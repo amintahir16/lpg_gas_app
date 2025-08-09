@@ -37,6 +37,7 @@ const navigation: NavigationItem[] = [
   { name: 'Financial', href: '/financial', icon: CurrencyDollarIcon, roles: ['ADMIN', 'SUPER_ADMIN'] },
   { name: 'Vendors', href: '/vendors', icon: BuildingOfficeIcon, roles: ['ADMIN', 'SUPER_ADMIN'] },
   { name: 'Reports', href: '/reports', icon: ChartBarIcon, roles: ['ADMIN', 'SUPER_ADMIN'] },
+  { name: 'Settings', href: '/settings', icon: CogIcon, roles: ['ADMIN', 'SUPER_ADMIN'] },
 ];
 
 const customerNavigation: NavigationItem[] = [
