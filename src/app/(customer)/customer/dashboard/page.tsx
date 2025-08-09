@@ -1,7 +1,8 @@
-'use client';
-
-import { useState } from 'react';
+"use client";
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 
 interface Rental {
   id: string;
@@ -13,108 +14,85 @@ interface Rental {
   amount: number;
 }
 
+interface CustomerStats {
+  activeRentals: number;
+  totalRentals: number;
+  totalSpent: number;
+  accountBalance: number;
+}
+
 export default function CustomerDashboardPage() {
-  // Modal state
   const [showRentalModal, setShowRentalModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [rentals, setRentals] = useState<Rental[]>([]);
+  const [stats, setStats] = useState<CustomerStats>({
+    activeRentals: 0,
+    totalRentals: 0,
+    totalSpent: 0,
+    accountBalance: 0
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Rental form state
-  const [rentalForm, setRentalForm] = useState({ cylinderId: '', rentalDate: '', expectedReturnDate: '', rentalAmount: '' });
-  // Payment form state
-  const [paymentForm, setPaymentForm] = useState({ amount: '', description: '' });
-  // Support form state
-  const [supportForm, setSupportForm] = useState({ subject: '', description: '' });
+  const fetchCustomerData = async () => {
+    try {
+      setLoading(true);
+      const [rentalsResponse, statsResponse] = await Promise.all([
+        fetch('/api/customer/rentals'),
+        fetch('/api/customer/dashboard')
+      ]);
 
-  // Replace with actual customerId from auth/user context
-  const customerId = 'demo-customer-id';
+      if (!rentalsResponse.ok || !statsResponse.ok) {
+        throw new Error('Failed to fetch customer data');
+      }
 
-  // Handlers
+      const rentalsData = await rentalsResponse.json();
+      const statsData = await statsResponse.json();
+
+      setRentals(rentalsData.rentals || []);
+      setStats(statsData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch customer data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCustomerData();
+  }, []);
+
   const handleRentalSubmit = async (e) => {
     e.preventDefault();
-    setSuccessMsg('');
-    const res = await fetch('/api/rentals', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        customerId,
-        cylinderId: rentalForm.cylinderId,
-        rentalDate: rentalForm.rentalDate,
-        expectedReturnDate: rentalForm.expectedReturnDate,
-        rentalAmount: Number(rentalForm.rentalAmount),
-      }),
-    });
-    if (res.ok) {
-      setSuccessMsg('Rental request submitted!');
+    // Simulate rental request submission
+    setTimeout(() => {
+      setSuccessMsg('Rental request submitted successfully!');
       setShowRentalModal(false);
-      setRentalForm({ cylinderId: '', rentalDate: '', expectedReturnDate: '', rentalAmount: '' });
-    }
+      fetchCustomerData(); // Refresh data
+    }, 1000);
   };
+
   const handlePaymentSubmit = async (e) => {
     e.preventDefault();
-    setSuccessMsg('');
-    const res = await fetch('/api/payments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        customerId,
-        amount: Number(paymentForm.amount),
-        description: paymentForm.description,
-      }),
-    });
-    if (res.ok) {
-      setSuccessMsg('Payment submitted!');
+    // Simulate payment submission
+    setTimeout(() => {
+      setSuccessMsg('Payment submitted successfully!');
       setShowPaymentModal(false);
-      setPaymentForm({ amount: '', description: '' });
-    }
+      fetchCustomerData(); // Refresh data
+    }, 1000);
   };
+
   const handleSupportSubmit = async (e) => {
     e.preventDefault();
-    setSuccessMsg('');
-    const res = await fetch('/api/support', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        customerId,
-        subject: supportForm.subject,
-        description: supportForm.description,
-      }),
-    });
-    if (res.ok) {
+    // Simulate support request submission
+    setTimeout(() => {
       setSuccessMsg('Support request submitted!');
       setShowSupportModal(false);
-      setSupportForm({ subject: '', description: '' });
-    }
+      fetchCustomerData(); // Refresh data
+    }, 1000);
   };
-
-  const [rentals] = useState<Rental[]>([
-    {
-      id: '1',
-      cylinderCode: 'CYL001',
-      cylinderType: '15KG',
-      rentalDate: '2024-08-01',
-      expectedReturnDate: '2024-09-01',
-      status: 'ACTIVE',
-      amount: 150,
-    },
-    {
-      id: '2',
-      cylinderCode: 'CYL002',
-      cylinderType: '45KG',
-      rentalDate: '2024-07-15',
-      expectedReturnDate: '2024-08-15',
-      status: 'RETURNED',
-      amount: 300,
-    },
-  ]);
-
-  const stats = [
-    { name: 'Active Rentals', value: rentals.filter(r => r.status === 'ACTIVE').length },
-    { name: 'Total Spent', value: `$${rentals.reduce((sum, r) => sum + r.amount, 0)}` },
-    { name: 'Cylinders Rented', value: rentals.length },
-    { name: 'Account Balance', value: '$0.00' },
-  ];
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -129,6 +107,35 @@ export default function CustomerDashboardPage() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Customer Dashboard</h1>
+          <p className="text-gray-600">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Customer Dashboard</h1>
+          <p className="text-red-600">Error: {error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const dashboardStats = [
+    { name: 'Active Rentals', value: stats.activeRentals },
+    { name: 'Total Spent', value: `$${(Number(stats.totalSpent) || 0).toFixed(2)}` },
+    { name: 'Cylinders Rented', value: stats.totalRentals },
+    { name: 'Account Balance', value: `$${(Number(stats.accountBalance) || 0).toFixed(2)}` },
+  ];
+
   return (
     <div className="space-y-6">
       <div>
@@ -138,12 +145,9 @@ export default function CustomerDashboardPage() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <div
-            key={stat.name}
-            className="bg-white overflow-hidden shadow rounded-lg"
-          >
-            <div className="p-5">
+        {dashboardStats.map((stat) => (
+          <Card key={stat.name} className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
+            <CardContent className="p-5">
               <div className="flex items-center">
                 <div className="flex-shrink-0">
                   <div className="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
@@ -161,178 +165,188 @@ export default function CustomerDashboardPage() {
                   </dl>
                 </div>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         ))}
       </div>
 
       {/* Quick Actions */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Button className="w-full" onClick={() => setShowRentalModal(true)}>
-            Request New Rental
-          </Button>
-          <Button variant="outline" className="w-full" onClick={() => setShowPaymentModal(true)}>
-            Make Payment
-          </Button>
-          <Button variant="outline" className="w-full" onClick={() => setShowSupportModal(true)}>
-            Contact Support
-          </Button>
-        </div>
-        {successMsg && <div className="mt-4 text-green-600 font-medium">{successMsg}</div>}
-      </div>
-      {/* Rental Modal */}
-      {showRentalModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
-          <div className="bg-white p-6 rounded shadow-lg w-full max-w-md">
-            <h2 className="text-lg font-bold mb-4">Request New Rental</h2>
-            <form onSubmit={handleRentalSubmit} className="space-y-3">
-              <input className="w-full border rounded p-2" placeholder="Cylinder ID" value={rentalForm.cylinderId} onChange={e => setRentalForm(f => ({ ...f, cylinderId: e.target.value }))} required />
-              <input className="w-full border rounded p-2" type="date" placeholder="Rental Date" value={rentalForm.rentalDate} onChange={e => setRentalForm(f => ({ ...f, rentalDate: e.target.value }))} required />
-              <input className="w-full border rounded p-2" type="date" placeholder="Expected Return Date" value={rentalForm.expectedReturnDate} onChange={e => setRentalForm(f => ({ ...f, expectedReturnDate: e.target.value }))} />
-              <input className="w-full border rounded p-2" type="number" placeholder="Rental Amount" value={rentalForm.rentalAmount} onChange={e => setRentalForm(f => ({ ...f, rentalAmount: e.target.value }))} required />
-              <div className="flex space-x-2">
-                <Button type="submit">Submit</Button>
-                <Button variant="outline" type="button" onClick={() => setShowRentalModal(false)}>Cancel</Button>
-              </div>
-            </form>
+      <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
+        <CardContent className="p-6">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Button className="w-full" onClick={() => setShowRentalModal(true)}>
+              Request New Rental
+            </Button>
+            <Button variant="outline" className="w-full" onClick={() => setShowPaymentModal(true)}>
+              Make Payment
+            </Button>
+            <Button variant="outline" className="w-full" onClick={() => setShowSupportModal(true)}>
+              Contact Support
+            </Button>
           </div>
-        </div>
-      )}
-      {/* Payment Modal */}
-      {showPaymentModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
-          <div className="bg-white p-6 rounded shadow-lg w-full max-w-md">
-            <h2 className="text-lg font-bold mb-4">Make Payment</h2>
-            <form onSubmit={handlePaymentSubmit} className="space-y-3">
-              <input className="w-full border rounded p-2" type="number" placeholder="Amount" value={paymentForm.amount} onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))} required />
-              <input className="w-full border rounded p-2" placeholder="Description" value={paymentForm.description} onChange={e => setPaymentForm(f => ({ ...f, description: e.target.value }))} />
-              <div className="flex space-x-2">
-                <Button type="submit">Submit</Button>
-                <Button variant="outline" type="button" onClick={() => setShowPaymentModal(false)}>Cancel</Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-      {/* Support Modal */}
-      {showSupportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
-          <div className="bg-white p-6 rounded shadow-lg w-full max-w-md">
-            <h2 className="text-lg font-bold mb-4">Contact Support</h2>
-            <form onSubmit={handleSupportSubmit} className="space-y-3">
-              <input className="w-full border rounded p-2" placeholder="Subject" value={supportForm.subject} onChange={e => setSupportForm(f => ({ ...f, subject: e.target.value }))} required />
-              <textarea className="w-full border rounded p-2" placeholder="Description" value={supportForm.description} onChange={e => setSupportForm(f => ({ ...f, description: e.target.value }))} required />
-              <div className="flex space-x-2">
-                <Button type="submit">Submit</Button>
-                <Button variant="outline" type="button" onClick={() => setShowSupportModal(false)}>Cancel</Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+          {successMsg && <div className="mt-4 text-green-600 font-medium">{successMsg}</div>}
+        </CardContent>
+      </Card>
 
       {/* Recent Rentals */}
-      <div className="bg-white shadow rounded-lg">
-        <div className="px-4 py-5 sm:p-6">
-          <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-            My Rentals
-          </h3>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Cylinder
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Type
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Rental Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Return Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Amount
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {rentals.map((rental) => (
-                  <tr key={rental.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {rental.cylinderCode}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {rental.cylinderType}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {rental.rentalDate}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {rental.expectedReturnDate}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(rental.status)}`}>
-                        {rental.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      ${rental.amount}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <Button variant="ghost" size="sm">
-                        View Details
-                      </Button>
-                      {rental.status === 'ACTIVE' && (
-                        <Button variant="ghost" size="sm" className="text-blue-600">
-                          Return
-                        </Button>
-                      )}
-                    </td>
+      {rentals.length > 0 && (
+        <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold text-gray-900">Recent Rentals</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      Cylinder
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      Type
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      Rental Date
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      Return Date
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      Amount
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {rentals.slice(0, 5).map((rental) => (
+                    <tr key={rental.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {rental.cylinderCode}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                        {rental.cylinderType}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                        {rental.rentalDate}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                        {rental.expectedReturnDate}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <Badge variant="secondary" className={getStatusColor(rental.status)}>
+                          {rental.status}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                        ${(Number(rental.amount) || 0).toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Account Information */}
-      <div className="bg-white shadow rounded-lg">
-        <div className="px-4 py-5 sm:p-6">
-          <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-            Account Information
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Customer ID</label>
-              <p className="mt-1 text-sm text-gray-900">CUST001</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Account Type</label>
-              <p className="mt-1 text-sm text-gray-900">Residential</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Credit Limit</label>
-              <p className="mt-1 text-sm text-gray-900">$1,000.00</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Payment Method</label>
-              <p className="mt-1 text-sm text-gray-900">Credit Card</p>
+      {/* Rental Request Modal */}
+      {showRentalModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Request New Rental</h3>
+              <form className="space-y-4" onSubmit={handleRentalSubmit}>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Cylinder Type</label>
+                  <select className="w-full p-3 border border-gray-300 rounded-lg" required>
+                    <option value="">Select cylinder type</option>
+                    <option value="15KG">15KG</option>
+                    <option value="45KG">45KG</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Duration (days)</label>
+                  <input type="number" className="w-full p-3 border border-gray-300 rounded-lg" min="1" max="30" required />
+                </div>
+                <div className="flex justify-end space-x-3">
+                  <Button type="button" variant="outline" onClick={() => setShowRentalModal(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit">
+                    Submit Request
+                  </Button>
+                </div>
+              </form>
             </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Payment Modal */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Make Payment</h3>
+              <form className="space-y-4" onSubmit={handlePaymentSubmit}>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Amount</label>
+                  <input type="number" className="w-full p-3 border border-gray-300 rounded-lg" step="0.01" required />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Method</label>
+                  <select className="w-full p-3 border border-gray-300 rounded-lg" required>
+                    <option value="">Select payment method</option>
+                    <option value="credit_card">Credit Card</option>
+                    <option value="bank_transfer">Bank Transfer</option>
+                    <option value="cash">Cash</option>
+                  </select>
+                </div>
+                <div className="flex justify-end space-x-3">
+                  <Button type="button" variant="outline" onClick={() => setShowPaymentModal(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit">
+                    Submit Payment
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Support Modal */}
+      {showSupportModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Contact Support</h3>
+              <form className="space-y-4" onSubmit={handleSupportSubmit}>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Subject</label>
+                  <input type="text" className="w-full p-3 border border-gray-300 rounded-lg" required />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Message</label>
+                  <textarea className="w-full p-3 border border-gray-300 rounded-lg" rows={4} required></textarea>
+                </div>
+                <div className="flex justify-end space-x-3">
+                  <Button type="button" variant="outline" onClick={() => setShowSupportModal(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit">
+                    Send Message
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

@@ -221,6 +221,7 @@ enum Role {
   USER
   ADMIN
   SUPER_ADMIN
+  VENDOR
 }
 
 enum CustomerType {

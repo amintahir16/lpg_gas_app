@@ -3,14 +3,25 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useSession, signOut } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
+import { 
+  HomeIcon, 
+  CubeIcon, 
+  BuildingOfficeIcon, 
+  CurrencyDollarIcon,
+  UserCircleIcon,
+  Bars3Icon,
+  XMarkIcon
+} from '@heroicons/react/24/outline';
+import { cn } from '@/lib/utils';
 
 const vendorNavigation = [
-  { name: 'Dashboard', href: '/vendor/dashboard', icon: '📊' },
-  { name: 'My Orders', href: '/vendor/orders', icon: '📦' },
-  { name: 'Inventory', href: '/vendor/inventory', icon: '🏪' },
-  { name: 'Payments', href: '/vendor/payments', icon: '💰' },
-  { name: 'Profile', href: '/vendor/profile', icon: '👤' },
+  { name: 'Dashboard', href: '/vendor/dashboard', icon: HomeIcon },
+  { name: 'My Orders', href: '/vendor/orders', icon: CubeIcon },
+  { name: 'Inventory', href: '/vendor/inventory', icon: BuildingOfficeIcon },
+  { name: 'Payments', href: '/vendor/payments', icon: CurrencyDollarIcon },
+  { name: 'Profile', href: '/vendor/profile', icon: UserCircleIcon },
 ];
 
 export default function VendorLayout({
@@ -19,32 +30,43 @@ export default function VendorLayout({
   children: React.ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [user, setUser] = useState<any>(null);
   const pathname = usePathname();
   const router = useRouter();
+  const { data: session, status } = useSession();
 
+  // Redirect to login if not authenticated
   useEffect(() => {
-    const userData = localStorage.getItem('user');
-    if (!userData) {
+    if (status === 'unauthenticated') {
       router.push('/login');
-      return;
     }
-    const userInfo = JSON.parse(userData);
-    if (userInfo.userType !== 'vendor') {
-      router.push('/dashboard');
-      return;
-    }
-    setUser(userInfo);
-  }, [router]);
+  }, [status, router]);
+
+  // Show loading while checking authentication
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render if not authenticated
+  if (status === 'unauthenticated') {
+    return null;
+  }
+
+  // Check if user has VENDOR role
+  if (session?.user?.role !== 'VENDOR') {
+    router.push('/dashboard');
+    return null;
+  }
 
   const handleLogout = () => {
-    localStorage.removeItem('user');
-    router.push('/login');
+    signOut({ callbackUrl: '/login' });
   };
-
-  if (!user) {
-    return <div>Loading...</div>;
-  }
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -57,9 +79,10 @@ export default function VendorLayout({
       )}
 
       {/* Sidebar */}
-      <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 ${
+      <div className={cn(
+        "fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0",
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      }`}>
+      )}>
         <div className="flex h-16 items-center justify-between px-4 border-b">
           <h1 className="text-xl font-bold text-gray-900">
             Vendor Portal
@@ -70,8 +93,7 @@ export default function VendorLayout({
             onClick={() => setSidebarOpen(false)}
             className="lg:hidden"
           >
-            <span className="sr-only">Close sidebar</span>
-            <span>✕</span>
+            <XMarkIcon className="w-5 h-5" />
           </Button>
         </div>
         
@@ -83,14 +105,15 @@ export default function VendorLayout({
                 <li key={item.name}>
                   <Link
                     href={item.href}
-                    className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                    className={cn(
+                      "flex items-center px-4 py-2 text-sm font-medium rounded-md transition-colors",
                       isActive
-                        ? 'bg-orange-100 text-orange-700'
+                        ? 'bg-blue-100 text-blue-700'
                         : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                    }`}
+                    )}
                     onClick={() => setSidebarOpen(false)}
                   >
-                    <span className="mr-3">{item.icon}</span>
+                    <item.icon className="mr-3 w-5 h-5" />
                     {item.name}
                   </Link>
                 </li>
@@ -102,14 +125,14 @@ export default function VendorLayout({
         {/* User info in sidebar */}
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t">
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center">
+            <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center">
               <span className="text-white text-sm font-medium">
-                {user.firstName?.charAt(0) || 'V'}
+                {session?.user?.name?.charAt(0) || 'V'}
               </span>
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-900 truncate">
-                {user.firstName} {user.lastName}
+                {session?.user?.name || 'Vendor'}
               </p>
               <p className="text-xs text-gray-500 truncate">
                 Vendor
@@ -129,8 +152,7 @@ export default function VendorLayout({
               onClick={() => setSidebarOpen(true)}
               className="lg:hidden"
             >
-              <span className="sr-only">Open sidebar</span>
-              <span>☰</span>
+              <Bars3Icon className="w-5 h-5" />
             </Button>
             <h2 className="ml-4 text-lg font-medium text-gray-900 lg:hidden">
               {vendorNavigation.find(item => item.href === pathname)?.name || 'Dashboard'}
@@ -139,7 +161,7 @@ export default function VendorLayout({
           
           <div className="flex items-center space-x-4">
             <span className="text-sm text-gray-700 hidden lg:block">
-              Welcome, {user.firstName}
+              Welcome, {session?.user?.name}
             </span>
             <Button variant="outline" size="sm" onClick={handleLogout}>
               Logout

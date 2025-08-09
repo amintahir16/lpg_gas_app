@@ -16,10 +16,11 @@ const routePermissions = {
     '/vendors',
     '/reports',
     '/api/customers',
-    '/api/inventory',
-    '/api/financial',
+    '/api/cylinders',
+    '/api/expenses',
     '/api/vendors',
-    '/api/reports'
+    '/api/reports',
+    '/api/dashboard'
   ],
   
   // User routes (accessible by USER, ADMIN, SUPER_ADMIN)
@@ -39,7 +40,8 @@ const routePermissions = {
 const roleHierarchy = {
   'USER': ['USER'],
   'ADMIN': ['USER', 'ADMIN'],
-  'SUPER_ADMIN': ['USER', 'ADMIN', 'SUPER_ADMIN']
+  'SUPER_ADMIN': ['USER', 'ADMIN', 'SUPER_ADMIN'],
+  'VENDOR': ['VENDOR']
 };
 
 export async function middleware(request: NextRequest) {

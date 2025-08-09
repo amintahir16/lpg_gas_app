@@ -1,61 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
-import { requirePermission } from '@/lib/auth-utils';
-import { z } from 'zod';
+import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 
-// Validation schemas
-const createCustomerSchema = z.object({
-  firstName: z.string().min(1, 'First name is required').max(50),
-  lastName: z.string().min(1, 'Last name is required').max(50),
-  email: z.string().email('Invalid email address').optional(),
-  phone: z.string().min(10, 'Phone number must be at least 10 digits'),
-  address: z.string().optional(),
-  city: z.string().optional(),
-  state: z.string().optional(),
-  postalCode: z.string().optional(),
-  customerType: z.enum(['RESIDENTIAL', 'COMMERCIAL', 'INDUSTRIAL']),
-  creditLimit: z.number().min(0).default(0),
-});
-
-const updateCustomerSchema = createCustomerSchema.partial();
-
-// GET /api/customers - Get all customers with pagination and filtering
 export async function GET(request: NextRequest) {
   try {
-    // Check permissions
-    await requirePermission({ resource: 'customer', action: 'read' });
+    // Get user info from headers (set by middleware)
+    const userId = request.headers.get('x-user-id');
+    const userRole = request.headers.get('x-user-role');
+    
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     const { searchParams } = new URL(request.url);
+    const search = searchParams.get('search') || '';
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
-    const search = searchParams.get('search') || '';
-    const customerType = searchParams.get('customerType') || '';
-    const isActive = searchParams.get('isActive');
-
-    // Calculate pagination
     const skip = (page - 1) * limit;
 
-    // Build where clause
-    const where: any = {};
-    
-    if (search) {
-      where.OR = [
-        { firstName: { contains: search, mode: 'insensitive' } },
-        { lastName: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } },
-        { phone: { contains: search, mode: 'insensitive' } },
-      ];
-    }
+    const where: Prisma.CustomerWhereInput = {
+      isActive: true,
+      OR: search ? [
+        { firstName: { contains: search, mode: 'insensitive' as Prisma.QueryMode } },
+        { lastName: { contains: search, mode: 'insensitive' as Prisma.QueryMode } },
+        { code: { contains: search, mode: 'insensitive' as Prisma.QueryMode } },
+        { email: { contains: search, mode: 'insensitive' as Prisma.QueryMode } }
+      ] : undefined
+    };
 
-    if (customerType) {
-      where.customerType = customerType;
-    }
-
-    if (isActive !== null && isActive !== undefined) {
-      where.isActive = isActive === 'true';
-    }
-
-    // Get customers with pagination
     const [customers, total] = await Promise.all([
       prisma.customer.findMany({
         where,
@@ -63,117 +35,95 @@ export async function GET(request: NextRequest) {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          ledger: {
-            take: 5,
-            orderBy: { createdAt: 'desc' },
-          },
-          cylinderRentals: {
-            where: { status: 'ACTIVE' },
-            take: 5,
-          },
-        },
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          }
+        }
       }),
-      prisma.customer.count({ where }),
+      prisma.customer.count({ where })
     ]);
 
-    const totalPages = Math.ceil(total / limit);
-
     return NextResponse.json({
-      success: true,
-      data: customers,
-      meta: {
+      customers,
+      pagination: {
         page,
         limit,
         total,
-        totalPages,
-        hasNextPage: page < totalPages,
-        hasPrevPage: page > 1,
-      },
+        pages: Math.ceil(total / limit)
+      }
     });
   } catch (error) {
-    console.error('GET /api/customers error:', error);
-    
-    if (error instanceof Error) {
-      return NextResponse.json(
-        { success: false, message: error.message },
-        { status: 400 }
-      );
-    }
-    
+    console.error('Customers fetch error:', error);
     return NextResponse.json(
-      { success: false, message: 'Internal server error' },
+      { error: 'Failed to fetch customers' },
       { status: 500 }
     );
   }
 }
 
-// POST /api/customers - Create a new customer
 export async function POST(request: NextRequest) {
   try {
-    // Check permissions
-    await requirePermission({ resource: 'customer', action: 'create' });
+    // Get user info from headers (set by middleware)
+    const userId = request.headers.get('x-user-id');
+    const userRole = request.headers.get('x-user-role');
+    
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     const body = await request.json();
-    
-    // Validate input
-    const validatedData = createCustomerSchema.parse(body);
-
-    // Check if customer with same email already exists
-    if (validatedData.email) {
-      const existingCustomer = await prisma.customer.findFirst({
-        where: { email: validatedData.email },
-      });
-
-      if (existingCustomer) {
-        return NextResponse.json(
-          { success: false, message: 'Customer with this email already exists' },
-          { status: 409 }
-        );
-      }
-    }
+    const {
+      firstName,
+      lastName,
+      email,
+      phone,
+      address,
+      city,
+      state,
+      postalCode,
+      customerType,
+      creditLimit
+    } = body;
 
     // Generate unique customer code
-    const customerCode = `CUST${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+    const customerCount = await prisma.customer.count();
+    const code = `CUST${String(customerCount + 1).padStart(3, '0')}`;
 
-    // Create customer
     const customer = await prisma.customer.create({
       data: {
-        ...validatedData,
-        code: customerCode,
+        code,
+        firstName,
+        lastName,
+        email,
+        phone,
+        address,
+        city,
+        state,
+        postalCode,
+        customerType,
+        creditLimit: parseFloat(creditLimit) || 0,
+        userId: userId
       },
       include: {
-        ledger: true,
-        cylinderRentals: true,
-      },
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      }
     });
 
-    return NextResponse.json(
-      { success: true, data: customer, message: 'Customer created successfully' },
-      { status: 201 }
-    );
+    return NextResponse.json(customer, { status: 201 });
   } catch (error) {
-    console.error('POST /api/customers error:', error);
-    
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          message: 'Validation error', 
-          errors: error.errors.map(e => `${e.path.join('.')}: ${e.message}`)
-        },
-        { status: 400 }
-      );
-    }
-    
-    if (error instanceof Error) {
-      return NextResponse.json(
-        { success: false, message: error.message },
-        { status: 400 }
-      );
-    }
-    
+    console.error('Customer creation error:', error);
     return NextResponse.json(
-      { success: false, message: 'Internal server error' },
+      { error: 'Failed to create customer' },
       { status: 500 }
     );
   }

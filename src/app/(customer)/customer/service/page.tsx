@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
 export default function RequestServicePage() {
   const [description, setDescription] = useState("");
@@ -21,16 +22,16 @@ export default function RequestServicePage() {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Describe your issue or request</label>
-              <textarea
-                className="w-full border rounded-md p-2 text-sm"
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Describe your issue or request</label>
+              <Textarea
                 rows={4}
                 value={description}
                 onChange={e => setDescription(e.target.value)}
+                placeholder="Please describe your issue or service request in detail..."
                 required
               />
             </div>
-            <Button type="submit">Submit Request</Button>
+            <Button type="submit" className="w-full">Submit Request</Button>
           </form>
         )}
       </div>
