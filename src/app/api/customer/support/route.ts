@@ -43,9 +43,9 @@ export async function GET(request: NextRequest) {
       id: request.id,
       title: request.subject || `Support Request ${request.id}`,
       description: request.description,
-      status: request.status || 'OPEN',
-      priority: 'MEDIUM', // Priority is not in the model, default to MEDIUM
-      category: 'GENERAL', // Category is not in the model, default to GENERAL
+      status: request.status,
+      priority: request.priority || 'MEDIUM',
+      category: request.category || 'GENERAL',
       createdAt: request.createdAt.toISOString().split('T')[0],
       updatedAt: request.updatedAt.toISOString().split('T')[0]
     }));
@@ -53,8 +53,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       tickets,
       totalTickets: tickets.length,
-      openTickets: tickets.filter(ticket => ticket.status === "OPEN").length,
-      resolvedTickets: tickets.filter(ticket => ticket.status === "RESOLVED").length
+      openTickets: tickets.filter(ticket => ticket.status === "PENDING" || ticket.status === "IN_PROGRESS").length,
+      resolvedTickets: tickets.filter(ticket => ticket.status === "RESOLVED" || ticket.status === "CLOSED").length
     });
   } catch (error) {
     console.error('Error fetching support tickets:', error);
@@ -98,31 +98,29 @@ export async function POST(request: NextRequest) {
         customerId: customer.id,
         subject: body.title,
         description: body.description,
-        status: 'PENDING',
-        createdAt: new Date(),
-        updatedAt: new Date()
+        priority: body.priority || 'MEDIUM',
+        category: body.category || 'GENERAL',
+        status: 'PENDING'
       }
     });
 
-    const newTicket = {
-      id: newSupportRequest.id,
-      title: newSupportRequest.subject,
-      description: newSupportRequest.description,
-      status: newSupportRequest.status,
-      priority: 'MEDIUM',
-      category: body.category || 'GENERAL',
-      createdAt: newSupportRequest.createdAt.toISOString().split('T')[0],
-      updatedAt: newSupportRequest.updatedAt.toISOString().split('T')[0]
-    };
-
     return NextResponse.json({
       message: 'Support ticket created successfully',
-      ticket: newTicket
+      ticket: {
+        id: newSupportRequest.id,
+        title: newSupportRequest.subject,
+        description: newSupportRequest.description,
+        status: newSupportRequest.status,
+        priority: newSupportRequest.priority,
+        category: newSupportRequest.category,
+        createdAt: newSupportRequest.createdAt.toISOString().split('T')[0],
+        updatedAt: newSupportRequest.updatedAt.toISOString().split('T')[0]
+      }
     });
   } catch (error) {
     console.error('Error creating support ticket:', error);
     return NextResponse.json(
-      { error: 'Internal Server Error', message: 'Failed to create ticket' },
+      { error: 'Internal Server Error', message: 'Failed to create support ticket' },
       { status: 500 }
     );
   }

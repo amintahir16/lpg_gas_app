@@ -18,6 +18,13 @@ export async function GET(request: NextRequest) {
     const vendor = await prisma.vendor.findFirst({
       where: {
         email: session.user.email
+      },
+      include: {
+        bankDetails: {
+          where: {
+            isActive: true
+          }
+        }
       }
     });
 
@@ -40,11 +47,18 @@ export async function GET(request: NextRequest) {
       taxId: vendor.taxId,
       contactPerson: vendor.contactPerson,
       paymentTerms: `${vendor.paymentTerms} days`,
-      bankDetails: {
+      bankDetails: vendor.bankDetails.length > 0 ? {
+        accountName: vendor.bankDetails[0].accountName,
+        accountNumber: vendor.bankDetails[0].accountNumber,
+        bankName: vendor.bankDetails[0].bankName,
+        swiftCode: vendor.bankDetails[0].swiftCode || "N/A",
+        routingNumber: vendor.bankDetails[0].routingNumber || "N/A"
+      } : {
         accountName: vendor.companyName,
-        accountNumber: "1234567890", // This would need a separate bank details table
-        bankName: "First National Bank",
-        swiftCode: "FNBNUS33"
+        accountNumber: "Not provided",
+        bankName: "Not provided",
+        swiftCode: "N/A",
+        routingNumber: "N/A"
       }
     };
 
@@ -71,10 +85,24 @@ export async function PUT(request: NextRequest) {
 
     const body = await request.json();
     
+    // Get the vendor ID
+    const vendor = await prisma.vendor.findFirst({
+      where: {
+        email: session.user.email
+      }
+    });
+
+    if (!vendor) {
+      return NextResponse.json(
+        { error: 'Not Found', message: 'Vendor not found' },
+        { status: 404 }
+      );
+    }
+
     // Update the vendor data in the database
     const updatedVendor = await prisma.vendor.update({
       where: {
-        email: session.user.email
+        id: vendor.id
       },
       data: {
         companyName: body.companyName,
@@ -88,6 +116,43 @@ export async function PUT(request: NextRequest) {
       }
     });
 
+    // Update or create bank details
+    if (body.bankDetails) {
+      const existingBankDetails = await prisma.vendorBankDetails.findFirst({
+        where: {
+          vendorId: vendor.id,
+          isActive: true
+        }
+      });
+
+      if (existingBankDetails) {
+        await prisma.vendorBankDetails.update({
+          where: {
+            id: existingBankDetails.id
+          },
+          data: {
+            accountName: body.bankDetails.accountName,
+            accountNumber: body.bankDetails.accountNumber,
+            bankName: body.bankDetails.bankName,
+            swiftCode: body.bankDetails.swiftCode,
+            routingNumber: body.bankDetails.routingNumber,
+            updatedAt: new Date()
+          }
+        });
+      } else {
+        await prisma.vendorBankDetails.create({
+          data: {
+            vendorId: vendor.id,
+            accountName: body.bankDetails.accountName,
+            accountNumber: body.bankDetails.accountNumber,
+            bankName: body.bankDetails.bankName,
+            swiftCode: body.bankDetails.swiftCode,
+            routingNumber: body.bankDetails.routingNumber
+          }
+        });
+      }
+    }
+
     return NextResponse.json({
       message: 'Profile updated successfully',
       profile: {
@@ -100,13 +165,7 @@ export async function PUT(request: NextRequest) {
         registrationNumber: updatedVendor.vendorCode,
         taxId: updatedVendor.taxId,
         contactPerson: updatedVendor.contactPerson,
-        paymentTerms: `${updatedVendor.paymentTerms} days`,
-        bankDetails: {
-          accountName: updatedVendor.companyName,
-          accountNumber: "1234567890",
-          bankName: "First National Bank",
-          swiftCode: "FNBNUS33"
-        }
+        paymentTerms: `${updatedVendor.paymentTerms} days`
       }
     });
   } catch (error) {

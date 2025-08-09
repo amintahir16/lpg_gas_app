@@ -70,6 +70,7 @@ model Cylinder {
 
   // Relations
   cylinderRentals CylinderRental[]
+  vendorInventories VendorInventory[]
 
   @@map("cylinders")
 }
@@ -142,8 +143,62 @@ model Vendor {
   invoices Invoice[]
   orders    VendorOrder[]
   supportRequests VendorSupportRequest[]
+  bankDetails VendorBankDetails[]
+  inventories VendorInventory[]
+  payments VendorPayment[]
 
   @@map("vendors")
+}
+
+model VendorBankDetails {
+  id            String   @id @default(cuid())
+  vendor        Vendor   @relation(fields: [vendorId], references: [id])
+  vendorId      String
+  accountName   String
+  accountNumber String
+  bankName      String
+  swiftCode     String?
+  routingNumber String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("vendor_bank_details")
+}
+
+model VendorInventory {
+  id          String   @id @default(cuid())
+  vendor      Vendor   @relation(fields: [vendorId], references: [id])
+  vendorId    String
+  cylinder    Cylinder? @relation(fields: [cylinderId], references: [id])
+  cylinderId  String?
+  name        String
+  category    String
+  quantity    Int      @default(1)
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  status      InventoryStatus @default(IN_STOCK)
+  description String?
+  lastUpdated DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("vendor_inventories")
+}
+
+model VendorPayment {
+  id          String   @id @default(cuid())
+  vendor      Vendor   @relation(fields: [vendorId], references: [id])
+  vendorId    String
+  amount      Decimal  @db.Decimal(10, 2)
+  paymentDate DateTime
+  method      PaymentMethod
+  status      PaymentStatus @default(PENDING)
+  reference   String?
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("vendor_payments")
 }
 
 model Invoice {
@@ -176,6 +231,8 @@ model SupportRequest {
   subject     String
   description String
   status      SupportRequestStatus @default(PENDING)
+  priority    SupportPriority @default(MEDIUM)
+  category    SupportCategory @default(GENERAL)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -196,13 +253,6 @@ model VendorOrder {
   @@map("vendor_orders")
 }
 
-enum VendorOrderStatus {
-  PENDING
-  APPROVED
-  REJECTED
-  COMPLETED
-}
-
 model VendorSupportRequest {
   id          String   @id @default(cuid())
   vendor      Vendor   @relation(fields: [vendorId], references: [id])
@@ -210,10 +260,71 @@ model VendorSupportRequest {
   subject     String
   description String
   status      SupportRequestStatus @default(PENDING)
+  priority    SupportPriority @default(MEDIUM)
+  category    SupportCategory @default(GENERAL)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@map("vendor_support_requests")
+}
+
+model SystemSettings {
+  id                    String   @id @default(cuid())
+  key                   String   @unique
+  value                 String
+  description           String?
+  category              String   @default("GENERAL")
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+enum VendorOrderStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum InventoryStatus {
+  IN_STOCK
+  LOW_STOCK
+  OUT_OF_STOCK
+  DISCONTINUED
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  CASH
+  CHECK
+  CREDIT_CARD
+  DEBIT_CARD
+  WIRE_TRANSFER
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum SupportPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum SupportCategory {
+  GENERAL
+  TECHNICAL
+  BILLING
+  DELIVERY
+  SAFETY
+  MAINTENANCE
 }
 
 // Enums

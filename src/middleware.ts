@@ -26,7 +26,8 @@ const routePermissions = {
   // User routes (accessible by USER, ADMIN, SUPER_ADMIN)
   user: [
     '/customer',
-    '/api/customer'
+    '/api/customer',
+    '/api/rentals'
   ],
   
   // Vendor routes

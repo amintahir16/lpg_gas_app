@@ -28,63 +28,144 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Fetch cylinders that are associated with this vendor
-    const cylinders = await prisma.cylinder.findMany({
+    // Fetch vendor inventory from the database
+    const vendorInventory = await prisma.vendorInventory.findMany({
       where: {
-        // For now, we'll show all cylinders as vendor inventory
-        // In a real implementation, you'd have a vendor-cylinder relationship
-        status: {
-          in: ['AVAILABLE', 'RENTED', 'MAINTENANCE']
+        vendorId: vendor.id
+      },
+      include: {
+        cylinder: {
+          select: {
+            id: true,
+            code: true,
+            cylinderType: true,
+            capacity: true,
+            currentStatus: true,
+            location: true
+          }
         }
       },
-      take: 20 // Limit to 20 items for performance
+      orderBy: {
+        lastUpdated: 'desc'
+      }
     });
 
-    // Transform cylinders into vendor inventory format
-    const inventory = cylinders.map((cylinder, index) => ({
-      id: cylinder.id,
-      name: `${cylinder.cylinderType} Gas Cylinder`,
-      category: "Cylinders",
-      quantity: 1, // Each cylinder is one unit
-      unitPrice: cylinder.cylinderType === 'KG_15' ? 150.00 : 450.00,
-      status: cylinder.status === 'AVAILABLE' ? 'IN_STOCK' : 
-              cylinder.status === 'RENTED' ? 'LOW_STOCK' : 'OUT_OF_STOCK',
-      lastUpdated: cylinder.updatedAt.toISOString().split('T')[0]
+    // Transform vendor inventory into the expected format
+    const inventory = vendorInventory.map((item) => ({
+      id: item.id,
+      name: item.name,
+      category: item.category,
+      quantity: item.quantity,
+      unitPrice: Number(item.unitPrice),
+      status: item.status,
+      lastUpdated: item.lastUpdated.toISOString().split('T')[0],
+      description: item.description,
+      cylinderInfo: item.cylinder ? {
+        code: item.cylinder.code,
+        type: item.cylinder.cylinderType,
+        capacity: Number(item.cylinder.capacity),
+        status: item.cylinder.currentStatus,
+        location: item.cylinder.location
+      } : null
     }));
 
-    // Add some equipment items based on vendor type
-    const equipmentItems = [
-      {
-        id: "EQUIP-001",
-        name: "Safety Equipment",
-        category: "Equipment",
-        quantity: 50,
-        unitPrice: 25.00,
-        status: "IN_STOCK",
-        lastUpdated: new Date().toISOString().split('T')[0]
-      },
-      {
-        id: "EQUIP-002",
-        name: "Regulators",
-        category: "Equipment",
-        quantity: 30,
-        unitPrice: 35.00,
-        status: "LOW_STOCK",
-        lastUpdated: new Date().toISOString().split('T')[0]
-      }
-    ];
-
-    const allInventory = [...inventory, ...equipmentItems];
+    // Calculate totals
+    const totalItems = inventory.length;
+    const totalValue = inventory.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
 
     return NextResponse.json({
-      inventory: allInventory,
-      totalItems: allInventory.length,
-      totalValue: allInventory.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0)
+      inventory,
+      totalItems,
+      totalValue
     });
   } catch (error) {
     console.error('Error fetching vendor inventory:', error);
     return NextResponse.json(
       { error: 'Internal Server Error', message: 'Failed to fetch inventory' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    
+    if (!session || session.user.role !== 'VENDOR') {
+      return NextResponse.json(
+        { error: 'Unauthorized', message: 'Vendor access required' },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+    
+    // Get the vendor ID
+    const vendor = await prisma.vendor.findFirst({
+      where: {
+        email: session.user.email
+      }
+    });
+
+    if (!vendor) {
+      return NextResponse.json(
+        { error: 'Not Found', message: 'Vendor not found' },
+        { status: 404 }
+      );
+    }
+
+    const { name, category, quantity, unitPrice, description, cylinderId } = body;
+
+    // Create new inventory item
+    const newInventoryItem = await prisma.vendorInventory.create({
+      data: {
+        vendorId: vendor.id,
+        name,
+        category,
+        quantity: parseInt(quantity),
+        unitPrice: parseFloat(unitPrice),
+        description,
+        cylinderId: cylinderId || null,
+        status: 'IN_STOCK'
+      },
+      include: {
+        cylinder: {
+          select: {
+            id: true,
+            code: true,
+            cylinderType: true,
+            capacity: true,
+            currentStatus: true,
+            location: true
+          }
+        }
+      }
+    });
+
+    return NextResponse.json({
+      message: 'Inventory item created successfully',
+      item: {
+        id: newInventoryItem.id,
+        name: newInventoryItem.name,
+        category: newInventoryItem.category,
+        quantity: newInventoryItem.quantity,
+        unitPrice: Number(newInventoryItem.unitPrice),
+        status: newInventoryItem.status,
+        lastUpdated: newInventoryItem.lastUpdated.toISOString().split('T')[0],
+        description: newInventoryItem.description,
+        cylinderInfo: newInventoryItem.cylinder ? {
+          code: newInventoryItem.cylinder.code,
+          type: newInventoryItem.cylinder.cylinderType,
+          capacity: Number(newInventoryItem.cylinder.capacity),
+          status: newInventoryItem.cylinder.currentStatus,
+          location: newInventoryItem.cylinder.location
+        } : null
+      }
+    });
+  } catch (error) {
+    console.error('Error creating inventory item:', error);
+    return NextResponse.json(
+      { error: 'Internal Server Error', message: 'Failed to create inventory item' },
       { status: 500 }
     );
   }

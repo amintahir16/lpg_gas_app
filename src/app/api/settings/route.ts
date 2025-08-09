@@ -14,10 +14,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get company information from the first vendor (as a proxy for company settings)
-    const companyVendor = await prisma.vendor.findFirst({
+    // Get system settings from the database
+    const systemSettings = await prisma.systemSettings.findMany({
+      where: {
+        isActive: true
+      },
       orderBy: {
-        createdAt: 'asc'
+        category: 'asc'
       }
     });
 
@@ -26,20 +29,26 @@ export async function GET(request: NextRequest) {
     const totalVendors = await prisma.vendor.count();
     const totalCylinders = await prisma.cylinder.count();
 
-    // Create settings based on actual data and environment
+    // Transform settings into a more usable format
+    const settingsMap = systemSettings.reduce((acc: Record<string, string>, setting: any) => {
+      acc[setting.key] = setting.value;
+      return acc;
+    }, {} as Record<string, string>);
+
+    // Create settings object with defaults and database values
     const settings = {
-      companyName: companyVendor?.companyName || "LPG Gas Supply Co.",
-      contactEmail: process.env.ADMIN_EMAIL || "admin@lpg.com",
-      contactPhone: process.env.ADMIN_PHONE || "+1 (555) 123-4567",
-      address: companyVendor?.address || "123 Gas Street, Industrial District, City, State 12345",
-      businessHours: process.env.BUSINESS_HOURS || "Monday - Friday: 8AM - 6PM, Saturday: 9AM - 2PM",
-      deliveryRadius: parseInt(process.env.DELIVERY_RADIUS || "50"),
-      defaultCreditLimit: parseInt(process.env.DEFAULT_CREDIT_LIMIT || "1000"),
-      taxRate: parseFloat(process.env.TAX_RATE || "8.5"),
-      currency: process.env.CURRENCY || "USD",
-      timezone: process.env.TIMEZONE || "America/New_York",
-      maintenanceInterval: parseInt(process.env.MAINTENANCE_INTERVAL || "90"),
-      safetyInspectionInterval: parseInt(process.env.SAFETY_INSPECTION_INTERVAL || "180"),
+      companyName: settingsMap.companyName || "LPG Gas Supply Co.",
+      contactEmail: settingsMap.contactEmail || process.env.ADMIN_EMAIL || "admin@lpg.com",
+      contactPhone: settingsMap.contactPhone || process.env.ADMIN_PHONE || "+1 (555) 123-4567",
+      address: settingsMap.address || "123 Gas Street, Industrial District, City, State 12345",
+      businessHours: settingsMap.businessHours || process.env.BUSINESS_HOURS || "Monday - Friday: 8AM - 6PM, Saturday: 9AM - 2PM",
+      deliveryRadius: parseInt(settingsMap.deliveryRadius || process.env.DELIVERY_RADIUS || "50"),
+      defaultCreditLimit: parseInt(settingsMap.defaultCreditLimit || process.env.DEFAULT_CREDIT_LIMIT || "1000"),
+      taxRate: parseFloat(settingsMap.taxRate || process.env.TAX_RATE || "8.5"),
+      currency: settingsMap.currency || process.env.CURRENCY || "USD",
+      timezone: settingsMap.timezone || process.env.TIMEZONE || "America/New_York",
+      maintenanceInterval: parseInt(settingsMap.maintenanceInterval || process.env.MAINTENANCE_INTERVAL || "90"),
+      safetyInspectionInterval: parseInt(settingsMap.safetyInspectionInterval || process.env.SAFETY_INSPECTION_INTERVAL || "180"),
       // Add some dynamic settings based on actual data
       totalCustomers,
       totalVendors,
@@ -69,14 +78,45 @@ export async function PUT(request: NextRequest) {
 
     const body = await request.json();
     
-    // In a real implementation, you would save these settings to a database table
-    // For now, we'll just log the settings and return success
-    console.log('Updating system settings:', body);
+    // Update or create system settings
+    const settingsToUpdate = [
+      { key: 'companyName', value: body.companyName },
+      { key: 'contactEmail', value: body.contactEmail },
+      { key: 'contactPhone', value: body.contactPhone },
+      { key: 'address', value: body.address },
+      { key: 'businessHours', value: body.businessHours },
+      { key: 'deliveryRadius', value: body.deliveryRadius?.toString() },
+      { key: 'defaultCreditLimit', value: body.defaultCreditLimit?.toString() },
+      { key: 'taxRate', value: body.taxRate?.toString() },
+      { key: 'currency', value: body.currency },
+      { key: 'timezone', value: body.timezone },
+      { key: 'maintenanceInterval', value: body.maintenanceInterval?.toString() },
+      { key: 'safetyInspectionInterval', value: body.safetyInspectionInterval?.toString() }
+    ];
 
-    // You could also update environment variables or save to a settings table
-    // For now, we'll just return the updated settings
+    // Update each setting
+    for (const setting of settingsToUpdate) {
+      if (setting.value !== undefined) {
+        await prisma.systemSettings.upsert({
+          where: {
+            key: setting.key
+          },
+          update: {
+            value: setting.value,
+            updatedAt: new Date()
+          },
+          create: {
+            key: setting.key,
+            value: setting.value,
+            category: 'GENERAL',
+            description: `System setting for ${setting.key}`
+          }
+        });
+      }
+    }
+
     return NextResponse.json({
-      message: 'Settings updated successfully (Note: In production, these would be saved to database)',
+      message: 'Settings updated successfully',
       settings: body
     });
   } catch (error) {
