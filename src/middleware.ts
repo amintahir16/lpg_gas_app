@@ -15,12 +15,14 @@ const routePermissions = {
     '/financial',
     '/vendors',
     '/reports',
+    '/settings',
     '/api/customers',
     '/api/cylinders',
     '/api/expenses',
     '/api/vendors',
     '/api/reports',
-    '/api/dashboard'
+    '/api/dashboard',
+    '/api/settings'
   ],
   
   // User routes (accessible by USER, ADMIN, SUPER_ADMIN)

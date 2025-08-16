@@ -244,6 +244,7 @@ export default function VendorsPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
+            onFocus={(e) => e.target.select()}
           />
         </div>
       </div>

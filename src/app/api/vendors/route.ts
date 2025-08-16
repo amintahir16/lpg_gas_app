@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { Prisma } from '@prisma/client';
-import { createVendorAddedNotification } from '@/lib/notifications';
+import { createVendorAddedNotification } from '@/lib/simpleNotifications';
 
 export async function GET(request: NextRequest) {
   try {
@@ -99,7 +99,8 @@ export async function POST(request: NextRequest) {
 
     // Create notification for new vendor
     try {
-      await createVendorAddedNotification(companyName, session?.user?.email || 'Unknown User');
+      const userEmail = request.headers.get('x-user-email') || 'Unknown User';
+      await createVendorAddedNotification(companyName, userEmail, vendorCode);
     } catch (notificationError) {
       console.error('Failed to create notification:', notificationError);
       // Don't fail the main operation if notification fails

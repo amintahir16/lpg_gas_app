@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { Prisma, CylinderStatus, CylinderType } from '@prisma/client';
-import { createCylinderAddedNotification } from '@/lib/notifications';
+import { createCylinderAddedNotification } from '@/lib/simpleNotifications';
 
 export async function GET(request: NextRequest) {
   try {
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
 
     // Create notification for new cylinder
     try {
-      await createCylinderAddedNotification(code, session.user.email || 'Unknown User');
+      await createCylinderAddedNotification(code, session.user.email || 'Unknown User', cylinderType);
     } catch (notificationError) {
       console.error('Failed to create notification:', notificationError);
       // Don't fail the main operation if notification fails

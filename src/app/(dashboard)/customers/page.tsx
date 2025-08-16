@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -38,10 +38,10 @@ interface CustomersResponse {
 }
 
 export default function CustomersPage() {
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [pagination, setPagination] = useState({
     page: 1,
@@ -50,15 +50,32 @@ export default function CustomersPage() {
     pages: 0
   });
 
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Reset pagination when search changes
+  useEffect(() => {
+    setPagination(prev => ({ ...prev, page: 1 }));
+  }, [debouncedSearchTerm]);
+
   useEffect(() => {
     fetchCustomers();
-  }, [searchTerm, pagination.page]);
+  }, [debouncedSearchTerm, pagination.page]);
 
   const fetchCustomers = async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams({
-        search: searchTerm,
+        search: debouncedSearchTerm,
         page: pagination.page.toString(),
         limit: pagination.limit.toString()
       });
@@ -160,10 +177,12 @@ export default function CustomersPage() {
               <div className="relative">
                 <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <Input
+                  ref={searchInputRef}
                   placeholder="Search customers..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
+                  onFocus={(e) => e.target.select()}
                 />
               </div>
             </div>

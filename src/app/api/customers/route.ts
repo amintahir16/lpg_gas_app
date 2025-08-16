@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { Prisma } from '@prisma/client';
+import { createCustomerAddedNotification } from '@/lib/simpleNotifications';
 
 export async function GET(request: NextRequest) {
   try {
@@ -118,6 +119,19 @@ export async function POST(request: NextRequest) {
         }
       }
     });
+
+    // Create notification for new customer
+    try {
+      const userEmail = request.headers.get('x-user-email') || 'Unknown User';
+      await createCustomerAddedNotification(
+        `${firstName} ${lastName}`,
+        userEmail,
+        code
+      );
+    } catch (notificationError) {
+      console.error('Failed to create notification:', notificationError);
+      // Don't fail the main operation if notification fails
+    }
 
     return NextResponse.json(customer, { status: 201 });
   } catch (error) {

@@ -407,24 +407,52 @@ enum SupportRequestStatus {
 
 enum NotificationType {
   CYLINDER_ADDED
+  CYLINDER_UPDATED
+  CYLINDER_DELETED
+  CYLINDER_STATUS_CHANGED
   VENDOR_ADDED
+  VENDOR_UPDATED
+  VENDOR_DELETED
+  VENDOR_STATUS_CHANGED
+  CUSTOMER_ADDED
+  CUSTOMER_UPDATED
+  CUSTOMER_DELETED
+  CUSTOMER_STATUS_CHANGED
   EXPENSE_ADDED
+  EXPENSE_UPDATED
+  EXPENSE_DELETED
+  EXPENSE_STATUS_CHANGED
   PAYMENT_RECEIVED
+  PAYMENT_UPDATED
+  PAYMENT_DELETED
+  RENTAL_CREATED
+  RENTAL_UPDATED
+  RENTAL_COMPLETED
   LOW_INVENTORY
-  RENTAL_REQUEST
+  MAINTENANCE_DUE
   SYSTEM_ALERT
+  USER_ACTIVITY
+}
+
+enum NotificationPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
 }
 
 model Notification {
-  id        String           @id @default(cuid())
+  id        String              @id @default(cuid())
   type      NotificationType
   title     String
   message   String
-  isRead    Boolean          @default(false)
+  isRead    Boolean             @default(false)
+  priority  NotificationPriority @default(MEDIUM)
+  metadata  String?             // JSON string for additional data
   userId    String?
-  user      User?            @relation("UserNotifications", fields: [userId], references: [id])
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  user      User?               @relation("UserNotifications", fields: [userId], references: [id])
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
 
   @@map("notifications")
 }

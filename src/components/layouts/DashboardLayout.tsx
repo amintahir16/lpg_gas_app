@@ -20,6 +20,8 @@ import {
 } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Footer } from '@/components/ui/footer';
+
 import { cn } from '@/lib/utils';
 
 interface NavigationItem {
@@ -54,25 +56,31 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [notifications, setNotifications] = useState(0);
-  const [notificationData, setNotificationData] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const { data: session, status } = useSession();
-
-  // Fetch notifications
-  const fetchNotifications = async () => {
-    try {
-      const response = await fetch('/api/notifications?unreadOnly=true&limit=5');
-      if (response.ok) {
-        const data = await response.json();
-        setNotificationData(data.notifications);
-        setNotifications(data.notifications.length);
-      }
-    } catch (error) {
-      console.error('Failed to fetch notifications:', error);
-    }
+  
+  // Temporary simple notification system
+  const [notificationData, setNotificationData] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState(0);
+  
+  // Simple notification functions
+  const markAsRead = async (id: string) => {
+    setNotificationData(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+    setNotifications(prev => Math.max(0, prev - 1));
+  };
+  
+  const markAllAsRead = async () => {
+    setNotificationData(prev => prev.map(n => ({ ...n, isRead: true })));
+    setNotifications(0);
+  };
+  
+  // Mock stats
+  const stats = {
+    total: notificationData.length,
+    unread: notifications,
+    urgent: 0
   };
 
   // Redirect to login if not authenticated
@@ -82,15 +90,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     }
   }, [status, router]);
 
-  // Fetch notifications when authenticated
-  useEffect(() => {
-    if (status === 'authenticated') {
-      fetchNotifications();
-      // Poll for new notifications every 3 seconds
-      const interval = setInterval(fetchNotifications, 3000);
-      return () => clearInterval(interval);
-    }
-  }, [status]);
+
 
   // Show loading while checking authentication
   if (status === 'loading') {
@@ -119,41 +119,30 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const handleMarkAllRead = async () => {
     try {
-      const response = await fetch('/api/notifications', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ markAllAsRead: true })
-      });
-      if (response.ok) {
-        setNotifications(0);
-        setNotificationData([]);
-      }
+      await markAllAsRead();
+      setShowNotifications(false);
     } catch (error) {
       console.error('Failed to mark notifications as read:', error);
     }
   };
 
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'CYLINDER_ADDED': return 'bg-blue-600';
-      case 'VENDOR_ADDED': return 'bg-purple-600';
-      case 'EXPENSE_ADDED': return 'bg-red-600';
-      case 'PAYMENT_RECEIVED': return 'bg-green-600';
-      case 'LOW_INVENTORY': return 'bg-yellow-600';
-      default: return 'bg-gray-600';
-    }
+  // Add test notification
+  const addTestNotification = () => {
+    const newNotification = {
+      id: `test_${Date.now()}`,
+      type: 'TEST',
+      title: 'Test Notification',
+      message: 'This is a test notification to verify the system works',
+      isRead: false,
+      createdAt: new Date().toISOString(),
+      priority: 'MEDIUM'
+    };
+    
+    setNotificationData(prev => [newNotification, ...prev]);
+    setNotifications(prev => prev + 1);
   };
 
-  const formatTimeAgo = (dateString: string) => {
-    const now = new Date();
-    const date = new Date(dateString);
-    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
-    
-    if (diffInMinutes < 1) return 'Just now';
-    if (diffInMinutes < 60) return `${diffInMinutes} minutes ago`;
-    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hours ago`;
-    return `${Math.floor(diffInMinutes / 1440)} days ago`;
-  };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
@@ -253,7 +242,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       </div>
 
       {/* Main Content */}
-      <div className="lg:pl-64">
+      <div className="lg:pl-64 flex flex-col min-h-screen">
         {/* Top Navigation Bar */}
         <div className="sticky top-0 z-30 flex h-16 items-center justify-between px-4 bg-white/95 backdrop-blur-sm shadow-sm border-b border-gray-200">
           <div className="flex items-center">
@@ -272,7 +261,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           
           <div className="flex items-center space-x-4">
             {/* Notifications */}
-            <div className="relative">
+            <div className="relative flex items-center space-x-2">
               <Button 
                 variant="ghost" 
                 size="icon" 
@@ -280,70 +269,95 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 onClick={() => setShowNotifications(!showNotifications)}
               >
                 <BellIcon className="w-5 h-5" />
-                {notifications > 0 && (
+                {stats.unread > 0 && (
                   <Badge 
                     variant="destructive" 
                     className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-xs"
                   >
-                    {notifications}
+                    {stats.unread}
                   </Badge>
                 )}
               </Button>
+              
+              {/* Test Button */}
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={addTestNotification}
+                className="text-xs px-2 py-1"
+              >
+                Test
+              </Button>
+            </div>
 
-              {/* Notifications Dropdown */}
-              {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
-                  <div className="p-4 border-b border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleMarkAllRead}
-                        className="text-sm text-blue-600 hover:text-blue-800"
-                      >
-                        Mark all read
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="max-h-96 overflow-y-auto">
-                    {notificationData.length > 0 ? (
-                      <div className="divide-y divide-gray-100">
-                        {notificationData.map((notification) => (
-                          <div key={notification.id} className="p-4 hover:bg-gray-50">
-                            <div className="flex items-start space-x-3">
-                              <div className="flex-shrink-0">
-                                <div className={`w-2 h-2 rounded-full mt-2 ${getNotificationIcon(notification.type)}`}></div>
-                              </div>
-                              <div className="flex-1">
-                                <p className="text-sm font-medium text-gray-900">{notification.title}</p>
-                                <p className="text-sm text-gray-600">{notification.message}</p>
-                                <p className="text-xs text-gray-400 mt-1">{formatTimeAgo(notification.createdAt)}</p>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="p-8 text-center">
-                        <BellIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                        <p className="text-gray-500">No new notifications</p>
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-4 border-t border-gray-200">
+            {/* Simple Notifications Dropdown */}
+            {showNotifications && (
+              <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                <div className="p-4 border-b border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
-                      className="w-full"
-                      onClick={() => setShowNotifications(false)}
+                      onClick={handleMarkAllRead}
+                      className="text-sm text-blue-600 hover:text-blue-800"
                     >
-                      View all notifications
+                      Mark all read
                     </Button>
                   </div>
                 </div>
-              )}
-            </div>
+                <div className="max-h-96 overflow-y-auto">
+                  {notificationData.length > 0 ? (
+                    <div className="divide-y divide-gray-100">
+                      {notificationData.map((notification) => (
+                        <div key={notification.id} className="p-4 hover:bg-gray-50">
+                          <div className="flex items-start space-x-3">
+                            <div className="flex-shrink-0">
+                              <div className="w-2 h-2 rounded-full mt-2 bg-blue-600"></div>
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-gray-900">{notification.title}</p>
+                              <p className="text-sm text-gray-600">{notification.message}</p>
+                              <p className="text-xs text-gray-400 mt-1">
+                                {new Date(notification.createdAt).toLocaleTimeString()}
+                              </p>
+                            </div>
+                            {!notification.isRead && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => markAsRead(notification.id)}
+                                className="text-xs text-blue-600 hover:text-blue-800"
+                              >
+                                Mark read
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center">
+                      <BellIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                      <p className="text-gray-500">No notifications yet</p>
+                      <p className="text-sm text-gray-400 mt-1">Click Test to create one!</p>
+                    </div>
+                  )}
+                </div>
+                <div className="p-4 border-t border-gray-200">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => setShowNotifications(false)}
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
+            )}
+
+
 
             {/* User Menu */}
             <div className="hidden lg:flex items-center space-x-3">
@@ -358,31 +372,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </div>
 
         {/* Page Content */}
-        <main className="p-6">
+        <main className="flex-1 p-6">
           {children}
         </main>
 
         {/* Footer */}
-        <footer className="bg-white/95 backdrop-blur-sm border-t border-gray-200 mt-auto">
-          <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-            <div className="flex flex-col md:flex-row justify-between items-center">
-              <div className="text-sm text-gray-500 mb-4 md:mb-0 font-medium">
-                © 2024 LPG Gas Cylinder Business App. All rights reserved.
-              </div>
-              <div className="flex space-x-6">
-                <a href="#" className="text-sm text-gray-500 hover:text-gray-700 transition-colors font-medium">
-                  Privacy Policy
-                </a>
-                <a href="#" className="text-sm text-gray-500 hover:text-gray-700 transition-colors font-medium">
-                  Terms of Service
-                </a>
-                <a href="#" className="text-sm text-gray-500 hover:text-gray-700 transition-colors font-medium">
-                  Contact Support
-                </a>
-              </div>
-            </div>
-          </div>
-        </footer>
+        <Footer />
       </div>
     </div>
   );

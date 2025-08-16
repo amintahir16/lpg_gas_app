@@ -286,6 +286,7 @@ export default function InventoryPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
+            onFocus={(e) => e.target.select()}
           />
         </div>
         <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>

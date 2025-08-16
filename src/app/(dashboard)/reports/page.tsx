@@ -242,6 +242,7 @@ export default function ReportsPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
+            onFocus={(e) => e.target.select()}
           />
         </div>
         <Select value={selectedReport} onChange={(e) => setSelectedReport(e.target.value)}>

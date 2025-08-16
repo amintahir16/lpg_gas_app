@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
+import { Footer } from '@/components/ui/footer';
 import { 
   HomeIcon, 
   CubeIcon, 
@@ -143,7 +144,7 @@ export default function CustomerLayout({
       </div>
 
       {/* Main content */}
-      <div className="lg:pl-64">
+      <div className="lg:pl-64 flex flex-col min-h-screen">
         <div className="flex h-16 items-center justify-between px-4 bg-white shadow-sm">
           <div className="flex items-center">
             <Button
@@ -169,31 +170,12 @@ export default function CustomerLayout({
           </div>
         </div>
 
-        <main className="p-6">
+        <main className="flex-1 p-6">
           {children}
         </main>
 
         {/* Footer */}
-        <footer className="bg-white border-t mt-auto">
-          <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-            <div className="flex flex-col md:flex-row justify-between items-center">
-              <div className="text-sm text-gray-500 mb-4 md:mb-0">
-                © 2024 LPG Gas Cylinder Business App. All rights reserved.
-              </div>
-              <div className="flex space-x-6">
-                <a href="#" className="text-sm text-gray-500 hover:text-gray-700">
-                  Privacy Policy
-                </a>
-                <a href="#" className="text-sm text-gray-500 hover:text-gray-700">
-                  Terms of Service
-                </a>
-                <a href="#" className="text-sm text-gray-500 hover:text-gray-700">
-                  Contact Support
-                </a>
-              </div>
-            </div>
-          </div>
-        </footer>
+        <Footer />
       </div>
     </div>
   );

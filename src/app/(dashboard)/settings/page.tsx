@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "react-hot-toast";
 
 interface SystemSettings {
   companyName: string;
@@ -20,11 +21,15 @@ interface SystemSettings {
   timezone: string;
   maintenanceInterval: number;
   safetyInspectionInterval: number;
+  totalCustomers?: number;
+  totalVendors?: number;
+  totalCylinders?: number;
 }
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<Partial<SystemSettings>>({});
@@ -32,17 +37,21 @@ export default function SettingsPage() {
   const fetchSettings = async () => {
     try {
       setLoading(true);
+      setError(null);
       const response = await fetch('/api/settings');
       
       if (!response.ok) {
-        throw new Error('Failed to fetch settings');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to fetch settings');
       }
 
       const data = await response.json();
       setSettings(data);
       setFormData(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch settings');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch settings';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -61,6 +70,7 @@ export default function SettingsPage() {
 
   const handleSave = async () => {
     try {
+      setSaving(true);
       const response = await fetch('/api/settings', {
         method: 'PUT',
         headers: {
@@ -70,36 +80,54 @@ export default function SettingsPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update settings');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update settings');
       }
 
       const data = await response.json();
       setSettings(formData as SystemSettings);
       setIsEditing(false);
+      toast.success('Settings updated successfully!');
+      
+      // Refresh settings to get updated data
+      await fetchSettings();
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save settings';
+      toast.error(errorMessage);
       console.error('Failed to save settings:', err);
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleCancel = () => {
     setFormData(settings || {});
     setIsEditing(false);
+    setError(null);
   };
 
   if (loading) {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-gray-900 mb-4">System Settings</h1>
-        <p className="text-gray-600">Loading settings...</p>
+        <div className="flex items-center space-x-2">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+          <p className="text-gray-600">Loading settings...</p>
+        </div>
       </div>
     );
   }
 
-  if (error) {
+  if (error && !settings) {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-gray-900 mb-4">System Settings</h1>
-        <p className="text-red-600">Error: {error}</p>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-600 mb-2">Error: {error}</p>
+          <Button onClick={fetchSettings} variant="outline" size="sm">
+            Try Again
+          </Button>
+        </div>
       </div>
     );
   }
@@ -116,16 +144,59 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">System Settings</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">System Settings</h1>
+          <p className="text-gray-600 mt-1">Manage your business configuration and preferences</p>
+        </div>
         {!isEditing ? (
           <Button onClick={() => setIsEditing(true)}>Edit Settings</Button>
         ) : (
           <div className="flex gap-2">
-            <Button onClick={handleSave}>Save Changes</Button>
-            <Button variant="outline" onClick={handleCancel}>Cancel</Button>
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? 'Saving...' : 'Save Changes'}
+            </Button>
+            <Button variant="outline" onClick={handleCancel} disabled={saving}>
+              Cancel
+            </Button>
           </div>
         )}
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-600">{error}</p>
+        </div>
+      )}
+
+      {/* System Statistics */}
+      {settings.totalCustomers !== undefined && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className="border-0 shadow-sm bg-blue-50/50">
+            <CardContent className="p-4">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-blue-600">{settings.totalCustomers}</p>
+                <p className="text-sm text-gray-600">Total Customers</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-0 shadow-sm bg-green-50/50">
+            <CardContent className="p-4">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-green-600">{settings.totalVendors}</p>
+                <p className="text-sm text-gray-600">Total Vendors</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-0 shadow-sm bg-purple-50/50">
+            <CardContent className="p-4">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-purple-600">{settings.totalCylinders}</p>
+                <p className="text-sm text-gray-600">Total Cylinders</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Company Information */}
@@ -143,6 +214,7 @@ export default function SettingsPage() {
                   value={formData.companyName || ''}
                   onChange={(e) => handleInputChange('companyName', e.target.value)}
                   className="w-full"
+                  placeholder="Enter company name"
                 />
               ) : (
                 <p className="text-gray-900">{settings.companyName}</p>
@@ -155,9 +227,11 @@ export default function SettingsPage() {
               </label>
               {isEditing ? (
                 <Input
+                  type="email"
                   value={formData.contactEmail || ''}
                   onChange={(e) => handleInputChange('contactEmail', e.target.value)}
                   className="w-full"
+                  placeholder="Enter contact email"
                 />
               ) : (
                 <p className="text-gray-900">{settings.contactEmail}</p>
@@ -170,9 +244,11 @@ export default function SettingsPage() {
               </label>
               {isEditing ? (
                 <Input
+                  type="tel"
                   value={formData.contactPhone || ''}
                   onChange={(e) => handleInputChange('contactPhone', e.target.value)}
                   className="w-full"
+                  placeholder="Enter contact phone"
                 />
               ) : (
                 <p className="text-gray-900">{settings.contactPhone}</p>
@@ -189,6 +265,7 @@ export default function SettingsPage() {
                   onChange={(e) => handleInputChange('address', e.target.value)}
                   className="w-full"
                   rows={3}
+                  placeholder="Enter company address"
                 />
               ) : (
                 <p className="text-gray-900">{settings.address}</p>
@@ -205,6 +282,7 @@ export default function SettingsPage() {
                   onChange={(e) => handleInputChange('businessHours', e.target.value)}
                   className="w-full"
                   rows={2}
+                  placeholder="Enter business hours"
                 />
               ) : (
                 <p className="text-gray-900">{settings.businessHours}</p>
@@ -226,9 +304,11 @@ export default function SettingsPage() {
               {isEditing ? (
                 <Input
                   type="number"
+                  min="0"
                   value={formData.deliveryRadius || 0}
                   onChange={(e) => handleInputChange('deliveryRadius', Number(e.target.value))}
                   className="w-full"
+                  placeholder="Enter delivery radius"
                 />
               ) : (
                 <p className="text-gray-900">{settings.deliveryRadius} miles</p>
@@ -242,12 +322,15 @@ export default function SettingsPage() {
               {isEditing ? (
                 <Input
                   type="number"
+                  min="0"
+                  step="0.01"
                   value={formData.defaultCreditLimit || 0}
                   onChange={(e) => handleInputChange('defaultCreditLimit', Number(e.target.value))}
                   className="w-full"
+                  placeholder="Enter default credit limit"
                 />
               ) : (
-                <p className="text-gray-900">${settings.defaultCreditLimit}</p>
+                <p className="text-gray-900">${settings.defaultCreditLimit.toFixed(2)}</p>
               )}
             </div>
 
@@ -258,10 +341,13 @@ export default function SettingsPage() {
               {isEditing ? (
                 <Input
                   type="number"
+                  min="0"
+                  max="100"
                   step="0.1"
                   value={formData.taxRate || 0}
                   onChange={(e) => handleInputChange('taxRate', Number(e.target.value))}
                   className="w-full"
+                  placeholder="Enter tax rate"
                 />
               ) : (
                 <p className="text-gray-900">{settings.taxRate}%</p>
@@ -277,9 +363,12 @@ export default function SettingsPage() {
                   value={formData.currency || ''}
                   onChange={(e) => handleInputChange('currency', e.target.value)}
                 >
+                  <option value="">Select currency</option>
                   <option value="USD">USD ($)</option>
                   <option value="EUR">EUR (€)</option>
                   <option value="GBP">GBP (£)</option>
+                  <option value="CAD">CAD (C$)</option>
+                  <option value="AUD">AUD (A$)</option>
                 </Select>
               ) : (
                 <p className="text-gray-900">{settings.currency}</p>
@@ -295,10 +384,13 @@ export default function SettingsPage() {
                   value={formData.timezone || ''}
                   onChange={(e) => handleInputChange('timezone', e.target.value)}
                 >
-                  <option value="America/New_York">Eastern Time</option>
-                  <option value="America/Chicago">Central Time</option>
-                  <option value="America/Denver">Mountain Time</option>
-                  <option value="America/Los_Angeles">Pacific Time</option>
+                  <option value="">Select timezone</option>
+                  <option value="America/New_York">Eastern Time (ET)</option>
+                  <option value="America/Chicago">Central Time (CT)</option>
+                  <option value="America/Denver">Mountain Time (MT)</option>
+                  <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                  <option value="America/Anchorage">Alaska Time (AKT)</option>
+                  <option value="Pacific/Honolulu">Hawaii Time (HST)</option>
                 </Select>
               ) : (
                 <p className="text-gray-900">{settings.timezone}</p>
@@ -321,9 +413,11 @@ export default function SettingsPage() {
                 {isEditing ? (
                   <Input
                     type="number"
+                    min="1"
                     value={formData.maintenanceInterval || 0}
                     onChange={(e) => handleInputChange('maintenanceInterval', Number(e.target.value))}
                     className="w-full"
+                    placeholder="Enter maintenance interval"
                   />
                 ) : (
                   <p className="text-gray-900">{settings.maintenanceInterval} days</p>
@@ -337,9 +431,11 @@ export default function SettingsPage() {
                 {isEditing ? (
                   <Input
                     type="number"
+                    min="1"
                     value={formData.safetyInspectionInterval || 0}
                     onChange={(e) => handleInputChange('safetyInspectionInterval', Number(e.target.value))}
                     className="w-full"
+                    placeholder="Enter safety inspection interval"
                   />
                 ) : (
                   <p className="text-gray-900">{settings.safetyInspectionInterval} days</p>

@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { ExpenseCategory, Prisma } from '@prisma/client';
-import { createExpenseAddedNotification } from '@/lib/notifications';
+import { createExpenseAddedNotification } from '@/lib/simpleNotifications';
 
 export async function GET(request: NextRequest) {
   try {
@@ -143,7 +143,8 @@ export async function POST(request: NextRequest) {
       await createExpenseAddedNotification(
         parseFloat(amount), 
         category, 
-        session.user.email || 'Unknown User'
+        session.user.email || 'Unknown User',
+        description
       );
     } catch (notificationError) {
       console.error('Failed to create notification:', notificationError);

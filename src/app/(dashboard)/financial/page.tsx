@@ -306,6 +306,7 @@ export default function FinancialPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
+            onFocus={(e) => e.target.select()}
           />
         </div>
         <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
