@@ -54,10 +54,26 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [notifications, setNotifications] = useState(0); // Real notification count
+  const [notifications, setNotifications] = useState(0);
+  const [notificationData, setNotificationData] = useState<any[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const { data: session, status } = useSession();
+
+  // Fetch notifications
+  const fetchNotifications = async () => {
+    try {
+      const response = await fetch('/api/notifications?unreadOnly=true&limit=5');
+      if (response.ok) {
+        const data = await response.json();
+        setNotificationData(data.notifications);
+        setNotifications(data.notifications.length);
+      }
+    } catch (error) {
+      console.error('Failed to fetch notifications:', error);
+    }
+  };
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -65,6 +81,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       router.push('/login');
     }
   }, [status, router]);
+
+  // Fetch notifications when authenticated
+  useEffect(() => {
+    if (status === 'authenticated') {
+      fetchNotifications();
+      // Poll for new notifications every 3 seconds
+      const interval = setInterval(fetchNotifications, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [status]);
 
   // Show loading while checking authentication
   if (status === 'loading') {
@@ -89,6 +115,44 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const handleLogout = () => {
     signOut({ callbackUrl: '/login' });
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      const response = await fetch('/api/notifications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markAllAsRead: true })
+      });
+      if (response.ok) {
+        setNotifications(0);
+        setNotificationData([]);
+      }
+    } catch (error) {
+      console.error('Failed to mark notifications as read:', error);
+    }
+  };
+
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'CYLINDER_ADDED': return 'bg-blue-600';
+      case 'VENDOR_ADDED': return 'bg-purple-600';
+      case 'EXPENSE_ADDED': return 'bg-red-600';
+      case 'PAYMENT_RECEIVED': return 'bg-green-600';
+      case 'LOW_INVENTORY': return 'bg-yellow-600';
+      default: return 'bg-gray-600';
+    }
+  };
+
+  const formatTimeAgo = (dateString: string) => {
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes} minutes ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hours ago`;
+    return `${Math.floor(diffInMinutes / 1440)} days ago`;
   };
 
   return (
@@ -208,17 +272,78 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           
           <div className="flex items-center space-x-4">
             {/* Notifications */}
-            <Button variant="ghost" size="icon" className="relative text-gray-500 hover:text-gray-700">
-              <BellIcon className="w-5 h-5" />
-              {notifications > 0 && (
-                <Badge 
-                  variant="destructive" 
-                  className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-xs"
-                >
-                  {notifications}
-                </Badge>
+            <div className="relative">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="relative text-gray-500 hover:text-gray-700"
+                onClick={() => setShowNotifications(!showNotifications)}
+              >
+                <BellIcon className="w-5 h-5" />
+                {notifications > 0 && (
+                  <Badge 
+                    variant="destructive" 
+                    className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-xs"
+                  >
+                    {notifications}
+                  </Badge>
+                )}
+              </Button>
+
+              {/* Notifications Dropdown */}
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                  <div className="p-4 border-b border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleMarkAllRead}
+                        className="text-sm text-blue-600 hover:text-blue-800"
+                      >
+                        Mark all read
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="max-h-96 overflow-y-auto">
+                    {notificationData.length > 0 ? (
+                      <div className="divide-y divide-gray-100">
+                        {notificationData.map((notification) => (
+                          <div key={notification.id} className="p-4 hover:bg-gray-50">
+                            <div className="flex items-start space-x-3">
+                              <div className="flex-shrink-0">
+                                <div className={`w-2 h-2 rounded-full mt-2 ${getNotificationIcon(notification.type)}`}></div>
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-gray-900">{notification.title}</p>
+                                <p className="text-sm text-gray-600">{notification.message}</p>
+                                <p className="text-xs text-gray-400 mt-1">{formatTimeAgo(notification.createdAt)}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-8 text-center">
+                        <BellIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <p className="text-gray-500">No new notifications</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-4 border-t border-gray-200">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => setShowNotifications(false)}
+                    >
+                      View all notifications
+                    </Button>
+                  </div>
+                </div>
               )}
-            </Button>
+            </div>
 
             {/* User Menu */}
             <div className="hidden lg:flex items-center space-x-3">

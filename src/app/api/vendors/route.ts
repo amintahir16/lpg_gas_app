@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/db';
 import { Prisma } from '@prisma/client';
+import { createVendorAddedNotification } from '@/lib/notifications';
 
 export async function GET(request: NextRequest) {
   try {
     // Get user info from headers (set by middleware)
-    const userId = request.headers.get('x-user-id');
-    const userRole = request.headers.get('x-user-role');
+    const session = await getServerSession(authOptions);
+    const userId = session?.user?.id;
+    const userRole = session?.user?.role;
     
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -58,11 +62,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // Get user info from headers (set by middleware)
-    const userId = request.headers.get('x-user-id');
-    const userRole = request.headers.get('x-user-role');
+    const session = await getServerSession(authOptions);
     
-    if (!userId) {
+    if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -95,6 +97,14 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    // Create notification for new vendor
+    try {
+      await createVendorAddedNotification(companyName, session?.user?.email || 'Unknown User');
+    } catch (notificationError) {
+      console.error('Failed to create notification:', notificationError);
+      // Don't fail the main operation if notification fails
+    }
+
     return NextResponse.json(vendor, { status: 201 });
   } catch (error) {
     console.error('Vendor creation error:', error);
@@ -103,4 +113,57 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}
+
+export async function PUT(request: NextRequest) {
+  try {
+    const userId = request.headers.get('x-user-id');
+    const userRole = request.headers.get('x-user-role');
+    
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const {
+      id,
+      companyName,
+      contactPerson,
+      email,
+      phone,
+      address,
+      taxId,
+      paymentTerms
+    } = body;
+
+    // Check if vendor exists
+    const existingVendor = await prisma.vendor.findUnique({
+      where: { id }
+    });
+
+    if (!existingVendor) {
+      return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
+    }
+
+    const updatedVendor = await prisma.vendor.update({
+      where: { id },
+      data: {
+        companyName,
+        contactPerson,
+        email,
+        phone,
+        address,
+        taxId,
+        paymentTerms: parseInt(paymentTerms) || 30
+      }
+    });
+
+    return NextResponse.json(updatedVendor);
+  } catch (error) {
+    console.error('Vendor update error:', error);
+    return NextResponse.json(
+      { error: 'Failed to update vendor' },
+      { status: 500 }
+    );
+  }
+}

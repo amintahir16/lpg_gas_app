@@ -1,5 +1,6 @@
 "use client";
-import { useState, useEffect } from 'react';
+
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,8 +13,10 @@ interface Cylinder {
   code: string;
   cylinderType: string;
   capacity: number;
+  currentStatus: string;
   location: string;
-  currentStatus: 'AVAILABLE' | 'RENTED' | 'MAINTENANCE' | 'RETIRED';
+  purchaseDate: string | null;
+  purchasePrice: number | null;
   lastMaintenanceDate: string | null;
   nextMaintenanceDate: string | null;
 }
@@ -29,13 +32,19 @@ interface CylindersResponse {
 }
 
 export default function InventoryPage() {
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [selectedCylinder, setSelectedCylinder] = useState<Cylinder | null>(null);
   const [cylinders, setCylinders] = useState<Cylinder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
@@ -43,11 +52,33 @@ export default function InventoryPage() {
     pages: 0
   });
 
+  // Debounce search term
+  useEffect(() => {
+    if (searchTerm) {
+      setIsSearching(true);
+    }
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+      setIsSearching(false);
+    }, 500); // 500ms delay
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Reset pagination when search changes
+  useEffect(() => {
+    if (debouncedSearchTerm !== searchTerm) return; // Only reset when debounced term is set
+    setPagination(prev => ({ ...prev, page: 1 }));
+  }, [debouncedSearchTerm]);
+
   const fetchCylinders = async () => {
     try {
-      setLoading(true);
+      // Only show loading spinner on initial load, not during search
+      if (cylinders.length === 0) {
+        setLoading(true);
+      }
       const params = new URLSearchParams({
-        search: searchTerm,
+        search: debouncedSearchTerm,
         status: statusFilter === 'ALL' ? '' : statusFilter,
         type: typeFilter === 'ALL' ? '' : typeFilter,
         page: pagination.page.toString(),
@@ -71,7 +102,7 @@ export default function InventoryPage() {
 
   useEffect(() => {
     fetchCylinders();
-  }, [searchTerm, statusFilter, typeFilter, pagination.page]);
+  }, [debouncedSearchTerm, statusFilter, typeFilter, pagination.page]);
 
   const handleAddCylinder = async (formData: any) => {
     try {
@@ -93,6 +124,44 @@ export default function InventoryPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create cylinder');
     }
+  };
+
+  const handleEditCylinder = async (formData: any) => {
+    if (!selectedCylinder) return;
+    
+    try {
+      const response = await fetch('/api/cylinders', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: selectedCylinder.id,
+          ...formData
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update cylinder');
+      }
+
+      // Refresh cylinders after updating
+      fetchCylinders();
+      setShowEditForm(false);
+      setSelectedCylinder(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update cylinder');
+    }
+  };
+
+  const handleViewCylinder = (cylinder: Cylinder) => {
+    setSelectedCylinder(cylinder);
+    setShowViewModal(true);
+  };
+
+  const handleEditClick = (cylinder: Cylinder) => {
+    setSelectedCylinder(cylinder);
+    setShowEditForm(true);
   };
 
   const getStatusColor = (status: string) => {
@@ -212,6 +281,7 @@ export default function InventoryPage() {
         <div className="flex-1 relative">
           <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input
+            ref={searchInputRef}
             placeholder="Search cylinders..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -227,8 +297,8 @@ export default function InventoryPage() {
         </Select>
         <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
           <option value="ALL">All Types</option>
-          <option value="15KG">15KG</option>
-          <option value="45KG">45KG</option>
+          <option value="KG_15">15KG</option>
+          <option value="KG_45">45KG</option>
         </Select>
       </div>
 
@@ -302,10 +372,18 @@ export default function InventoryPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
-                          <Button variant="outline" size="sm">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleEditClick(cylinder)}
+                          >
                             Edit
                           </Button>
-                          <Button variant="ghost" size="sm">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleViewCylinder(cylinder)}
+                          >
                             View
                           </Button>
                         </div>
@@ -368,8 +446,8 @@ export default function InventoryPage() {
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Cylinder Type</label>
                   <Select name="cylinderType" required>
-                    <option value="15KG">15KG</option>
-                    <option value="45KG">45KG</option>
+                    <option value="KG_15">15KG</option>
+                    <option value="KG_45">45KG</option>
                   </Select>
                 </div>
                 <div>
@@ -401,6 +479,177 @@ export default function InventoryPage() {
                   </Button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Cylinder Modal */}
+      {showEditForm && selectedCylinder && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Cylinder</h3>
+              <form className="space-y-4" onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                handleEditCylinder({
+                  cylinderType: formData.get('cylinderType'),
+                  capacity: formData.get('capacity'),
+                  location: formData.get('location'),
+                  currentStatus: formData.get('currentStatus'),
+                  purchaseDate: formData.get('purchaseDate'),
+                  purchasePrice: formData.get('purchasePrice'),
+                  lastMaintenanceDate: formData.get('lastMaintenanceDate'),
+                  nextMaintenanceDate: formData.get('nextMaintenanceDate')
+                });
+              }}>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Cylinder Type</label>
+                  <Select name="cylinderType" defaultValue={selectedCylinder.cylinderType} required>
+                    <option value="KG_15">15KG</option>
+                    <option value="KG_45">45KG</option>
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Capacity (KG)</label>
+                  <Input name="capacity" type="number" defaultValue={selectedCylinder.capacity} required />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Location</label>
+                  <Input name="location" type="text" defaultValue={selectedCylinder.location} required />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
+                  <Select name="currentStatus" defaultValue={selectedCylinder.currentStatus} required>
+                    <option value="AVAILABLE">Available</option>
+                    <option value="RENTED">Rented</option>
+                    <option value="MAINTENANCE">Maintenance</option>
+                    <option value="RETIRED">Retired</option>
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Purchase Date</label>
+                  <Input 
+                    name="purchaseDate" 
+                    type="date" 
+                    defaultValue={selectedCylinder.purchaseDate ? new Date(selectedCylinder.purchaseDate).toISOString().split('T')[0] : ''}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Purchase Price</label>
+                  <Input 
+                    name="purchasePrice" 
+                    type="number" 
+                    placeholder="0.00" 
+                    step="0.01"
+                    defaultValue={selectedCylinder.purchasePrice || ''}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Last Maintenance Date</label>
+                  <Input 
+                    name="lastMaintenanceDate" 
+                    type="date"
+                    defaultValue={selectedCylinder.lastMaintenanceDate ? new Date(selectedCylinder.lastMaintenanceDate).toISOString().split('T')[0] : ''}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Next Maintenance Date</label>
+                  <Input 
+                    name="nextMaintenanceDate" 
+                    type="date"
+                    defaultValue={selectedCylinder.nextMaintenanceDate ? new Date(selectedCylinder.nextMaintenanceDate).toISOString().split('T')[0] : ''}
+                  />
+                </div>
+                <div className="flex justify-end space-x-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setShowEditForm(false);
+                      setSelectedCylinder(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit">
+                    Update Cylinder
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Cylinder Modal */}
+      {showViewModal && selectedCylinder && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Cylinder Details</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700">Cylinder Code</label>
+                  <p className="text-sm text-gray-900 font-medium">{selectedCylinder.code}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700">Type</label>
+                  <Badge variant="secondary" className="font-semibold">
+                    {selectedCylinder.cylinderType}
+                  </Badge>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700">Capacity</label>
+                  <p className="text-sm text-gray-900">{selectedCylinder.capacity} KG</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700">Location</label>
+                  <p className="text-sm text-gray-900">{selectedCylinder.location}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700">Status</label>
+                  <Badge variant={getStatusColor(selectedCylinder.currentStatus) as any} className="font-semibold">
+                    {selectedCylinder.currentStatus}
+                  </Badge>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700">Last Maintenance</label>
+                  <p className="text-sm text-gray-900">
+                    {selectedCylinder.lastMaintenanceDate 
+                      ? new Date(selectedCylinder.lastMaintenanceDate).toLocaleDateString() 
+                      : 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700">Next Maintenance</label>
+                  <p className="text-sm text-gray-900">
+                    {selectedCylinder.nextMaintenanceDate 
+                      ? new Date(selectedCylinder.nextMaintenanceDate).toLocaleDateString() 
+                      : 'N/A'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-end space-x-3 mt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowViewModal(false);
+                    setSelectedCylinder(null);
+                  }}
+                >
+                  Close
+                </Button>
+                <Button
+                  onClick={() => {
+                    setShowViewModal(false);
+                    setShowEditForm(true);
+                  }}
+                >
+                  Edit Cylinder
+                </Button>
+              </div>
             </div>
           </div>
         </div>

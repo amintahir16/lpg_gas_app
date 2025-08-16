@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -33,12 +33,14 @@ interface ReportsResponse {
 }
 
 export default function ReportsPage() {
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [selectedReport, setSelectedReport] = useState('');
   const [dateRange, setDateRange] = useState('LAST_30_DAYS');
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
@@ -46,11 +48,29 @@ export default function ReportsPage() {
     pages: 0
   });
 
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500); // 500ms delay
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Reset pagination when search changes
+  useEffect(() => {
+    if (debouncedSearchTerm !== searchTerm) return;
+    setPagination(prev => ({ ...prev, page: 1 }));
+  }, [debouncedSearchTerm]);
+
   const fetchReports = async () => {
     try {
-      setLoading(true);
+      // Only show loading spinner on initial load, not during search
+      if (reports.length === 0) {
+        setLoading(true);
+      }
       const params = new URLSearchParams({
-        search: searchTerm,
+        search: debouncedSearchTerm,
         page: pagination.page.toString(),
         limit: pagination.limit.toString()
       });
@@ -72,7 +92,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     fetchReports();
-  }, [searchTerm, pagination.page]);
+  }, [debouncedSearchTerm, pagination.page]);
 
   const handleGenerateReport = async () => {
     try {
@@ -217,6 +237,7 @@ export default function ReportsPage() {
         <div className="flex-1 relative">
           <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input
+            ref={searchInputRef}
             placeholder="Search reports..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}

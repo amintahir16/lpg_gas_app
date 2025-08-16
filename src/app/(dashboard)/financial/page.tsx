@@ -1,19 +1,35 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { PlusIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { 
+  PlusIcon,
+  MagnifyingGlassIcon,
+  EyeIcon,
+  PencilIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon
+} from '@heroicons/react/24/outline';
 
 interface Expense {
   id: string;
   category: string;
   description: string;
   amount: number;
-  date: string;
-  status: 'pending' | 'approved' | 'rejected';
+  expenseDate: string;
+  receiptUrl?: string;
+  status?: 'PENDING' | 'APPROVED' | 'REJECTED';
+  userId: string;
+  createdAt: string;
+  updatedAt?: string;
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+  };
 }
 
 interface ExpensesResponse {
@@ -27,9 +43,14 @@ interface ExpensesResponse {
 }
 
 export default function FinancialPage() {
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [showAddExpense, setShowAddExpense] = useState(false);
+  const [showEditExpense, setShowEditExpense] = useState(false);
+  const [showViewExpense, setShowViewExpense] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,11 +61,28 @@ export default function FinancialPage() {
     pages: 0
   });
 
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Reset pagination when search changes
+  useEffect(() => {
+    if (debouncedSearchTerm !== searchTerm) return;
+    setPagination(prev => ({ ...prev, page: 1 }));
+  }, [debouncedSearchTerm, categoryFilter]);
+
   const fetchExpenses = async () => {
     try {
-      setLoading(true);
+      if (expenses.length === 0) {
+        setLoading(true);
+      }
       const params = new URLSearchParams({
-        search: searchTerm,
+        search: debouncedSearchTerm,
         category: categoryFilter === 'ALL' ? '' : categoryFilter,
         page: pagination.page.toString(),
         limit: pagination.limit.toString()
@@ -67,10 +105,50 @@ export default function FinancialPage() {
 
   useEffect(() => {
     fetchExpenses();
-  }, [searchTerm, categoryFilter, pagination.page]);
+  }, [debouncedSearchTerm, categoryFilter, pagination.page]);
+
+  const handleEditExpense = (expense: Expense) => {
+    setSelectedExpense(expense);
+    setShowEditExpense(true);
+  };
+
+  const handleViewExpense = (expense: Expense) => {
+    setSelectedExpense(expense);
+    setShowViewExpense(true);
+  };
+
+  const handleUpdateExpense = async (formData: any) => {
+    if (!selectedExpense) return;
+    
+    try {
+      const response = await fetch('/api/expenses', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: selectedExpense.id,
+          ...formData
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update expense');
+      }
+
+      // Refresh expenses after updating
+      fetchExpenses();
+      setShowEditExpense(false);
+      setSelectedExpense(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update expense');
+    }
+  };
 
   const handleAddExpense = async (formData: any) => {
     try {
+      console.log('Form data being sent:', formData);
+      
       const response = await fetch('/api/expenses', {
         method: 'POST',
         headers: {
@@ -79,25 +157,35 @@ export default function FinancialPage() {
         body: JSON.stringify(formData),
       });
 
+      console.log('Response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error('Failed to create expense');
+        const errorData = await response.json();
+        console.error('API error response:', errorData);
+        throw new Error(errorData.error || 'Failed to create expense');
       }
 
+      const result = await response.json();
+      console.log('Success response:', result);
+
       // Refresh expenses after creating
-      fetchExpenses();
+      await fetchExpenses();
       setShowAddExpense(false);
+      setError(null); // Clear any previous errors
     } catch (err) {
+      console.error('Add expense error:', err);
       setError(err instanceof Error ? err.message : 'Failed to create expense');
     }
   };
 
   const getStatusColor = (status: string) => {
+    if (!status) return 'secondary';
     switch (status) {
-      case 'approved':
+      case 'APPROVED':
         return 'success';
-      case 'pending':
+      case 'PENDING':
         return 'warning';
-      case 'rejected':
+      case 'REJECTED':
         return 'destructive';
       default:
         return 'secondary';
@@ -105,10 +193,11 @@ export default function FinancialPage() {
   };
 
   const getStatusText = (status: string) => {
-    return status.charAt(0).toUpperCase() + status.slice(1);
+    if (!status) return 'Unknown';
+    return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
   };
 
-  const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const totalExpenses = expenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
 
   if (loading) {
     return (
@@ -175,7 +264,7 @@ export default function FinancialPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-gray-900">
-              {expenses.filter(e => e.status === 'pending').length}
+              {expenses.filter(e => e.status === 'PENDING' || !e.status).length}
             </div>
             <p className="text-xs text-gray-500 mt-1 font-medium">Awaiting approval</p>
           </CardContent>
@@ -187,7 +276,7 @@ export default function FinancialPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-gray-900">
-              {expenses.filter(e => e.status === 'approved').length}
+              {expenses.filter(e => e.status === 'APPROVED').length}
             </div>
             <p className="text-xs text-gray-500 mt-1 font-medium">Approved expenses</p>
           </CardContent>
@@ -199,7 +288,7 @@ export default function FinancialPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-gray-900">
-              {expenses.filter(e => e.status === 'rejected').length}
+              {expenses.filter(e => e.status === 'REJECTED').length}
             </div>
             <p className="text-xs text-gray-500 mt-1 font-medium">Rejected expenses</p>
           </CardContent>
@@ -211,6 +300,8 @@ export default function FinancialPage() {
         <div className="flex-1 relative">
           <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input
+            ref={searchInputRef}
+            type="text"
             placeholder="Search expenses..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -221,10 +312,9 @@ export default function FinancialPage() {
           <option value="ALL">All Categories</option>
           <option value="FUEL">Fuel</option>
           <option value="SALARY">Salary</option>
+          <option value="MEALS">Meals</option>
           <option value="MAINTENANCE">Maintenance</option>
           <option value="UTILITIES">Utilities</option>
-          <option value="OFFICE">Office</option>
-          <option value="TRAVEL">Travel</option>
           <option value="OTHER">Other</option>
         </Select>
       </div>
@@ -275,22 +365,30 @@ export default function FinancialPage() {
                         </Badge>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                        ${expense.amount.toFixed(2)}
+                        ${Number(expense.amount).toFixed(2)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        {new Date(expense.date).toLocaleDateString()}
+                        {new Date(expense.expenseDate).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge variant={getStatusColor(expense.status) as any} className="font-semibold">
-                          {getStatusText(expense.status)}
+                        <Badge variant={getStatusColor(expense.status || 'PENDING') as any} className="font-semibold">
+                          {getStatusText(expense.status || 'PENDING')}
                         </Badge>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
-                          <Button variant="outline" size="sm">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleEditExpense(expense)}
+                          >
                             Edit
                           </Button>
-                          <Button variant="ghost" size="sm">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleViewExpense(expense)}
+                          >
                             View
                           </Button>
                         </div>
@@ -335,61 +433,271 @@ export default function FinancialPage() {
 
       {/* Add Expense Modal */}
       {showAddExpense && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Expense</h3>
-              <form className="space-y-4" onSubmit={(e) => {
-                e.preventDefault();
-                const formData = new FormData(e.currentTarget);
-                handleAddExpense({
-                  category: formData.get('category'),
-                  description: formData.get('description'),
-                  amount: formData.get('amount'),
-                  date: formData.get('date')
-                });
-              }}>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Add New Expense</h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAddExpense(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </Button>
+            </div>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target as HTMLFormElement);
+              
+              const category = formData.get('category') as string;
+              const description = formData.get('description') as string;
+              const amount = formData.get('amount') as string;
+              const dateValue = formData.get('date') as string;
+              const receiptUrl = formData.get('receiptUrl') as string;
+              
+              console.log('Raw form values:', { category, description, amount, dateValue, receiptUrl });
+              
+              if (!category || !description || !amount || !dateValue) {
+                setError('All required fields must be filled');
+                return;
+              }
+              
+              handleAddExpense({
+                category,
+                description,
+                amount: parseFloat(amount),
+                expenseDate: dateValue,
+                receiptUrl: receiptUrl || null
+              });
+            }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Category</label>
+                <Select name="category" required>
+                  <option value="">Select category</option>
+                  <option value="FUEL">Fuel</option>
+                  <option value="MAINTENANCE">Maintenance</option>
+                  <option value="INSURANCE">Insurance</option>
+                  <option value="OFFICE_SUPPLIES">Office Supplies</option>
+                  <option value="UTILITIES">Utilities</option>
+                  <option value="MARKETING">Marketing</option>
+                  <option value="OTHER">Other</option>
+                </Select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
+                <Input name="description" type="text" placeholder="Expense description" required />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Amount</label>
+                <Input name="amount" type="number" placeholder="0.00" step="0.01" required />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Date</label>
+                <Input name="date" type="date" required defaultValue={new Date().toISOString().split('T')[0]} />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Receipt URL (Optional)</label>
+                <Input name="receiptUrl" type="url" placeholder="https://..." />
+              </div>
+              <div className="flex justify-end space-x-2 mt-6">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowAddExpense(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white">
+                  Add Expense
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Expense Modal */}
+      {showEditExpense && selectedExpense && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Edit Expense</h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setShowEditExpense(false);
+                  setSelectedExpense(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </Button>
+            </div>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target as HTMLFormElement);
+              handleUpdateExpense({
+                category: formData.get('category'),
+                amount: formData.get('amount'),
+                description: formData.get('description'),
+                expenseDate: formData.get('expenseDate'),
+                receiptUrl: formData.get('receiptUrl')
+              });
+            }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Category</label>
+                <Select name="category" defaultValue={selectedExpense.category} required>
+                  <option value="FUEL">Fuel</option>
+                  <option value="MAINTENANCE">Maintenance</option>
+                  <option value="INSURANCE">Insurance</option>
+                  <option value="OFFICE_SUPPLIES">Office Supplies</option>
+                  <option value="UTILITIES">Utilities</option>
+                  <option value="MARKETING">Marketing</option>
+                  <option value="OTHER">Other</option>
+                </Select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
+                <Input 
+                  name="description" 
+                  type="text" 
+                  defaultValue={selectedExpense.description}
+                  placeholder="Expense description" 
+                  required 
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Amount</label>
+                <Input 
+                  name="amount" 
+                  type="number" 
+                  defaultValue={Number(selectedExpense.amount).toString()}
+                  placeholder="0.00" 
+                  step="0.01" 
+                  required 
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Date</label>
+                <Input 
+                  name="expenseDate" 
+                  type="date" 
+                  defaultValue={new Date(selectedExpense.expenseDate).toISOString().split('T')[0]}
+                  required 
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Receipt URL (Optional)</label>
+                <Input 
+                  name="receiptUrl" 
+                  type="url" 
+                  defaultValue={selectedExpense.receiptUrl || ''}
+                  placeholder="https://..." 
+                />
+              </div>
+              <div className="flex justify-end space-x-2 mt-6">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowEditExpense(false);
+                    setSelectedExpense(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white">
+                  Update Expense
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* View Expense Modal */}
+      {showViewExpense && selectedExpense && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Expense Details</h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setShowViewExpense(false);
+                  setSelectedExpense(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </Button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Category</label>
+                <div className="p-2 bg-gray-50 rounded border">
+                  <Badge variant="outline" className="text-sm">
+                    {selectedExpense.category.replace('_', ' ')}
+                  </Badge>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Description</label>
+                <div className="p-2 bg-gray-50 rounded border">
+                  {selectedExpense.description}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Amount</label>
+                <div className="p-2 bg-gray-50 rounded border text-green-600 font-semibold">
+                  ${Number(selectedExpense.amount).toFixed(2)}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Date</label>
+                <div className="p-2 bg-gray-50 rounded border">
+                  {new Date(selectedExpense.expenseDate).toLocaleDateString()}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Created By</label>
+                <div className="p-2 bg-gray-50 rounded border">
+                  {selectedExpense.user?.name || 'Unknown'}
+                </div>
+              </div>
+              {selectedExpense.receiptUrl && (
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Category</label>
-                  <Select name="category" required>
-                    <option value="FUEL">Fuel</option>
-                    <option value="SALARY">Salary</option>
-                    <option value="MAINTENANCE">Maintenance</option>
-                    <option value="UTILITIES">Utilities</option>
-                    <option value="OFFICE">Office</option>
-                    <option value="TRAVEL">Travel</option>
-                    <option value="OTHER">Other</option>
-                  </Select>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Receipt</label>
+                  <div className="p-2 bg-gray-50 rounded border">
+                    <a 
+                      href={selectedExpense.receiptUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 underline"
+                    >
+                      View Receipt
+                    </a>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
-                  <Input name="description" type="text" placeholder="Expense description" required />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Amount</label>
-                  <Input name="amount" type="number" placeholder="0.00" step="0.01" required />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Date</label>
-                  <Input name="date" type="date" required />
-                </div>
-                <div className="flex justify-end space-x-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setShowAddExpense(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit">
-                    Add Expense
-                  </Button>
-                </div>
-              </form>
+              )}
+              <div className="flex justify-end mt-6">
+                <Button
+                  onClick={() => {
+                    setShowViewExpense(false);
+                    setSelectedExpense(null);
+                  }}
+                >
+                  Close
+                </Button>
+              </div>
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
-} 
+}

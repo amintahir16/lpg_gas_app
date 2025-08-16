@@ -24,6 +24,14 @@ const rolePermissions: Record<Role, Permission[]> = {
     { resource: 'customer.payments', action: 'read' },
     { resource: 'customer.support', action: 'create' },
   ],
+  VENDOR: [
+    { resource: 'vendor', action: 'manage' },
+    { resource: 'vendor.inventory', action: 'manage' },
+    { resource: 'vendor.orders', action: 'manage' },
+    { resource: 'vendor.payments', action: 'read' },
+    { resource: 'vendor.profile', action: 'update' },
+    { resource: 'customer', action: 'read' },
+  ],
   ADMIN: [
     { resource: 'customer', action: 'manage' },
     { resource: 'inventory', action: 'manage' },
@@ -118,8 +126,9 @@ export async function requireRole(requiredRole: Role): Promise<AuthenticatedUser
   
   const roleHierarchy: Record<Role, Role[]> = {
     USER: ['USER'],
+    VENDOR: ['VENDOR'],
     ADMIN: ['USER', 'ADMIN'],
-    SUPER_ADMIN: ['USER', 'ADMIN', 'SUPER_ADMIN'],
+    SUPER_ADMIN: ['USER', 'VENDOR', 'ADMIN', 'SUPER_ADMIN'],
   };
   
   const userRoles = roleHierarchy[user.role] || [];
@@ -189,6 +198,8 @@ export function getDashboardUrl(userRole: Role): string {
       return '/dashboard';
     case 'USER':
       return '/customer/dashboard';
+    case 'VENDOR':
+      return '/vendor/dashboard';
     default:
       return '/login';
   }

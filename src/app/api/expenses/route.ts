@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
-import { Prisma, ExpenseCategory } from '@prisma/client';
+import { prisma } from '@/lib/db';
+import { ExpenseCategory, Prisma } from '@prisma/client';
+import { createExpenseAddedNotification } from '@/lib/notifications';
 
 export async function GET(request: NextRequest) {
   try {
@@ -73,6 +74,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+    console.log('API received body:', body);
+    
     const {
       category,
       amount,
@@ -81,13 +84,47 @@ export async function POST(request: NextRequest) {
       receiptUrl
     } = body;
 
+    // Validate required fields
+    if (!category || !description || !amount || !expenseDate) {
+      return NextResponse.json(
+        { error: 'Missing required fields: category, description, amount, expenseDate' },
+        { status: 400 }
+      );
+    }
+
+    // Validate date before creating
+    if (isNaN(Date.parse(expenseDate))) {
+      return NextResponse.json(
+        { error: 'Invalid expense date provided' },
+        { status: 400 }
+      );
+    }
+
+    // Validate amount
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      return NextResponse.json(
+        { error: 'Invalid amount provided' },
+        { status: 400 }
+      );
+    }
+
+    console.log('Creating expense with data:', {
+      category,
+      amount: parsedAmount,
+      description,
+      expenseDate: new Date(expenseDate),
+      receiptUrl,
+      userId: session.user.id
+    });
+
     const expense = await prisma.expense.create({
       data: {
         category: category as ExpenseCategory,
-        amount: parseFloat(amount),
+        amount: parsedAmount,
         description,
         expenseDate: new Date(expenseDate),
-        receiptUrl,
+        receiptUrl: receiptUrl || null,
         userId: session.user.id
       },
       include: {
@@ -101,11 +138,85 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    // Create notification for new expense
+    try {
+      await createExpenseAddedNotification(
+        parseFloat(amount), 
+        category, 
+        session.user.email || 'Unknown User'
+      );
+    } catch (notificationError) {
+      console.error('Failed to create notification:', notificationError);
+      // Don't fail the main operation if notification fails
+    }
+
     return NextResponse.json(expense, { status: 201 });
   } catch (error) {
     console.error('Expense creation error:', error);
     return NextResponse.json(
       { error: 'Failed to create expense' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const {
+      id,
+      category,
+      amount,
+      description,
+      expenseDate,
+      receiptUrl
+    } = body;
+
+    // Verify the expense belongs to the user
+    const existingExpense = await prisma.expense.findUnique({
+      where: { id },
+      select: { userId: true }
+    });
+
+    if (!existingExpense) {
+      return NextResponse.json({ error: 'Expense not found' }, { status: 404 });
+    }
+
+    if (existingExpense.userId !== session.user.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
+    const updatedExpense = await prisma.expense.update({
+      where: { id },
+      data: {
+        category: category as ExpenseCategory,
+        amount: parseFloat(amount),
+        description,
+        expenseDate: new Date(expenseDate),
+        receiptUrl
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    return NextResponse.json(updatedExpense);
+  } catch (error) {
+    console.error('Expense update error:', error);
+    return NextResponse.json(
+      { error: 'Failed to update expense' },
       { status: 500 }
     );
   }
