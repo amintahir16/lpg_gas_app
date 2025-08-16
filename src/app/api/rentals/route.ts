@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { createRentalCreatedNotification } from '@/lib/notifications';
 
 export async function POST(request: NextRequest) {
   try {
@@ -84,6 +85,18 @@ export async function POST(request: NextRequest) {
         currentStatus: 'RENTED'
       }
     });
+
+    // Create notification for new rental
+    try {
+      const customerName = `${rental.customer.firstName} ${rental.customer.lastName}`;
+      const cylinderCode = rental.cylinder.code;
+      const currentUserEmail = userEmail || 'Unknown User';
+      
+      await createRentalCreatedNotification(customerName, cylinderCode, currentUserEmail);
+    } catch (notificationError) {
+      console.error('Failed to create rental notification:', notificationError);
+      // Don't fail the main operation if notification fails
+    }
 
     return NextResponse.json({
       message: 'Rental created successfully',

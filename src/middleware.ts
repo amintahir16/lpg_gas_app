@@ -25,6 +25,14 @@ const routePermissions = {
     '/api/settings'
   ],
   
+  // Notification routes (accessible by all authenticated users)
+  notifications: [
+    '/api/notifications',
+    '/api/notifications/stats',
+    '/api/simple-notifications',
+    '/api/test-notification'
+  ],
+  
   // User routes (accessible by USER, ADMIN, SUPER_ADMIN)
   user: [
     '/customer',
@@ -114,6 +122,11 @@ export async function middleware(request: NextRequest) {
 function checkRouteAccess(pathname: string, userRole: string): boolean {
   // SUPER_ADMIN has access to everything
   if (userRole === 'SUPER_ADMIN') return true;
+  
+  // Check notification routes (accessible by all authenticated users)
+  if (routePermissions.notifications.some(route => pathname.startsWith(route))) {
+    return true; // All authenticated users can access notifications
+  }
   
   // Check admin routes
   if (routePermissions.admin.some(route => pathname.startsWith(route))) {

@@ -21,11 +21,15 @@ import {
   createMaintenanceDueNotification
 } from './notifications';
 
-// Real-time notification service
+// Enhanced notification service with better error handling and performance
 export class NotificationService {
   private static instance: NotificationService;
   private checkInterval: NodeJS.Timeout | null = null;
   private lastCheckTime: Date = new Date();
+  private isRunning: boolean = false;
+  private errorCount: number = 0;
+  private maxRetries: number = 3;
+  private retryDelay: number = 5000; // 5 seconds
 
   private constructor() {}
 
@@ -36,18 +40,32 @@ export class NotificationService {
     return NotificationService.instance;
   }
 
-  // Start monitoring database changes
-  public startMonitoring() {
-    if (this.checkInterval) {
-      clearInterval(this.checkInterval);
+  // Start monitoring database changes with enhanced error handling
+  public async startMonitoring() {
+    if (this.isRunning) {
+      console.log('Notification monitoring is already running');
+      return;
     }
 
-    // Check for changes every 3 seconds
-    this.checkInterval = setInterval(async () => {
-      await this.checkForChanges();
-    }, 3000);
+    try {
+      this.isRunning = true;
+      this.errorCount = 0;
+      
+      if (this.checkInterval) {
+        clearInterval(this.checkInterval);
+      }
 
-    console.log('Notification monitoring started - checking every 3 seconds');
+      // Check for changes every 3 seconds
+      this.checkInterval = setInterval(async () => {
+        await this.checkForChanges();
+      }, 3000);
+
+      console.log('Notification monitoring started - checking every 3 seconds');
+    } catch (error) {
+      console.error('Failed to start notification monitoring:', error);
+      this.isRunning = false;
+      throw error;
+    }
   }
 
   // Stop monitoring
@@ -56,275 +74,391 @@ export class NotificationService {
       clearInterval(this.checkInterval);
       this.checkInterval = null;
     }
+    this.isRunning = false;
     console.log('Notification monitoring stopped');
   }
 
-  // Check for database changes and create notifications
+  // Check if service is running
+  public isServiceRunning(): boolean {
+    return this.isRunning;
+  }
+
+  // Get service status
+  public getServiceStatus() {
+    return {
+      isRunning: this.isRunning,
+      lastCheckTime: this.lastCheckTime,
+      errorCount: this.errorCount,
+      maxRetries: this.maxRetries
+    };
+  }
+
+  // Check for database changes and create notifications with retry mechanism
   private async checkForChanges() {
     try {
       const now = new Date();
       
       // Check for new cylinders added
-      await this.checkNewCylinders();
+      await this.retryOperation(() => this.checkNewCylinders());
       
       // Check for cylinder status changes
-      await this.checkCylinderStatusChanges();
+      await this.retryOperation(() => this.checkCylinderStatusChanges());
       
       // Check for new vendors
-      await this.checkNewVendors();
+      await this.retryOperation(() => this.checkNewVendors());
       
       // Check for new customers
-      await this.checkNewCustomers();
+      await this.retryOperation(() => this.checkNewCustomers());
       
       // Check for new expenses
-      await this.checkNewExpenses();
+      await this.retryOperation(() => this.checkNewExpenses());
       
       // Check for low inventory
-      await this.checkLowInventory();
+      await this.retryOperation(() => this.checkLowInventory());
       
       // Check for maintenance due
-      await this.checkMaintenanceDue();
+      await this.retryOperation(() => this.checkMaintenanceDue());
       
       // Check for new rentals
-      await this.checkNewRentals();
+      await this.retryOperation(() => this.checkNewRentals());
       
       // Check for completed rentals
-      await this.checkCompletedRentals();
+      await this.retryOperation(() => this.checkCompletedRentals());
       
       this.lastCheckTime = now;
+      this.errorCount = 0; // Reset error count on successful check
     } catch (error) {
-      console.error('Error checking for changes:', error);
+      this.errorCount++;
+      console.error(`Error checking for changes (attempt ${this.errorCount}):`, error);
+      
+      // If too many errors, stop the service
+      if (this.errorCount >= this.maxRetries) {
+        console.error('Too many errors, stopping notification service');
+        this.stopMonitoring();
+      }
     }
   }
 
-  // Check for new cylinders
-  private async checkNewCylinders() {
-    const newCylinders = await prisma.cylinder.findMany({
-      where: {
-        createdAt: {
-          gt: this.lastCheckTime
-        }
-      },
-      include: {
-        cylinderRentals: true
-      }
-    });
-
-    for (const cylinder of newCylinders) {
+  // Retry operation with exponential backoff
+  private async retryOperation<T>(
+    operation: () => Promise<T>,
+    maxRetries: number = 3,
+    baseDelay: number = 1000
+  ): Promise<T> {
+    let lastError: Error;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
+        return await operation();
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        
+        if (attempt === maxRetries) {
+          throw lastError;
+        }
+        
+        // Exponential backoff
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+    
+    throw lastError!;
+  }
+
+  // Check for new cylinders with optimized query
+  private async checkNewCylinders() {
+    try {
+      const newCylinders = await prisma.cylinder.findMany({
+        where: {
+          createdAt: {
+            gt: this.lastCheckTime
+          }
+        },
+        select: {
+          id: true,
+          code: true,
+          cylinderType: true,
+          createdAt: true
+        }
+      });
+
+      for (const cylinder of newCylinders) {
         await createCylinderAddedNotification(
           cylinder.code,
-          'System',
+          'system@lpg-gas.com', // Default system user
           cylinder.cylinderType
         );
-      } catch (error) {
-        console.error('Failed to create cylinder added notification:', error);
       }
+    } catch (error) {
+      console.error('Error checking for new cylinders:', error);
+      throw error;
     }
   }
 
   // Check for cylinder status changes
   private async checkCylinderStatusChanges() {
-    // This would require tracking previous status values
-    // For now, we'll rely on explicit notifications from API calls
+    try {
+      // This would need a more sophisticated approach to track status changes
+      // For now, we'll implement a basic check
+      const cylindersWithRecentUpdates = await prisma.cylinder.findMany({
+        where: {
+          updatedAt: {
+            gt: this.lastCheckTime
+          }
+        },
+        select: {
+          id: true,
+          code: true,
+          currentStatus: true,
+          updatedAt: true
+        }
+      });
+
+      // In a real implementation, you'd compare with previous state
+      // For now, we'll just log the updates
+      console.log(`Found ${cylindersWithRecentUpdates.length} cylinders with recent updates`);
+    } catch (error) {
+      console.error('Error checking for cylinder status changes:', error);
+      throw error;
+    }
   }
 
   // Check for new vendors
   private async checkNewVendors() {
-    const newVendors = await prisma.vendor.findMany({
-      where: {
-        createdAt: {
-          gt: this.lastCheckTime
+    try {
+      const newVendors = await prisma.vendor.findMany({
+        where: {
+          createdAt: {
+            gt: this.lastCheckTime
+          }
+        },
+        select: {
+          id: true,
+          companyName: true,
+          vendorCode: true,
+          createdAt: true
         }
-      }
-    });
+      });
 
-    for (const vendor of newVendors) {
-      try {
+      for (const vendor of newVendors) {
         await createVendorAddedNotification(
           vendor.companyName,
-          'System',
+          'system@lpg-gas.com',
           vendor.vendorCode
         );
-      } catch (error) {
-        console.error('Failed to create vendor added notification:', error);
       }
+    } catch (error) {
+      console.error('Error checking for new vendors:', error);
+      throw error;
     }
   }
 
   // Check for new customers
   private async checkNewCustomers() {
-    const newCustomers = await prisma.customer.findMany({
-      where: {
-        createdAt: {
-          gt: this.lastCheckTime
+    try {
+      const newCustomers = await prisma.customer.findMany({
+        where: {
+          createdAt: {
+            gt: this.lastCheckTime
+          }
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          code: true,
+          createdAt: true
         }
-      }
-    });
+      });
 
-    for (const customer of newCustomers) {
-      try {
+      for (const customer of newCustomers) {
         await createCustomerAddedNotification(
           `${customer.firstName} ${customer.lastName}`,
-          'System',
+          'system@lpg-gas.com',
           customer.code
         );
-      } catch (error) {
-        console.error('Failed to create customer added notification:', error);
       }
+    } catch (error) {
+      console.error('Error checking for new customers:', error);
+      throw error;
     }
   }
 
   // Check for new expenses
   private async checkNewExpenses() {
-    const newExpenses = await prisma.expense.findMany({
-      where: {
-        createdAt: {
-          gt: this.lastCheckTime
+    try {
+      const newExpenses = await prisma.expense.findMany({
+        where: {
+          createdAt: {
+            gt: this.lastCheckTime
+          }
+        },
+        select: {
+          id: true,
+          amount: true,
+          category: true,
+          description: true,
+          createdAt: true
         }
-      }
-    });
+      });
 
-    for (const expense of newExpenses) {
-      try {
+      for (const expense of newExpenses) {
         await createExpenseAddedNotification(
           Number(expense.amount),
           expense.category,
-          'System',
+          'system@lpg-gas.com',
           expense.description
         );
-      } catch (error) {
-        console.error('Failed to create expense added notification:', error);
       }
+    } catch (error) {
+      console.error('Error checking for new expenses:', error);
+      throw error;
     }
   }
 
   // Check for low inventory
   private async checkLowInventory() {
-    const lowInventoryThreshold = 5; // Alert when less than 5 cylinders
-
-    const lowInventory = await prisma.cylinder.groupBy({
-      by: ['cylinderType'],
-      where: {
-        currentStatus: 'AVAILABLE'
-      },
-      _count: {
-        id: true
-      },
-      having: {
-        id: {
-          _count: {
-            lt: lowInventoryThreshold
-          }
+    try {
+      // Check for cylinders with low availability
+      const lowInventoryCylinders = await prisma.cylinder.findMany({
+        where: {
+          currentStatus: 'AVAILABLE'
+        },
+        select: {
+          id: true,
+          code: true,
+          cylinderType: true
         }
-      }
-    });
+      });
 
-    for (const item of lowInventory) {
-      try {
+      // If less than 5 cylinders available, create low inventory notification
+      if (lowInventoryCylinders.length < 5) {
         await createLowInventoryNotification(
-          item.cylinderType,
-          item._count.id
+          'GENERAL',
+          lowInventoryCylinders.length
         );
-      } catch (error) {
-        console.error('Failed to create low inventory notification:', error);
       }
+    } catch (error) {
+      console.error('Error checking for low inventory:', error);
+      throw error;
     }
   }
 
   // Check for maintenance due
   private async checkMaintenanceDue() {
-    const maintenanceThreshold = 7; // Alert when maintenance is due in 7 days or less
-    const now = new Date();
-    const thresholdDate = new Date(now.getTime() + (maintenanceThreshold * 24 * 60 * 60 * 1000));
-
-    const maintenanceDue = await prisma.cylinder.findMany({
-      where: {
-        nextMaintenanceDate: {
-          lte: thresholdDate,
-          gt: now
+    try {
+      const maintenanceDueCylinders = await prisma.cylinder.findMany({
+        where: {
+          nextMaintenanceDate: {
+            lte: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
+          }
         },
-        currentStatus: {
-          not: 'RETIRED'
+        select: {
+          id: true,
+          code: true,
+          nextMaintenanceDate: true
         }
-      }
-    });
+      });
 
-    for (const cylinder of maintenanceDue) {
-      if (cylinder.nextMaintenanceDate) {
-        const daysUntilDue = Math.ceil(
-          (cylinder.nextMaintenanceDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)
-        );
-
-        try {
+      for (const cylinder of maintenanceDueCylinders) {
+        if (cylinder.nextMaintenanceDate) {
+          const daysUntilDue = Math.ceil(
+            (cylinder.nextMaintenanceDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000)
+          );
           await createMaintenanceDueNotification(
             cylinder.code,
             daysUntilDue
           );
-        } catch (error) {
-          console.error('Failed to create maintenance due notification:', error);
         }
       }
+    } catch (error) {
+      console.error('Error checking for maintenance due:', error);
+      throw error;
     }
   }
 
   // Check for new rentals
   private async checkNewRentals() {
-    const newRentals = await prisma.cylinderRental.findMany({
-      where: {
-        createdAt: {
-          gt: this.lastCheckTime
+    try {
+      const newRentals = await prisma.cylinderRental.findMany({
+        where: {
+          createdAt: {
+            gt: this.lastCheckTime
+          }
+        },
+        select: {
+          id: true,
+          customer: {
+            select: {
+              firstName: true,
+              lastName: true
+            }
+          },
+          cylinder: {
+            select: {
+              code: true
+            }
+          },
+          createdAt: true
         }
-      },
-      include: {
-        customer: true,
-        cylinder: true
-      }
-    });
+      });
 
-    for (const rental of newRentals) {
-      try {
+      for (const rental of newRentals) {
         await createRentalCreatedNotification(
           `${rental.customer.firstName} ${rental.customer.lastName}`,
           rental.cylinder.code,
-          'System'
+          'system@lpg-gas.com'
         );
-      } catch (error) {
-        console.error('Failed to create rental created notification:', error);
       }
+    } catch (error) {
+      console.error('Error checking for new rentals:', error);
+      throw error;
     }
   }
 
   // Check for completed rentals
   private async checkCompletedRentals() {
-    const completedRentals = await prisma.cylinderRental.findMany({
-      where: {
-        updatedAt: {
-          gt: this.lastCheckTime
+    try {
+      const completedRentals = await prisma.cylinderRental.findMany({
+        where: {
+          status: 'RETURNED',
+          updatedAt: {
+            gt: this.lastCheckTime
+          }
         },
-        status: 'RETURNED'
-      },
-      include: {
-        customer: true,
-        cylinder: true
-      }
-    });
+        select: {
+          id: true,
+          customer: {
+            select: {
+              firstName: true,
+              lastName: true
+            }
+          },
+          cylinder: {
+            select: {
+              code: true
+            }
+          },
+          updatedAt: true
+        }
+      });
 
-    for (const rental of completedRentals) {
-      try {
+      for (const rental of completedRentals) {
         await createRentalCompletedNotification(
           `${rental.customer.firstName} ${rental.customer.lastName}`,
           rental.cylinder.code,
-          'System'
+          'system@lpg-gas.com'
         );
-      } catch (error) {
-        console.error('Failed to create rental completed notification:', error);
       }
+    } catch (error) {
+      console.error('Error checking for completed rentals:', error);
+      throw error;
     }
   }
 
-  // Manual notification creation for immediate feedback
-  public async createImmediateNotification(
+  // Manual notification creation for immediate use
+  public async createManualNotification(
     type: string,
     title: string,
     message: string,
@@ -333,35 +467,92 @@ export class NotificationService {
     metadata?: Record<string, any>
   ) {
     try {
-      await createNotification({
+      return await createNotification({
         type: type as any,
         title,
         message,
         userId,
-        priority,
-        metadata
+        metadata,
+        priority
       });
     } catch (error) {
-      console.error('Failed to create immediate notification:', error);
+      console.error('Error creating manual notification:', error);
+      throw error;
+    }
+  }
+
+  // Bulk notification operations
+  public async createBulkNotifications(notifications: Array<{
+    type: string;
+    title: string;
+    message: string;
+    userId?: string;
+    priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+    metadata?: Record<string, any>;
+  }>) {
+    try {
+      const createdNotifications = [];
+      
+      for (const notification of notifications) {
+        const created = await this.createManualNotification(
+          notification.type,
+          notification.title,
+          notification.message,
+          notification.userId,
+          notification.priority,
+          notification.metadata
+        );
+        createdNotifications.push(created);
+      }
+      
+      return createdNotifications;
+    } catch (error) {
+      console.error('Error creating bulk notifications:', error);
+      throw error;
+    }
+  }
+
+  // Cleanup old notifications
+  public async cleanupOldNotifications(daysOld: number = 30) {
+    try {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+
+      const deletedCount = await prisma.notification.deleteMany({
+        where: {
+          createdAt: {
+            lt: cutoffDate
+          },
+          isRead: true
+        }
+      });
+
+      console.log(`Cleaned up ${deletedCount.count} old notifications`);
+      return deletedCount.count;
+    } catch (error) {
+      console.error('Error cleaning up old notifications:', error);
+      throw error;
     }
   }
 
   // Get notification statistics
-  public async getStats() {
+  public async getNotificationStats() {
     try {
       const [total, unread, urgent] = await Promise.all([
         prisma.notification.count(),
         prisma.notification.count({ where: { isRead: false } }),
-        prisma.notification.count({ where: { priority: 'URGENT', isRead: false } })
+        prisma.notification.count({ 
+          where: { 
+            isRead: false,
+            priority: 'URGENT'
+          } 
+        })
       ]);
 
       return { total, unread, urgent };
     } catch (error) {
-      console.error('Failed to get notification stats:', error);
-      return { total: 0, unread: 0, urgent: 0 };
+      console.error('Error getting notification stats:', error);
+      throw error;
     }
   }
-}
-
-// Export singleton instance
-export const notificationService = NotificationService.getInstance(); 
+} 

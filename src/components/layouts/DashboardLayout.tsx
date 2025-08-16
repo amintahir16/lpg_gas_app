@@ -12,7 +12,6 @@ import {
   BuildingOfficeIcon, 
   ChartBarIcon,
   CogIcon,
-  BellIcon,
   Bars3Icon,
   XMarkIcon,
   UserCircleIcon,
@@ -21,6 +20,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Footer } from '@/components/ui/footer';
+import { NotificationBell } from '@/components/ui/notification-bell';
 
 import { cn } from '@/lib/utils';
 
@@ -56,33 +56,10 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const { data: session, status } = useSession();
   
-  // Temporary simple notification system
-  const [notificationData, setNotificationData] = useState<any[]>([]);
-  const [notifications, setNotifications] = useState(0);
-  
-  // Simple notification functions
-  const markAsRead = async (id: string) => {
-    setNotificationData(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
-    setNotifications(prev => Math.max(0, prev - 1));
-  };
-  
-  const markAllAsRead = async () => {
-    setNotificationData(prev => prev.map(n => ({ ...n, isRead: true })));
-    setNotifications(0);
-  };
-  
-  // Mock stats
-  const stats = {
-    total: notificationData.length,
-    unread: notifications,
-    urgent: 0
-  };
-
   // Redirect to login if not authenticated
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -116,32 +93,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const handleLogout = () => {
     signOut({ callbackUrl: '/login' });
   };
-
-  const handleMarkAllRead = async () => {
-    try {
-      await markAllAsRead();
-      setShowNotifications(false);
-    } catch (error) {
-      console.error('Failed to mark notifications as read:', error);
-    }
-  };
-
-  // Add test notification
-  const addTestNotification = () => {
-    const newNotification = {
-      id: `test_${Date.now()}`,
-      type: 'TEST',
-      title: 'Test Notification',
-      message: 'This is a test notification to verify the system works',
-      isRead: false,
-      createdAt: new Date().toISOString(),
-      priority: 'MEDIUM'
-    };
-    
-    setNotificationData(prev => [newNotification, ...prev]);
-    setNotifications(prev => prev + 1);
-  };
-
 
 
   return (
@@ -261,37 +212,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           
           <div className="flex items-center space-x-4">
             {/* Notifications */}
-            <div className="relative flex items-center space-x-2">
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="relative text-gray-500 hover:text-gray-700"
-                onClick={() => setShowNotifications(!showNotifications)}
-              >
-                <BellIcon className="w-5 h-5" />
-                {stats.unread > 0 && (
-                  <Badge 
-                    variant="destructive" 
-                    className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-xs"
-                  >
-                    {stats.unread}
-                  </Badge>
-                )}
-              </Button>
-              
-              {/* Test Button */}
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={addTestNotification}
-                className="text-xs px-2 py-1"
-              >
-                Test
-              </Button>
-            </div>
+            <NotificationBell />
 
             {/* Simple Notifications Dropdown */}
-            {showNotifications && (
+            {/* This section is no longer needed as NotificationBell handles its own state */}
+            {/* Keeping it for now, but it will not show notifications */}
+            {/* {showNotifications && (
               <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
                 <div className="p-4 border-b border-gray-200">
                   <div className="flex items-center justify-between">
@@ -355,7 +281,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   </Button>
                 </div>
               </div>
-            )}
+            )} */}
 
 
 

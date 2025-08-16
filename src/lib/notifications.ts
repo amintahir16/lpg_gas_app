@@ -1,7 +1,13 @@
 import { prisma } from '@/lib/db';
 
 export interface CreateNotificationData {
-  type: 'CYLINDER_ADDED' | 'VENDOR_ADDED' | 'EXPENSE_ADDED' | 'PAYMENT_RECEIVED' | 'LOW_INVENTORY' | 'RENTAL_REQUEST' | 'SYSTEM_ALERT';
+  type: 'CYLINDER_ADDED' | 'CYLINDER_UPDATED' | 'CYLINDER_DELETED' | 'CYLINDER_STATUS_CHANGED' |
+        'VENDOR_ADDED' | 'VENDOR_UPDATED' | 'VENDOR_DELETED' |
+        'CUSTOMER_ADDED' | 'CUSTOMER_UPDATED' | 'CUSTOMER_DELETED' |
+        'EXPENSE_ADDED' | 'EXPENSE_UPDATED' | 'EXPENSE_DELETED' |
+        'PAYMENT_RECEIVED' | 'PAYMENT_UPDATED' | 'PAYMENT_DELETED' |
+        'RENTAL_CREATED' | 'RENTAL_UPDATED' | 'RENTAL_COMPLETED' |
+        'LOW_INVENTORY' | 'MAINTENANCE_DUE' | 'SYSTEM_ALERT' | 'USER_ACTIVITY';
   title: string;
   message: string;
   userId?: string; // null for global notifications

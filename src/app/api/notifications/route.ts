@@ -151,3 +151,49 @@ export async function PUT(request: NextRequest) {
     );
   }
 }
+
+// DELETE - Delete a specific notification
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ error: 'Notification ID is required' }, { status: 400 });
+    }
+
+    // Check if notification exists and user has access to it
+    const notification = await prisma.notification.findFirst({
+      where: {
+        id,
+        OR: [
+          { userId: session.user.id }, // User's personal notification
+          { userId: null } // Global notification
+        ]
+      }
+    });
+
+    if (!notification) {
+      return NextResponse.json({ error: 'Notification not found or access denied' }, { status: 404 });
+    }
+
+    // Delete the notification
+    await prisma.notification.delete({
+      where: { id }
+    });
+
+    return NextResponse.json({ success: true, message: 'Notification deleted successfully' });
+  } catch (error) {
+    console.error('Notification deletion error:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete notification' },
+      { status: 500 }
+    );
+  }
+}

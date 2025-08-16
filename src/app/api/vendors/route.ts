@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { Prisma } from '@prisma/client';
-import { createVendorAddedNotification } from '@/lib/simpleNotifications';
+import { createVendorAddedNotification } from '@/lib/notifications';
 
 export async function GET(request: NextRequest) {
   try {

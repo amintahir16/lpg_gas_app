@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { Prisma, CylinderStatus, CylinderType } from '@prisma/client';
-import { createCylinderAddedNotification } from '@/lib/simpleNotifications';
+import { createCylinderAddedNotification } from '@/lib/notifications';
 
 export async function GET(request: NextRequest) {
   try {
