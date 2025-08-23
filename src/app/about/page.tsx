@@ -63,12 +63,12 @@ export default function AboutPage() {
     },
     {
       title: "Safety Excellence Award",
-      description: "Dubai Municipality 2023",
+      description: "Pakistan Standards Authority 2023",
       icon: Shield
     },
     {
       title: "Best LPG Provider",
-      description: "UAE Energy Awards 2022",
+      description: "Pakistan Energy Awards 2022",
       icon: Star
     },
     {
@@ -119,7 +119,7 @@ export default function AboutPage() {
               <p className="text-lg text-gray-600 mb-6">
                 Founded in 2005, LPG Gas Company began with a simple mission: to provide 
                 affordable, safe, and reliable energy solutions to homes and businesses 
-                across the UAE.
+                across Pakistan.
               </p>
               <p className="text-lg text-gray-600 mb-6">
                 What started as a small family business has grown into one of the region's 
@@ -198,7 +198,7 @@ export default function AboutPage() {
               </div>
               <h3 className="text-2xl font-semibold text-gray-900 mb-4">Our Vision</h3>
               <p className="text-gray-600">
-                To become the leading LPG provider in the UAE, known for innovation, 
+                To become the leading LPG provider in Pakistan, known for innovation, 
                 sustainability, and exceptional customer experience.
               </p>
             </motion.div>

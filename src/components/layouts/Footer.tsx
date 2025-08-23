@@ -39,11 +39,11 @@ export default function Footer() {
               <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
                 <span className="text-white font-bold text-xl">LPG</span>
               </div>
-              <span className="text-xl font-bold">Gas Company</span>
+              <span className="text-xl font-bold">Pakistan</span>
             </div>
             <p className="text-gray-300 mb-4">
-              Providing clean, safe, and affordable energy solutions since 2005. 
-              Your trusted partner for all LPG needs.
+              Providing clean, safe, and affordable energy solutions across Pakistan since 2005. 
+              Your trusted partner for all LPG needs nationwide.
             </p>
             <div className="flex space-x-4">
               {socialLinks.map((social) => (
@@ -99,16 +99,24 @@ export default function Footer() {
             <div className="space-y-3">
               <div className="flex items-center space-x-3">
                 <Phone className="w-5 h-5 text-blue-400" />
-                <span className="text-gray-300">+971 50 123 4567</span>
+                <span className="text-gray-300">+92 300 1234567</span>
+              </div>
+              <div className="flex items-center space-x-3">
+                <Phone className="w-5 h-5 text-blue-400" />
+                <span className="text-gray-300">+92 301 9876543</span>
               </div>
               <div className="flex items-center space-x-3">
                 <Mail className="w-5 h-5 text-blue-400" />
-                <span className="text-gray-300">info@lpgcompany.com</span>
+                <span className="text-gray-300">info@lpgpakistan.com</span>
+              </div>
+              <div className="flex items-center space-x-3">
+                <Mail className="w-5 h-5 text-blue-400" />
+                <span className="text-gray-300">sales@lpgpakistan.com</span>
               </div>
               <div className="flex items-start space-x-3">
                 <MapPin className="w-5 h-5 text-blue-400 mt-1" />
                 <span className="text-gray-300">
-                  Dubai, United Arab Emirates
+                  Karachi, Pakistan
                 </span>
               </div>
             </div>
@@ -119,7 +127,7 @@ export default function Footer() {
         <div className="border-t border-gray-800 mt-12 pt-8">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <p className="text-gray-400 text-sm">
-              © {currentYear} LPG Gas Company. All rights reserved.
+              © {currentYear} LPG Pakistan. All rights reserved.
             </p>
             <div className="flex space-x-6 mt-4 md:mt-0">
               <Link href="/privacy" className="text-gray-400 hover:text-white text-sm transition-colors">

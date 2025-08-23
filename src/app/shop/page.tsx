@@ -121,7 +121,7 @@ function ProductCard({ product, onAddToCart }: {
         </p>
         <div className="flex items-center justify-between mb-4">
           <span className="text-2xl font-bold text-blue-600">
-            AED {product.price}
+            PKR {product.price}
           </span>
           <span className="text-sm text-gray-500">
             {product.inStock ? 'In Stock' : 'Out of Stock'}
@@ -200,7 +200,7 @@ function CartDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
                           {item.size && (
                             <p className="text-sm text-gray-600">Size: {item.size}</p>
                           )}
-                          <p className="text-blue-600 font-semibold">AED {item.price}</p>
+                          <p className="text-blue-600 font-semibold">PKR {item.price}</p>
                         </div>
                         <div className="flex items-center gap-2">
                           <button
@@ -235,7 +235,7 @@ function CartDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
                   <div className="flex justify-between items-center mb-4">
                     <span className="text-lg font-semibold">Total:</span>
                     <span className="text-2xl font-bold text-blue-600">
-                      AED {cart.totalPrice.toFixed(2)}
+                      PKR {cart.totalPrice.toFixed(2)}
                     </span>
                   </div>
                   <button
@@ -267,7 +267,7 @@ function ShopContent() {
       id: '1',
       name: 'LPG Cylinder - 11kg',
       description: 'Standard 11kg LPG cylinder for home use. Perfect for cooking and small appliances.',
-      price: 45,
+      price: 2500,
       size: '11kg',
       image: 'https://images.unsplash.com/photo-1581094794329-c8112a89af12?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80',
       inStock: true
@@ -276,7 +276,7 @@ function ShopContent() {
       id: '2',
       name: 'LPG Cylinder - 22kg',
       description: 'Large 22kg LPG cylinder for commercial use. Ideal for restaurants and businesses.',
-      price: 85,
+      price: 4800,
       size: '22kg',
       image: 'https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1170&q=80',
       inStock: true
@@ -285,7 +285,7 @@ function ShopContent() {
       id: '3',
       name: 'LPG Cylinder - 45kg',
       description: 'Extra large 45kg LPG cylinder for industrial use. Perfect for large facilities.',
-      price: 150,
+      price: 8500,
       size: '45kg',
       image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1169&q=80',
       inStock: true
@@ -294,7 +294,7 @@ function ShopContent() {
       id: '4',
       name: 'LPG Refill Service',
       description: 'Professional refill service for your existing cylinders. Safety guaranteed.',
-      price: 25,
+      price: 1200,
       image: 'https://images.unsplash.com/photo-1581094794329-c8112a89af12?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80',
       inStock: true
     },
@@ -310,7 +310,7 @@ function ShopContent() {
       id: '6',
       name: 'Safety Equipment Kit',
       description: 'Complete safety kit including gloves, goggles, and safety instructions.',
-      price: 75,
+      price: 3500,
       image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1169&q=80',
       inStock: true
     }
@@ -347,7 +347,7 @@ function ShopContent() {
             transition={{ duration: 0.8, delay: 0.2 }}
             className="text-xl md:text-2xl text-gray-200 max-w-3xl mx-auto"
           >
-            Quality LPG cylinders and services for all your energy needs
+            Quality LPG cylinders and services for all your energy needs across Pakistan
           </motion.p>
         </div>
       </section>
@@ -381,7 +381,7 @@ function ShopContent() {
               Our Products
             </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              High-quality LPG cylinders and services for homes and businesses
+              High-quality LPG cylinders and services for homes and businesses across Pakistan with competitive PKR pricing
             </p>
           </motion.div>
 
@@ -411,8 +411,8 @@ function ShopContent() {
                 Need Bulk Orders?
               </h2>
               <p className="text-lg text-gray-600 mb-6">
-                For businesses requiring large quantities of LPG, we offer special 
-                bulk pricing and dedicated delivery services.
+                For businesses requiring large quantities of LPG across Pakistan, we offer special 
+                bulk pricing and dedicated delivery services with nationwide coverage.
               </p>
               <div className="space-y-4 mb-6">
                 <div className="flex items-center gap-3">

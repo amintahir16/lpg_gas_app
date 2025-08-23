@@ -20,7 +20,7 @@ export default function ServicesPage() {
         'Competitive pricing',
         '24/7 emergency service'
       ],
-      price: 'Starting from AED 45'
+      price: 'Starting from PKR 2,500'
     },
     {
       id: 'bulk',
@@ -42,7 +42,7 @@ export default function ServicesPage() {
       id: 'distribution',
       title: 'Distribution & Marketing',
       description: 'Comprehensive distribution network and marketing support for LPG products and services.',
-      longDescription: 'Our extensive distribution network covers the entire UAE, ensuring reliable delivery to even the most remote locations. We also provide marketing support and training to help businesses maximize their LPG usage efficiency.',
+      longDescription: 'Our extensive distribution network covers the entire Pakistan, ensuring reliable delivery to even the most remote locations. We also provide marketing support and training to help businesses maximize their LPG usage efficiency.',
       image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1169&q=80',
       icon: MapPin,
       features: [

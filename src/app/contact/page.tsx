@@ -62,7 +62,7 @@ export default function ContactPage() {
     {
       icon: MapPin,
       title: 'Address',
-      details: ['Dubai, United Arab Emirates', 'Office: Sheikh Zayed Road'],
+      details: ['Karachi, Pakistan', 'Office: Main Business District'],
       color: 'bg-purple-100 text-purple-600'
     },
     {
