@@ -9,7 +9,6 @@ const routePermissions = {
     '/login', 
     '/register', 
     '/api/auth',
-    '/',
     '/about',
     '/services',
     '/shop',
@@ -67,6 +66,9 @@ const roleHierarchy = {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  if (pathname === '/') {
+    return NextResponse.next();
+  }
   
   // Allow public routes
   if (routePermissions.public.some(route => pathname.startsWith(route))) {
