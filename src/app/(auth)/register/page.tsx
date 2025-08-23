@@ -341,6 +341,12 @@ export default function RegisterPage() {
 
               {/* Links */}
               <div className="text-center space-y-3">
+                <Link 
+                  href="/" 
+                  className="inline-block text-sm text-gray-600 hover:text-gray-800 transition-colors font-medium"
+                >
+                  ← Back to Landing Page
+                </Link>
                 <p className="text-sm text-gray-600">
                   Already have an account?{' '}
                   <Link

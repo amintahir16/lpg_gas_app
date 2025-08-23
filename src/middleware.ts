@@ -4,8 +4,18 @@ import { getToken } from 'next-auth/jwt';
 
 // Define route permissions
 const routePermissions = {
-  // Public routes
-  public: ['/login', '/register', '/api/auth'],
+  // Public routes (landing pages - no authentication required)
+  public: [
+    '/login', 
+    '/register', 
+    '/api/auth',
+    '/',
+    '/about',
+    '/services',
+    '/shop',
+    '/blog',
+    '/contact'
+  ],
   
   // Admin only routes
   admin: [

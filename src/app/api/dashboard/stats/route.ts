@@ -6,8 +6,12 @@ export async function GET(request: NextRequest) {
     // Get user info from headers (set by middleware)
     const userId = request.headers.get('x-user-id');
     const userRole = request.headers.get('x-user-role');
+    const userEmail = request.headers.get('x-user-email');
+    
+    console.log(`[API] Dashboard stats request - UserId: ${userId}, Role: ${userRole}, Email: ${userEmail}`);
     
     if (!userId) {
+      console.log(`[API] No user ID in headers - returning 401`);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -72,6 +76,7 @@ export async function GET(request: NextRequest) {
       }))
     };
 
+    console.log(`[API] Dashboard stats successful - returning data`);
     return NextResponse.json(stats);
   } catch (error) {
     console.error('Dashboard stats error:', error);

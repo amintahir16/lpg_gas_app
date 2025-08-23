@@ -15,7 +15,8 @@ import {
   Bars3Icon,
   XMarkIcon,
   UserCircleIcon,
-  ArrowRightOnRectangleIcon
+  ArrowRightOnRectangleIcon,
+  ChevronRightIcon
 } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -179,15 +180,20 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 {userRole.toLowerCase()}
               </p>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleLogout}
-              className="text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-              title="Logout"
-            >
-              <ArrowRightOnRectangleIcon className="w-4 h-4" />
-            </Button>
+            <div className="flex items-center space-x-2">
+              <Link href="/" className="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                Landing
+              </Link>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleLogout}
+                className="text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                title="Logout"
+              >
+                <ArrowRightOnRectangleIcon className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -208,6 +214,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <h2 className="ml-4 text-lg font-semibold text-gray-900 lg:hidden">
               {currentNavigation.find(item => item.href === pathname)?.name || 'Dashboard'}
             </h2>
+            <Link href="/" className="ml-4 text-sm text-blue-600 hover:text-blue-800 lg:hidden">
+              ← Landing
+            </Link>
           </div>
           
           <div className="flex items-center space-x-4">
@@ -286,11 +295,23 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
 
             {/* User Menu */}
-            <div className="hidden lg:flex items-center space-x-3">
+            <div className="hidden lg:flex items-center space-x-4">
+              <Link 
+                href="/" 
+                className="group inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded-lg transition-all duration-300 hover:shadow-md"
+              >
+                <span>Landing Page</span>
+                <ChevronRightIcon className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" />
+              </Link>
               <span className="text-sm font-medium text-gray-700">
                 Welcome, {session?.user?.name}
               </span>
-              <Button variant="outline" size="sm" onClick={handleLogout} className="font-medium">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleLogout} 
+                className="font-medium border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition-all duration-300"
+              >
                 Logout
               </Button>
             </div>
