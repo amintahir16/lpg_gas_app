@@ -50,19 +50,19 @@ export default function ContactPage() {
     {
       icon: Phone,
       title: 'Phone',
-      details: ['+971 50 123 4567', '+971 4 123 4567'],
+      details: ['+92 300 1234567', '+92 301 9876543'],
       color: 'bg-blue-100 text-blue-600'
     },
     {
       icon: Mail,
       title: 'Email',
-      details: ['info@lpgcompany.com', 'support@lpgcompany.com'],
+      details: ['info@lpgpakistan.com', 'support@lpgpakistan.com'],
       color: 'bg-green-100 text-green-600'
     },
     {
       icon: MapPin,
       title: 'Address',
-      details: ['Karachi, Pakistan', 'Office: Main Business District'],
+      details: ['193 Industrial Estate Rd, Phase-1 Hayatabad', 'Peshawar, Pakistan'],
       color: 'bg-purple-100 text-purple-600'
     },
     {
@@ -312,14 +312,14 @@ export default function ContactPage() {
               
               <div className="w-full h-96 bg-gray-200 rounded-lg overflow-hidden shadow-lg">
                 <iframe
-                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3609.1234567890123!2d55.2708!3d25.2048!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMjXCsDEyJzE3LjMiTiA1NcKwMTYnMTQuOSJF!5e0!3m2!1sen!2sae!4v1234567890123"
+                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3308.1234567890123!2d71.4309233!3d33.9763911!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x38d9108a64127615%3A0x6d377cbefcb04e67!2s193%20Industrial%20Estate%20Rd%2C%20Phase-1%20Hayatabad%2C%20Peshawar%2C%20Pakistan!5e0!3m2!1sen!2spk!4v1234567890123"
                   width="100%"
                   height="100%"
                   style={{ border: 0 }}
                   allowFullScreen
                   loading="lazy"
                   referrerPolicy="no-referrer-when-downgrade"
-                  title="LPG Gas Company Location"
+                  title="LPG Pakistan - 193 Industrial Estate Rd, Phase-1 Hayatabad, Peshawar"
                 ></iframe>
               </div>
             </motion.div>
@@ -344,14 +344,14 @@ export default function ContactPage() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <a
-                href="tel:+971501234567"
+                href="tel:+923001234567"
                 className="bg-red-600 hover:bg-red-700 text-white font-bold py-4 px-8 rounded-lg transition-colors duration-300 flex items-center justify-center gap-2"
               >
                 <Phone className="w-5 h-5" />
-                Emergency: +971 50 123 4567
+                Emergency: +92 300 1234567
               </a>
               <a
-                href="mailto:emergency@lpgcompany.com"
+                href="mailto:emergency@lpgpakistan.com"
                 className="border-2 border-red-600 text-red-600 hover:bg-red-600 hover:text-white font-bold py-4 px-8 rounded-lg transition-colors duration-300 flex items-center justify-center gap-2"
               >
                 <Mail className="w-5 h-5" />
@@ -365,7 +365,7 @@ export default function ContactPage() {
       {/* WhatsApp Floating Button */}
       <div className="fixed bottom-6 right-6 z-50">
         <a
-          href="https://wa.me/971501234567?text=Hi, I'm interested in your LPG services"
+          href="https://wa.me/923001234567?text=Hi, I'm interested in your LPG services"
           target="_blank"
           rel="noopener noreferrer"
           className="bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-lg transition-all duration-300 hover:scale-110"

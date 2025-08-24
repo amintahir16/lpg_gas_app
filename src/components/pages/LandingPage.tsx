@@ -238,11 +238,26 @@ export default function LandingPage() {
                   {service.price}
                 </p>
                 <Link
-                  href="/services"
-                  className="group inline-flex items-center text-blue-600 hover:text-blue-700 font-semibold transition-all duration-300 hover:gap-2"
+                  href="/shop"
+                  className={`group relative inline-flex items-center justify-center w-full font-bold py-3 px-6 rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 ease-out border-2 border-transparent ${
+                    index === 0 
+                      ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white hover:border-blue-300' 
+                      : index === 1 
+                      ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white hover:border-green-300'
+                      : 'bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white hover:border-purple-300'
+                  }`}
                 >
-                  Learn More
-                  <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform duration-300" />
+                  <span className="relative z-10 flex items-center gap-2">
+                    {index === 0 ? (
+                      <Flame className="w-4 h-4 text-white" />
+                    ) : index === 1 ? (
+                      <Truck className="w-4 h-4 text-white" />
+                    ) : (
+                      <MapPin className="w-4 h-4 text-white" />
+                    )}
+                    Shop Now
+                    <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" />
+                  </span>
                 </Link>
               </motion.div>
             ))}
@@ -274,7 +289,7 @@ export default function LandingPage() {
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.1 }}
               viewport={{ once: true }}
-              className="bg-gray-50 p-8 rounded-lg shadow-lg text-center hover:shadow-xl transition-shadow duration-300"
+              className="bg-gray-50 p-8 rounded-lg shadow-lg text-center hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 ease-out transform hover:scale-[1.02]"
             >
               <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
                 <Flame className="w-8 h-8 text-blue-600" />
@@ -292,9 +307,14 @@ export default function LandingPage() {
               </ul>
               <Link
                 href="/shop"
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 inline-block"
+                className="group relative inline-flex items-center justify-center w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 ease-out border-2 border-transparent hover:border-blue-300"
               >
-                Order Now
+                <span className="relative z-10 flex items-center gap-2">
+                  <Flame className="w-5 h-5 text-white" />
+                  Order Now
+                  <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" />
+                </span>
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
               </Link>
             </motion.div>
 
@@ -303,7 +323,7 @@ export default function LandingPage() {
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.2 }}
               viewport={{ once: true }}
-              className="bg-blue-600 p-8 rounded-lg shadow-lg text-center hover:shadow-xl transition-shadow duration-300 transform scale-105"
+              className="bg-blue-600 p-8 rounded-lg shadow-lg text-center hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 ease-out transform hover:scale-[1.02] scale-105"
             >
               <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-6">
                 <Truck className="w-8 h-8 text-blue-600" />
@@ -321,9 +341,14 @@ export default function LandingPage() {
               </ul>
               <Link
                 href="/contact"
-                className="w-full bg-yellow-400 hover:bg-yellow-500 text-black font-bold py-3 px-6 rounded-lg transition-colors duration-300 inline-block"
+                className="group relative inline-flex items-center justify-center w-full bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 text-black font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 ease-out border-2 border-transparent hover:border-yellow-300"
               >
-                Get Quote
+                <span className="relative z-10 flex items-center gap-2">
+                  <Phone className="w-5 h-5 text-black" />
+                  Get Quote
+                  <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" />
+                </span>
+                <div className="absolute inset-0 bg-gradient-to-r from-yellow-300 to-yellow-400 rounded-xl opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
               </Link>
             </motion.div>
 
@@ -332,7 +357,7 @@ export default function LandingPage() {
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.3 }}
               viewport={{ once: true }}
-              className="bg-gray-50 p-8 rounded-lg shadow-lg text-center hover:shadow-xl transition-shadow duration-300"
+              className="bg-gray-50 p-8 rounded-lg shadow-lg text-center hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 ease-out transform hover:scale-[1.02]"
             >
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
                 <MapPin className="w-8 h-8 text-green-600" />
@@ -350,9 +375,14 @@ export default function LandingPage() {
               </ul>
               <Link
                 href="/contact"
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 inline-block"
+                className="group relative inline-flex items-center justify-center w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 ease-out border-2 border-transparent hover:border-green-300"
               >
-                Contact Sales
+                <span className="relative z-10 flex items-center gap-2">
+                  <Phone className="w-5 h-5 text-white" />
+                  Contact Sales
+                  <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" />
+                </span>
+                <div className="absolute inset-0 bg-gradient-to-r from-green-500 to-green-600 rounded-xl opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
               </Link>
             </motion.div>
           </div>
@@ -571,7 +601,7 @@ export default function LandingPage() {
                 <MapPin className="w-8 h-8 text-blue-600" />
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">Head Office</h3>
-              <p className="text-gray-600">Karachi, Pakistan</p>
+              <p className="text-gray-600">Peshawar, Pakistan</p>
               <p className="text-gray-500 text-sm">Nationwide Coverage</p>
             </div>
           </div>
