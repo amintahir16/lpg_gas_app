@@ -9,9 +9,9 @@ export async function GET(request: NextRequest) {
     const stoves = await prisma.stove.findMany();
 
     // Calculate totals manually with proper number conversion
-    const totalRegulators = regulators.reduce((sum, reg) => sum + reg.quantity, 0);
-    const totalGasPipes = gasPipes.reduce((sum, pipe) => sum + pipe.quantity, 0);
-    const totalStoves = stoves.reduce((sum, stove) => sum + stove.quantity, 0);
+    const totalRegulators = regulators.reduce((sum, reg) => sum + Number(reg.quantity), 0);
+    const totalGasPipes = gasPipes.reduce((sum, pipe) => sum + Number(pipe.quantity), 0);
+    const totalStoves = stoves.reduce((sum, stove) => sum + Number(stove.quantity), 0);
     
     const regulatorsTotalCost = regulators.reduce((sum, reg) => sum + parseFloat(reg.totalCost.toString()), 0);
     const gasPipesTotalCost = gasPipes.reduce((sum, pipe) => sum + parseFloat(pipe.totalCost.toString()), 0);
