@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,7 +12,9 @@ import {
   EyeIcon,
   PencilIcon,
   ChevronLeftIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
+  ChartBarIcon,
+  CubeIcon
 } from '@heroicons/react/24/outline';
 
 interface Vendor {
@@ -201,6 +204,37 @@ export default function VendorsPage() {
           <PlusIcon className="w-4 h-4 mr-2" />
           Add Vendor
         </Button>
+      </div>
+
+      {/* Navigation Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Link href="/vendors/dashboard">
+          <Card className="p-6 hover:shadow-lg transition-shadow cursor-pointer">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                <ChartBarIcon className="h-6 w-6 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Vendor Dashboard</h3>
+                <p className="text-gray-600">View categorized vendors and analytics</p>
+              </div>
+            </div>
+          </Card>
+        </Link>
+
+        <Link href="/vendors/category/cylinder-purchase">
+          <Card className="p-6 hover:shadow-lg transition-shadow cursor-pointer">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 bg-green-100 rounded-lg flex items-center justify-center">
+                <CubeIcon className="h-6 w-6 text-green-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Category Management</h3>
+                <p className="text-gray-600">Manage vendors by categories</p>
+              </div>
+            </div>
+          </Card>
+        </Link>
       </div>
 
       {/* Vendor Stats */}

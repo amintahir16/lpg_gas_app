@@ -24,6 +24,7 @@ model User {
   invoices        Invoice[]        @relation("UserInvoices")
   cylinderRentals CylinderRental[] @relation("UserCylinderRentals")
   notifications   Notification[]   @relation("UserNotifications")
+  purchaseEntries PurchaseEntry[]  @relation("UserPurchaseEntries")
 
   @@map("users")
 }
@@ -129,18 +130,19 @@ model Expense {
 }
 
 model Vendor {
-  id            String   @id @default(cuid())
-  vendorCode    String   @unique
+  id            String         @id @default(cuid())
+  vendorCode    String         @unique
   companyName   String
   contactPerson String?
   email         String?
   phone         String?
   address       String?
   taxId         String?
-  paymentTerms  Int      @default(30)
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  paymentTerms  Int            @default(30)
+  category      VendorCategory?
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
   // Relations
   invoices        Invoice[]
@@ -149,6 +151,8 @@ model Vendor {
   bankDetails     VendorBankDetails[]
   inventories     VendorInventory[]
   payments        VendorPayment[]
+  purchaseEntries PurchaseEntry[]
+  financialReports VendorFinancialReport[]
 
   @@map("vendors")
 }
@@ -405,6 +409,21 @@ enum SupportRequestStatus {
   CLOSED
 }
 
+enum VendorCategory {
+  CYLINDER_PURCHASE
+  GAS_PURCHASE
+  VAPORIZER_PURCHASE
+  ACCESSORIES_PURCHASE
+  VALVES_PURCHASE
+}
+
+enum PurchaseEntryStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
 enum NotificationType {
   CYLINDER_ADDED
   CYLINDER_UPDATED
@@ -455,4 +474,43 @@ model Notification {
   updatedAt DateTime            @updatedAt
 
   @@map("notifications")
+}
+
+model PurchaseEntry {
+  id              String              @id @default(cuid())
+  vendor          Vendor              @relation(fields: [vendorId], references: [id])
+  vendorId        String
+  category        VendorCategory
+  itemName        String
+  itemDescription String?
+  quantity        Int                 @default(1)
+  unitPrice       Decimal             @db.Decimal(10, 2)
+  totalPrice      Decimal             @db.Decimal(10, 2)
+  status          PurchaseEntryStatus @default(PENDING)
+  purchaseDate    DateTime            @default(now())
+  invoiceNumber   String?
+  notes           String?
+  user            User                @relation("UserPurchaseEntries", fields: [userId], references: [id])
+  userId          String
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@map("purchase_entries")
+}
+
+model VendorFinancialReport {
+  id            String         @id @default(cuid())
+  vendor        Vendor         @relation(fields: [vendorId], references: [id])
+  vendorId      String
+  reportDate    DateTime
+  netBalance    Decimal        @db.Decimal(10, 2)
+  cashIn        Decimal        @default(0) @db.Decimal(10, 2)
+  cashOut       Decimal        @default(0) @db.Decimal(10, 2)
+  previousBalance Decimal      @default(0) @db.Decimal(10, 2)
+  notes         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@unique([vendorId, reportDate])
+  @@map("vendor_financial_reports")
 }
