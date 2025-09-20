@@ -31,7 +31,8 @@ const routePermissions = {
     '/api/vendors',
     '/api/reports',
     '/api/dashboard',
-    '/api/settings'
+    '/api/settings',
+    '/api/inventory'
   ],
   
   // Notification routes (accessible by all authenticated users)

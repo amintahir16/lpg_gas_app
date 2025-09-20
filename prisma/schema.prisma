@@ -63,16 +63,20 @@ model Cylinder {
   capacity            Decimal        @db.Decimal(5, 2)
   purchaseDate        DateTime?
   purchasePrice       Decimal?       @db.Decimal(10, 2)
-  currentStatus       CylinderStatus @default(AVAILABLE)
+  currentStatus       CylinderStatus @default(FULL)
   location            String?
   lastMaintenanceDate DateTime?
   nextMaintenanceDate DateTime?
+  storeId             String?
+  vehicleId           String?
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
 
   // Relations
   cylinderRentals   CylinderRental[]
   vendorInventories VendorInventory[]
+  store             Store?           @relation(fields: [storeId], references: [id])
+  vehicle           Vehicle?         @relation(fields: [vehicleId], references: [id])
 
   @@map("cylinders")
 }
@@ -350,15 +354,17 @@ enum CustomerType {
 }
 
 enum CylinderType {
-  KG_15
-  KG_45
+  DOMESTIC_11_8KG
+  STANDARD_15KG
+  COMMERCIAL_45_4KG
 }
 
 enum CylinderStatus {
-  AVAILABLE
-  RENTED
+  FULL
+  EMPTY
   MAINTENANCE
   RETIRED
+  WITH_CUSTOMER
 }
 
 enum TransactionType {
@@ -513,4 +519,70 @@ model VendorFinancialReport {
 
   @@unique([vendorId, reportDate])
   @@map("vendor_financial_reports")
+}
+
+model Store {
+  id          String   @id @default(cuid())
+  name        String
+  location    String
+  address     String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  cylinders   Cylinder[]
+
+  @@map("stores")
+}
+
+model Vehicle {
+  id          String   @id @default(cuid())
+  vehicleNumber String @unique
+  vehicleType String
+  driverName  String?
+  capacity    Int?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  cylinders   Cylinder[]
+
+  @@map("vehicles")
+}
+
+model Regulator {
+  id            String   @id @default(cuid())
+  type          String
+  costPerPiece  Decimal  @db.Decimal(10, 2)
+  quantity      Int      @default(0)
+  totalCost     Decimal  @db.Decimal(10, 2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("regulators")
+}
+
+model GasPipe {
+  id          String   @id @default(cuid())
+  type        String
+  quantity    Decimal  @db.Decimal(10, 2) // in meters
+  totalCost   Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("gas_pipes")
+}
+
+model Stove {
+  id          String   @id @default(cuid())
+  quality     String
+  quantity    Int      @default(0)
+  costPerPiece Decimal @db.Decimal(10, 2)
+  totalCost   Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("stoves")
 }

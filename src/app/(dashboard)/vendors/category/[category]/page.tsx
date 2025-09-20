@@ -73,7 +73,7 @@ const categoryInfo = {
     label: 'Vaporizer Purchase',
     icon: Package,
     color: 'bg-purple-500',
-    description: 'Manage vaporizer vendors like Iqbal Energy, Hass Vaporizer, Fakhar Vaporizer',
+    description: 'Manage vaporizer vendors',
     items: ['20kg Vaporizer', '30kg Vaporizer', '40kg Vaporizer']
   },
   'accessories-purchase': {
@@ -81,7 +81,7 @@ const categoryInfo = {
     icon: Package,
     color: 'bg-orange-500',
     description: 'Manage accessories vendors like Daud Reeta Bazar, Imtiaaz Reeta Bazar',
-    items: ['Regulator', 'Stove', 'Pipe', 'High Pressure Regulator', 'Regulator Quality 1', 'Regulator Quality 2']
+    items: ['Regulator', 'Stove Quality 1', 'Stove Quality 2', 'Stove Quality 3', 'Stove Quality 4', 'Stove Quality 5', 'Pipe', 'High Pressure Regulator', 'Regulator Quality 1', 'Regulator Quality 2']
   },
   'valves-purchase': {
     label: 'Valves Purchase',
