@@ -1,0 +1,11 @@
+name,category,unit,stockQuantity,stockType,remainingKg,priceSoldToCustomer,lowStockThreshold
+Domestic (11.8kg),GAS_CYLINDER,pc,100,FILLED,,5000,10
+Standard (15kg),GAS_CYLINDER,pc,150,FILLED,,6500,15
+Commercial (45.4kg),GAS_CYLINDER,pc,50,FILLED,,18000,5
+Regulator,ACCESSORY,pc,200,FILLED,,1500,20
+Gas Pipe (1 meter),ACCESSORY,meter,500,FILLED,,300,50
+Stove (2 Burner),ACCESSORY,pc,75,FILLED,,2500,10
+Gas Pipe (2 meter),ACCESSORY,meter,300,FILLED,,550,30
+Stove (4 Burner),ACCESSORY,pc,25,FILLED,,4500,5
+Vaporizer,ACCESSORY,pc,10,FILLED,,12000,2
+Pressure Gauge,ACCESSORY,pc,100,FILLED,,800,10

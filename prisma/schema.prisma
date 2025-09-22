@@ -1,4 +1,3 @@
-// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,81 +8,77 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  password  String
-  role      Role     @default(USER)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  customers       Customer[]       @relation("UserCustomers")
-  expenses        Expense[]        @relation("UserExpenses")
-  invoices        Invoice[]        @relation("UserInvoices")
-  cylinderRentals CylinderRental[] @relation("UserCylinderRentals")
-  notifications   Notification[]   @relation("UserNotifications")
-  purchaseEntries PurchaseEntry[]  @relation("UserPurchaseEntries")
+  id               String           @id @default(cuid())
+  email            String           @unique
+  name             String?
+  password         String
+  role             Role             @default(USER)
+  isActive         Boolean          @default(true)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  b2b_transactions B2BTransaction[]
+  cylinderRentals  CylinderRental[] @relation("UserCylinderRentals")
+  expenses         Expense[]        @relation("UserExpenses")
+  invoices         Invoice[]        @relation("UserInvoices")
+  notifications    Notification[]   @relation("UserNotifications")
+  purchaseEntries  PurchaseEntry[]  @relation("UserPurchaseEntries")
 
   @@map("users")
 }
 
 model Customer {
-  id           String       @id @default(cuid())
-  code         String       @unique
-  firstName    String
-  lastName     String
-  email        String?
-  phone        String
-  address      String?
-  city         String?
-  state        String?
-  postalCode   String?
-  customerType CustomerType
-  creditLimit  Decimal      @default(0) @db.Decimal(10, 2)
-  isActive     Boolean      @default(true)
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-
-  // Relations
-  user            User             @relation("UserCustomers", fields: [userId], references: [id])
-  userId          String
-  ledger          CustomerLedger[]
-  cylinderRentals CylinderRental[]
-  supportRequests SupportRequest[]
+  id                 String           @id @default(cuid())
+  name               String
+  type               String           @default("B2B")
+  contactPerson      String
+  phone              String
+  email              String?
+  address            String?
+  creditLimit        Decimal?         @db.Decimal(10, 2)
+  paymentTermsDays   Int              @default(30)
+  ledgerBalance      Decimal          @default(0) @db.Decimal(10, 2)
+  domestic118kgDue   Int              @default(0)
+  standard15kgDue    Int              @default(0)
+  commercial454kgDue Int              @default(0)
+  notes              String?
+  isActive           Boolean          @default(true)
+  createdBy          String
+  createdAt          DateTime         @default(now())
+  updatedBy          String?
+  updatedAt          DateTime         @updatedAt
+  b2bTransactions    B2BTransaction[]
+  ledger             CustomerLedger[]
+  cylinderRentals    CylinderRental[]
+  supportRequests    SupportRequest[]
 
   @@map("customers")
 }
 
 model Cylinder {
-  id                  String         @id @default(cuid())
-  code                String         @unique
+  id                  String            @id @default(cuid())
+  code                String            @unique
   cylinderType        CylinderType
-  capacity            Decimal        @db.Decimal(5, 2)
+  capacity            Decimal           @db.Decimal(5, 2)
   purchaseDate        DateTime?
-  purchasePrice       Decimal?       @db.Decimal(10, 2)
-  currentStatus       CylinderStatus @default(FULL)
+  purchasePrice       Decimal?          @db.Decimal(10, 2)
+  currentStatus       CylinderStatus    @default(FULL)
   location            String?
   lastMaintenanceDate DateTime?
   nextMaintenanceDate DateTime?
   storeId             String?
   vehicleId           String?
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
-
-  // Relations
-  cylinderRentals   CylinderRental[]
-  vendorInventories VendorInventory[]
-  store             Store?           @relation(fields: [storeId], references: [id])
-  vehicle           Vehicle?         @relation(fields: [vehicleId], references: [id])
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  cylinderRentals     CylinderRental[]
+  store               Store?            @relation(fields: [storeId], references: [id])
+  vehicle             Vehicle?          @relation(fields: [vehicleId], references: [id])
+  vendorInventories   VendorInventory[]
 
   @@map("cylinders")
 }
 
 model CustomerLedger {
   id              String          @id @default(cuid())
-  customer        Customer        @relation(fields: [customerId], references: [id])
   customerId      String
   transactionType TransactionType
   amount          Decimal         @db.Decimal(10, 2)
@@ -92,17 +87,15 @@ model CustomerLedger {
   description     String?
   invoiceId       String?
   createdAt       DateTime        @default(now())
+  customer        Customer        @relation(fields: [customerId], references: [id])
 
   @@map("customer_ledger")
 }
 
 model CylinderRental {
   id                 String       @id @default(cuid())
-  customer           Customer     @relation(fields: [customerId], references: [id])
   customerId         String
-  cylinder           Cylinder     @relation(fields: [cylinderId], references: [id])
   cylinderId         String
-  user               User         @relation("UserCylinderRentals", fields: [userId], references: [id])
   userId             String
   rentalDate         DateTime
   expectedReturnDate DateTime?
@@ -113,6 +106,9 @@ model CylinderRental {
   notes              String?
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
+  customer           Customer     @relation(fields: [customerId], references: [id])
+  cylinder           Cylinder     @relation(fields: [cylinderId], references: [id])
+  user               User         @relation("UserCylinderRentals", fields: [userId], references: [id])
 
   @@map("cylinder_rentals")
 }
@@ -125,45 +121,42 @@ model Expense {
   expenseDate DateTime
   receiptUrl  String?
   status      ExpenseStatus   @default(PENDING)
-  user        User            @relation("UserExpenses", fields: [userId], references: [id])
   userId      String
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @default(now()) @updatedAt
+  user        User            @relation("UserExpenses", fields: [userId], references: [id])
 
   @@map("expenses")
 }
 
 model Vendor {
-  id            String         @id @default(cuid())
-  vendorCode    String         @unique
-  companyName   String
-  contactPerson String?
-  email         String?
-  phone         String?
-  address       String?
-  taxId         String?
-  paymentTerms  Int            @default(30)
-  category      VendorCategory?
-  isActive      Boolean        @default(true)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-
-  // Relations
-  invoices        Invoice[]
-  orders          VendorOrder[]
-  supportRequests VendorSupportRequest[]
-  bankDetails     VendorBankDetails[]
-  inventories     VendorInventory[]
-  payments        VendorPayment[]
-  purchaseEntries PurchaseEntry[]
+  id               String                  @id @default(cuid())
+  vendorCode       String                  @unique
+  companyName      String
+  contactPerson    String?
+  email            String?
+  phone            String?
+  address          String?
+  taxId            String?
+  paymentTerms     Int                     @default(30)
+  category         VendorCategory?
+  isActive         Boolean                 @default(true)
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  invoices         Invoice[]
+  purchaseEntries  PurchaseEntry[]
+  bankDetails      VendorBankDetails[]
   financialReports VendorFinancialReport[]
+  inventories      VendorInventory[]
+  orders           VendorOrder[]
+  payments         VendorPayment[]
+  supportRequests  VendorSupportRequest[]
 
   @@map("vendors")
 }
 
 model VendorBankDetails {
   id            String   @id @default(cuid())
-  vendor        Vendor   @relation(fields: [vendorId], references: [id])
   vendorId      String
   accountName   String
   accountNumber String
@@ -173,15 +166,14 @@ model VendorBankDetails {
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  vendor        Vendor   @relation(fields: [vendorId], references: [id])
 
   @@map("vendor_bank_details")
 }
 
 model VendorInventory {
   id          String          @id @default(cuid())
-  vendor      Vendor          @relation(fields: [vendorId], references: [id])
   vendorId    String
-  cylinder    Cylinder?       @relation(fields: [cylinderId], references: [id])
   cylinderId  String?
   name        String
   category    String
@@ -192,13 +184,14 @@ model VendorInventory {
   lastUpdated DateTime        @default(now())
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
+  cylinder    Cylinder?       @relation(fields: [cylinderId], references: [id])
+  vendor      Vendor          @relation(fields: [vendorId], references: [id])
 
   @@map("vendor_inventories")
 }
 
 model VendorPayment {
   id          String        @id @default(cuid())
-  vendor      Vendor        @relation(fields: [vendorId], references: [id])
   vendorId    String
   amount      Decimal       @db.Decimal(10, 2)
   paymentDate DateTime
@@ -208,6 +201,7 @@ model VendorPayment {
   description String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+  vendor      Vendor        @relation(fields: [vendorId], references: [id])
 
   @@map("vendor_payments")
 }
@@ -226,18 +220,17 @@ model Invoice {
   dueDate        DateTime?
   paidDate       DateTime?
   notes          String?
-  user           User          @relation("UserInvoices", fields: [userId], references: [id])
   userId         String
-  vendor         Vendor?       @relation(fields: [vendorId], references: [id])
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
+  user           User          @relation("UserInvoices", fields: [userId], references: [id])
+  vendor         Vendor?       @relation(fields: [vendorId], references: [id])
 
   @@map("invoices")
 }
 
 model SupportRequest {
   id          String               @id @default(cuid())
-  customer    Customer             @relation(fields: [customerId], references: [id])
   customerId  String
   subject     String
   description String
@@ -246,13 +239,13 @@ model SupportRequest {
   category    SupportCategory      @default(GENERAL)
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
+  customer    Customer             @relation(fields: [customerId], references: [id])
 
   @@map("support_requests")
 }
 
 model VendorOrder {
   id          String            @id @default(cuid())
-  vendor      Vendor            @relation(fields: [vendorId], references: [id])
   vendorId    String
   orderDate   DateTime          @default(now())
   status      VendorOrderStatus @default(PENDING)
@@ -260,13 +253,13 @@ model VendorOrder {
   notes       String?
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
+  vendor      Vendor            @relation(fields: [vendorId], references: [id])
 
   @@map("vendor_orders")
 }
 
 model VendorSupportRequest {
   id          String               @id @default(cuid())
-  vendor      Vendor               @relation(fields: [vendorId], references: [id])
   vendorId    String
   subject     String
   description String
@@ -275,6 +268,7 @@ model VendorSupportRequest {
   category    SupportCategory      @default(GENERAL)
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
+  vendor      Vendor               @relation(fields: [vendorId], references: [id])
 
   @@map("vendor_support_requests")
 }
@@ -290,6 +284,195 @@ model SystemSettings {
   updatedAt   DateTime @updatedAt
 
   @@map("system_settings")
+}
+
+model Notification {
+  id        String               @id @default(cuid())
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean              @default(false)
+  priority  NotificationPriority @default(MEDIUM)
+  metadata  String?
+  userId    String?
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  user      User?                @relation("UserNotifications", fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+model PurchaseEntry {
+  id              String              @id @default(cuid())
+  vendorId        String
+  category        VendorCategory
+  itemName        String
+  itemDescription String?
+  quantity        Int                 @default(1)
+  unitPrice       Decimal             @db.Decimal(10, 2)
+  totalPrice      Decimal             @db.Decimal(10, 2)
+  status          PurchaseEntryStatus @default(PENDING)
+  purchaseDate    DateTime            @default(now())
+  invoiceNumber   String?
+  notes           String?
+  userId          String
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  user            User                @relation("UserPurchaseEntries", fields: [userId], references: [id])
+  vendor          Vendor              @relation(fields: [vendorId], references: [id])
+
+  @@map("purchase_entries")
+}
+
+model VendorFinancialReport {
+  id              String   @id @default(cuid())
+  vendorId        String
+  reportDate      DateTime
+  netBalance      Decimal  @db.Decimal(10, 2)
+  cashIn          Decimal  @default(0) @db.Decimal(10, 2)
+  cashOut         Decimal  @default(0) @db.Decimal(10, 2)
+  previousBalance Decimal  @default(0) @db.Decimal(10, 2)
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  vendor          Vendor   @relation(fields: [vendorId], references: [id])
+
+  @@unique([vendorId, reportDate])
+  @@map("vendor_financial_reports")
+}
+
+model Store {
+  id        String     @id @default(cuid())
+  name      String
+  location  String
+  address   String?
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  cylinders Cylinder[]
+
+  @@map("stores")
+}
+
+model Vehicle {
+  id            String     @id @default(cuid())
+  vehicleNumber String     @unique
+  vehicleType   String
+  driverName    String?
+  capacity      Int?
+  isActive      Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  cylinders     Cylinder[]
+
+  @@map("vehicles")
+}
+
+model Regulator {
+  id           String   @id @default(cuid())
+  type         String
+  costPerPiece Decimal  @db.Decimal(10, 2)
+  quantity     Int      @default(0)
+  totalCost    Decimal  @db.Decimal(10, 2)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("regulators")
+}
+
+model GasPipe {
+  id        String   @id @default(cuid())
+  type      String
+  quantity  Decimal  @db.Decimal(10, 2)
+  totalCost Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("gas_pipes")
+}
+
+model Stove {
+  id           String   @id @default(cuid())
+  quality      String
+  quantity     Int      @default(0)
+  costPerPiece Decimal  @db.Decimal(10, 2)
+  totalCost    Decimal  @db.Decimal(10, 2)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("stoves")
+}
+
+model B2BTransaction {
+  id               String               @id @default(cuid())
+  transactionType  B2BTransactionType
+  billSno          String               @unique
+  customerId       String
+  date             DateTime
+  time             DateTime
+  totalAmount      Decimal              @db.Decimal(10, 2)
+  paymentReference String?
+  notes            String?
+  createdBy        String
+  createdAt        DateTime             @default(now())
+  voided           Boolean              @default(false)
+  voidedBy         String?
+  voidedAt         DateTime?
+  voidReason       String?
+  items            B2BTransactionItem[]
+  users            User                 @relation(fields: [createdBy], references: [id])
+  customer         Customer             @relation(fields: [customerId], references: [id])
+
+  @@map("b2b_transactions")
+}
+
+model B2BTransactionItem {
+  id                  String           @id @default(cuid())
+  transactionId       String
+  productId           String?
+  productName         String
+  quantity            Decimal          @db.Decimal(10, 2)
+  pricePerItem        Decimal          @db.Decimal(10, 2)
+  totalPrice          Decimal          @db.Decimal(10, 2)
+  cylinderType        String?
+  returnedCondition   ReturnCondition?
+  remainingKg         Decimal?         @db.Decimal(5, 2)
+  originalSoldPrice   Decimal?         @db.Decimal(10, 2)
+  buybackRate         Decimal?         @db.Decimal(3, 2)
+  buybackPricePerItem Decimal?         @db.Decimal(10, 2)
+  buybackTotal        Decimal?         @db.Decimal(10, 2)
+  products            Product?         @relation(fields: [productId], references: [id])
+  transaction         B2BTransaction   @relation(fields: [transactionId], references: [id])
+
+  @@map("b2b_transaction_items")
+}
+
+model Product {
+  id                    String               @id @default(cuid())
+  name                  String
+  category              ProductCategory
+  unit                  String
+  stockQuantity         Decimal              @default(0) @db.Decimal(10, 2)
+  stockType             StockType            @default(FILLED)
+  remainingKg           Decimal?             @db.Decimal(5, 2)
+  priceSoldToCustomer   Decimal              @db.Decimal(10, 2)
+  lowStockThreshold     Int                  @default(10)
+  isActive              Boolean              @default(true)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  b2b_transaction_items B2BTransactionItem[]
+
+  @@map("products")
+}
+
+model BillSequence {
+  id        String   @id @default(cuid())
+  date      DateTime @unique
+  sequence  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("bill_sequences")
 }
 
 enum VendorOrderStatus {
@@ -338,7 +521,6 @@ enum SupportCategory {
   MAINTENANCE
 }
 
-// Enums
 enum Role {
   USER
   ADMIN
@@ -393,6 +575,32 @@ enum ExpenseStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+enum B2BTransactionType {
+  SALE
+  PAYMENT
+  BUYBACK
+  RETURN_EMPTY
+  ADJUSTMENT
+  CREDIT_NOTE
+}
+
+enum ReturnCondition {
+  EMPTY
+  PARTIAL
+  FULL
+}
+
+enum ProductCategory {
+  GAS_CYLINDER
+  ACCESSORY
+}
+
+enum StockType {
+  FILLED
+  EMPTY
+  PARTIAL
 }
 
 enum InvoiceType {
@@ -464,125 +672,4 @@ enum NotificationPriority {
   MEDIUM
   HIGH
   URGENT
-}
-
-model Notification {
-  id        String              @id @default(cuid())
-  type      NotificationType
-  title     String
-  message   String
-  isRead    Boolean             @default(false)
-  priority  NotificationPriority @default(MEDIUM)
-  metadata  String?             // JSON string for additional data
-  userId    String?
-  user      User?               @relation("UserNotifications", fields: [userId], references: [id])
-  createdAt DateTime            @default(now())
-  updatedAt DateTime            @updatedAt
-
-  @@map("notifications")
-}
-
-model PurchaseEntry {
-  id              String              @id @default(cuid())
-  vendor          Vendor              @relation(fields: [vendorId], references: [id])
-  vendorId        String
-  category        VendorCategory
-  itemName        String
-  itemDescription String?
-  quantity        Int                 @default(1)
-  unitPrice       Decimal             @db.Decimal(10, 2)
-  totalPrice      Decimal             @db.Decimal(10, 2)
-  status          PurchaseEntryStatus @default(PENDING)
-  purchaseDate    DateTime            @default(now())
-  invoiceNumber   String?
-  notes           String?
-  user            User                @relation("UserPurchaseEntries", fields: [userId], references: [id])
-  userId          String
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-
-  @@map("purchase_entries")
-}
-
-model VendorFinancialReport {
-  id            String         @id @default(cuid())
-  vendor        Vendor         @relation(fields: [vendorId], references: [id])
-  vendorId      String
-  reportDate    DateTime
-  netBalance    Decimal        @db.Decimal(10, 2)
-  cashIn        Decimal        @default(0) @db.Decimal(10, 2)
-  cashOut       Decimal        @default(0) @db.Decimal(10, 2)
-  previousBalance Decimal      @default(0) @db.Decimal(10, 2)
-  notes         String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-
-  @@unique([vendorId, reportDate])
-  @@map("vendor_financial_reports")
-}
-
-model Store {
-  id          String   @id @default(cuid())
-  name        String
-  location    String
-  address     String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  cylinders   Cylinder[]
-
-  @@map("stores")
-}
-
-model Vehicle {
-  id          String   @id @default(cuid())
-  vehicleNumber String @unique
-  vehicleType String
-  driverName  String?
-  capacity    Int?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  cylinders   Cylinder[]
-
-  @@map("vehicles")
-}
-
-model Regulator {
-  id            String   @id @default(cuid())
-  type          String
-  costPerPiece  Decimal  @db.Decimal(10, 2)
-  quantity      Int      @default(0)
-  totalCost     Decimal  @db.Decimal(10, 2)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@map("regulators")
-}
-
-model GasPipe {
-  id          String   @id @default(cuid())
-  type        String
-  quantity    Decimal  @db.Decimal(10, 2) // in meters
-  totalCost   Decimal  @db.Decimal(10, 2)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("gas_pipes")
-}
-
-model Stove {
-  id          String   @id @default(cuid())
-  quality     String
-  quantity    Int      @default(0)
-  costPerPiece Decimal @db.Decimal(10, 2)
-  totalCost   Decimal  @db.Decimal(10, 2)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("stoves")
 }

@@ -4,32 +4,37 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { 
+  PlusIcon, 
+  MagnifyingGlassIcon, 
+  BuildingOfficeIcon,
+  CurrencyDollarIcon,
+  CubeIcon
+} from '@heroicons/react/24/outline';
 
-interface Customer {
+interface B2BCustomer {
   id: string;
-  code: string;
-  firstName: string;
-  lastName: string;
-  email: string | null;
+  name: string;
+  contactPerson: string;
   phone: string;
-  customerType: string;
-  creditLimit: number | string;
+  email: string | null;
+  address: string | null;
+  creditLimit: number | null;
+  paymentTermsDays: number;
+  ledgerBalance: number;
+  domestic118kgDue: number;
+  standard15kgDue: number;
+  commercial454kgDue: number;
+  notes: string | null;
   isActive: boolean;
   createdAt: string;
-  user: {
-    id: string;
-    name: string | null;
-    email: string;
-  };
 }
 
-interface CustomersResponse {
-  customers: Customer[];
+interface B2BCustomersResponse {
+  customers: B2BCustomer[];
   pagination: {
     page: number;
     limit: number;
@@ -38,10 +43,10 @@ interface CustomersResponse {
   };
 }
 
-export default function CustomersPage() {
+export default function B2BCustomersPage() {
   const router = useRouter();
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customers, setCustomers] = useState<B2BCustomer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -70,25 +75,26 @@ export default function CustomersPage() {
   }, [debouncedSearchTerm]);
 
   useEffect(() => {
-    fetchCustomers();
+    fetchB2BCustomers();
   }, [debouncedSearchTerm, pagination.page]);
 
-  const fetchCustomers = async () => {
+  const fetchB2BCustomers = async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams({
         search: debouncedSearchTerm,
         page: pagination.page.toString(),
-        limit: pagination.limit.toString()
+        limit: pagination.limit.toString(),
+        type: 'B2B'
       });
 
-      const response = await fetch(`/api/customers?${params}`);
+      const response = await fetch(`/api/customers/b2b?${params}`);
       
       if (!response.ok) {
-        throw new Error('Failed to fetch customers');
+        throw new Error('Failed to fetch B2B customers');
       }
       
-      const data: CustomersResponse = await response.json();
+      const data: B2BCustomersResponse = await response.json();
       setCustomers(data.customers);
       setPagination(data.pagination);
     } catch (err) {
@@ -98,35 +104,38 @@ export default function CustomersPage() {
     }
   };
 
-  const getCustomerTypeColor = (type: string) => {
-    switch (type) {
-      case 'RESIDENTIAL':
-        return 'success';
-      case 'COMMERCIAL':
-        return 'info';
-      case 'INDUSTRIAL':
-        return 'warning';
-      default:
-        return 'secondary';
-    }
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-PK', {
+      style: 'currency',
+      currency: 'PKR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const getTotalCylindersDue = (customer: B2BCustomer) => {
+    return customer.domestic118kgDue + customer.standard15kgDue + customer.commercial454kgDue;
   };
 
   const handleAddCustomer = async (formData: any) => {
     try {
-      const response = await fetch('/api/customers', {
+      const response = await fetch('/api/customers/b2b', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          type: 'B2B'
+        }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create customer');
+        throw new Error('Failed to create B2B customer');
       }
 
       // Refresh the customers list
-      fetchCustomers();
+      fetchB2BCustomers();
       setShowAddForm(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create customer');
@@ -138,7 +147,7 @@ export default function CustomersPage() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600 font-medium">Loading customers...</p>
+          <p className="mt-4 text-gray-600 font-medium">Loading B2B customers...</p>
         </div>
       </div>
     );
@@ -149,25 +158,21 @@ export default function CustomersPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Customer Management</h1>
+          <h1 className="text-3xl font-bold text-gray-900 flex items-center">
+            <BuildingOfficeIcon className="w-8 h-8 mr-3 text-blue-600" />
+            Industries & Restaurants (B2B)
+          </h1>
           <p className="mt-2 text-gray-600 font-medium">
-            Manage your customer database and relationships
+            Manage B2B customers, cylinder dues, and account receivables
           </p>
         </div>
-        <div className="mt-4 sm:mt-0 flex space-x-3">
-          <Button 
-            onClick={() => router.push('/customers/b2b')}
-            variant="outline"
-            className="font-semibold"
-          >
-            B2B Customers
-          </Button>
+        <div className="mt-4 sm:mt-0">
           <Button 
             onClick={() => setShowAddForm(true)}
             className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-lg"
           >
             <PlusIcon className="w-4 h-4 mr-2" />
-            Add Customer
+            Add B2B Customer
           </Button>
         </div>
       </div>
@@ -177,7 +182,7 @@ export default function CustomersPage() {
         <CardHeader>
           <CardTitle className="text-lg font-semibold text-gray-900">Search & Filters</CardTitle>
           <CardDescription className="text-gray-600 font-medium">
-            Find specific customers or filter by type
+            Find specific B2B customers or filter by status
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -187,7 +192,7 @@ export default function CustomersPage() {
                 <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <Input
                   ref={searchInputRef}
-                  placeholder="Search customers..."
+                  placeholder="Search B2B customers..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -221,48 +226,103 @@ export default function CustomersPage() {
         </Card>
       )}
 
-      {/* Customers Table */}
+      {/* B2B Customers Table */}
       <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
         <CardHeader>
-          <CardTitle className="text-lg font-semibold text-gray-900">Customer Database</CardTitle>
+          <CardTitle className="text-lg font-semibold text-gray-900">B2B Customer Database</CardTitle>
           <CardDescription className="text-gray-600 font-medium">
-            Complete list of all customers and their details
+            Complete list of all B2B customers with cylinder dues and account receivables
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="font-semibold text-gray-700">Code</TableHead>
-                <TableHead className="font-semibold text-gray-700">Name</TableHead>
-                <TableHead className="font-semibold text-gray-700">Email</TableHead>
-                <TableHead className="font-semibold text-gray-700">Phone</TableHead>
-                <TableHead className="font-semibold text-gray-700">Type</TableHead>
-                <TableHead className="font-semibold text-gray-700">Credit Limit</TableHead>
+                <TableHead className="font-semibold text-gray-700">Customer</TableHead>
+                <TableHead className="font-semibold text-gray-700">Contact</TableHead>
+                <TableHead className="font-semibold text-gray-700">Cylinder 11.8kg</TableHead>
+                <TableHead className="font-semibold text-gray-700">Cylinder 15kg</TableHead>
+                <TableHead className="font-semibold text-gray-700">Cylinder 45.4kg</TableHead>
+                <TableHead className="font-semibold text-gray-700">Total Due</TableHead>
+                <TableHead className="font-semibold text-gray-700">Account Receivables</TableHead>
                 <TableHead className="font-semibold text-gray-700">Status</TableHead>
+                <TableHead className="font-semibold text-gray-700">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {customers.map((customer) => (
-                <TableRow key={customer.id}>
-                  <TableCell className="font-semibold text-gray-900">{customer.code}</TableCell>
-                  <TableCell className="text-gray-700">
-                    {customer.firstName} {customer.lastName}
-                  </TableCell>
-                  <TableCell className="text-gray-700">{customer.email || '-'}</TableCell>
-                  <TableCell className="text-gray-700">{customer.phone}</TableCell>
+                <TableRow key={customer.id} className="hover:bg-gray-50">
                   <TableCell>
-                    <Badge variant={getCustomerTypeColor(customer.customerType) as any} className="font-semibold">
-                      {customer.customerType}
+                    <div>
+                      <p className="font-semibold text-gray-900">{customer.name}</p>
+                      <p className="text-sm text-gray-500">{customer.contactPerson}</p>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div>
+                      <p className="text-gray-700">{customer.phone}</p>
+                      {customer.email && (
+                        <p className="text-sm text-gray-500">{customer.email}</p>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge 
+                      variant={customer.domestic118kgDue > 0 ? 'destructive' : 'secondary'}
+                      className="font-semibold"
+                    >
+                      {customer.domestic118kgDue}
                     </Badge>
                   </TableCell>
-                  <TableCell className="font-semibold text-gray-900">
-                    ${(Number(customer.creditLimit) || 0).toFixed(2)}
+                  <TableCell>
+                    <Badge 
+                      variant={customer.standard15kgDue > 0 ? 'destructive' : 'secondary'}
+                      className="font-semibold"
+                    >
+                      {customer.standard15kgDue}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge 
+                      variant={customer.commercial454kgDue > 0 ? 'destructive' : 'secondary'}
+                      className="font-semibold"
+                    >
+                      {customer.commercial454kgDue}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center">
+                      <CubeIcon className="w-4 h-4 mr-1 text-gray-500" />
+                      <span className="font-semibold text-gray-900">
+                        {getTotalCylindersDue(customer)}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center">
+                      <CurrencyDollarIcon className="w-4 h-4 mr-1 text-gray-500" />
+                      <span className={`font-semibold ${
+                        customer.ledgerBalance > 0 ? 'text-red-600' : 
+                        customer.ledgerBalance < 0 ? 'text-green-600' : 'text-gray-600'
+                      }`}>
+                        {formatCurrency(customer.ledgerBalance)}
+                      </span>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Badge variant={customer.isActive ? 'success' : 'destructive'} className="font-semibold">
                       {customer.isActive ? 'Active' : 'Inactive'}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => router.push(`/customers/b2b/${customer.id}`)}
+                      className="font-medium"
+                    >
+                      View Details
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -300,31 +360,33 @@ export default function CustomersPage() {
         </CardContent>
       </Card>
 
-      {/* Add Customer Modal */}
+      {/* Add B2B Customer Modal */}
       {showAddForm && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
           <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
             <div className="mt-3">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Customer</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New B2B Customer</h3>
               <form className="space-y-4" onSubmit={(e) => {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
                 handleAddCustomer({
-                  firstName: formData.get('firstName'),
-                  lastName: formData.get('lastName'),
+                  name: formData.get('name'),
+                  contactPerson: formData.get('contactPerson'),
                   email: formData.get('email'),
                   phone: formData.get('phone'),
-                  customerType: formData.get('customerType'),
-                  creditLimit: formData.get('creditLimit')
+                  address: formData.get('address'),
+                  creditLimit: formData.get('creditLimit'),
+                  paymentTermsDays: formData.get('paymentTermsDays'),
+                  notes: formData.get('notes')
                 });
               }}>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">First Name</label>
-                  <Input name="firstName" type="text" placeholder="First Name" required />
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Company Name</label>
+                  <Input name="name" type="text" placeholder="Company Name" required />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Last Name</label>
-                  <Input name="lastName" type="text" placeholder="Last Name" required />
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Contact Person</label>
+                  <Input name="contactPerson" type="text" placeholder="Contact Person" required />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
@@ -335,16 +397,20 @@ export default function CustomersPage() {
                   <Input name="phone" type="tel" placeholder="Phone" required />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Customer Type</label>
-                  <Select name="customerType" required>
-                    <option value="RESIDENTIAL">Residential</option>
-                    <option value="COMMERCIAL">Commercial</option>
-                    <option value="INDUSTRIAL">Industrial</option>
-                  </Select>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Address</label>
+                  <Input name="address" type="text" placeholder="Address" />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Credit Limit</label>
                   <Input name="creditLimit" type="number" placeholder="0.00" step="0.01" defaultValue="0" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Terms (Days)</label>
+                  <Input name="paymentTermsDays" type="number" placeholder="30" defaultValue="30" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Notes</label>
+                  <Input name="notes" type="text" placeholder="Notes" />
                 </div>
                 <div className="flex justify-end space-x-3">
                   <Button
@@ -366,4 +432,4 @@ export default function CustomersPage() {
       )}
     </div>
   );
-} 
+}

@@ -1,0 +1,5 @@
+Date,Time,Bill S.No,Transaction Type,Customer Name,Product Name,Quantity,Price Per Item,Total Price,Cylinder Type,Returned Condition,Remaining Kg,Original Sold Price,Buyback Rate,Buyback Price Per Item,Buyback Total,Payment Reference,Notes,Created By,Created At
+2025-01-20,10:30:00,BILL-20250120-000001,SALE,Kandahaar Restaurant,Domestic (11.8kg),2,5000,10000,Domestic (11.8kg),,,,,,,,B2B Sale Transaction,admin-user,2025-01-20 10:30:00
+2025-01-20,10:30:00,BILL-20250120-000001,SALE,Kandahaar Restaurant,Regulator,1,1500,1500,,,,,,,,,,B2B Sale Transaction,admin-user,2025-01-20 10:30:00
+2025-01-20,14:15:00,BILL-20250120-000002,PAYMENT,Kandahaar Restaurant,Payment,,,,,,,,,,,,BANK-001,Partial payment received,admin-user,2025-01-20 14:15:00
+2025-01-20,16:45:00,BILL-20250120-000003,BUYBACK,Kandahaar Restaurant,Domestic (11.8kg),1,5000,5000,Domestic (11.8kg),PARTIAL,5,5000,0.60,3000,3000,,Buyback of partial cylinder,admin-user,2025-01-20 16:45:00

@@ -1,0 +1,10 @@
+name,category,unit,stock_quantity,stock_type,price_sold_to_customer,low_stock_threshold
+"Domestic (11.8kg)","GAS_CYLINDER","pc","100","FILLED","5000","10"
+"Standard (15kg)","GAS_CYLINDER","pc","80","FILLED","6000","8"
+"Commercial (45.4kg)","GAS_CYLINDER","pc","50","FILLED","15000","5"
+"Empty Domestic (11.8kg)","GAS_CYLINDER","pc","20","EMPTY","0","5"
+"Empty Standard (15kg)","GAS_CYLINDER","pc","15","EMPTY","0","5"
+"Empty Commercial (45.4kg)","GAS_CYLINDER","pc","10","EMPTY","0","3"
+"Regulator","ACCESSORY","pc","50","FILLED","1500","10"
+"Gas Pipe","ACCESSORY","ft","1000","FILLED","50","100"
+"Stove","ACCESSORY","pc","25","FILLED","3000","5"
