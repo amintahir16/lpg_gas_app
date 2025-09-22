@@ -26,13 +26,16 @@ const routePermissions = {
     '/reports',
     '/settings',
     '/api/customers',
+    '/api/customers/b2b',
     '/api/cylinders',
     '/api/expenses',
     '/api/vendors',
     '/api/reports',
     '/api/dashboard',
     '/api/settings',
-    '/api/inventory'
+    '/api/inventory',
+    '/api/b2b-transactions',
+    '/api/customers/b2b/transactions'
   ],
   
   // Notification routes (accessible by all authenticated users)

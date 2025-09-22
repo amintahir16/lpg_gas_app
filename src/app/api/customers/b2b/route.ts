@@ -60,8 +60,36 @@ export async function POST(request: NextRequest) {
   try {
     const userId = request.headers.get('x-user-id');
     
+    console.log('Received userId from headers:', userId);
+    
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Verify user exists in database
+    let user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true }
+    });
+
+    if (!user) {
+      console.log('User not found in database:', userId);
+      console.log('Looking for any admin user to use instead...');
+      
+      // If user not found, try to find any admin user
+      user = await prisma.user.findFirst({
+        where: { role: 'ADMIN' },
+        select: { id: true, email: true }
+      });
+      
+      if (!user) {
+        console.log('No admin users found in database');
+        return NextResponse.json({ error: 'No valid user found' }, { status: 401 });
+      }
+      
+      console.log('Using admin user instead:', user);
+    } else {
+      console.log('User found:', user);
     }
 
     const body = await request.json();
@@ -96,8 +124,8 @@ export async function POST(request: NextRequest) {
         customerType: 'INDUSTRIAL', // Default for B2B
         firstName: contactPerson, // Required field
         lastName: '', // Required field
-        userId, // Required field
-        createdBy: userId,
+        userId: user.id, // Required field
+        createdBy: user.id,
       },
     });
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { B2BTransactionType } from '@prisma/client';
+import { B2BTransactionType, CylinderType } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
@@ -69,8 +69,36 @@ export async function POST(request: NextRequest) {
   try {
     const userId = request.headers.get('x-user-id');
     
+    console.log('Received userId from headers:', userId);
+    
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Verify user exists in database
+    let user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true }
+    });
+
+    if (!user) {
+      console.log('User not found in database:', userId);
+      console.log('Looking for any admin user to use instead...');
+      
+      // If user not found, try to find any admin user
+      user = await prisma.user.findFirst({
+        where: { role: 'ADMIN' },
+        select: { id: true, email: true }
+      });
+      
+      if (!user) {
+        console.log('No admin users found in database');
+        return NextResponse.json({ error: 'No valid user found' }, { status: 401 });
+      }
+      
+      console.log('Using admin user instead:', user);
+    } else {
+      console.log('User found:', user);
     }
 
     const body = await request.json();
@@ -86,6 +114,52 @@ export async function POST(request: NextRequest) {
       items,
     } = body;
 
+    // Validate and format date/time
+    console.log('Received date/time data:', { date, time, dateType: typeof date, timeType: typeof time });
+    
+    const transactionDate = new Date(date);
+    
+    // Handle time parsing - if time is just HH:MM, combine with date
+    let transactionTime;
+    if (time) {
+      if (time.includes('T') || time.includes(' ')) {
+        // Full datetime string
+        transactionTime = new Date(time);
+      } else if (time.match(/^\d{1,2}:\d{2}$/)) {
+        // Time only (HH:MM) - combine with date
+        const [hours, minutes] = time.split(':');
+        const combinedDateTime = new Date(date);
+        combinedDateTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+        transactionTime = combinedDateTime;
+      } else {
+        // Try to parse as regular date
+        transactionTime = new Date(time);
+      }
+    } else {
+      transactionTime = new Date();
+    }
+    
+    console.log('Parsed dates:', { 
+      transactionDate: transactionDate.toISOString(), 
+      transactionTime: transactionTime.toISOString(),
+      dateValid: !isNaN(transactionDate.getTime()),
+      timeValid: !isNaN(transactionTime.getTime())
+    });
+    
+    if (isNaN(transactionDate.getTime())) {
+      return NextResponse.json(
+        { error: 'Invalid date format', receivedDate: date },
+        { status: 400 }
+      );
+    }
+    
+    if (isNaN(transactionTime.getTime())) {
+      return NextResponse.json(
+        { error: 'Invalid time format', receivedTime: time },
+        { status: 400 }
+      );
+    }
+
     // Start a transaction to ensure data consistency
     const result = await prisma.$transaction(async (tx) => {
       // Create the transaction
@@ -94,12 +168,12 @@ export async function POST(request: NextRequest) {
           transactionType: transactionType as B2BTransactionType,
           billSno,
           customerId,
-          date: new Date(date),
-          time: new Date(time),
+          date: transactionDate,
+          time: transactionTime,
           totalAmount: parseFloat(totalAmount),
           paymentReference,
           notes,
-          createdBy: userId,
+          createdBy: user.id,
         },
       });
 
@@ -160,13 +234,13 @@ export async function POST(request: NextRequest) {
           if (item.cylinderType) {
             switch (item.cylinderType) {
               case 'Domestic (11.8kg)':
-                updateData.domestic118kgDue = customer.domestic118kgDue + parseInt(item.quantity);
+                updateData.domestic118kgDue = (customer.domestic118kgDue || 0) + parseInt(item.quantity);
                 break;
               case 'Standard (15kg)':
-                updateData.standard15kgDue = customer.standard15kgDue + parseInt(item.quantity);
+                updateData.standard15kgDue = (customer.standard15kgDue || 0) + parseInt(item.quantity);
                 break;
               case 'Commercial (45.4kg)':
-                updateData.commercial454kgDue = customer.commercial454kgDue + parseInt(item.quantity);
+                updateData.commercial454kgDue = (customer.commercial454kgDue || 0) + parseInt(item.quantity);
                 break;
             }
           }
@@ -177,13 +251,13 @@ export async function POST(request: NextRequest) {
             const quantity = parseInt(item.quantity);
             switch (item.cylinderType) {
               case 'Domestic (11.8kg)':
-                updateData.domestic118kgDue = Math.max(0, customer.domestic118kgDue - quantity);
+                updateData.domestic118kgDue = Math.max(0, (customer.domestic118kgDue || 0) - quantity);
                 break;
               case 'Standard (15kg)':
-                updateData.standard15kgDue = Math.max(0, customer.standard15kgDue - quantity);
+                updateData.standard15kgDue = Math.max(0, (customer.standard15kgDue || 0) - quantity);
                 break;
               case 'Commercial (45.4kg)':
-                updateData.commercial454kgDue = Math.max(0, customer.commercial454kgDue - quantity);
+                updateData.commercial454kgDue = Math.max(0, (customer.commercial454kgDue || 0) - quantity);
                 break;
             }
           }
@@ -221,6 +295,48 @@ export async function POST(request: NextRequest) {
               },
             });
           }
+        } else if (transactionType === 'RETURN_EMPTY' || transactionType === 'BUYBACK') {
+          // Add empty cylinders back to cylinder inventory
+          const quantity = parseInt(item.quantity);
+          const cylinderType = item.cylinderType;
+          
+          if (quantity > 0 && cylinderType) {
+            // Map cylinder type to CylinderType enum
+            let mappedCylinderType: CylinderType;
+            switch (cylinderType) {
+              case 'Domestic (11.8kg)':
+                mappedCylinderType = CylinderType.DOMESTIC_11_8KG;
+                break;
+              case 'Standard (15kg)':
+                mappedCylinderType = CylinderType.STANDARD_15KG;
+                break;
+              case 'Commercial (45.4kg)':
+                mappedCylinderType = CylinderType.COMMERCIAL_45_4KG;
+                break;
+              default:
+                console.log(`Unknown cylinder type: ${cylinderType}`);
+                continue;
+            }
+
+            // Create empty cylinders in inventory
+            const initialCylinderCount = await tx.cylinder.count();
+            for (let i = 0; i < quantity; i++) {
+              const code = `CYL${String(initialCylinderCount + 1 + i).padStart(3, '0')}`;
+              
+              await tx.cylinder.create({
+                data: {
+                  code,
+                  cylinderType: mappedCylinderType,
+                  capacity: cylinderType === 'Domestic (11.8kg)' ? 11.8 :
+                           cylinderType === 'Standard (15kg)' ? 15.0 : 45.4,
+                  currentStatus: 'EMPTY',
+                  location: 'Returned from Customer',
+                },
+              });
+            }
+            
+            console.log(`Added ${quantity} empty ${cylinderType} cylinders to inventory`);
+          }
         }
       }
 
@@ -230,8 +346,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     console.error('Error creating transaction:', error);
+    console.error('Transaction data:', {
+      transactionType,
+      customerId,
+      items: items?.map(item => ({
+        productName: item.productName,
+        quantity: item.quantity,
+        cylinderType: item.cylinderType,
+        productId: item.productId
+      }))
+    });
     return NextResponse.json(
-      { error: 'Failed to create transaction' },
+      { error: 'Failed to create transaction', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

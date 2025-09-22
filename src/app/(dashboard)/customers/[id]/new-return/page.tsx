@@ -57,6 +57,22 @@ export default function NewReturnPage() {
     }
   }, [customerId]);
 
+  // Force validation when customer data changes
+  useEffect(() => {
+    if (customer && returnItems.length > 0) {
+      setReturnItems(items => items.map(item => {
+        if (item.cylinderType) {
+          const maxQuantity = getMaxQuantityForCylinderType(item.cylinderType, customer);
+          if (item.quantity > maxQuantity) {
+            return { ...item, quantity: maxQuantity };
+          }
+        }
+        return item;
+      }));
+    }
+  }, [customer]);
+
+
   const fetchCustomerData = async () => {
     try {
       const response = await fetch(`/api/customers/${customerId}`);
@@ -91,6 +107,22 @@ export default function NewReturnPage() {
       if (item.id === id) {
         const updatedItem = { ...item, [field]: value };
         
+        // Validate quantity against remaining cylinders due
+        if (field === 'quantity' && customer && updatedItem.cylinderType) {
+          const maxQuantity = getMaxQuantityForCylinderType(updatedItem.cylinderType, customer);
+          const numericValue = parseInt(value) || 0;
+          
+          // Always cap the quantity to the maximum allowed
+          const cappedQuantity = Math.min(Math.max(numericValue, 0), maxQuantity);
+          updatedItem.quantity = cappedQuantity;
+          
+          if (numericValue > maxQuantity) {
+            setError(`Cannot return more than ${maxQuantity} ${updatedItem.cylinderType} cylinders. Only ${maxQuantity} are currently due.`);
+          } else {
+            setError(null);
+          }
+        }
+        
         // Auto-calculate buyback amounts for partial/full returns
         if (field === 'condition' || field === 'quantity' || field === 'originalSoldPrice') {
           if (updatedItem.condition === 'PARTIAL' || updatedItem.condition === 'FULL') {
@@ -113,6 +145,84 @@ export default function NewReturnPage() {
       }
       return item;
     }));
+  };
+
+  const handleQuantityKeyDown = (e: React.KeyboardEvent, itemId: string, cylinderType: string) => {
+    if (!customer || !cylinderType) return;
+    
+    const maxQuantity = getMaxQuantityForCylinderType(cylinderType, customer);
+    
+    // Allow: backspace, delete, tab, escape, enter, home, end, left, right, up, down
+    if ([8, 9, 27, 13, 35, 36, 37, 38, 39, 40, 46].indexOf(e.keyCode) !== -1 ||
+        // Allow: Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X
+        (e.keyCode === 65 && e.ctrlKey === true) ||
+        (e.keyCode === 67 && e.ctrlKey === true) ||
+        (e.keyCode === 86 && e.ctrlKey === true) ||
+        (e.keyCode === 88 && e.ctrlKey === true)) {
+      return;
+    }
+    
+    // Ensure that it is a number and stop the keypress
+    if ((e.shiftKey || (e.keyCode < 48 || e.keyCode > 57)) && (e.keyCode < 96 || e.keyCode > 105)) {
+      e.preventDefault();
+      return;
+    }
+    
+    // Check if the new value would exceed the maximum
+    const input = e.target as HTMLInputElement;
+    const currentValue = input.value;
+    const selectionStart = input.selectionStart || 0;
+    const selectionEnd = input.selectionEnd || 0;
+    
+    // Create the new value by replacing the selected text with the new key
+    const newValue = currentValue.substring(0, selectionStart) + e.key + currentValue.substring(selectionEnd);
+    const numericValue = parseInt(newValue);
+    
+    if (!isNaN(numericValue) && numericValue > maxQuantity) {
+      e.preventDefault();
+      setError(`Cannot return more than ${maxQuantity} ${cylinderType} cylinders. Only ${maxQuantity} are currently due.`);
+    } else {
+      setError(null);
+    }
+  };
+
+  const handleQuantityPaste = (e: React.ClipboardEvent, itemId: string, cylinderType: string) => {
+    if (!customer) return;
+    
+    e.preventDefault();
+    const pastedText = e.clipboardData.getData('text');
+    const pastedValue = parseInt(pastedText);
+    const maxQuantity = getMaxQuantityForCylinderType(cylinderType, customer);
+    
+    if (isNaN(pastedValue) || pastedValue < 0) {
+      setError('Please enter a valid number');
+      return;
+    }
+    
+    if (pastedValue > maxQuantity) {
+      setError(`Cannot return more than ${maxQuantity} ${cylinderType} cylinders. Only ${maxQuantity} are currently due.`);
+      updateReturnItem(itemId, 'quantity', maxQuantity);
+    } else {
+      setError(null);
+      updateReturnItem(itemId, 'quantity', pastedValue);
+    }
+  };
+
+  const handleQuantityInput = (e: React.FormEvent<HTMLInputElement>, itemId: string, cylinderType: string) => {
+    if (!customer || !cylinderType) return;
+    
+    const input = e.target as HTMLInputElement;
+    const value = parseInt(input.value) || 0;
+    const maxQuantity = getMaxQuantityForCylinderType(cylinderType, customer);
+    
+    if (value > maxQuantity) {
+      input.value = maxQuantity.toString();
+      setError(`Cannot return more than ${maxQuantity} ${cylinderType} cylinders. Only ${maxQuantity} are currently due.`);
+      updateReturnItem(itemId, 'quantity', maxQuantity);
+    } else {
+      setError(null);
+      updateReturnItem(itemId, 'quantity', value);
+    }
   };
 
   const fetchOriginalPrice = async (cylinderType: string, itemId: string) => {
@@ -211,6 +321,7 @@ export default function NewReturnPage() {
           items: returnItems
             .filter(item => item.condition === 'PARTIAL' || item.condition === 'FULL')
             .map(item => ({
+              productId: null, // No specific product ID for cylinder returns
               productName: `${item.cylinderType} Cylinder`,
               quantity: item.quantity,
               pricePerItem: item.originalSoldPrice || 0,
@@ -248,6 +359,7 @@ export default function NewReturnPage() {
         totalAmount: 0,
         notes: 'Empty cylinder return transaction',
         items: returnItems.map(item => ({
+          productId: null, // No specific product ID for cylinder returns
           productName: `${item.cylinderType} Cylinder`,
           quantity: item.quantity,
           pricePerItem: 0,
@@ -257,6 +369,8 @@ export default function NewReturnPage() {
         })),
       };
 
+      console.log('Calling /api/b2b-transactions with data:', emptyReturnTransactionData);
+      
       const returnResponse = await fetch('/api/b2b-transactions', {
         method: 'POST',
         headers: {
@@ -281,6 +395,7 @@ export default function NewReturnPage() {
           paymentReference: `BUYBACK-CASH-${billSno}`,
           notes: 'Cash payment for buyback',
           items: [{
+            productId: null, // No specific product ID for payments
             productName: 'Buyback Payment',
             quantity: 1,
             pricePerItem: totals.buybackTotal,
@@ -324,6 +439,19 @@ export default function NewReturnPage() {
     if (customer.standard15kgDue > 0) parts.push(`15kg: ${customer.standard15kgDue}`);
     if (customer.commercial454kgDue > 0) parts.push(`45.4kg: ${customer.commercial454kgDue}`);
     return parts.length > 0 ? parts.join(' / ') : 'None';
+  };
+
+  const getMaxQuantityForCylinderType = (cylinderType: string, customer: Customer): number => {
+    switch (cylinderType) {
+      case 'Domestic (11.8kg)':
+        return customer.domestic118kgDue;
+      case 'Standard (15kg)':
+        return customer.standard15kgDue;
+      case 'Commercial (45.4kg)':
+        return customer.commercial454kgDue;
+      default:
+        return 0;
+    }
   };
 
   if (loading) {
@@ -472,14 +600,35 @@ export default function NewReturnPage() {
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">
                         Quantity
+                        {item.cylinderType && customer && (
+                          <span className="text-xs text-gray-500 ml-2">
+                            (Max: {getMaxQuantityForCylinderType(item.cylinderType, customer)})
+                          </span>
+                        )}
                       </label>
                       <Input
                         type="number"
                         value={item.quantity}
                         onChange={(e) => updateReturnItem(item.id, 'quantity', parseInt(e.target.value) || 0)}
-                        min="1"
+                        onInput={(e) => handleQuantityInput(e, item.id, item.cylinderType)}
+                        onKeyDown={(e) => handleQuantityKeyDown(e, item.id, item.cylinderType)}
+                        onPaste={(e) => handleQuantityPaste(e, item.id, item.cylinderType)}
+                        min="0"
+                        max={item.cylinderType ? getMaxQuantityForCylinderType(item.cylinderType, customer) : undefined}
                         step="1"
+                        className={item.cylinderType && item.quantity > getMaxQuantityForCylinderType(item.cylinderType, customer) ? 'border-red-500 bg-red-50' : ''}
+                        placeholder="0"
                       />
+                      {item.cylinderType && item.quantity > getMaxQuantityForCylinderType(item.cylinderType, customer) && (
+                        <p className="text-xs text-red-600 mt-1">
+                          Cannot exceed {getMaxQuantityForCylinderType(item.cylinderType, customer)} cylinders
+                        </p>
+                      )}
+                      {item.cylinderType && customer && getMaxQuantityForCylinderType(item.cylinderType, customer) === 0 && (
+                        <p className="text-xs text-orange-600 mt-1">
+                          No cylinders of this type are currently due
+                        </p>
+                      )}
                     </div>
 
                     <div>

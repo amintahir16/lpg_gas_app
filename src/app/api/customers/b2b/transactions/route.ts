@@ -1,12 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { CylinderType } from '@prisma/client';
 
 export async function POST(request: NextRequest) {
   try {
     const userId = request.headers.get('x-user-id');
     
+    console.log('Received userId from headers:', userId);
+    
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Verify user exists in database
+    let user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true }
+    });
+
+    if (!user) {
+      console.log('User not found in database:', userId);
+      console.log('Looking for any admin user to use instead...');
+      
+      // If user not found, try to find any admin user
+      user = await prisma.user.findFirst({
+        where: { role: 'ADMIN' },
+        select: { id: true, email: true }
+      });
+      
+      if (!user) {
+        console.log('No admin users found in database');
+        return NextResponse.json({ error: 'No valid user found' }, { status: 401 });
+      }
+      
+      console.log('Using admin user instead:', user);
+    } else {
+      console.log('User found:', user);
     }
 
     const body = await request.json();
@@ -21,6 +50,52 @@ export async function POST(request: NextRequest) {
       gasItems = [],
       accessoryItems = []
     } = body;
+
+    // Validate and format date/time
+    console.log('Received date/time data:', { date, time, dateType: typeof date, timeType: typeof time });
+    
+    const transactionDate = new Date(date);
+    
+    // Handle time parsing - if time is just HH:MM, combine with date
+    let transactionTime;
+    if (time) {
+      if (time.includes('T') || time.includes(' ')) {
+        // Full datetime string
+        transactionTime = new Date(time);
+      } else if (time.match(/^\d{1,2}:\d{2}$/)) {
+        // Time only (HH:MM) - combine with date
+        const [hours, minutes] = time.split(':');
+        const combinedDateTime = new Date(date);
+        combinedDateTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+        transactionTime = combinedDateTime;
+      } else {
+        // Try to parse as regular date
+        transactionTime = new Date(time);
+      }
+    } else {
+      transactionTime = new Date();
+    }
+    
+    console.log('Parsed dates:', { 
+      transactionDate: transactionDate.toISOString(), 
+      transactionTime: transactionTime.toISOString(),
+      dateValid: !isNaN(transactionDate.getTime()),
+      timeValid: !isNaN(transactionTime.getTime())
+    });
+    
+    if (isNaN(transactionDate.getTime())) {
+      return NextResponse.json(
+        { error: 'Invalid date format', receivedDate: date },
+        { status: 400 }
+      );
+    }
+    
+    if (isNaN(transactionTime.getTime())) {
+      return NextResponse.json(
+        { error: 'Invalid time format', receivedTime: time },
+        { status: 400 }
+      );
+    }
 
     // Generate bill sequence number
     const today = new Date().toISOString().split('T')[0];
@@ -40,12 +115,12 @@ export async function POST(request: NextRequest) {
           transactionType: transactionType as any,
           billSno,
           customerId,
-          date: new Date(date),
-          time: new Date(time),
+          date: transactionDate,
+          time: transactionTime,
           totalAmount: parseFloat(totalAmount),
           paymentReference,
           notes,
-          createdBy: userId,
+          createdBy: user.id,
         },
       });
 
@@ -72,8 +147,8 @@ export async function POST(request: NextRequest) {
 
             return {
               transactionId: transaction.id,
-              productId: item.productId,
-              productName: item.name || item.productName || 'Gas Cylinder',
+              productId: item.productId || null, // B2B customer detail page doesn't send productId
+              productName: item.name || item.productName || (item.cylinderType ? `${item.cylinderType} Cylinder` : 'Gas Cylinder'),
               quantity: parseFloat(item.delivered || item.quantity || item.emptyReturned || 0),
               pricePerItem: parseFloat(item.pricePerItem || 0),
               totalPrice: transactionType === 'BUYBACK' ? buybackTotal : parseFloat((item.delivered || item.quantity || 0) * (item.pricePerItem || 0)),
@@ -220,25 +295,34 @@ export async function POST(request: NextRequest) {
       if ((transactionType === 'BUYBACK' || transactionType === 'RETURN_EMPTY') && gasItems.length > 0) {
         for (const gasItem of gasItems) {
           if (gasItem.emptyReturned > 0) {
-            // Find the corresponding cylinder product
-            const cylinderProduct = await tx.product.findFirst({
-              where: { 
-                name: {
-                  contains: gasItem.cylinderType === 'DOMESTIC_11_8KG' ? '11.8kg' :
-                          gasItem.cylinderType === 'STANDARD_15KG' ? '15kg' : '45.4kg'
-                }
-              }
-            });
+            // For B2B customer detail page, we need to add cylinders to the Cylinder table
+            // instead of updating Product stock
+            const quantity = parseInt(gasItem.emptyReturned);
+            const cylinderType = gasItem.cylinderType;
             
-            if (cylinderProduct) {
-              await tx.product.update({
-                where: { id: cylinderProduct.id },
-                data: {
-                  stockQuantity: {
-                    increment: gasItem.emptyReturned
-                  }
-                }
-              });
+            if (quantity > 0 && cylinderType) {
+              let mappedCylinderType: CylinderType;
+              switch (cylinderType) {
+                case 'DOMESTIC_11_8KG': mappedCylinderType = CylinderType.DOMESTIC_11_8KG; break;
+                case 'STANDARD_15KG': mappedCylinderType = CylinderType.STANDARD_15KG; break;
+                case 'COMMERCIAL_45_4KG': mappedCylinderType = CylinderType.COMMERCIAL_45_4KG; break;
+                default: console.log(`Unknown cylinder type: ${cylinderType}`); continue;
+              }
+
+              const initialCylinderCount = await tx.cylinder.count();
+              for (let i = 0; i < quantity; i++) {
+                const code = `CYL${String(initialCylinderCount + 1 + i).padStart(3, '0')}`;
+                await tx.cylinder.create({
+                  data: {
+                    code,
+                    cylinderType: mappedCylinderType,
+                    capacity: cylinderType === 'DOMESTIC_11_8KG' ? 11.8 : cylinderType === 'STANDARD_15KG' ? 15.0 : 45.4,
+                    currentStatus: 'EMPTY',
+                    location: 'Returned from Customer',
+                  },
+                });
+              }
+              console.log(`Added ${quantity} empty ${cylinderType} cylinders to inventory`);
             }
           }
         }

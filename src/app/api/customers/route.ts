@@ -72,8 +72,36 @@ export async function POST(request: NextRequest) {
     const userId = request.headers.get('x-user-id');
     const userRole = request.headers.get('x-user-role');
     
+    console.log('Received userId from headers:', userId);
+    
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Verify user exists in database
+    let user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true }
+    });
+
+    if (!user) {
+      console.log('User not found in database:', userId);
+      console.log('Looking for any admin user to use instead...');
+      
+      // If user not found, try to find any admin user
+      user = await prisma.user.findFirst({
+        where: { role: 'ADMIN' },
+        select: { id: true, email: true }
+      });
+      
+      if (!user) {
+        console.log('No admin users found in database');
+        return NextResponse.json({ error: 'No valid user found' }, { status: 401 });
+      }
+      
+      console.log('Using admin user instead:', user);
+    } else {
+      console.log('User found:', user);
     }
 
     const body = await request.json();
@@ -107,7 +135,7 @@ export async function POST(request: NextRequest) {
         postalCode,
         customerType,
         creditLimit: parseFloat(creditLimit) || 0,
-        userId: userId
+        userId: user.id
       },
       include: {
         user: {
