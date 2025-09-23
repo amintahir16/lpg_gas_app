@@ -205,7 +205,11 @@ export async function POST(request: NextRequest) {
         throw new Error('Customer not found');
       }
 
-      let newLedgerBalance = customer.ledgerBalance;
+      let newLedgerBalance = parseFloat(customer.ledgerBalance.toString());
+      
+      console.log('Current ledger balance:', customer.ledgerBalance, 'Type:', typeof customer.ledgerBalance);
+      console.log('Parsed ledger balance:', newLedgerBalance);
+      console.log('Transaction amount:', totalAmount, 'Type:', typeof totalAmount);
       
       switch (transactionType) {
         case 'SALE':
@@ -222,6 +226,8 @@ export async function POST(request: NextRequest) {
           newLedgerBalance -= parseFloat(totalAmount);
           break;
       }
+      
+      console.log('New ledger balance after calculation:', newLedgerBalance);
 
       // Update customer ledger balance and cylinder due counts
       const updateData: any = {
@@ -264,10 +270,14 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      await tx.customer.update({
+      console.log('Updating customer with data:', updateData);
+      
+      const updatedCustomer = await tx.customer.update({
         where: { id: customerId },
         data: updateData,
       });
+      
+      console.log('Customer updated successfully. New balance:', updatedCustomer.ledgerBalance);
 
       // Update inventory for sales and returns
       for (const item of items) {

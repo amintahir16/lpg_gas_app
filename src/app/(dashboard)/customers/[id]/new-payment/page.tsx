@@ -32,6 +32,8 @@ export default function NewPaymentPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [paymentData, setPaymentData] = useState({
+    date: new Date().toISOString().split('T')[0],
+    time: new Date().toTimeString().slice(0, 5),
     amount: '',
     paymentReference: '',
     notes: '',
@@ -43,6 +45,7 @@ export default function NewPaymentPage() {
       fetchCustomerData();
     }
   }, [customerId]);
+
 
   const fetchCustomerData = async () => {
     try {
@@ -64,19 +67,16 @@ export default function NewPaymentPage() {
     setError(null);
 
     try {
-      const now = new Date();
-      const billSno = `BILL-${now.toISOString().slice(0, 10).replace(/-/g, '')}-${String(Date.now()).slice(-6)}`;
-
       const transactionData = {
         transactionType: 'PAYMENT',
-        billSno,
         customerId,
-        date: now.toISOString().split('T')[0],
-        time: now.toISOString(),
+        date: paymentData.date,
+        time: paymentData.time,
         totalAmount: parseFloat(paymentData.amount),
         paymentReference: paymentData.paymentReference,
         notes: paymentData.notes || 'Payment received',
         items: [{
+          productId: null,
           productName: 'Payment',
           quantity: 1,
           pricePerItem: parseFloat(paymentData.amount),
@@ -217,95 +217,86 @@ export default function NewPaymentPage() {
       {/* Payment Form */}
       <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
         <CardHeader>
-          <CardTitle className="text-lg font-semibold text-gray-900">Payment Details</CardTitle>
-          <CardDescription className="text-gray-600 font-medium">
-            Enter the payment amount and reference information
-          </CardDescription>
+          <CardTitle className="text-lg font-semibold text-gray-900">New Payment</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Date and Time */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Payment Amount (PKR) *
+                  Date
                 </label>
                 <Input
-                  type="number"
-                  value={paymentData.amount}
-                  onChange={(e) => setPaymentData(prev => ({ ...prev, amount: e.target.value }))}
-                  placeholder="0.00"
-                  step="0.01"
-                  min="0.01"
+                  type="date"
+                  value={paymentData.date}
+                  onChange={(e) => setPaymentData(prev => ({ ...prev, date: e.target.value }))}
                   required
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Payment Reference
+                  Time
                 </label>
                 <Input
-                  type="text"
-                  value={paymentData.paymentReference}
-                  onChange={(e) => setPaymentData(prev => ({ ...prev, paymentReference: e.target.value }))}
-                  placeholder="e.g., BANK-001, CHECK-123"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Payment Method
-                </label>
-                <select
-                  value={paymentData.paymentMethod}
-                  onChange={(e) => setPaymentData(prev => ({ ...prev, paymentMethod: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="CASH">Cash</option>
-                  <option value="BANK_TRANSFER">Bank Transfer</option>
-                  <option value="CHECK">Check</option>
-                  <option value="CREDIT_CARD">Credit Card</option>
-                  <option value="DEBIT_CARD">Debit Card</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Notes
-                </label>
-                <Textarea
-                  value={paymentData.notes}
-                  onChange={(e) => setPaymentData(prev => ({ ...prev, notes: e.target.value }))}
-                  placeholder="Additional notes about this payment"
-                  rows={3}
+                  type="time"
+                  value={paymentData.time}
+                  onChange={(e) => setPaymentData(prev => ({ ...prev, time: e.target.value }))}
+                  required
                 />
               </div>
             </div>
 
-            {/* Payment Summary */}
-            {paymentData.amount && (
-              <Card className="border border-gray-200 bg-gray-50">
-                <CardContent className="p-4">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">Payment Amount</p>
-                      <p className="text-2xl font-bold text-gray-900">
-                        {formatCurrency(parseFloat(paymentData.amount) || 0)}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium text-gray-500">New Ledger Balance</p>
-                      <p className={`text-2xl font-bold ${
-                        (customer.ledgerBalance - (parseFloat(paymentData.amount) || 0)) > 0 ? 'text-red-600' : 
-                        (customer.ledgerBalance - (parseFloat(paymentData.amount) || 0)) < 0 ? 'text-green-600' : 'text-gray-600'
-                      }`}>
-                        {formatCurrency(customer.ledgerBalance - (parseFloat(paymentData.amount) || 0))}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+            {/* Payment Reference */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Payment Reference
+              </label>
+              <Input
+                type="text"
+                value={paymentData.paymentReference}
+                onChange={(e) => setPaymentData(prev => ({ ...prev, paymentReference: e.target.value }))}
+                placeholder="Payment Reference"
+              />
+            </div>
+
+            {/* Notes */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Notes
+              </label>
+              <Input
+                type="text"
+                value={paymentData.notes}
+                onChange={(e) => setPaymentData(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="Notes"
+              />
+            </div>
+
+            {/* Payment Amount */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Payment Amount (PKR)
+              </label>
+              <Input
+                type="number"
+                value={paymentData.amount}
+                onChange={(e) => setPaymentData(prev => ({ ...prev, amount: e.target.value }))}
+                placeholder="Enter payment amount"
+                step="0.01"
+                min="0.01"
+                required
+                className="text-lg"
+              />
+            </div>
+
+            {/* Payment Amount Display */}
+            <div className="text-right">
+              <span className="text-lg font-semibold text-blue-600">
+                Payment Amount: Rs {paymentData.amount || '0'}
+              </span>
+            </div>
 
             {/* Action Buttons */}
             <div className="flex justify-end space-x-3 pt-6">
@@ -320,19 +311,9 @@ export default function NewPaymentPage() {
               <Button
                 type="submit"
                 disabled={saving || !paymentData.amount || parseFloat(paymentData.amount) <= 0}
-                className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4"
               >
-                {saving ? (
-                  <div className="flex items-center">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Recording Payment...
-                  </div>
-                ) : (
-                  <>
-                    <CheckIcon className="w-4 h-4 mr-2" />
-                    Record Payment
-                  </>
-                )}
+                {saving ? 'Creating Transaction...' : 'Create Transaction'}
               </Button>
             </div>
           </form>

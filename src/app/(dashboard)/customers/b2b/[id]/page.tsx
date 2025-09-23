@@ -275,8 +275,7 @@ export default function B2BCustomerDetailPage() {
       } else if (transactionType === 'BUYBACK') {
         totalAmount = gasItems.reduce((sum, item) => sum + item.buybackTotal, 0);
       } else if (transactionType === 'PAYMENT') {
-        totalAmount = gasItems.reduce((sum, item) => sum + (item.delivered * item.pricePerItem), 0) +
-                     accessoryItems.reduce((sum, item) => sum + (item.quantity * item.pricePerItem), 0);
+        totalAmount = parseFloat(formData.get('paymentAmount') as string) || 0;
       }
 
       const transactionData = {
@@ -287,8 +286,8 @@ export default function B2BCustomerDetailPage() {
         totalAmount,
         paymentReference: formData.get('paymentReference'),
         notes: formData.get('notes'),
-        gasItems: gasItems.filter(item => item.delivered > 0 || item.emptyReturned > 0),
-        accessoryItems: accessoryItems.filter(item => item.quantity > 0)
+        gasItems: transactionType === 'PAYMENT' ? [] : gasItems.filter(item => item.delivered > 0 || item.emptyReturned > 0),
+        accessoryItems: transactionType === 'PAYMENT' ? [] : accessoryItems.filter(item => item.quantity > 0)
       };
 
       const response = await fetch('/api/customers/b2b/transactions', {
@@ -786,6 +785,22 @@ export default function B2BCustomerDetailPage() {
                   </Card>
                 )}
 
+                {/* Payment Amount Field - Only for PAYMENT type */}
+                {transactionType === 'PAYMENT' && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Amount (PKR)</label>
+                    <Input 
+                      name="paymentAmount" 
+                      type="number"
+                      placeholder="Enter payment amount"
+                      step="0.01"
+                      min="0.01"
+                      required
+                      className="text-lg"
+                    />
+                  </div>
+                )}
+
                 {/* Additional Fields */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -822,10 +837,7 @@ export default function B2BCustomerDetailPage() {
                   )}
                   {transactionType === 'PAYMENT' && (
                     <p className="text-lg font-semibold text-blue-600">
-                      Payment Amount: {formatCurrency(
-                        gasItems.reduce((sum, item) => sum + (item.delivered * item.pricePerItem), 0) +
-                        accessoryItems.reduce((sum, item) => sum + (item.quantity * item.pricePerItem), 0)
-                      )}
+                      Payment Amount: Rs 0
                     </p>
                   )}
                   {transactionType === 'RETURN_EMPTY' && (
