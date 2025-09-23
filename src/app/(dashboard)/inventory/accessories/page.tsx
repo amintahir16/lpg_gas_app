@@ -706,15 +706,7 @@ export default function AccessoriesInventoryPage() {
                             PKR {filteredStoves.reduce((sum, stove) => sum + Number(stove.totalCost || 0), 0).toLocaleString()}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex space-x-2">
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => setShowAddForm(true)}
-                              >
-                                Add Stove
-                              </Button>
-                            </div>
+                            {/* Empty cell for total row */}
                           </td>
                         </tr>
                       )}

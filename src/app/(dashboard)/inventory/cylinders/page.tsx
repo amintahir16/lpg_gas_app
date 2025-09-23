@@ -55,11 +55,23 @@ export default function CylindersInventoryPage() {
   const [showEditForm, setShowEditForm] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedCylinder, setSelectedCylinder] = useState<Cylinder | null>(null);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 100,
+    total: 0,
+    pages: 0
+  });
 
   useEffect(() => {
+    // Reset to page 1 when filters change
+    setPagination(prev => ({ ...prev, page: 1 }));
     fetchCylinders();
     fetchCylinderTypeStats();
   }, [searchTerm, statusFilter, typeFilter, locationFilter]);
+
+  useEffect(() => {
+    fetchCylinders();
+  }, [pagination.page]);
 
   const fetchCylinders = async () => {
     try {
@@ -68,7 +80,9 @@ export default function CylindersInventoryPage() {
         search: searchTerm,
         status: statusFilter === 'ALL' ? '' : statusFilter,
         type: typeFilter === 'ALL' ? '' : typeFilter,
-        location: locationFilter === 'ALL' ? '' : locationFilter
+        location: locationFilter === 'ALL' ? '' : locationFilter,
+        page: pagination.page.toString(),
+        limit: pagination.limit.toString()
       });
 
       const response = await fetch(`/api/inventory/cylinders?${params}`, {
@@ -77,6 +91,7 @@ export default function CylindersInventoryPage() {
       if (response.ok) {
         const data = await response.json();
         setCylinders(data.cylinders);
+        setPagination(data.pagination);
       }
     } catch (error) {
       console.error('Failed to fetch cylinders:', error);
@@ -304,7 +319,7 @@ export default function CylindersInventoryPage() {
       <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
         <CardHeader>
           <CardTitle className="text-lg font-semibold text-gray-900">
-            Cylinders Inventory ({cylinders.length} total)
+            Cylinders Inventory ({pagination.total} total)
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -396,6 +411,51 @@ export default function CylindersInventoryPage() {
                 )}
               </tbody>
             </table>
+          </div>
+          
+          {/* Pagination Controls */}
+          <div className="flex items-center justify-between px-6 py-4 border-t">
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-700">
+                Showing {((pagination.page - 1) * pagination.limit) + 1} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} cylinders
+              </span>
+              <div className="flex items-center space-x-2">
+                <label htmlFor="pageSize" className="text-sm text-gray-700">Show:</label>
+                <select
+                  id="pageSize"
+                  value={pagination.limit}
+                  onChange={(e) => setPagination(prev => ({ ...prev, limit: parseInt(e.target.value), page: 1 }))}
+                  className="px-2 py-1 text-sm border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value={200}>200</option>
+                  <option value={500}>500</option>
+                </select>
+                <span className="text-sm text-gray-700">per page</span>
+              </div>
+            </div>
+            {pagination.pages > 1 && (
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+                  disabled={pagination.page === 1}
+                  className="px-3 py-1 text-sm border rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <span className="text-sm text-gray-700">
+                  Page {pagination.page} of {pagination.pages}
+                </span>
+                <button
+                  onClick={() => setPagination(prev => ({ ...prev, page: Math.min(prev.pages, prev.page + 1) }))}
+                  disabled={pagination.page === pagination.pages}
+                  className="px-3 py-1 text-sm border rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

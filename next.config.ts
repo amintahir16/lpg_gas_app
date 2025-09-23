@@ -2,9 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  staticPageGenerationTimeout: 1000,
   experimental: {
-    // Disable static optimization for dynamic routes
-    staticPageGenerationTimeout: 1000,
+    // Other experimental options can go here
   },
   // Disable caching for development
   onDemandEntries: {

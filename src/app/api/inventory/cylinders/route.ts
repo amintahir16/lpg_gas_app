@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type') || '';
     const location = searchParams.get('location') || '';
     const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const limit = parseInt(searchParams.get('limit') || '100');
 
     // Build where clause
     const where: any = {};
