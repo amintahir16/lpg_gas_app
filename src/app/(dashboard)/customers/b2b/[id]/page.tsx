@@ -98,6 +98,10 @@ export default function B2BCustomerDetailPage() {
   const [transactionType, setTransactionType] = useState<'SALE' | 'PAYMENT' | 'BUYBACK' | 'RETURN_EMPTY'>('SALE');
   const [transactionDate, setTransactionDate] = useState(new Date().toISOString().split('T')[0]);
   const [transactionTime, setTransactionTime] = useState(new Date().toTimeString().slice(0, 5));
+  
+  // Payment form states
+  const [paymentAgainst, setPaymentAgainst] = useState('');
+  const [paymentQuantity, setPaymentQuantity] = useState(0);
 
   // Gas transaction form data
   const [gasItems, setGasItems] = useState([
@@ -165,6 +169,7 @@ export default function B2BCustomerDetailPage() {
   const fetchCustomerLedger = async () => {
     try {
       setLoading(true);
+      console.log('Fetching customer ledger for customer:', customerId);
       const response = await fetch(`/api/customers/b2b/${customerId}/ledger?page=${pagination.page}&limit=${pagination.limit}`);
       
       if (!response.ok) {
@@ -172,10 +177,14 @@ export default function B2BCustomerDetailPage() {
       }
       
       const data: CustomerLedgerResponse = await response.json();
+      console.log('Customer ledger data:', data);
+      console.log('Customer ledger balance:', data.customer.ledgerBalance);
+      console.log('Transactions count:', data.transactions.length);
       setCustomer(data.customer);
       setTransactions(data.transactions);
       setPagination(data.pagination);
     } catch (err) {
+      console.error('Error fetching customer ledger:', err);
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
@@ -278,6 +287,17 @@ export default function B2BCustomerDetailPage() {
         totalAmount = parseFloat(formData.get('paymentAmount') as string) || 0;
       }
 
+      // Create payment item for PAYMENT transactions
+      const paymentItem = transactionType === 'PAYMENT' && paymentAgainst ? {
+        productName: paymentQuantity > 0 
+          ? `${paymentAgainst.replace(/_/g, ' ').replace(/\./g, '.').replace(/KG/g, 'kg')} x${paymentQuantity}`
+          : paymentAgainst.replace(/_/g, ' ').replace(/\./g, '.').replace(/KG/g, 'kg'),
+        quantity: paymentQuantity > 0 ? paymentQuantity : 1,
+        pricePerItem: paymentQuantity > 0 ? totalAmount / paymentQuantity : totalAmount,
+        totalPrice: totalAmount,
+        cylinderType: paymentAgainst.includes('KG') ? paymentAgainst : null
+      } : null;
+
       const transactionData = {
         transactionType,
         customerId,
@@ -286,8 +306,11 @@ export default function B2BCustomerDetailPage() {
         totalAmount,
         paymentReference: formData.get('paymentReference'),
         notes: formData.get('notes'),
+        paymentAgainst: transactionType === 'PAYMENT' ? formData.get('paymentAgainst') : null,
+        paymentDescription: transactionType === 'PAYMENT' ? formData.get('paymentDescription') : null,
+        paymentQuantity: transactionType === 'PAYMENT' ? paymentQuantity : null,
         gasItems: transactionType === 'PAYMENT' ? [] : gasItems.filter(item => item.delivered > 0 || item.emptyReturned > 0),
-        accessoryItems: transactionType === 'PAYMENT' ? [] : accessoryItems.filter(item => item.quantity > 0)
+        accessoryItems: transactionType === 'PAYMENT' ? (paymentItem ? [paymentItem] : []) : accessoryItems.filter(item => item.quantity > 0)
       };
 
       const response = await fetch('/api/customers/b2b/transactions', {
@@ -299,14 +322,37 @@ export default function B2BCustomerDetailPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create transaction');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create transaction');
       }
+
+      const result = await response.json();
+      console.log('Transaction created successfully:', result);
 
       // Reset form and refresh data
       setShowTransactionForm(false);
       setGasItems(gasItems.map(item => ({ ...item, delivered: 0, emptyReturned: 0 })));
       setAccessoryItems(accessoryItems.map(item => ({ ...item, quantity: 0 })));
-      fetchCustomerLedger();
+      
+      // Reset payment form states
+      setPaymentAgainst('');
+      setPaymentQuantity(0);
+      
+      // Refresh customer data multiple times to ensure it's updated
+      await fetchCustomerLedger();
+      
+      // Force refresh after short delay
+      setTimeout(async () => {
+        console.log('Force refreshing customer data...');
+        await fetchCustomerLedger();
+      }, 1000);
+      
+      // Another refresh after longer delay
+      setTimeout(async () => {
+        console.log('Final refresh of customer data...');
+        await fetchCustomerLedger();
+      }, 2000);
+      
       alert('Transaction created successfully!');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create transaction');
@@ -785,21 +831,85 @@ export default function B2BCustomerDetailPage() {
                   </Card>
                 )}
 
-                {/* Payment Amount Field - Only for PAYMENT type */}
+                {/* Payment Details - Only for PAYMENT type */}
                 {transactionType === 'PAYMENT' && (
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Amount (PKR)</label>
-                    <Input 
-                      name="paymentAmount" 
-                      type="number"
-                      placeholder="Enter payment amount"
-                      step="0.01"
-                      min="0.01"
-                      required
-                      className="text-lg"
-                    />
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Against</label>
+                      <select 
+                        name="paymentAgainst" 
+                        value={paymentAgainst}
+                        onChange={(e) => {
+                          setPaymentAgainst(e.target.value);
+                          setPaymentQuantity(0);
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      >
+                        <option value="">Select what this payment is for</option>
+                        <optgroup label="Gas Cylinders">
+                          <option value="DOMESTIC_11.8KG">Domestic (11.8kg)</option>
+                          <option value="STANDARD_15KG">Standard (15kg)</option>
+                          <option value="COMMERCIAL_45.4KG">Commercial (45.4kg)</option>
+                        </optgroup>
+                        <optgroup label="Accessories">
+                          <option value="GAS_PIPE_FT">Gas Pipe (ft)</option>
+                          <option value="STOVE">Stove</option>
+                          <option value="REGULATOR_ADJUSTABLE">Regulator Adjustable</option>
+                          <option value="REGULATOR_IDEAL_HIGH_PRESSURE">Regulator Ideal High Pressure</option>
+                          <option value="REGULATOR_5_STAR_HIGH_PRESSURE">Regulator 5 Star High Pressure</option>
+                          <option value="REGULATOR_3_STAR_LOW_PRESSURE_Q1">Regulator 3 Star Low Pressure Q1</option>
+                          <option value="REGULATOR_3_STAR_LOW_PRESSURE_Q2">Regulator 3 Star Low Pressure Q2</option>
+                        </optgroup>
+                        <optgroup label="Other">
+                          <option value="ACCOUNT_RECEIVABLES">Account Receivables (General Payment)</option>
+                          <option value="SPECIFIC_SALE">Specific Sale/Invoice</option>
+                          <option value="CYLINDER_DEPOSIT">Cylinder Deposit</option>
+                          <option value="ADVANCE_PAYMENT">Advance Payment</option>
+                        </optgroup>
+                      </select>
+                    </div>
+
+                    {/* Quantity Field - Only show for specific products */}
+                    {(paymentAgainst && !['ACCOUNT_RECEIVABLES', 'SPECIFIC_SALE', 'CYLINDER_DEPOSIT', 'ADVANCE_PAYMENT'].includes(paymentAgainst)) && (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity</label>
+                        <Input
+                          type="number"
+                          value={paymentQuantity}
+                          onChange={(e) => setPaymentQuantity(parseInt(e.target.value) || 0)}
+                          placeholder="Enter quantity"
+                          min="1"
+                          step="1"
+                          className="w-32"
+                        />
+                      </div>
+                    )}
+                    
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Description</label>
+                      <Input 
+                        name="paymentDescription" 
+                        placeholder="e.g., Payment for Sale B2B202509220041 - STANDARD_15KG Cylinder x1"
+                        className="text-sm"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Amount (PKR)</label>
+                      <Input 
+                        name="paymentAmount" 
+                        type="number"
+                        placeholder="Enter payment amount"
+                        step="0.01"
+                        min="0.01"
+                        required
+                        className="text-lg"
+                      />
+                    </div>
                   </div>
                 )}
+
 
                 {/* Additional Fields */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -836,9 +946,15 @@ export default function B2BCustomerDetailPage() {
                     </div>
                   )}
                   {transactionType === 'PAYMENT' && (
-                    <p className="text-lg font-semibold text-blue-600">
-                      Payment Amount: Rs 0
-                    </p>
+                    <div className="text-right space-y-1">
+                      <p className="text-lg font-semibold text-blue-600">
+                        Payment Amount: Rs 0
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        Payment Against: {paymentAgainst || '[Select from dropdown above]'}
+                        {paymentQuantity > 0 && ` (Qty: ${paymentQuantity})`}
+                      </p>
+                    </div>
                   )}
                   {transactionType === 'RETURN_EMPTY' && (
                     <p className="text-lg font-semibold text-gray-600">

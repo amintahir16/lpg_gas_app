@@ -96,6 +96,10 @@ export default function NewPaymentPage() {
         throw new Error('Failed to record payment');
       }
 
+      // Show success message
+      alert('Payment recorded successfully!');
+      
+      // Redirect to customer detail page
       router.push(`/customers/${customerId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to record payment');

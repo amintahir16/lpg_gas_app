@@ -255,6 +255,9 @@ export default function NewSalePage() {
         throw new Error('Failed to create sale transaction');
       }
 
+      // Show success message
+      alert('Sale transaction created successfully!');
+      
       // Redirect to customer detail page
       router.push(`/customers/${customerId}`);
     } catch (err) {

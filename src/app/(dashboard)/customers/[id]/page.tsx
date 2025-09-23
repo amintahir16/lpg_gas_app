@@ -94,16 +94,57 @@ export default function CustomerDetailPage() {
     }
   }, [customerId, pagination.page]);
 
+  // Refresh data when page becomes visible (e.g., when navigating back from new sale/payment)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && customerId) {
+        console.log('Page became visible, refreshing customer data...');
+        fetchCustomerLedger();
+        
+        // Force refresh after short delay (similar to gas buyback logic)
+        setTimeout(async () => {
+          console.log('Force refreshing customer data...');
+          await fetchCustomerLedger();
+        }, 1000);
+        
+        // Another refresh after longer delay
+        setTimeout(async () => {
+          console.log('Final refresh of customer data...');
+          await fetchCustomerLedger();
+        }, 2000);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [customerId]);
+
+  // Also refresh when window gains focus
+  useEffect(() => {
+    const handleFocus = () => {
+      if (customerId) {
+        console.log('Window focused, refreshing customer data...');
+        fetchCustomerLedger();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [customerId]);
+
   const fetchCustomerLedger = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/customers/${customerId}/ledger?page=${pagination.page}&limit=${pagination.limit}`);
+      // Add timestamp to prevent caching
+      const timestamp = new Date().getTime();
+      const response = await fetch(`/api/customers/${customerId}/ledger?page=${pagination.page}&limit=${pagination.limit}&t=${timestamp}`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch customer ledger');
       }
       
       const data: CustomerLedgerResponse = await response.json();
+      console.log('Fetched customer data - Balance:', data.customer.ledgerBalance);
       setCustomer(data.customer);
       setTransactions(data.transactions);
       setPagination(data.pagination);
@@ -131,6 +172,56 @@ export default function CustomerDetailPage() {
     return new Date(timeString).toLocaleTimeString('en-PK', { 
       hour: '2-digit', 
       minute: '2-digit' 
+    });
+  };
+
+  // Calculate running balance for transactions
+  const calculateRunningBalance = (transactions: Transaction[]) => {
+    // Sort transactions by date and time ascending (oldest first) for proper running balance calculation
+    const sortedTransactions = [...transactions].sort((a, b) => {
+      const dateA = new Date(a.date + 'T' + a.time);
+      const dateB = new Date(b.date + 'T' + b.time);
+      return dateA.getTime() - dateB.getTime();
+    });
+
+    let runningBalance = 0;
+    const transactionsWithBalance = sortedTransactions.map(transaction => {
+      let transactionAmount = 0;
+      
+      switch (transaction.transactionType) {
+        case 'SALE':
+          transactionAmount = transaction.totalAmount;
+          runningBalance += transactionAmount;
+          break;
+        case 'PAYMENT':
+          transactionAmount = -transaction.totalAmount;
+          runningBalance += transactionAmount;
+          break;
+        case 'BUYBACK':
+          transactionAmount = -transaction.totalAmount;
+          runningBalance += transactionAmount;
+          break;
+        case 'ADJUSTMENT':
+        case 'CREDIT_NOTE':
+          transactionAmount = -transaction.totalAmount;
+          runningBalance += transactionAmount;
+          break;
+        case 'RETURN_EMPTY':
+          // No ledger impact
+          transactionAmount = 0;
+          break;
+      }
+
+      return {
+        ...transaction,
+        runningBalance: runningBalance
+      };
+    });
+
+    // Return transactions in original order (newest first) but with calculated running balance
+    return transactions.map(transaction => {
+      const transactionWithBalance = transactionsWithBalance.find(t => t.id === transaction.id);
+      return transactionWithBalance || { ...transaction, runningBalance: 0 };
     });
   };
 
@@ -251,6 +342,15 @@ export default function CustomerDetailPage() {
             Account Receivables & Transaction History
           </p>
         </div>
+        <Button
+          variant="outline"
+          onClick={fetchCustomerLedger}
+          disabled={loading}
+          className="flex items-center"
+        >
+          <ArrowPathIcon className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
       </div>
 
       {/* Error Display */}
@@ -445,7 +545,7 @@ export default function CustomerDetailPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {transactions.map((transaction) => (
+                {calculateRunningBalance(transactions).map((transaction) => (
                   <tr key={transaction.id} className={transaction.voided ? 'opacity-50' : ''}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       {formatDate(transaction.date)}
@@ -480,7 +580,7 @@ export default function CustomerDetailPage() {
                         ? formatCurrency(transaction.totalAmount) : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                      {formatCurrency(customer.ledgerBalance)}
+                      {formatCurrency(transaction.runningBalance)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                       <Button

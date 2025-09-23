@@ -173,14 +173,18 @@ export async function POST(request: NextRequest) {
         throw new Error('Customer not found');
       }
 
-      let newLedgerBalance = customer.ledgerBalance || 0;
+      let newLedgerBalance = parseFloat(customer.ledgerBalance.toString()) || 0;
       let newDomestic118kgDue = customer.domestic118kgDue || 0;
       let newStandard15kgDue = customer.standard15kgDue || 0;
       let newCommercial454kgDue = customer.commercial454kgDue || 0;
       
+      console.log(`Processing transaction type: ${transactionType}, amount: ${totalAmount}`);
+      console.log(`Current ledger balance: ${newLedgerBalance}, Type: ${typeof newLedgerBalance}`);
       switch (transactionType) {
         case 'SALE':
+          console.log(`SALE transaction: adding ${totalAmount} to ledger balance`);
           newLedgerBalance += parseFloat(totalAmount);
+          console.log(`New ledger balance after calculation: ${newLedgerBalance}`);
           // Update cylinder due counts for sales
           gasItems.forEach((item: any) => {
             if (item.delivered > 0) {
@@ -258,6 +262,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Update customer
+      console.log(`Updating customer ${customerId} ledger balance from ${customer.ledgerBalance} to ${newLedgerBalance}`);
       await tx.customer.update({
         where: { id: customerId },
         data: {
@@ -268,6 +273,7 @@ export async function POST(request: NextRequest) {
           updatedBy: userId,
         },
       });
+      console.log(`Customer ${customerId} ledger balance updated successfully`);
 
       // Update inventory for accessories
       if (transactionType === 'SALE' && accessoryItems.length > 0) {
