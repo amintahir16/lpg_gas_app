@@ -16,12 +16,18 @@ export async function GET(request: NextRequest) {
       const typeStats = cylinderTypeStats.filter(stat => stat.cylinderType === type);
       const full = typeStats.find(stat => stat.currentStatus === 'FULL')?._count.id || 0;
       const empty = typeStats.find(stat => stat.currentStatus === 'EMPTY')?._count.id || 0;
+      const maintenance = typeStats.find(stat => stat.currentStatus === 'MAINTENANCE')?._count.id || 0;
+      const withCustomer = typeStats.find(stat => stat.currentStatus === 'WITH_CUSTOMER')?._count.id || 0;
+      const retired = typeStats.find(stat => stat.currentStatus === 'RETIRED')?._count.id || 0;
       
       return {
         type: type.replace('_', ' '),
         full,
         empty,
-        total: full + empty
+        maintenance,
+        withCustomer,
+        retired,
+        total: full + empty + maintenance + withCustomer + retired
       };
     });
 

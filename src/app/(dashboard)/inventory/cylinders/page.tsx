@@ -40,6 +40,9 @@ interface CylinderTypeStats {
   type: string;
   full: number;
   empty: number;
+  maintenance: number;
+  withCustomer: number;
+  retired: number;
   total: number;
 }
 
@@ -55,6 +58,7 @@ export default function CylindersInventoryPage() {
   const [showEditForm, setShowEditForm] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedCylinder, setSelectedCylinder] = useState<Cylinder | null>(null);
+  const [isAddingCylinder, setIsAddingCylinder] = useState(false);
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 100,
@@ -165,6 +169,9 @@ export default function CylindersInventoryPage() {
   };
 
   const handleAddCylinder = async (formData: any) => {
+    if (isAddingCylinder) return; // Prevent multiple submissions
+    
+    setIsAddingCylinder(true);
     try {
       console.log('Submitting cylinder data:', formData);
       
@@ -177,20 +184,31 @@ export default function CylindersInventoryPage() {
         body: JSON.stringify(formData),
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('Error response:', errorData);
         throw new Error(errorData.error || 'Failed to create cylinder');
       }
 
       const result = await response.json();
       console.log('Cylinder created successfully:', result);
       
-      await fetchCylinders();
+      // Refresh both cylinders list and statistics
+      await Promise.all([
+        fetchCylinders(),
+        fetchCylinderTypeStats()
+      ]);
+      
       setShowAddForm(false);
       alert('Cylinder added successfully!');
     } catch (error) {
       console.error('Failed to add cylinder:', error);
       alert(`Error: ${error instanceof Error ? error.message : 'Failed to add cylinder'}`);
+    } finally {
+      setIsAddingCylinder(false);
     }
   };
 
@@ -211,7 +229,12 @@ export default function CylindersInventoryPage() {
         throw new Error('Failed to update cylinder');
       }
 
-      fetchCylinders();
+      // Refresh both cylinders list and statistics
+      await Promise.all([
+        fetchCylinders(),
+        fetchCylinderTypeStats()
+      ]);
+      
       setShowEditForm(false);
       setSelectedCylinder(null);
     } catch (error) {
@@ -262,16 +285,49 @@ export default function CylindersInventoryPage() {
               <CubeIcon className="w-5 h-5 text-gray-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-gray-900 mb-2">{stat.total}</div>
-              <div className="flex space-x-4 text-sm">
-                <div className="flex items-center space-x-1">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-green-600 font-medium">{stat.full} Full</span>
+              <div className="text-2xl font-bold text-gray-900 mb-3">{stat.total}</div>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span className="text-green-600 font-medium">Full</span>
+                  </div>
+                  <span className="font-semibold text-gray-700">{stat.full}</span>
                 </div>
-                <div className="flex items-center space-x-1">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                  <span className="text-orange-600 font-medium">{stat.empty} Empty</span>
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                    <span className="text-orange-600 font-medium">Empty</span>
+                  </div>
+                  <span className="font-semibold text-gray-700">{stat.empty}</span>
                 </div>
+                {stat.withCustomer > 0 && (
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      <span className="text-blue-600 font-medium">With Customer</span>
+                    </div>
+                    <span className="font-semibold text-gray-700">{stat.withCustomer}</span>
+                  </div>
+                )}
+                {stat.maintenance > 0 && (
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                      <span className="text-red-600 font-medium">Maintenance</span>
+                    </div>
+                    <span className="font-semibold text-gray-700">{stat.maintenance}</span>
+                  </div>
+                )}
+                {stat.retired > 0 && (
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
+                      <span className="text-gray-600 font-medium">Retired</span>
+                    </div>
+                    <span className="font-semibold text-gray-700">{stat.retired}</span>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -291,26 +347,38 @@ export default function CylindersInventoryPage() {
                 className="pl-10"
               />
             </div>
-            <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <select 
+              value={statusFilter} 
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
               <option value="ALL">All Status</option>
               <option value="FULL">Full</option>
               <option value="EMPTY">Empty</option>
               <option value="MAINTENANCE">Maintenance</option>
               <option value="WITH_CUSTOMER">With Customer</option>
               <option value="RETIRED">Retired</option>
-            </Select>
-            <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+            </select>
+            <select 
+              value={typeFilter} 
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
               <option value="ALL">All Types</option>
               <option value="DOMESTIC_11_8KG">Domestic (11.8kg)</option>
               <option value="STANDARD_15KG">Standard (15kg)</option>
               <option value="COMMERCIAL_45_4KG">Commercial (45.4kg)</option>
-            </Select>
-            <Select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}>
+            </select>
+            <select 
+              value={locationFilter} 
+              onChange={(e) => setLocationFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
               <option value="ALL">All Locations</option>
               <option value="STORE">In Store</option>
               <option value="VEHICLE">In Vehicle</option>
               <option value="CUSTOMER">With Customer</option>
-            </Select>
+            </select>
           </div>
         </CardContent>
       </Card>
@@ -468,32 +536,118 @@ export default function CylindersInventoryPage() {
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Cylinder</h3>
               <form className="space-y-4" onSubmit={(e) => {
                 e.preventDefault();
-                const form = e.currentTarget;
-                const formData = {
-                  cylinderType: form.cylinderType.value,
-                  capacity: parseFloat(form.capacity.value),
-                  currentStatus: form.currentStatus.value,
-                  location: form.location.value,
-                  purchaseDate: form.purchaseDate.value || null,
-                  purchasePrice: form.purchasePrice.value ? parseFloat(form.purchasePrice.value) : null
-                };
-                handleAddCylinder(formData);
+                console.log('Form submitted!');
+                
+                try {
+                  const form = e.currentTarget;
+                  console.log('Form element:', form);
+                  
+                  // Get form values
+                  const cylinderCode = form.cylinderCode?.value;
+                  const cylinderType = form.cylinderType?.value;
+                  const currentStatus = form.currentStatus?.value;
+                  const location = form.location?.value;
+                  const purchaseDate = form.purchaseDate?.value;
+                  const purchasePrice = form.purchasePrice?.value;
+                  
+                  console.log('Raw form values:', {
+                    cylinderCode,
+                    cylinderType,
+                    currentStatus,
+                    location,
+                    purchaseDate,
+                    purchasePrice
+                  });
+                  
+                  // Validate required fields
+                  if (!cylinderCode) {
+                    alert('Please enter a cylinder code');
+                    return;
+                  }
+                  
+                  if (!cylinderType) {
+                    alert('Please select a cylinder type');
+                    return;
+                  }
+                  
+                  if (!currentStatus) {
+                    alert('Please select a status');
+                    return;
+                  }
+                  
+                  if (!location) {
+                    alert('Please enter a location');
+                    return;
+                  }
+                  
+                  // Calculate capacity based on cylinder type
+                  let capacity = 0;
+                  switch (cylinderType) {
+                    case 'DOMESTIC_11_8KG':
+                      capacity = 11.8;
+                      break;
+                    case 'STANDARD_15KG':
+                      capacity = 15.0;
+                      break;
+                    case 'COMMERCIAL_45_4KG':
+                      capacity = 45.4;
+                      break;
+                    default:
+                      capacity = 15.0; // default
+                  }
+                  
+                  const formData = {
+                    code: cylinderCode,
+                    cylinderType,
+                    capacity,
+                    currentStatus,
+                    location,
+                    purchaseDate: purchaseDate || null,
+                    purchasePrice: purchasePrice ? parseFloat(purchasePrice) : null
+                  };
+                  
+                  console.log('Form data to submit:', formData);
+                  handleAddCylinder(formData);
+                } catch (error) {
+                  console.error('Form submission error:', error);
+                  alert('Error processing form. Please check the console for details.');
+                }
               }}>
                 <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Cylinder Code</label>
+                  <Input 
+                    name="cylinderCode" 
+                    type="text" 
+                    placeholder="e.g., CYL-001, ABC-123" 
+                    required 
+                    className="w-full"
+                  />
+                </div>
+                <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Cylinder Type</label>
-                  <Select name="cylinderType" required>
+                  <select 
+                    name="cylinderType" 
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Select Cylinder Type</option>
                     <option value="DOMESTIC_11_8KG">Domestic (11.8kg)</option>
                     <option value="STANDARD_15KG">Standard (15kg)</option>
                     <option value="COMMERCIAL_45_4KG">Commercial (45.4kg)</option>
-                  </Select>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
-                  <Select name="currentStatus" required>
+                  <select 
+                    name="currentStatus" 
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Select Status</option>
                     <option value="FULL">Full</option>
                     <option value="EMPTY">Empty</option>
                     <option value="MAINTENANCE">Maintenance</option>
-                  </Select>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Location</label>
@@ -512,11 +666,25 @@ export default function CylindersInventoryPage() {
                     type="button"
                     variant="outline"
                     onClick={() => setShowAddForm(false)}
+                    disabled={isAddingCylinder}
                   >
                     Cancel
                   </Button>
-                  <Button type="submit">
-                    Add Cylinder
+                  <Button 
+                    type="submit"
+                    disabled={isAddingCylinder}
+                    className="min-w-[120px]"
+                    onClick={(e) => {
+                      console.log('Add Cylinder button clicked');
+                      // Let the form handle the submission, but also trigger it manually as backup
+                      const form = e.currentTarget.closest('form');
+                      if (form) {
+                        console.log('Found form element, triggering submit');
+                        // Don't prevent default, let the form handle it
+                      }
+                    }}
+                  >
+                    {isAddingCylinder ? 'Adding...' : 'Add Cylinder'}
                   </Button>
                 </div>
               </form>
@@ -547,11 +715,16 @@ export default function CylindersInventoryPage() {
               }}>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Cylinder Type</label>
-                  <Select name="cylinderType" defaultValue={selectedCylinder.cylinderType} required>
+                  <select 
+                    name="cylinderType" 
+                    defaultValue={selectedCylinder.cylinderType}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
                     <option value="DOMESTIC_11_8KG">Domestic (11.8kg)</option>
                     <option value="STANDARD_15KG">Standard (15kg)</option>
                     <option value="COMMERCIAL_45_4KG">Commercial (45.4kg)</option>
-                  </Select>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Capacity (KG)</label>
@@ -559,13 +732,18 @@ export default function CylindersInventoryPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
-                  <Select name="currentStatus" defaultValue={selectedCylinder.currentStatus} required>
+                  <select 
+                    name="currentStatus" 
+                    defaultValue={selectedCylinder.currentStatus}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
                     <option value="FULL">Full</option>
                     <option value="EMPTY">Empty</option>
                     <option value="MAINTENANCE">Maintenance</option>
                     <option value="WITH_CUSTOMER">With Customer</option>
                     <option value="RETIRED">Retired</option>
-                  </Select>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Location</label>
@@ -661,6 +839,12 @@ export default function CylindersInventoryPage() {
                   <label className="block text-sm font-semibold text-gray-700">Purchase Date</label>
                   <p className="text-sm text-gray-900">
                     {selectedCylinder.purchaseDate ? new Date(selectedCylinder.purchaseDate).toLocaleDateString() : 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700">Purchase Price</label>
+                  <p className="text-sm text-gray-900 font-medium">
+                    {selectedCylinder.purchasePrice ? `PKR ${selectedCylinder.purchasePrice.toLocaleString()}` : 'N/A'}
                   </p>
                 </div>
                 <div>

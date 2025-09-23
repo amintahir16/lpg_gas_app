@@ -112,13 +112,13 @@ export default function B2BCustomerDetailPage() {
 
   // Accessories transaction form data
   const [accessoryItems, setAccessoryItems] = useState([
-    { name: 'Gas Pipe (ft)', quantity: 0, pricePerItem: 0 },
-    { name: 'Stove', quantity: 0, pricePerItem: 0 },
-    { name: 'Regulator Adjustable', quantity: 0, pricePerItem: 0 },
-    { name: 'Regulator Ideal High Pressure', quantity: 0, pricePerItem: 0 },
-    { name: 'Regulator 5 Star High Pressure', quantity: 0, pricePerItem: 0 },
-    { name: 'Regulator 3 Star Low Pressure Q1', quantity: 0, pricePerItem: 0 },
-    { name: 'Regulator 3 Star Low Pressure Q2', quantity: 0, pricePerItem: 0 }
+    { name: 'Gas Pipe (ft)', quantity: 0, pricePerItem: 0, quality: '' },
+    { name: 'Stove', quantity: 0, pricePerItem: 0, quality: '' },
+    { name: 'Regulator Adjustable', quantity: 0, pricePerItem: 0, quality: '' },
+    { name: 'Regulator Ideal High Pressure', quantity: 0, pricePerItem: 0, quality: '' },
+    { name: 'Regulator 5 Star High Pressure', quantity: 0, pricePerItem: 0, quality: '' },
+    { name: 'Regulator 3 Star Low Pressure Q1', quantity: 0, pricePerItem: 0, quality: '' },
+    { name: 'Regulator 3 Star Low Pressure Q2', quantity: 0, pricePerItem: 0, quality: '' }
   ]);
 
   useEffect(() => {
@@ -332,7 +332,7 @@ export default function B2BCustomerDetailPage() {
       // Reset form and refresh data
       setShowTransactionForm(false);
       setGasItems(gasItems.map(item => ({ ...item, delivered: 0, emptyReturned: 0 })));
-      setAccessoryItems(accessoryItems.map(item => ({ ...item, quantity: 0 })));
+      setAccessoryItems(accessoryItems.map(item => ({ ...item, quantity: 0, quality: '' })));
       
       // Reset payment form states
       setPaymentAgainst('');
@@ -781,18 +781,42 @@ export default function B2BCustomerDetailPage() {
                       <div className="overflow-x-auto">
                         <table className="w-full">
                           <thead>
-                            <tr className="border-b">
-                              <th className="text-left py-2">Item Name</th>
-                              <th className="text-left py-2">Quantity</th>
-                              <th className="text-left py-2">Price Per Item</th>
-                              <th className="text-left py-2">Total Price per Item</th>
+                            <tr className="border-b bg-gray-50">
+                              <th className="text-left py-3 px-4 font-semibold text-gray-900">Item Name</th>
+                              <th className="text-left py-3 px-4 font-semibold text-gray-900">Quality</th>
+                              <th className="text-left py-3 px-4 font-semibold text-gray-900">Quantity</th>
+                              <th className="text-left py-3 px-4 font-semibold text-gray-900">Price Per Item</th>
+                              <th className="text-left py-3 px-4 font-semibold text-gray-900">Total Price</th>
                             </tr>
                           </thead>
                           <tbody>
                             {accessoryItems.map((item, index) => (
-                              <tr key={index} className="border-b">
-                                <td className="py-2">{item.name}</td>
-                                <td className="py-2">
+                              <tr key={index} className="border-b hover:bg-gray-50 transition-colors">
+                                <td className="py-3 px-4 font-medium text-gray-900">{item.name}</td>
+                                <td className="py-3 px-4">
+                                  {item.name === 'Stove' ? (
+                                    <select
+                                      value={item.quality}
+                                      onChange={(e) => {
+                                        const newItems = [...accessoryItems];
+                                        newItems[index].quality = e.target.value;
+                                        setAccessoryItems(newItems);
+                                      }}
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
+                                      required={item.quantity > 0}
+                                    >
+                                      <option value="">Select Quality</option>
+                                      <option value="Quality 1">Quality 1</option>
+                                      <option value="Quality 2">Quality 2</option>
+                                      <option value="Quality 3">Quality 3</option>
+                                      <option value="Quality 4">Quality 4</option>
+                                      <option value="Quality 5">Quality 5</option>
+                                    </select>
+                                  ) : (
+                                    <span className="text-gray-400 text-sm">N/A</span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-4">
                                   <Input
                                     type="number"
                                     min="0"
@@ -802,10 +826,10 @@ export default function B2BCustomerDetailPage() {
                                       newItems[index].quantity = parseInt(e.target.value) || 0;
                                       setAccessoryItems(newItems);
                                     }}
-                                    className="w-20"
+                                    className="w-20 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
                                   />
                                 </td>
-                                <td className="py-2">
+                                <td className="py-3 px-4">
                                   <Input
                                     type="number"
                                     min="0"
@@ -816,10 +840,10 @@ export default function B2BCustomerDetailPage() {
                                       newItems[index].pricePerItem = parseFloat(e.target.value) || 0;
                                       setAccessoryItems(newItems);
                                     }}
-                                    className="w-24"
+                                    className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
                                   />
                                 </td>
-                                <td className="py-2 font-semibold">
+                                <td className="py-3 px-4 font-semibold text-gray-900">
                                   {formatCurrency(item.quantity * item.pricePerItem)}
                                 </td>
                               </tr>

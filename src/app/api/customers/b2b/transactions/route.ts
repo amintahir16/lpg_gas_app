@@ -145,10 +145,16 @@ export async function POST(request: NextRequest) {
               buybackTotal = buybackAmount * (item.emptyReturned || 0);
             }
 
+            // Create product name with quality for stoves
+            let productName = item.name || item.productName || (item.cylinderType ? `${item.cylinderType} Cylinder` : 'Gas Cylinder');
+            if (item.name === 'Stove' && item.quality) {
+              productName = `Stove ${item.quality}`;
+            }
+
             return {
               transactionId: transaction.id,
               productId: item.productId || null, // B2B customer detail page doesn't send productId
-              productName: item.name || item.productName || (item.cylinderType ? `${item.cylinderType} Cylinder` : 'Gas Cylinder'),
+              productName: productName,
               quantity: parseFloat(item.delivered || item.quantity || item.emptyReturned || 0),
               pricePerItem: parseFloat(item.pricePerItem || 0),
               totalPrice: transactionType === 'BUYBACK' ? buybackTotal : parseFloat((item.delivered || item.quantity || 0) * (item.pricePerItem || 0)),
@@ -275,23 +281,91 @@ export async function POST(request: NextRequest) {
       });
       console.log(`Customer ${customerId} ledger balance updated successfully`);
 
-      // Update inventory for accessories
+      // Update cylinder inventory for sales (deduction) and returns (addition)
+      if (transactionType === 'SALE' && gasItems.length > 0) {
+        for (const gasItem of gasItems) {
+          if (gasItem.delivered > 0) {
+            // Find and update cylinders from inventory
+            const cylinderType = gasItem.cylinderType;
+            let mappedCylinderType: CylinderType;
+            
+            switch (cylinderType) {
+              case 'DOMESTIC_11_8KG': mappedCylinderType = CylinderType.DOMESTIC_11_8KG; break;
+              case 'STANDARD_15KG': mappedCylinderType = CylinderType.STANDARD_15KG; break;
+              case 'COMMERCIAL_45_4KG': mappedCylinderType = CylinderType.COMMERCIAL_45_4KG; break;
+              default: console.log(`Unknown cylinder type: ${cylinderType}`); continue;
+            }
+
+            // Find available cylinders of this type
+            const availableCylinders = await tx.cylinder.findMany({
+              where: {
+                cylinderType: mappedCylinderType,
+                currentStatus: 'FULL'
+              },
+              take: gasItem.delivered
+            });
+
+            if (availableCylinders.length < gasItem.delivered) {
+              throw new Error(`Insufficient inventory: Only ${availableCylinders.length} ${cylinderType} cylinders available, but ${gasItem.delivered} requested`);
+            }
+
+            // Update cylinders to "WITH_CUSTOMER" status
+            await tx.cylinder.updateMany({
+              where: {
+                id: { in: availableCylinders.map(c => c.id) }
+              },
+              data: {
+                currentStatus: 'WITH_CUSTOMER',
+                location: `Customer: ${customer.name}`
+              }
+            });
+
+            console.log(`Deducted ${gasItem.delivered} ${cylinderType} cylinders from inventory`);
+          }
+        }
+      }
+
+      // Update inventory for accessories (only deduction on sales)
       if (transactionType === 'SALE' && accessoryItems.length > 0) {
         for (const accessory of accessoryItems) {
           if (accessory.quantity > 0) {
-            const product = await tx.product.findFirst({
-              where: { name: accessory.name }
-            });
-            
-            if (product) {
-              await tx.product.update({
-                where: { id: product.id },
-                data: {
-                  stockQuantity: {
-                    decrement: accessory.quantity
-                  }
-                }
+            if (accessory.name === 'Stove' && accessory.quality) {
+              // Handle stove inventory with quality
+              const stove = await tx.stove.findFirst({
+                where: { quality: accessory.quality }
               });
+              
+              if (stove) {
+                await tx.stove.update({
+                  where: { id: stove.id },
+                  data: {
+                    quantity: {
+                      decrement: accessory.quantity
+                    },
+                    totalCost: {
+                      decrement: accessory.quantity * stove.costPerPiece
+                    }
+                  }
+                });
+                console.log(`Deducted ${accessory.quantity} ${accessory.quality} stoves from inventory`);
+              }
+            } else {
+              // Handle other accessories (regulators, gas pipes, etc.)
+              const product = await tx.product.findFirst({
+                where: { name: accessory.name }
+              });
+              
+              if (product) {
+                await tx.product.update({
+                  where: { id: product.id },
+                  data: {
+                    stockQuantity: {
+                      decrement: accessory.quantity
+                    }
+                  }
+                });
+                console.log(`Deducted ${accessory.quantity} ${accessory.name} from inventory`);
+              }
             }
           }
         }
@@ -301,8 +375,6 @@ export async function POST(request: NextRequest) {
       if ((transactionType === 'BUYBACK' || transactionType === 'RETURN_EMPTY') && gasItems.length > 0) {
         for (const gasItem of gasItems) {
           if (gasItem.emptyReturned > 0) {
-            // For B2B customer detail page, we need to add cylinders to the Cylinder table
-            // instead of updating Product stock
             const quantity = parseInt(gasItem.emptyReturned);
             const cylinderType = gasItem.cylinderType;
             
@@ -315,20 +387,59 @@ export async function POST(request: NextRequest) {
                 default: console.log(`Unknown cylinder type: ${cylinderType}`); continue;
               }
 
-              const initialCylinderCount = await tx.cylinder.count();
-              for (let i = 0; i < quantity; i++) {
-                const code = `CYL${String(initialCylinderCount + 1 + i).padStart(3, '0')}`;
-                await tx.cylinder.create({
-                  data: {
-                    code,
-                    cylinderType: mappedCylinderType,
-                    capacity: cylinderType === 'DOMESTIC_11_8KG' ? 11.8 : cylinderType === 'STANDARD_15KG' ? 15.0 : 45.4,
-                    currentStatus: 'EMPTY',
-                    location: 'Returned from Customer',
+              // Find cylinders that are currently with this customer
+              const cylindersWithCustomer = await tx.cylinder.findMany({
+                where: {
+                  cylinderType: mappedCylinderType,
+                  currentStatus: 'WITH_CUSTOMER',
+                  location: { contains: customer.name }
+                },
+                take: quantity
+              });
+
+              if (cylindersWithCustomer.length >= quantity) {
+                // Update existing cylinders to EMPTY status
+                await tx.cylinder.updateMany({
+                  where: {
+                    id: { in: cylindersWithCustomer.slice(0, quantity).map(c => c.id) }
                   },
+                  data: {
+                    currentStatus: 'EMPTY',
+                    location: 'Store - Ready for Refill'
+                  }
                 });
+                console.log(`Updated ${quantity} ${cylinderType} cylinders to EMPTY status in inventory`);
+              } else {
+                // If not enough cylinders found with customer, create new ones
+                const cylindersToCreate = quantity - cylindersWithCustomer.length;
+                if (cylindersWithCustomer.length > 0) {
+                  await tx.cylinder.updateMany({
+                    where: {
+                      id: { in: cylindersWithCustomer.map(c => c.id) }
+                    },
+                    data: {
+                      currentStatus: 'EMPTY',
+                      location: 'Store - Ready for Refill'
+                    }
+                  });
+                }
+
+                // Create new cylinders for the remaining quantity
+                const initialCylinderCount = await tx.cylinder.count();
+                for (let i = 0; i < cylindersToCreate; i++) {
+                  const code = `CYL${String(initialCylinderCount + 1 + i).padStart(3, '0')}`;
+                  await tx.cylinder.create({
+                    data: {
+                      code,
+                      cylinderType: mappedCylinderType,
+                      capacity: cylinderType === 'DOMESTIC_11_8KG' ? 11.8 : cylinderType === 'STANDARD_15KG' ? 15.0 : 45.4,
+                      currentStatus: 'EMPTY',
+                      location: 'Store - Ready for Refill',
+                    },
+                  });
+                }
+                console.log(`Added ${quantity} empty ${cylinderType} cylinders to inventory (${cylindersWithCustomer.length} updated, ${cylindersToCreate} created)`);
               }
-              console.log(`Added ${quantity} empty ${cylinderType} cylinders to inventory`);
             }
           }
         }
