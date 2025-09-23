@@ -12,7 +12,9 @@ import {
   MagnifyingGlassIcon, 
   BuildingOfficeIcon,
   CurrencyDollarIcon,
-  CubeIcon
+  CubeIcon,
+  ArrowLeftIcon,
+  DocumentTextIcon
 } from '@heroicons/react/24/outline';
 
 interface B2BCustomer {
@@ -78,9 +80,23 @@ export default function B2BCustomersPage() {
     fetchB2BCustomers();
   }, [debouncedSearchTerm, pagination.page]);
 
+  // Refresh data when page becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchB2BCustomers();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
   const fetchB2BCustomers = async () => {
     try {
       setLoading(true);
+      setError(null); // Clear any previous errors
+      
       const params = new URLSearchParams({
         search: debouncedSearchTerm,
         page: pagination.page.toString(),
@@ -88,17 +104,24 @@ export default function B2BCustomersPage() {
         type: 'B2B'
       });
 
+      console.log('Fetching B2B customers with params:', params.toString());
       const response = await fetch(`/api/customers/b2b?${params}`);
       
       if (!response.ok) {
-        throw new Error('Failed to fetch B2B customers');
+        const errorText = await response.text();
+        console.error('API Error:', response.status, errorText);
+        throw new Error(`Failed to fetch B2B customers: ${response.status}`);
       }
       
       const data: B2BCustomersResponse = await response.json();
-      setCustomers(data.customers);
-      setPagination(data.pagination);
+      console.log('Fetched B2B customers:', data);
+      
+      setCustomers(data.customers || []);
+      setPagination(data.pagination || { page: 1, limit: 10, total: 0, pages: 0 });
     } catch (err) {
+      console.error('Error fetching B2B customers:', err);
       setError(err instanceof Error ? err.message : 'An error occurred');
+      setCustomers([]); // Ensure customers array is cleared on error
     } finally {
       setLoading(false);
     }
@@ -119,6 +142,8 @@ export default function B2BCustomersPage() {
 
   const handleAddCustomer = async (formData: any) => {
     try {
+      setError(null); // Clear any previous errors
+      
       const response = await fetch('/api/customers/b2b', {
         method: 'POST',
         headers: {
@@ -131,18 +156,30 @@ export default function B2BCustomersPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create B2B customer');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create B2B customer');
       }
 
-      // Refresh the customers list
-      fetchB2BCustomers();
+      const newCustomer = await response.json();
+      console.log('Customer created successfully:', newCustomer);
+
+      // Close the form first
       setShowAddForm(false);
+      
+      // Reset pagination to page 1 to see the new customer
+      setPagination(prev => ({ ...prev, page: 1 }));
+      
+      // Refresh the customers list
+      await fetchB2BCustomers();
+      
     } catch (err) {
+      console.error('Error creating customer:', err);
       setError(err instanceof Error ? err.message : 'Failed to create customer');
     }
   };
 
-  if (loading && customers.length === 0) {
+  // Only show loading screen on initial load
+  if (loading && customers.length === 0 && !error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
         <div className="text-center">
@@ -158,6 +195,17 @@ export default function B2BCustomersPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
+          <div className="flex items-center mb-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push('/customers')}
+              className="mr-4 flex items-center"
+            >
+              <ArrowLeftIcon className="w-4 h-4 mr-2" />
+              Back to Customers
+            </Button>
+          </div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center">
             <BuildingOfficeIcon className="w-8 h-8 mr-3 text-blue-600" />
             Industries & Restaurants (B2B)
@@ -166,7 +214,16 @@ export default function B2BCustomersPage() {
             Manage B2B customers, cylinder dues, and account receivables
           </p>
         </div>
-        <div className="mt-4 sm:mt-0">
+        <div className="mt-4 sm:mt-0 flex space-x-3">
+          <Button 
+            onClick={fetchB2BCustomers}
+            variant="outline"
+            disabled={loading}
+            className="font-semibold"
+          >
+            <MagnifyingGlassIcon className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
           <Button 
             onClick={() => setShowAddForm(true)}
             className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-lg"
@@ -235,23 +292,58 @@ export default function B2BCustomersPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="font-semibold text-gray-700">Customer</TableHead>
-                <TableHead className="font-semibold text-gray-700">Contact</TableHead>
-                <TableHead className="font-semibold text-gray-700">Cylinder 11.8kg</TableHead>
-                <TableHead className="font-semibold text-gray-700">Cylinder 15kg</TableHead>
-                <TableHead className="font-semibold text-gray-700">Cylinder 45.4kg</TableHead>
-                <TableHead className="font-semibold text-gray-700">Total Due</TableHead>
-                <TableHead className="font-semibold text-gray-700">Account Receivables</TableHead>
-                <TableHead className="font-semibold text-gray-700">Status</TableHead>
-                <TableHead className="font-semibold text-gray-700">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {customers.map((customer) => (
-                <TableRow key={customer.id} className="hover:bg-gray-50">
+          {loading && customers.length === 0 ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="mt-4 text-gray-600 font-medium">Loading customers...</p>
+              </div>
+            </div>
+          ) : customers.length === 0 ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <BuildingOfficeIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">No B2B Customers Found</h3>
+                <p className="text-gray-600 mb-4">
+                  {debouncedSearchTerm 
+                    ? `No customers found matching "${debouncedSearchTerm}"` 
+                    : 'Start by adding your first B2B customer'
+                  }
+                </p>
+                {!debouncedSearchTerm && (
+                  <Button 
+                    onClick={() => setShowAddForm(true)}
+                    className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold"
+                  >
+                    <PlusIcon className="w-4 h-4 mr-2" />
+                    Add First Customer
+                  </Button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="font-semibold text-gray-700">Customer</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Contact</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Type</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Cylinder 11.8kg</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Cylinder 15kg</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Cylinder 45.4kg</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Total Due</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Account Receivables</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Status</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {customers.map((customer) => (
+                <TableRow 
+                  key={customer.id} 
+                  className="cursor-pointer hover:bg-gray-50"
+                  onClick={() => router.push(`/customers/b2b/${customer.id}`)}
+                >
                   <TableCell>
                     <div>
                       <p className="font-semibold text-gray-900">{customer.name}</p>
@@ -265,6 +357,17 @@ export default function B2BCustomersPage() {
                         <p className="text-sm text-gray-500">{customer.email}</p>
                       )}
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge 
+                      variant="outline"
+                      className="font-semibold"
+                    >
+                      {customer.notes && customer.notes.includes('Customer Type:') 
+                        ? customer.notes.split('Customer Type: ')[1]?.split(' |')[0] || 'B2B'
+                        : 'B2B'
+                      }
+                    </Badge>
                   </TableCell>
                   <TableCell>
                     <Badge 
@@ -318,19 +421,23 @@ export default function B2BCustomersPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => router.push(`/customers/b2b/${customer.id}`)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/customers/b2b/${customer.id}`);
+                      }}
                       className="font-medium"
                     >
                       View Details
                     </Button>
                   </TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                ))}
+              </TableBody>
+            </Table>
+          )}
 
           {/* Pagination */}
-          {pagination.pages > 1 && (
+          {customers.length > 0 && pagination.pages > 1 && (
             <div className="flex items-center justify-between mt-6">
               <p className="text-sm text-gray-700">
                 Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
@@ -377,12 +484,25 @@ export default function B2BCustomersPage() {
                   address: formData.get('address'),
                   creditLimit: formData.get('creditLimit'),
                   paymentTermsDays: formData.get('paymentTermsDays'),
-                  notes: formData.get('notes')
+                  notes: formData.get('notes'),
+                  customerType: formData.get('customerType')
                 });
               }}>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Company Name</label>
                   <Input name="name" type="text" placeholder="Company Name" required />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Customer Type</label>
+                  <select 
+                    name="customerType" 
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Select Customer Type</option>
+                    <option value="INDUSTRIAL">Industrial</option>
+                    <option value="RESTAURANT">Restaurant</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Contact Person</label>

@@ -102,16 +102,17 @@ export async function POST(request: NextRequest) {
       creditLimit,
       paymentTermsDays,
       notes,
+      customerType,
       type = 'B2B'
     } = body;
 
-    // Generate customer code
-    const customerCount = await prisma.customer.count();
-    const customerCode = `B2B${String(customerCount + 1).padStart(4, '0')}`;
+    // Combine customer type with notes
+    const combinedNotes = customerType ? 
+      `Customer Type: ${customerType}${notes ? ` | ${notes}` : ''}` : 
+      notes;
 
     const customer = await prisma.customer.create({
       data: {
-        code: customerCode,
         name,
         contactPerson,
         email,
@@ -119,12 +120,8 @@ export async function POST(request: NextRequest) {
         address,
         creditLimit: creditLimit ? parseFloat(creditLimit) : 0,
         paymentTermsDays: paymentTermsDays ? parseInt(paymentTermsDays) : 30,
-        notes,
+        notes: combinedNotes,
         type,
-        customerType: 'INDUSTRIAL', // Default for B2B
-        firstName: contactPerson, // Required field
-        lastName: '', // Required field
-        userId: user.id, // Required field
         createdBy: user.id,
       },
     });

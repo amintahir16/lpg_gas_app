@@ -4,28 +4,22 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 
 interface Customer {
   id: string;
-  code: string;
-  firstName: string;
-  lastName: string;
+  name: string;
+  type: string;
+  contactPerson: string;
   email: string | null;
   phone: string;
-  customerType: string;
   creditLimit: number | string;
   isActive: boolean;
   createdAt: string;
-  user: {
-    id: string;
-    name: string | null;
-    email: string;
-  };
+  notes?: string | null;
 }
 
 interface CustomersResponse {
@@ -44,7 +38,6 @@ export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showAddForm, setShowAddForm] = useState(false);
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
@@ -100,49 +93,22 @@ export default function CustomersPage() {
 
   const getCustomerTypeColor = (type: string) => {
     switch (type) {
-      case 'RESIDENTIAL':
-        return 'success';
-      case 'COMMERCIAL':
+      case 'B2B':
         return 'info';
-      case 'INDUSTRIAL':
-        return 'warning';
       default:
         return 'secondary';
     }
   };
 
-  const handleAddCustomer = async (formData: any) => {
-    try {
-      const response = await fetch('/api/customers', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to create customer');
-      }
-
-      // Refresh the customers list
-      fetchCustomers();
-      setShowAddForm(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create customer');
+  const getCustomerTypeDisplay = (customer: Customer) => {
+    // For B2B customers, extract the specific type from notes
+    if (customer.type === 'B2B' && customer.notes && customer.notes.includes('Customer Type:')) {
+      const type = customer.notes.split('Customer Type: ')[1]?.split(' |')[0];
+      return type || 'B2B';
     }
+    return customer.type;
   };
 
-  if (loading && customers.length === 0) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600 font-medium">Loading customers...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -154,7 +120,7 @@ export default function CustomersPage() {
             Manage your customer database and relationships
           </p>
         </div>
-        <div className="mt-4 sm:mt-0 flex space-x-3">
+        <div className="mt-4 sm:mt-0">
           <Button 
             onClick={() => router.push('/customers/b2b')}
             variant="outline"
@@ -162,15 +128,18 @@ export default function CustomersPage() {
           >
             B2B Customers
           </Button>
-          <Button 
-            onClick={() => setShowAddForm(true)}
-            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-lg"
-          >
-            <PlusIcon className="w-4 h-4 mr-2" />
-            Add Customer
-          </Button>
         </div>
       </div>
+
+      {/* Loading State */}
+      {loading && customers.length === 0 && !error && (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600 font-medium">Loading customers...</p>
+          </div>
+        </div>
+      )}
 
       {/* Search and Filters */}
       <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
@@ -233,8 +202,8 @@ export default function CustomersPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="font-semibold text-gray-700">Code</TableHead>
                 <TableHead className="font-semibold text-gray-700">Name</TableHead>
+                <TableHead className="font-semibold text-gray-700">Contact Person</TableHead>
                 <TableHead className="font-semibold text-gray-700">Email</TableHead>
                 <TableHead className="font-semibold text-gray-700">Phone</TableHead>
                 <TableHead className="font-semibold text-gray-700">Type</TableHead>
@@ -244,20 +213,22 @@ export default function CustomersPage() {
             </TableHeader>
             <TableBody>
               {customers.map((customer) => (
-                <TableRow key={customer.id}>
-                  <TableCell className="font-semibold text-gray-900">{customer.code}</TableCell>
-                  <TableCell className="text-gray-700">
-                    {customer.firstName} {customer.lastName}
-                  </TableCell>
+                <TableRow 
+                  key={customer.id}
+                  className="cursor-pointer hover:bg-gray-50"
+                  onClick={() => router.push(`/customers/b2b/${customer.id}`)}
+                >
+                  <TableCell className="font-semibold text-gray-900">{customer.name}</TableCell>
+                  <TableCell className="text-gray-700">{customer.contactPerson}</TableCell>
                   <TableCell className="text-gray-700">{customer.email || '-'}</TableCell>
                   <TableCell className="text-gray-700">{customer.phone}</TableCell>
                   <TableCell>
-                    <Badge variant={getCustomerTypeColor(customer.customerType) as any} className="font-semibold">
-                      {customer.customerType}
+                    <Badge variant={getCustomerTypeColor(customer.type) as any} className="font-semibold">
+                      {getCustomerTypeDisplay(customer)}
                     </Badge>
                   </TableCell>
                   <TableCell className="font-semibold text-gray-900">
-                    ${(Number(customer.creditLimit) || 0).toFixed(2)}
+                    Rs {(Number(customer.creditLimit) || 0).toFixed(2)}
                   </TableCell>
                   <TableCell>
                     <Badge variant={customer.isActive ? 'success' : 'destructive'} className="font-semibold">
@@ -300,70 +271,6 @@ export default function CustomersPage() {
         </CardContent>
       </Card>
 
-      {/* Add Customer Modal */}
-      {showAddForm && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Customer</h3>
-              <form className="space-y-4" onSubmit={(e) => {
-                e.preventDefault();
-                const formData = new FormData(e.currentTarget);
-                handleAddCustomer({
-                  firstName: formData.get('firstName'),
-                  lastName: formData.get('lastName'),
-                  email: formData.get('email'),
-                  phone: formData.get('phone'),
-                  customerType: formData.get('customerType'),
-                  creditLimit: formData.get('creditLimit')
-                });
-              }}>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">First Name</label>
-                  <Input name="firstName" type="text" placeholder="First Name" required />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Last Name</label>
-                  <Input name="lastName" type="text" placeholder="Last Name" required />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
-                  <Input name="email" type="email" placeholder="Email" />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Phone</label>
-                  <Input name="phone" type="tel" placeholder="Phone" required />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Customer Type</label>
-                  <Select name="customerType" required>
-                    <option value="RESIDENTIAL">Residential</option>
-                    <option value="COMMERCIAL">Commercial</option>
-                    <option value="INDUSTRIAL">Industrial</option>
-                  </Select>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Credit Limit</label>
-                  <Input name="creditLimit" type="number" placeholder="0.00" step="0.01" defaultValue="0" />
-                </div>
-                <div className="flex justify-end space-x-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setShowAddForm(false)}
-                    className="font-medium"
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" className="font-medium">
-                    Add Customer
-                  </Button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 } 

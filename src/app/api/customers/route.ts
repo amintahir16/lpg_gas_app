@@ -22,9 +22,9 @@ export async function GET(request: NextRequest) {
     const where: Prisma.CustomerWhereInput = {
       isActive: true,
       OR: search ? [
-        { firstName: { contains: search, mode: 'insensitive' as Prisma.QueryMode } },
-        { lastName: { contains: search, mode: 'insensitive' as Prisma.QueryMode } },
-        { code: { contains: search, mode: 'insensitive' as Prisma.QueryMode } },
+        { name: { contains: search, mode: 'insensitive' as Prisma.QueryMode } },
+        { contactPerson: { contains: search, mode: 'insensitive' as Prisma.QueryMode } },
+        { phone: { contains: search, mode: 'insensitive' as Prisma.QueryMode } },
         { email: { contains: search, mode: 'insensitive' as Prisma.QueryMode } }
       ] : undefined
     };
@@ -34,16 +34,7 @@ export async function GET(request: NextRequest) {
         where,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true
-            }
-          }
-        }
+        orderBy: { createdAt: 'desc' }
       }),
       prisma.customer.count({ where })
     ]);
