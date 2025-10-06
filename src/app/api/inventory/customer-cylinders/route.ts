@@ -18,9 +18,8 @@ export async function GET(request: NextRequest) {
         { code: { contains: search, mode: 'insensitive' } },
         { cylinderRentals: { some: { customer: { 
           OR: [
-            { firstName: { contains: search, mode: 'insensitive' } },
-            { lastName: { contains: search, mode: 'insensitive' } },
-            { code: { contains: search, mode: 'insensitive' } }
+            { name: { contains: search, mode: 'insensitive' } },
+            { contactPerson: { contains: search, mode: 'insensitive' } }
           ]
         }}}}
       ];
@@ -42,12 +41,11 @@ export async function GET(request: NextRequest) {
             customer: {
               select: {
                 id: true,
-                code: true,
-                firstName: true,
-                lastName: true,
+                name: true,
+                contactPerson: true,
                 phone: true,
-                address: true,
-                city: true
+                email: true,
+                address: true
               }
             }
           },

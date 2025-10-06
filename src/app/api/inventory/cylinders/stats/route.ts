@@ -12,11 +12,11 @@ export async function GET(request: NextRequest) {
     });
 
     // Process cylinder type stats
+    // Note: Exclude WITH_CUSTOMER from inventory totals as they are tracked separately
     const processedStats = ['DOMESTIC_11_8KG', 'STANDARD_15KG', 'COMMERCIAL_45_4KG'].map(type => {
       const typeStats = cylinderTypeStats.filter(stat => stat.cylinderType === type);
       const full = typeStats.find(stat => stat.currentStatus === 'FULL')?._count.id || 0;
       const empty = typeStats.find(stat => stat.currentStatus === 'EMPTY')?._count.id || 0;
-      const maintenance = typeStats.find(stat => stat.currentStatus === 'MAINTENANCE')?._count.id || 0;
       const withCustomer = typeStats.find(stat => stat.currentStatus === 'WITH_CUSTOMER')?._count.id || 0;
       const retired = typeStats.find(stat => stat.currentStatus === 'RETIRED')?._count.id || 0;
       
@@ -24,10 +24,10 @@ export async function GET(request: NextRequest) {
         type: type.replace('_', ' '),
         full,
         empty,
-        maintenance,
         withCustomer,
         retired,
-        total: full + empty + maintenance + withCustomer + retired
+        // Total only includes cylinders in inventory (excluding WITH_CUSTOMER)
+        total: full + empty + retired
       };
     });
 

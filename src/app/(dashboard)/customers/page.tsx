@@ -120,7 +120,14 @@ export default function CustomersPage() {
             Manage your customer database and relationships
           </p>
         </div>
-        <div className="mt-4 sm:mt-0">
+        <div className="mt-4 sm:mt-0 flex space-x-3">
+          <Button 
+            onClick={() => router.push('/customers/b2c')}
+            variant="outline"
+            className="font-semibold"
+          >
+            B2C Customers
+          </Button>
           <Button 
             onClick={() => router.push('/customers/b2b')}
             variant="outline"

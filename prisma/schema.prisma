@@ -475,6 +475,103 @@ model BillSequence {
   @@map("bill_sequences")
 }
 
+model B2CCustomer {
+  id                String            @id @default(cuid())
+  name              String
+  phone             String
+  email             String?
+  address           String
+  houseNumber       String?
+  sector            String?
+  street            String?
+  phase             String?
+  area              String?
+  city              String            @default("Hayatabad")
+  googleMapLocation String?
+  totalProfit       Decimal           @default(0) @db.Decimal(15, 2)
+  isActive          Boolean           @default(true)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  transactions      B2CTransaction[]
+  cylinderHoldings  B2CCylinderHolding[]
+
+  @@map("b2c_customers")
+}
+
+model B2CCylinderHolding {
+  id           String            @id @default(cuid())
+  customerId   String
+  cylinderType CylinderType
+  quantity     Int               @default(1)
+  securityAmount Decimal         @db.Decimal(10, 2)
+  issueDate    DateTime          @default(now())
+  returnDate   DateTime?
+  isReturned   Boolean           @default(false)
+  returnDeduction Decimal        @default(0) @db.Decimal(10, 2)
+  customer     B2CCustomer       @relation(fields: [customerId], references: [id])
+
+  @@map("b2c_cylinder_holdings")
+}
+
+model B2CTransaction {
+  id              String                @id @default(cuid())
+  billSno         String                @unique
+  customerId      String
+  date            DateTime
+  time            DateTime
+  totalAmount     Decimal               @db.Decimal(15, 2)
+  deliveryCharges Decimal               @default(0) @db.Decimal(10, 2)
+  finalAmount     Decimal               @db.Decimal(15, 2)
+  paymentMethod   String                @default("CASH")
+  notes           String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  customer        B2CCustomer           @relation(fields: [customerId], references: [id])
+  gasItems        B2CTransactionGasItem[]
+  securityItems   B2CTransactionSecurityItem[]
+  accessoryItems  B2CTransactionAccessoryItem[]
+
+  @@map("b2c_transactions")
+}
+
+model B2CTransactionGasItem {
+  id            String        @id @default(cuid())
+  transactionId String
+  cylinderType  CylinderType
+  quantity      Int           @default(1)
+  pricePerItem  Decimal       @db.Decimal(10, 2)
+  totalPrice    Decimal       @db.Decimal(15, 2)
+  transaction   B2CTransaction @relation(fields: [transactionId], references: [id])
+
+  @@map("b2c_transaction_gas_items")
+}
+
+model B2CTransactionSecurityItem {
+  id            String        @id @default(cuid())
+  transactionId String
+  cylinderType  CylinderType
+  quantity      Int           @default(1)
+  pricePerItem  Decimal       @db.Decimal(10, 2)
+  totalPrice    Decimal       @db.Decimal(15, 2)
+  isReturn      Boolean       @default(false)
+  deductionRate Decimal       @default(0.25) @db.Decimal(3, 2)
+  transaction   B2CTransaction @relation(fields: [transactionId], references: [id])
+
+  @@map("b2c_transaction_security_items")
+}
+
+model B2CTransactionAccessoryItem {
+  id            String        @id @default(cuid())
+  transactionId String
+  itemName      String
+  quantity      Int           @default(1)
+  pricePerItem  Decimal       @db.Decimal(10, 2)
+  totalPrice    Decimal       @db.Decimal(15, 2)
+  transaction   B2CTransaction @relation(fields: [transactionId], references: [id])
+
+  @@map("b2c_transaction_accessory_items")
+}
+
 enum VendorOrderStatus {
   PENDING
   APPROVED
@@ -544,7 +641,6 @@ enum CylinderType {
 enum CylinderStatus {
   FULL
   EMPTY
-  MAINTENANCE
   RETIRED
   WITH_CUSTOMER
 }

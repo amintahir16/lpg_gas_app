@@ -22,12 +22,11 @@ interface CustomerCylinder {
   currentStatus: string;
   customer: {
     id: string;
-    code: string;
-    firstName: string;
-    lastName: string;
+    name: string;
+    contactPerson: string;
     phone: string;
+    email?: string;
     address?: string;
-    city?: string;
   };
   rental: {
     id: string;
@@ -114,8 +113,10 @@ export default function CustomerCylindersPage() {
         return 'success';
       case 'EMPTY':
         return 'warning';
-      case 'MAINTENANCE':
-        return 'destructive';
+      case 'WITH_CUSTOMER':
+        return 'info';
+      case 'RETIRED':
+        return 'secondary';
       default:
         return 'secondary';
     }
@@ -145,8 +146,10 @@ export default function CustomerCylindersPage() {
 Cylinder: ${item.code}
 Type: ${getTypeDisplayName(item.cylinderType)}
 Status: ${item.currentStatus}
-Customer: ${item.customer.firstName} ${item.customer.lastName}
+Customer: ${item.customer.name}
+Contact Person: ${item.customer.contactPerson}
 Phone: ${item.customer.phone}
+Email: ${item.customer.email || 'N/A'}
 Address: ${item.customer.address || 'N/A'}
 Rental Date: ${new Date(item.rental.rentalDate).toLocaleDateString()}
 Expected Return: ${item.rental.expectedReturnDate ? new Date(item.rental.expectedReturnDate).toLocaleDateString() : 'N/A'}
@@ -160,11 +163,11 @@ Status: ${item.rental.status}
   const handleContactCustomer = (customer: any) => {
     // Open contact options (phone, email, etc.)
     const contactInfo = `
-Customer: ${customer.firstName} ${customer.lastName}
+Customer: ${customer.name}
+Contact Person: ${customer.contactPerson}
 Phone: ${customer.phone}
 ${customer.email ? `Email: ${customer.email}` : ''}
 Address: ${customer.address || 'N/A'}
-City: ${customer.city || 'N/A'}
     `;
     
     if (confirm(`${contactInfo}\n\nWould you like to call ${customer.phone}?`)) {
@@ -311,15 +314,14 @@ City: ${customer.city || 'N/A'}
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
                           <div className="text-sm font-semibold text-gray-900">
-                            {item.customer.firstName} {item.customer.lastName}
+                            {item.customer.name}
                           </div>
                           <div className="text-xs text-gray-500">
-                            Code: {item.customer.code}
+                            Contact: {item.customer.contactPerson}
                           </div>
-                          {item.customer.city && (
-                            <div className="text-xs text-gray-500 flex items-center mt-1">
-                              <MapPinIcon className="w-3 h-3 mr-1" />
-                              {item.customer.city}
+                          {item.customer.email && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              {item.customer.email}
                             </div>
                           )}
                         </div>

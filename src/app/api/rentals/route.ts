@@ -61,8 +61,8 @@ export async function POST(request: NextRequest) {
       include: {
         customer: {
           select: {
-            firstName: true,
-            lastName: true,
+            name: true,
+            contactPerson: true,
             email: true
           }
         },
@@ -76,19 +76,19 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // Update cylinder status to RENTED
+    // Update cylinder status to WITH_CUSTOMER
     await prisma.cylinder.update({
       where: {
         id: availableCylinder.id
       },
       data: {
-        currentStatus: 'RENTED'
+        currentStatus: 'WITH_CUSTOMER'
       }
     });
 
     // Create notification for new rental
     try {
-      const customerName = `${rental.customer.firstName} ${rental.customer.lastName}`;
+      const customerName = rental.customer.name;
       const cylinderCode = rental.cylinder.code;
       const currentUserEmail = userEmail || 'Unknown User';
       

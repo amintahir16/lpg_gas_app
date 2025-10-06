@@ -124,8 +124,6 @@ export default function CylindersInventoryPage() {
         return 'success';
       case 'EMPTY':
         return 'warning';
-      case 'MAINTENANCE':
-        return 'destructive';
       case 'WITH_CUSTOMER':
         return 'info';
       case 'RETIRED':
@@ -301,24 +299,6 @@ export default function CylindersInventoryPage() {
                   </div>
                   <span className="font-semibold text-gray-700">{stat.empty}</span>
                 </div>
-                {stat.withCustomer > 0 && (
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                      <span className="text-blue-600 font-medium">With Customer</span>
-                    </div>
-                    <span className="font-semibold text-gray-700">{stat.withCustomer}</span>
-                  </div>
-                )}
-                {stat.maintenance > 0 && (
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                      <span className="text-red-600 font-medium">Maintenance</span>
-                    </div>
-                    <span className="font-semibold text-gray-700">{stat.maintenance}</span>
-                  </div>
-                )}
                 {stat.retired > 0 && (
                   <div className="flex justify-between items-center">
                     <div className="flex items-center space-x-2">
@@ -355,7 +335,6 @@ export default function CylindersInventoryPage() {
               <option value="ALL">All Status</option>
               <option value="FULL">Full</option>
               <option value="EMPTY">Empty</option>
-              <option value="MAINTENANCE">Maintenance</option>
               <option value="WITH_CUSTOMER">With Customer</option>
               <option value="RETIRED">Retired</option>
             </select>
@@ -638,15 +617,14 @@ export default function CylindersInventoryPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
-                  <select 
-                    name="currentStatus" 
+                  <select
+                    name="currentStatus"
                     required
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="">Select Status</option>
                     <option value="FULL">Full</option>
                     <option value="EMPTY">Empty</option>
-                    <option value="MAINTENANCE">Maintenance</option>
                   </select>
                 </div>
                 <div>
@@ -732,15 +710,14 @@ export default function CylindersInventoryPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
-                  <select 
-                    name="currentStatus" 
+                  <select
+                    name="currentStatus"
                     defaultValue={selectedCylinder.currentStatus}
                     required
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="FULL">Full</option>
                     <option value="EMPTY">Empty</option>
-                    <option value="MAINTENANCE">Maintenance</option>
                     <option value="WITH_CUSTOMER">With Customer</option>
                     <option value="RETIRED">Retired</option>
                   </select>
