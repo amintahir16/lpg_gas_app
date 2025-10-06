@@ -221,7 +221,7 @@ export default function B2CCustomersPage() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Total Profit</p>
-                <p className="text-2xl font-bold text-gray-900">Rs {summary.totalProfit.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-gray-900">Rs {Number(summary.totalProfit).toFixed(2)}</p>
               </div>
             </div>
           </CardContent>
@@ -375,7 +375,7 @@ export default function B2CCustomersPage() {
                     </div>
                   </TableCell>
                   <TableCell className="font-semibold text-gray-900">
-                    Rs {customer.totalProfit.toFixed(2)}
+                    Rs {Number(customer.totalProfit).toFixed(2)}
                   </TableCell>
                   <TableCell>
                     <Badge variant={customer.isActive ? 'success' : 'destructive'} className="font-semibold">

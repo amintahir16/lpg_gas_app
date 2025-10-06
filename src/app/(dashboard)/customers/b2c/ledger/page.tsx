@@ -111,7 +111,7 @@ export default function B2CLedgerPage() {
             <div>
               <h3 className="text-lg font-semibold text-gray-900">Total Profit Summary</h3>
               <p className="text-3xl font-bold text-green-600 mt-2">
-                Rs {summary.totalProfit.toFixed(2)}
+                Rs {Number(summary.totalProfit).toFixed(2)}
               </p>
               <p className="text-sm text-gray-600 mt-1">
                 From {summary.totalCustomers} customers
@@ -209,7 +209,7 @@ export default function B2CLedgerPage() {
                     )}
                   </TableCell>
                   <TableCell className="font-semibold text-gray-900">
-                    Rs {customer.totalProfit.toFixed(2)}
+                    Rs {Number(customer.totalProfit).toFixed(2)}
                   </TableCell>
                   <TableCell>
                     <Button

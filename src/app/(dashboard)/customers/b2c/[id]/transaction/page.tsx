@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeftIcon, PlusIcon, TrashIcon, CalculatorIcon } from '@heroicons/react/24/outline';
 
@@ -314,15 +314,10 @@ export default function B2CTransactionPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
-              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="CASH">Cash</SelectItem>
-                  <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
-                  <SelectItem value="CARD">Card</SelectItem>
-                </SelectContent>
+              <Select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+                <option value="CASH">Cash</option>
+                <option value="BANK_TRANSFER">Bank Transfer</option>
+                <option value="CARD">Card</option>
               </Select>
             </div>
           </CardContent>
@@ -351,18 +346,14 @@ export default function B2CTransactionPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Cylinder Type</label>
                   <Select 
                     value={item.cylinderType} 
-                    onValueChange={(value) => updateGasItem(index, 'cylinderType', value)}
+                    onChange={(e) => updateGasItem(index, 'cylinderType', e.target.value)}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CYLINDER_TYPES.map((type) => (
-                        <SelectItem key={type.value} value={type.value}>
-                          {type.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
+                    <option value="">Select type</option>
+                    {CYLINDER_TYPES.map((type) => (
+                      <option key={type.value} value={type.value}>
+                        {type.label}
+                      </option>
+                    ))}
                   </Select>
                 </div>
                 <div>
@@ -428,18 +419,14 @@ export default function B2CTransactionPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Cylinder Type</label>
                   <Select 
                     value={item.cylinderType} 
-                    onValueChange={(value) => updateSecurityItem(index, 'cylinderType', value)}
+                    onChange={(e) => updateSecurityItem(index, 'cylinderType', e.target.value)}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CYLINDER_TYPES.map((type) => (
-                        <SelectItem key={type.value} value={type.value}>
-                          {type.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
+                    <option value="">Select type</option>
+                    {CYLINDER_TYPES.map((type) => (
+                      <option key={type.value} value={type.value}>
+                        {type.label}
+                      </option>
+                    ))}
                   </Select>
                 </div>
                 <div>
@@ -465,15 +452,10 @@ export default function B2CTransactionPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Return?</label>
                   <Select 
                     value={item.isReturn.toString()} 
-                    onValueChange={(value) => updateSecurityItem(index, 'isReturn', value === 'true')}
+                    onChange={(e) => updateSecurityItem(index, 'isReturn', e.target.value === 'true')}
                   >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="false">New Deposit</SelectItem>
-                      <SelectItem value="true">Return (25% off)</SelectItem>
-                    </SelectContent>
+                    <option value="false">New Deposit</option>
+                    <option value="true">Return (25% off)</option>
                   </Select>
                 </div>
                 <div className="flex items-end">
@@ -520,18 +502,14 @@ export default function B2CTransactionPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Item Name</label>
                   <Select 
                     value={item.itemName} 
-                    onValueChange={(value) => updateAccessoryItem(index, 'itemName', value)}
+                    onChange={(e) => updateAccessoryItem(index, 'itemName', e.target.value)}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select item" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ACCESSORY_OPTIONS.map((option) => (
-                        <SelectItem key={option} value={option}>
-                          {option}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
+                    <option value="">Select item</option>
+                    {ACCESSORY_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
                   </Select>
                 </div>
                 <div>

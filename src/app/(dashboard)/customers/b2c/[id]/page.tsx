@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { HomeIcon, ArrowLeftIcon, MapPinIcon, PhoneIcon, EnvelopeIcon, PlusIcon, CalendarIcon } from '@heroicons/react/24/outline';
+import { HomeIcon, ArrowLeftIcon, MapPinIcon, PhoneIcon, EnvelopeIcon, PlusIcon, CalendarIcon, EyeIcon } from '@heroicons/react/24/outline';
 
 interface B2CCustomer {
   id: string;
@@ -221,7 +221,7 @@ export default function B2CCustomerDetailPage() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Total Profit</p>
-                <p className="text-2xl font-bold text-gray-900">Rs {customer.totalProfit.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-gray-900">Rs {Number(customer.totalProfit).toFixed(2)}</p>
               </div>
             </div>
           </CardContent>
@@ -235,7 +235,7 @@ export default function B2CCustomerDetailPage() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Security Held</p>
-                <p className="text-2xl font-bold text-gray-900">Rs {totalSecurityAmount.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-gray-900">Rs {Number(totalSecurityAmount).toFixed(2)}</p>
               </div>
             </div>
           </CardContent>
@@ -332,7 +332,7 @@ export default function B2CCustomerDetailPage() {
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold text-gray-900">Rs {holding.securityAmount.toFixed(2)}</p>
+                      <p className="font-semibold text-gray-900">Rs {Number(holding.securityAmount).toFixed(2)}</p>
                       <p className="text-sm text-gray-600">Security</p>
                     </div>
                   </div>
@@ -371,7 +371,7 @@ export default function B2CCustomerDetailPage() {
                 {customer.transactions.map((transaction) => (
                   <TableRow 
                     key={transaction.id}
-                    className="hover:bg-gray-50"
+                    className="hover:bg-gray-50 cursor-pointer"
                     onClick={() => router.push(`/customers/b2c/${customerId}/transactions/${transaction.id}`)}
                   >
                     <TableCell>
@@ -406,18 +406,31 @@ export default function B2CCustomerDetailPage() {
                     </TableCell>
                     <TableCell>
                       <div>
-                        <p className="font-semibold text-gray-900">Rs {transaction.finalAmount.toFixed(2)}</p>
+                        <p className="font-semibold text-gray-900">Rs {Number(transaction.finalAmount).toFixed(2)}</p>
                         {transaction.deliveryCharges > 0 && (
                           <p className="text-sm text-gray-600">
-                            + Rs {transaction.deliveryCharges.toFixed(2)} delivery
+                            + Rs {Number(transaction.deliveryCharges).toFixed(2)} delivery
                           </p>
                         )}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="success" className="font-semibold">
-                        {transaction.paymentMethod}
-                      </Badge>
+                      <div className="flex items-center space-x-2">
+                        <Badge variant="success" className="font-semibold">
+                          {transaction.paymentMethod}
+                        </Badge>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/customers/b2c/${customerId}/transactions/${transaction.id}`);
+                          }}
+                        >
+                          <EyeIcon className="w-4 h-4 mr-1" />
+                          View
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
