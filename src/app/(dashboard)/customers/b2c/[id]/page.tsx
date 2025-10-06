@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -68,6 +68,7 @@ interface B2CCustomer {
 export default function B2CCustomerDetailPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const customerId = params.id as string;
 
   const [customer, setCustomer] = useState<B2CCustomer | null>(null);
@@ -78,12 +79,14 @@ export default function B2CCustomerDetailPage() {
     if (customerId) {
       fetchCustomerDetails();
     }
-  }, [customerId]);
+  }, [customerId, searchParams]);
 
   const fetchCustomerDetails = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/customers/b2c/${customerId}`);
+      const response = await fetch(`/api/customers/b2c/${customerId}`, {
+        cache: 'no-store' // Always fetch fresh data
+      });
       
       if (!response.ok) {
         throw new Error('Failed to fetch customer details');
@@ -327,7 +330,7 @@ export default function B2CCustomerDetailPage() {
                       <Badge variant={getCylinderTypeColor(holding.cylinderType) as any} className="font-semibold">
                         {getCylinderTypeDisplay(holding.cylinderType)} x{holding.quantity}
                       </Badge>
-                      <p className="text-sm text-gray-600 mt-1">
+                      <p className="text-sm text-gray-600 mt-1" suppressHydrationWarning>
                         Issued: {new Date(holding.issueDate).toLocaleDateString()}
                       </p>
                     </div>
@@ -375,7 +378,7 @@ export default function B2CCustomerDetailPage() {
                     onClick={() => router.push(`/customers/b2c/${customerId}/transactions/${transaction.id}`)}
                   >
                     <TableCell>
-                      <div>
+                      <div suppressHydrationWarning>
                         <p className="font-semibold text-gray-900">
                           {new Date(transaction.date).toLocaleDateString()}
                         </p>

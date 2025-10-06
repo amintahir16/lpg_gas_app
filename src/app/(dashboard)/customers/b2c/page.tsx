@@ -198,7 +198,7 @@ export default function B2CCustomersPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
         <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
           <CardContent className="p-6">
             <div className="flex items-center">
@@ -250,6 +250,20 @@ export default function B2CCustomersPage() {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Standard Cylinders</p>
                 <p className="text-2xl font-bold text-gray-900">{summary.cylindersInMarket.standard}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
+          <CardContent className="p-6">
+            <div className="flex items-center">
+              <div className="p-2 bg-yellow-100 rounded-lg">
+                <span className="text-yellow-600 text-lg font-bold">🏭</span>
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">Commercial Cylinders</p>
+                <p className="text-2xl font-bold text-gray-900">{summary.cylindersInMarket.commercial}</p>
               </div>
             </div>
           </CardContent>

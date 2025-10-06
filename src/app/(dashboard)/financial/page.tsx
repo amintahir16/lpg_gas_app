@@ -368,7 +368,7 @@ export default function FinancialPage() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                         ${Number(expense.amount).toFixed(2)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700" suppressHydrationWarning>
                         {new Date(expense.expenseDate).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -659,7 +659,7 @@ export default function FinancialPage() {
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Date</label>
-                <div className="p-2 bg-gray-50 rounded border">
+                <div className="p-2 bg-gray-50 rounded border" suppressHydrationWarning>
                   {new Date(selectedExpense.expenseDate).toLocaleDateString()}
                 </div>
               </div>

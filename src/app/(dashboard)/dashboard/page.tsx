@@ -241,7 +241,7 @@ export default function DashboardPage() {
                   <TableCell className="font-semibold text-gray-900">{activity.title}</TableCell>
                   <TableCell className="text-gray-700">{activity.description}</TableCell>
                   <TableCell className="text-gray-700">
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2" suppressHydrationWarning>
                       <ClockIcon className="h-4 w-4 text-gray-400" />
                       <span>{formatTime(activity.time)}</span>
                     </div>

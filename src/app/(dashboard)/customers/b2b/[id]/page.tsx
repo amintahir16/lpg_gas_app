@@ -1052,10 +1052,10 @@ export default function B2BCustomerDetailPage() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {transactions.map((transaction) => (
                   <tr key={transaction.id} className={transaction.voided ? 'opacity-50' : ''}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900" suppressHydrationWarning>
                       {formatDate(transaction.date)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700" suppressHydrationWarning>
                       {formatTime(transaction.time)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">

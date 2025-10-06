@@ -153,9 +153,9 @@ export default function B2CTransactionDetailPage() {
     );
   }
 
-  const gasTotal = transaction.gasItems.reduce((sum, item) => sum + item.totalPrice, 0);
-  const securityTotal = transaction.securityItems.reduce((sum, item) => sum + item.totalPrice, 0);
-  const accessoryTotal = transaction.accessoryItems.reduce((sum, item) => sum + item.totalPrice, 0);
+  const gasTotal = transaction.gasItems.reduce((sum, item) => sum + Number(item.totalPrice), 0);
+  const securityTotal = transaction.securityItems.reduce((sum, item) => sum + Number(item.totalPrice), 0);
+  const accessoryTotal = transaction.accessoryItems.reduce((sum, item) => sum + Number(item.totalPrice), 0);
   const subtotal = gasTotal + securityTotal + accessoryTotal;
 
   return (
@@ -228,11 +228,11 @@ export default function B2CTransactionDetailPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <p className="text-sm text-gray-600">Date:</p>
-              <p className="font-semibold text-gray-900">{new Date(transaction.date).toLocaleDateString()}</p>
+              <p className="font-semibold text-gray-900" suppressHydrationWarning>{new Date(transaction.date).toLocaleDateString()}</p>
             </div>
             <div>
               <p className="text-sm text-gray-600">Time:</p>
-              <p className="font-semibold text-gray-900">{new Date(transaction.time).toLocaleTimeString()}</p>
+              <p className="font-semibold text-gray-900" suppressHydrationWarning>{new Date(transaction.time).toLocaleTimeString()}</p>
             </div>
             <div>
               <p className="text-sm text-gray-600">Bill SNo:</p>

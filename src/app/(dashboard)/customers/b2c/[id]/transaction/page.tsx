@@ -216,7 +216,8 @@ export default function B2CTransactionPage() {
       }
 
       const result = await response.json();
-      router.push(`/customers/b2c/${customerId}`);
+      // Force a refresh of the customer data by redirecting with cache busting
+      router.push(`/customers/b2c/${customerId}?refresh=${Date.now()}`);
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
