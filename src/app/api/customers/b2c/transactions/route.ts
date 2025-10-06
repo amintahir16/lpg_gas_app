@@ -179,11 +179,13 @@ export async function POST(request: NextRequest) {
       }
 
       // Update customer's total profit
+      // Only count gas and accessory sales as profit, NOT security deposits (they're refundable)
+      const profitAmount = gasTotal + accessoryTotal;
       await tx.b2CCustomer.update({
         where: { id: customerId },
         data: {
           totalProfit: {
-            increment: totalAmount // Only count item sales, not security deposits
+            increment: profitAmount // Exclude security deposits from profit
           }
         }
       });

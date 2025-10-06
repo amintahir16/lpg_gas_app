@@ -138,7 +138,7 @@ export default function B2CCustomerDetailPage() {
   };
 
   const activeCylinders = customer?.cylinderHoldings.filter(h => !h.isReturned) || [];
-  const totalSecurityAmount = activeCylinders.reduce((sum, h) => sum + Number(h.securityAmount), 0);
+  const totalSecurityAmount = activeCylinders.reduce((sum, h) => sum + (Number(h.securityAmount) * h.quantity), 0);
 
   if (loading) {
     return (
@@ -252,7 +252,7 @@ export default function B2CCustomerDetailPage() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Active Cylinders</p>
-                <p className="text-2xl font-bold text-gray-900">{activeCylinders.length}</p>
+                <p className="text-2xl font-bold text-gray-900">{activeCylinders.reduce((sum, h) => sum + h.quantity, 0)}</p>
               </div>
             </div>
           </CardContent>
