@@ -353,7 +353,8 @@ export default function B2CCustomersPage() {
               {customers.map((customer) => (
                 <TableRow 
                   key={customer.id}
-                  className="hover:bg-gray-50"
+                  className="cursor-pointer hover:bg-gray-50"
+                  onClick={() => router.push(`/customers/b2c/${customer.id}`)}
                 >
                   <TableCell>
                     <div>

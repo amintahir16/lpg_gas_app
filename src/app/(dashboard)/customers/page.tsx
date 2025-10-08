@@ -75,7 +75,7 @@ export default function CustomersPage() {
         limit: pagination.limit.toString()
       });
 
-      const response = await fetch(`/api/customers?${params}`);
+      const response = await fetch(`/api/customers/combined?${params}`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch customers');
@@ -95,17 +95,15 @@ export default function CustomersPage() {
     switch (type) {
       case 'B2B':
         return 'info';
+      case 'B2C':
+        return 'success';
       default:
         return 'secondary';
     }
   };
 
   const getCustomerTypeDisplay = (customer: Customer) => {
-    // For B2B customers, extract the specific type from notes
-    if (customer.type === 'B2B' && customer.notes && customer.notes.includes('Customer Type:')) {
-      const type = customer.notes.split('Customer Type: ')[1]?.split(' |')[0];
-      return type || 'B2B';
-    }
+    // Always return the simplified type (B2B or B2C)
     return customer.type;
   };
 
@@ -223,7 +221,13 @@ export default function CustomersPage() {
                 <TableRow 
                   key={customer.id}
                   className="cursor-pointer hover:bg-gray-50"
-                  onClick={() => router.push(`/customers/b2b/${customer.id}`)}
+                  onClick={() => {
+                    if (customer.type === 'B2B') {
+                      router.push(`/customers/b2b/${customer.id}`);
+                    } else {
+                      router.push(`/customers/b2c/${customer.id}`);
+                    }
+                  }}
                 >
                   <TableCell className="font-semibold text-gray-900">{customer.name}</TableCell>
                   <TableCell className="text-gray-700">{customer.contactPerson}</TableCell>
