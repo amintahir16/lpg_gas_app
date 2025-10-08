@@ -26,6 +26,7 @@ interface GasItem {
   cylinderType: string;
   quantity: number;
   pricePerItem: number;
+  costPrice: number;
 }
 
 interface SecurityItem {
@@ -39,6 +40,7 @@ interface AccessoryItem {
   itemName: string;
   quantity: number;
   pricePerItem: number;
+  costPrice: number;
 }
 
 const CYLINDER_TYPES = [
@@ -71,6 +73,7 @@ export default function B2CTransactionPage() {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [time, setTime] = useState(new Date().toTimeString().slice(0, 5));
   const [deliveryCharges, setDeliveryCharges] = useState(0);
+  const [deliveryCost, setDeliveryCost] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [notes, setNotes] = useState('');
 
@@ -104,7 +107,7 @@ export default function B2CTransactionPage() {
   };
 
   const addGasItem = () => {
-    setGasItems([...gasItems, { cylinderType: '', quantity: 1, pricePerItem: 0 }]);
+    setGasItems([...gasItems, { cylinderType: '', quantity: 1, pricePerItem: 0, costPrice: 0 }]);
   };
 
   const removeGasItem = (index: number) => {
@@ -153,7 +156,7 @@ export default function B2CTransactionPage() {
   };
 
   const addAccessoryItem = () => {
-    setAccessoryItems([...accessoryItems, { itemName: '', quantity: 1, pricePerItem: 0 }]);
+    setAccessoryItems([...accessoryItems, { itemName: '', quantity: 1, pricePerItem: 0, costPrice: 0 }]);
   };
 
   const removeAccessoryItem = (index: number) => {
@@ -172,11 +175,33 @@ export default function B2CTransactionPage() {
     }, 0);
   };
 
+  // Calculate revenue totals
   const gasTotal = calculateTotal(gasItems, 'pricePerItem', 'quantity');
   const securityTotal = calculateTotal(securityItems, 'pricePerItem', 'quantity');
   const accessoryTotal = calculateTotal(accessoryItems, 'pricePerItem', 'quantity');
   const subtotal = gasTotal + securityTotal + accessoryTotal;
   const finalTotal = subtotal + Number(deliveryCharges);
+
+  // Calculate cost totals
+  const gasCost = calculateTotal(gasItems, 'costPrice', 'quantity');
+  const accessoryCost = calculateTotal(accessoryItems, 'costPrice', 'quantity');
+  
+  // Calculate security return profit (25% deduction on returns)
+  const securityReturnProfit = securityItems.reduce((sum, item) => {
+    if (item.isReturn) {
+      // When returning, customer gets 75%, we keep 25% as profit
+      const originalSecurity = item.pricePerItem / 0.75;
+      const deduction = originalSecurity * 0.25;
+      return sum + (deduction * item.quantity);
+    }
+    return sum;
+  }, 0);
+  
+  // Calculate profit margins
+  const gasProfit = gasTotal - gasCost;
+  const accessoryProfit = accessoryTotal - accessoryCost;
+  const deliveryProfit = Number(deliveryCharges) - Number(deliveryCost);
+  const actualProfit = gasProfit + accessoryProfit + deliveryProfit + securityReturnProfit;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -195,6 +220,7 @@ export default function B2CTransactionPage() {
         date: new Date(date),
         time: new Date(`2000-01-01T${time}`),
         deliveryCharges: Number(deliveryCharges),
+        deliveryCost: Number(deliveryCost),
         paymentMethod,
         notes: notes || null,
         gasItems: gasItems.filter(item => item.cylinderType && item.quantity > 0),
@@ -342,7 +368,7 @@ export default function B2CTransactionPage() {
           </CardHeader>
           <CardContent>
             {gasItems.map((item, index) => (
-              <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg mb-4">
+              <div key={index} className="grid grid-cols-1 md:grid-cols-6 gap-4 p-4 bg-gray-50 rounded-lg mb-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Cylinder Type</label>
                   <Select 
@@ -367,13 +393,33 @@ export default function B2CTransactionPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Price per Item</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price</label>
                   <Input
                     type="number"
                     min="0"
                     step="0.01"
                     value={item.pricePerItem}
                     onChange={(e) => updateGasItem(index, 'pricePerItem', parseFloat(e.target.value) || 0)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Cost Price</label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={item.costPrice}
+                    onChange={(e) => updateGasItem(index, 'costPrice', parseFloat(e.target.value) || 0)}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Profit</label>
+                  <Input
+                    type="number"
+                    value={((item.pricePerItem - item.costPrice) * item.quantity).toFixed(2)}
+                    disabled
+                    className="bg-green-50 font-semibold text-green-700"
                   />
                 </div>
                 <div className="flex items-end">
@@ -498,7 +544,7 @@ export default function B2CTransactionPage() {
           </CardHeader>
           <CardContent>
             {accessoryItems.map((item, index) => (
-              <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg mb-4">
+              <div key={index} className="grid grid-cols-1 md:grid-cols-6 gap-4 p-4 bg-gray-50 rounded-lg mb-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Item Name</label>
                   <Select 
@@ -523,13 +569,33 @@ export default function B2CTransactionPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Price per Item</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price</label>
                   <Input
                     type="number"
                     min="0"
                     step="0.01"
                     value={item.pricePerItem}
                     onChange={(e) => updateAccessoryItem(index, 'pricePerItem', parseFloat(e.target.value) || 0)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Cost Price</label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={item.costPrice}
+                    onChange={(e) => updateAccessoryItem(index, 'costPrice', parseFloat(e.target.value) || 0)}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Profit</label>
+                  <Input
+                    type="number"
+                    value={((item.pricePerItem - item.costPrice) * item.quantity).toFixed(2)}
+                    disabled
+                    className="bg-green-50 font-semibold text-green-700"
                   />
                 </div>
                 <div className="flex items-end">
@@ -562,18 +628,20 @@ export default function B2CTransactionPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Revenue Column */}
               <div className="space-y-2">
+                <h4 className="font-semibold text-gray-900 mb-3">Revenue</h4>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Gas Total:</span>
+                  <span className="text-gray-600">Gas Sales:</span>
                   <span className="font-semibold">Rs {gasTotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Security Total:</span>
+                  <span className="text-gray-600">Security Deposits:</span>
                   <span className="font-semibold">Rs {securityTotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Accessories Total:</span>
+                  <span className="text-gray-600">Accessories:</span>
                   <span className="font-semibold">Rs {accessoryTotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between border-t pt-2">
@@ -581,23 +649,86 @@ export default function B2CTransactionPage() {
                   <span className="font-bold">Rs {subtotal.toFixed(2)}</span>
                 </div>
               </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Charges</label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={deliveryCharges}
-                    onChange={(e) => setDeliveryCharges(parseFloat(e.target.value) || 0)}
-                    placeholder="0.00"
-                  />
+
+              {/* Cost Column */}
+              <div className="space-y-2">
+                <h4 className="font-semibold text-gray-900 mb-3">Costs</h4>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Gas Cost:</span>
+                  <span className="font-semibold text-red-600">Rs {gasCost.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Security (Refundable):</span>
+                  <span className="font-semibold text-gray-500">Rs 0.00</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Accessories Cost:</span>
+                  <span className="font-semibold text-red-600">Rs {accessoryCost.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between border-t pt-2">
-                  <span className="text-lg font-bold text-gray-900">Total Amount Due:</span>
-                  <span className="text-xl font-bold text-green-600">Rs {finalTotal.toFixed(2)}</span>
+                  <span className="text-gray-900 font-medium">Total Cost:</span>
+                  <span className="font-bold text-red-600">Rs {(gasCost + accessoryCost).toFixed(2)}</span>
                 </div>
               </div>
+
+              {/* Profit Column */}
+              <div className="space-y-2 bg-green-50 p-3 rounded-lg">
+                <h4 className="font-semibold text-green-900 mb-3">Profit Margin</h4>
+                <div className="flex justify-between">
+                  <span className="text-green-700">Gas Profit:</span>
+                  <span className="font-semibold text-green-700">Rs {gasProfit.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-green-700">Accessory Profit:</span>
+                  <span className="font-semibold text-green-700">Rs {accessoryProfit.toFixed(2)}</span>
+                </div>
+                {securityReturnProfit > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-green-700">Security Deduction (25%):</span>
+                    <span className="font-semibold text-green-700">Rs {securityReturnProfit.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-green-700">Delivery Profit:</span>
+                  <span className="font-semibold text-green-700">Rs {deliveryProfit.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between border-t border-green-300 pt-2">
+                  <span className="text-green-900 font-bold">Actual Profit:</span>
+                  <span className="font-bold text-green-700 text-lg">Rs {actualProfit.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Delivery Section */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Charges (to customer)</label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={deliveryCharges}
+                  onChange={(e) => setDeliveryCharges(parseFloat(e.target.value) || 0)}
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Cost (actual)</label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={deliveryCost}
+                  onChange={(e) => setDeliveryCost(parseFloat(e.target.value) || 0)}
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+
+            {/* Final Total */}
+            <div className="flex justify-between items-center border-t-2 border-gray-300 pt-4 mt-4">
+              <span className="text-xl font-bold text-gray-900">Total Amount to Collect:</span>
+              <span className="text-2xl font-bold text-blue-600">Rs {finalTotal.toFixed(2)}</span>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label>

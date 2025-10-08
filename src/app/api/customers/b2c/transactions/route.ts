@@ -17,6 +17,7 @@ export async function POST(request: NextRequest) {
       date,
       time,
       deliveryCharges = 0,
+      deliveryCost = 0,
       paymentMethod = 'CASH',
       notes,
       gasItems = [],
@@ -68,12 +69,35 @@ export async function POST(request: NextRequest) {
 
     const billSno = `B2C-${dateStr.replace(/-/g, '')}-${billSequence.sequence.toString().padStart(4, '0')}`;
 
-    // Calculate totals
+    // Calculate revenue totals
     const gasTotal = gasItems.reduce((sum: number, item: any) => sum + (item.pricePerItem * item.quantity), 0);
     const securityTotal = securityItems.reduce((sum: number, item: any) => sum + (item.pricePerItem * item.quantity), 0);
     const accessoryTotal = accessoryItems.reduce((sum: number, item: any) => sum + (item.pricePerItem * item.quantity), 0);
     const totalAmount = gasTotal + securityTotal + accessoryTotal;
     const finalAmount = totalAmount + Number(deliveryCharges);
+
+    // Calculate cost totals
+    const gasCost = gasItems.reduce((sum: number, item: any) => sum + ((item.costPrice || 0) * item.quantity), 0);
+    const accessoryCost = accessoryItems.reduce((sum: number, item: any) => sum + ((item.costPrice || 0) * item.quantity), 0);
+    
+    // Calculate security return profit (25% deduction on returns)
+    const securityReturnProfit = securityItems.reduce((sum: number, item: any) => {
+      if (item.isReturn) {
+        // When returning, customer gets 75%, we keep 25% as profit
+        const originalSecurity = item.pricePerItem / 0.75; // Work backwards to get original amount
+        const deduction = originalSecurity * 0.25;
+        return sum + (deduction * item.quantity);
+      }
+      return sum;
+    }, 0);
+    
+    // Calculate profit margins
+    const gasProfit = gasTotal - gasCost;
+    const accessoryProfit = accessoryTotal - accessoryCost;
+    const deliveryProfit = Number(deliveryCharges) - Number(deliveryCost || 0);
+    
+    const totalCost = gasCost + accessoryCost;
+    const actualProfit = gasProfit + accessoryProfit + deliveryProfit + securityReturnProfit;
 
     // Create transaction with all items in a transaction
     const transaction = await prisma.$transaction(async (tx) => {
@@ -87,21 +111,34 @@ export async function POST(request: NextRequest) {
           totalAmount,
           deliveryCharges: Number(deliveryCharges),
           finalAmount,
+          totalCost,
+          deliveryCost: Number(deliveryCost || 0),
+          actualProfit,
           paymentMethod,
           notes: notes || null
         }
       });
 
-      // Create gas items
+      // Create gas items with cost and profit tracking
       if (gasItems.length > 0) {
         await tx.b2CTransactionGasItem.createMany({
-          data: gasItems.map((item: any) => ({
-            transactionId: newTransaction.id,
-            cylinderType: item.cylinderType,
-            quantity: item.quantity,
-            pricePerItem: item.pricePerItem,
-            totalPrice: item.pricePerItem * item.quantity
-          }))
+          data: gasItems.map((item: any) => {
+            const totalPrice = item.pricePerItem * item.quantity;
+            const costPrice = item.costPrice || 0;
+            const totalCost = costPrice * item.quantity;
+            const profitMargin = totalPrice - totalCost;
+            
+            return {
+              transactionId: newTransaction.id,
+              cylinderType: item.cylinderType,
+              quantity: item.quantity,
+              pricePerItem: item.pricePerItem,
+              totalPrice,
+              costPrice,
+              totalCost,
+              profitMargin
+            };
+          })
         });
       }
 
@@ -165,27 +202,36 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Create accessory items
+      // Create accessory items with cost and profit tracking
       if (accessoryItems.length > 0) {
         await tx.b2CTransactionAccessoryItem.createMany({
-          data: accessoryItems.map((item: any) => ({
-            transactionId: newTransaction.id,
-            itemName: item.itemName,
-            quantity: item.quantity,
-            pricePerItem: item.pricePerItem,
-            totalPrice: item.pricePerItem * item.quantity
-          }))
+          data: accessoryItems.map((item: any) => {
+            const totalPrice = item.pricePerItem * item.quantity;
+            const costPrice = item.costPrice || 0;
+            const totalCost = costPrice * item.quantity;
+            const profitMargin = totalPrice - totalCost;
+            
+            return {
+              transactionId: newTransaction.id,
+              itemName: item.itemName,
+              quantity: item.quantity,
+              pricePerItem: item.pricePerItem,
+              totalPrice,
+              costPrice,
+              totalCost,
+              profitMargin
+            };
+          })
         });
       }
 
-      // Update customer's total profit
-      // Only count gas and accessory sales as profit, NOT security deposits (they're refundable)
-      const profitAmount = gasTotal + accessoryTotal;
+      // Update customer's actual profit margin
+      // Profit = (Selling Price - Cost Price) for all items + Security Deductions + Delivery Profit
       await tx.b2CCustomer.update({
         where: { id: customerId },
         data: {
           totalProfit: {
-            increment: profitAmount // Exclude security deposits from profit
+            increment: actualProfit // Actual profit margin, not revenue
           }
         }
       });
