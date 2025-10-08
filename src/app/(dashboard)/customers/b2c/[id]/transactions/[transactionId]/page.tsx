@@ -29,6 +29,9 @@ interface B2CTransaction {
   totalAmount: number;
   deliveryCharges: number;
   finalAmount: number;
+  totalCost: number;
+  deliveryCost: number;
+  actualProfit: number;
   paymentMethod: string;
   notes: string | null;
   customer: B2CCustomer;
@@ -37,6 +40,9 @@ interface B2CTransaction {
     quantity: number;
     pricePerItem: number;
     totalPrice: number;
+    costPrice: number;
+    totalCost: number;
+    profitMargin: number;
   }[];
   securityItems: {
     cylinderType: string;
@@ -44,12 +50,16 @@ interface B2CTransaction {
     pricePerItem: number;
     totalPrice: number;
     isReturn: boolean;
+    deductionRate: number;
   }[];
   accessoryItems: {
     itemName: string;
     quantity: number;
     pricePerItem: number;
     totalPrice: number;
+    costPrice: number;
+    totalCost: number;
+    profitMargin: number;
   }[];
 }
 
@@ -260,8 +270,11 @@ export default function B2CTransactionDetailPage() {
                 <TableRow>
                   <TableHead className="font-semibold text-gray-700">Gas Cylinder</TableHead>
                   <TableHead className="font-semibold text-gray-700">Quantity</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Price Per Item</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Total Price per Item</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Selling Price</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Cost Price</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Total Revenue</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Total Cost</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Profit</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -272,15 +285,26 @@ export default function B2CTransactionDetailPage() {
                     </TableCell>
                     <TableCell>{item.quantity}</TableCell>
                     <TableCell>Rs {Number(item.pricePerItem).toFixed(2)}</TableCell>
+                    <TableCell>Rs {Number(item.costPrice).toFixed(2)}</TableCell>
                     <TableCell className="font-semibold">Rs {Number(item.totalPrice).toFixed(2)}</TableCell>
+                    <TableCell>Rs {Number(item.totalCost).toFixed(2)}</TableCell>
+                    <TableCell className="font-semibold text-green-600">
+                      Rs {Number(item.profitMargin).toFixed(2)}
+                    </TableCell>
                   </TableRow>
                 ))}
                 <TableRow className="border-t-2">
-                  <TableCell colSpan={3} className="font-bold text-gray-900 text-right">
+                  <TableCell colSpan={4} className="font-bold text-gray-900 text-right">
                     Total =
                   </TableCell>
                   <TableCell className="font-bold text-gray-900">
                     Rs {Number(gasTotal).toFixed(2)}
+                  </TableCell>
+                  <TableCell className="font-bold text-gray-900">
+                    Rs {transaction.gasItems.reduce((sum, item) => sum + Number(item.totalCost), 0).toFixed(2)}
+                  </TableCell>
+                  <TableCell className="font-bold text-green-600">
+                    Rs {transaction.gasItems.reduce((sum, item) => sum + Number(item.profitMargin), 0).toFixed(2)}
                   </TableCell>
                 </TableRow>
               </TableBody>
@@ -352,8 +376,11 @@ export default function B2CTransactionDetailPage() {
                 <TableRow>
                   <TableHead className="font-semibold text-gray-700">Item Name</TableHead>
                   <TableHead className="font-semibold text-gray-700">Quantity</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Price Per Item</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Total Price per Item</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Selling Price</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Cost Price</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Total Revenue</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Total Cost</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Profit</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -362,15 +389,26 @@ export default function B2CTransactionDetailPage() {
                     <TableCell className="font-semibold text-gray-900">{item.itemName}</TableCell>
                     <TableCell>{item.quantity}</TableCell>
                     <TableCell>Rs {Number(item.pricePerItem).toFixed(2)}</TableCell>
+                    <TableCell>Rs {Number(item.costPrice).toFixed(2)}</TableCell>
                     <TableCell className="font-semibold">Rs {Number(item.totalPrice).toFixed(2)}</TableCell>
+                    <TableCell>Rs {Number(item.totalCost).toFixed(2)}</TableCell>
+                    <TableCell className="font-semibold text-green-600">
+                      Rs {Number(item.profitMargin).toFixed(2)}
+                    </TableCell>
                   </TableRow>
                 ))}
                 <TableRow className="border-t-2">
-                  <TableCell colSpan={3} className="font-bold text-gray-900 text-right">
+                  <TableCell colSpan={4} className="font-bold text-gray-900 text-right">
                     Total =
                   </TableCell>
                   <TableCell className="font-bold text-gray-900">
                     Rs {Number(accessoryTotal).toFixed(2)}
+                  </TableCell>
+                  <TableCell className="font-bold text-gray-900">
+                    Rs {transaction.accessoryItems.reduce((sum, item) => sum + Number(item.totalCost), 0).toFixed(2)}
+                  </TableCell>
+                  <TableCell className="font-bold text-green-600">
+                    Rs {transaction.accessoryItems.reduce((sum, item) => sum + Number(item.profitMargin), 0).toFixed(2)}
                   </TableCell>
                 </TableRow>
               </TableBody>
@@ -378,6 +416,100 @@ export default function B2CTransactionDetailPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Profit Breakdown Section */}
+      <Card className="border-0 shadow-sm bg-gradient-to-r from-green-50 to-emerald-50">
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold text-gray-900 flex items-center">
+            <ReceiptPercentIcon className="w-5 h-5 mr-2 text-green-600" />
+            Profit Breakdown
+          </CardTitle>
+          <CardDescription className="text-gray-600">
+            Detailed analysis of revenue, costs, and actual profit margins
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Revenue Column */}
+            <div className="space-y-2 bg-blue-50 p-3 rounded-lg">
+              <h4 className="font-semibold text-blue-900 mb-3">Revenue</h4>
+              <div className="flex justify-between">
+                <span className="text-blue-700">Gas Sales:</span>
+                <span className="font-semibold text-blue-700">Rs {gasTotal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-blue-700">Accessory Sales:</span>
+                <span className="font-semibold text-blue-700">Rs {Number(accessoryTotal).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-blue-700">Delivery Charges:</span>
+                <span className="font-semibold text-blue-700">Rs {Number(transaction.deliveryCharges).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between border-t pt-2">
+                <span className="font-semibold text-blue-900">Total Revenue:</span>
+                <span className="font-bold text-blue-900">Rs {Number(transaction.finalAmount).toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* Cost Column */}
+            <div className="space-y-2 bg-red-50 p-3 rounded-lg">
+              <h4 className="font-semibold text-red-900 mb-3">Costs</h4>
+              <div className="flex justify-between">
+                <span className="text-red-700">Gas Cost:</span>
+                <span className="font-semibold text-red-700">Rs {transaction.gasItems.reduce((sum, item) => sum + Number(item.totalCost), 0).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-red-700">Accessory Cost:</span>
+                <span className="font-semibold text-red-700">Rs {transaction.accessoryItems.reduce((sum, item) => sum + Number(item.totalCost), 0).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-red-700">Delivery Cost:</span>
+                <span className="font-semibold text-red-700">Rs {Number(transaction.deliveryCost).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between border-t pt-2">
+                <span className="font-semibold text-red-900">Total Cost:</span>
+                <span className="font-bold text-red-900">Rs {Number(transaction.totalCost).toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* Profit Column */}
+            <div className="space-y-2 bg-green-50 p-3 rounded-lg">
+              <h4 className="font-semibold text-green-900 mb-3">Profit Margin</h4>
+              <div className="flex justify-between">
+                <span className="text-green-700">Gas Profit:</span>
+                <span className="font-semibold text-green-700">Rs {transaction.gasItems.reduce((sum, item) => sum + Number(item.profitMargin), 0).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-green-700">Accessory Profit:</span>
+                <span className="font-semibold text-green-700">Rs {transaction.accessoryItems.reduce((sum, item) => sum + Number(item.profitMargin), 0).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-green-700">Delivery Profit:</span>
+                <span className="font-semibold text-green-700">Rs {(Number(transaction.deliveryCharges) - Number(transaction.deliveryCost)).toFixed(2)}</span>
+              </div>
+              {transaction.securityItems.some(item => item.isReturn) && (
+                <div className="flex justify-between">
+                  <span className="text-green-700">Security Deduction (25%):</span>
+                  <span className="font-semibold text-green-700">
+                    Rs {transaction.securityItems.reduce((sum, item) => {
+                      if (item.isReturn) {
+                        const originalSecurity = item.pricePerItem / 0.75;
+                        const deduction = originalSecurity * 0.25;
+                        return sum + (deduction * item.quantity);
+                      }
+                      return sum;
+                    }, 0).toFixed(2)}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between border-t pt-2">
+                <span className="font-semibold text-green-900">Actual Profit:</span>
+                <span className="font-bold text-green-900">Rs {Number(transaction.actualProfit).toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Total Amount Section */}
       <Card className="border-0 shadow-sm bg-gradient-to-r from-green-50 to-blue-50">
