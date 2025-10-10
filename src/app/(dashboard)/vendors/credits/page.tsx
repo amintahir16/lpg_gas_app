@@ -311,10 +311,12 @@ export default function VendorCreditsPage() {
                   <span className="text-sm text-gray-500">
                     {vendor.purchaseCount} purchase{vendor.purchaseCount !== 1 ? 's' : ''}
                   </span>
-                  <Button size="sm" variant="outline">
-                    <EyeIcon className="h-4 w-4 mr-1" />
-                    View Details
-                  </Button>
+                  <Link href={`/vendors/${vendor.id}`}>
+                    <Button size="sm" variant="outline">
+                      <EyeIcon className="h-4 w-4 mr-1" />
+                      View Details
+                    </Button>
+                  </Link>
                 </div>
               </div>
             </CardContent>
