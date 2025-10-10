@@ -39,6 +39,7 @@ interface Vendor {
     cashOut: number;
     netBalance: number;
   };
+  creditBalance?: number;
 }
 
 interface VendorItem {
@@ -461,6 +462,36 @@ export default function VendorDetailPage() {
             </div>
           </CardContent>
         </Card>
+
+        {vendor.creditBalance !== undefined && vendor.creditBalance !== 0 && (
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Credit Balance</p>
+                  <p className={`text-2xl font-bold ${
+                    vendor.creditBalance > 0 ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {vendor.creditBalance > 0 ? '+' : ''}{formatCurrency(Math.abs(vendor.creditBalance))}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {vendor.creditBalance > 0 
+                      ? 'Vendor owes you money' 
+                      : 'You owe vendor money'
+                    }
+                  </p>
+                </div>
+                <div className={`p-3 rounded-lg ${
+                  vendor.creditBalance > 0 ? 'bg-green-100' : 'bg-red-100'
+                }`}>
+                  <CurrencyDollarIcon className={`w-8 h-8 ${
+                    vendor.creditBalance > 0 ? 'text-green-600' : 'text-red-600'
+                  }`} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Tabs */}

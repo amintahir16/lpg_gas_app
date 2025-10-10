@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   PlusIcon,
+  CurrencyDollarIcon,
   // Cylinder icons
   ArchiveBoxIcon, // Better representation for cylinders/containers
   // Gas icons  
@@ -184,13 +185,21 @@ export default function VendorsPage() {
         <div className="text-sm text-gray-500">
           {categories.length} {categories.length === 1 ? 'category' : 'categories'}
         </div>
-        <Button
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="flex items-center gap-2"
-        >
-          <PlusIcon className="w-5 h-5" />
-          Add New Category
-        </Button>
+        <div className="flex gap-3">
+          <Link href="/vendors/credits">
+            <Button variant="outline" className="flex items-center gap-2">
+              <CurrencyDollarIcon className="w-5 h-5" />
+              Credit Management
+            </Button>
+          </Link>
+          <Button
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="flex items-center gap-2"
+          >
+            <PlusIcon className="w-5 h-5" />
+            Add New Category
+          </Button>
+        </div>
       </div>
 
       {/* Add Category Form */}
