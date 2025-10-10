@@ -30,6 +30,7 @@ const routePermissions = {
     '/api/cylinders',
     '/api/expenses',
     '/api/vendors',
+    '/api/vendor-categories',
     '/api/reports',
     '/api/dashboard',
     '/api/settings',

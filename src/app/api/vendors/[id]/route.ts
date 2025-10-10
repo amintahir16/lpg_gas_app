@@ -5,39 +5,67 @@ import { prisma } from '@/lib/db';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
-    const userId = session?.user?.id;
-    
-    if (!userId) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { id } = params;
+    const { id } = await params;
 
     const vendor = await prisma.vendor.findUnique({
       where: { id },
       include: {
-        purchaseEntries: {
-          take: 10,
-          orderBy: { createdAt: 'desc' }
+        category: true,
+        items: {
+          where: { isActive: true },
+          orderBy: { sortOrder: 'asc' }
         },
-        financialReports: {
-          take: 1,
-          orderBy: { reportDate: 'desc' }
+        purchases: {
+          include: {
+            items: true,
+            payments: true
+          },
+          orderBy: { purchaseDate: 'desc' }
         }
       }
     });
 
     if (!vendor) {
-      return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Vendor not found' },
+        { status: 404 }
+      );
     }
 
-    return NextResponse.json(vendor);
+    // Calculate financial summary
+    const totalPurchases = vendor.purchases.reduce(
+      (sum, p) => sum + Number(p.totalAmount), 0
+    );
+    const totalPaid = vendor.purchases.reduce(
+      (sum, p) => sum + Number(p.paidAmount), 0
+    );
+    const outstandingBalance = vendor.purchases.reduce(
+      (sum, p) => sum + Number(p.balanceAmount), 0
+    );
+
+    return NextResponse.json({
+      vendor: {
+        ...vendor,
+        financialSummary: {
+          totalPurchases,
+          totalPaid,
+          outstandingBalance,
+          cashIn: totalPaid,
+          cashOut: totalPurchases,
+          netBalance: outstandingBalance
+        }
+      }
+    });
   } catch (error) {
-    console.error('Vendor fetch error:', error);
+    console.error('Error fetching vendor:', error);
     return NextResponse.json(
       { error: 'Failed to fetch vendor' },
       { status: 500 }
@@ -45,109 +73,3 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { id } = params;
-    const body = await request.json();
-    const {
-      companyName,
-      contactPerson,
-      email,
-      phone,
-      address,
-      taxId,
-      paymentTerms,
-      category,
-      isActive
-    } = body;
-
-    // Check if vendor exists
-    const existingVendor = await prisma.vendor.findUnique({
-      where: { id }
-    });
-
-    if (!existingVendor) {
-      return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
-    }
-
-    const updatedVendor = await prisma.vendor.update({
-      where: { id },
-      data: {
-        companyName,
-        contactPerson,
-        email,
-        phone,
-        address,
-        taxId,
-        paymentTerms: parseInt(paymentTerms) || 30,
-        category,
-        isActive: isActive !== undefined ? isActive : true
-      },
-      include: {
-        purchaseEntries: {
-          take: 10,
-          orderBy: { createdAt: 'desc' }
-        },
-        financialReports: {
-          take: 1,
-          orderBy: { reportDate: 'desc' }
-        }
-      }
-    });
-
-    return NextResponse.json(updatedVendor);
-  } catch (error) {
-    console.error('Vendor update error:', error);
-    return NextResponse.json(
-      { error: 'Failed to update vendor' },
-      { status: 500 }
-    );
-  }
-}
-
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { id } = params;
-
-    // Check if vendor exists
-    const existingVendor = await prisma.vendor.findUnique({
-      where: { id }
-    });
-
-    if (!existingVendor) {
-      return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
-    }
-
-    // Soft delete by setting isActive to false
-    const updatedVendor = await prisma.vendor.update({
-      where: { id },
-      data: { isActive: false }
-    });
-
-    return NextResponse.json({ message: 'Vendor deactivated successfully' });
-  } catch (error) {
-    console.error('Vendor delete error:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete vendor' },
-      { status: 500 }
-    );
-  }
-}

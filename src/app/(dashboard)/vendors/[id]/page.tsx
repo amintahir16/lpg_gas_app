@@ -1,137 +1,309 @@
-'use client';
+"use client";
 
 import { useState, useEffect } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import { 
-  ArrowLeft, 
-  Edit, 
-  Plus, 
-  DollarSign,
-  Calendar,
-  Package,
-  TrendingUp,
-  TrendingDown,
-  Phone,
-  Mail,
-  MapPin,
-  Building
-} from 'lucide-react';
-import VendorFinancialReport from '@/components/VendorFinancialReport';
-import PurchaseEntryForm from '@/components/forms/PurchaseEntryForm';
+  ArrowLeftIcon,
+  PlusIcon,
+  CurrencyDollarIcon,
+  ShoppingCartIcon,
+  BanknotesIcon,
+  TrashIcon,
+  PencilIcon,
+} from '@heroicons/react/24/outline';
 
 interface Vendor {
   id: string;
   vendorCode: string;
-  companyName: string;
-  category: string;
+  name: string;
   contactPerson?: string;
-  email?: string;
   phone?: string;
+  email?: string;
   address?: string;
-  taxId?: string;
-  paymentTerms: number;
-  isActive: boolean;
-  createdAt: string;
-  purchaseEntries?: PurchaseEntry[];
-  financialReports?: FinancialReport[];
+  category: {
+    id: string;
+    name: string;
+  };
+  items: VendorItem[];
+  purchases: Purchase[];
+  financialSummary: {
+    totalPurchases: number;
+    totalPaid: number;
+    outstandingBalance: number;
+    cashIn: number;
+    cashOut: number;
+    netBalance: number;
+  };
 }
 
-interface PurchaseEntry {
+interface VendorItem {
+  id: string;
+  name: string;
+  description?: string;
+  category: string;
+  defaultUnit: string;
+}
+
+interface Purchase {
+  id: string;
+  purchaseDate: string;
+  invoiceNumber?: string;
+  totalAmount: number;
+  paidAmount: number;
+  balanceAmount: number;
+  paymentStatus: string;
+  items: PurchaseItem[];
+  payments: Payment[];
+}
+
+interface PurchaseItem {
   id: string;
   itemName: string;
   quantity: number;
   unitPrice: number;
   totalPrice: number;
-  purchaseDate: string;
-  status: string;
-  invoiceNumber?: string;
-  notes?: string;
 }
 
-interface FinancialReport {
+interface Payment {
   id: string;
-  reportDate: string;
-  netBalance: number;
-  cashIn: number;
-  cashOut: number;
+  amount: number;
+  paymentDate: string;
+  paymentMethod: string;
 }
 
-export default function VendorDetailsPage() {
+export default function VendorDetailPage() {
   const params = useParams();
-  const searchParams = useSearchParams();
-  const vendorId = params.id as string;
-  const action = searchParams.get('action');
+  const vendorId = params?.id as string;
   
   const [vendor, setVendor] = useState<Vendor | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'purchases' | 'items' | 'financial'>('purchases');
+
+  // Financial report state
+  const [reportPeriod, setReportPeriod] = useState('all');
+  const [financialReport, setFinancialReport] = useState<any>(null);
+
+  // Purchase form state
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
+  // Default cylinder purchase items for Cylinder Purchase category
+  const defaultCylinderItems = [
+    { itemName: 'Domestic (11.8kg) Cylinder', quantity: 0, unitPrice: 0, totalPrice: 0 },
+    { itemName: 'Standard (15kg) Cylinder', quantity: 0, unitPrice: 0, totalPrice: 0 },
+    { itemName: 'Commercial (45.4kg) Cylinder', quantity: 0, unitPrice: 0, totalPrice: 0 }
+  ];
+
+  // Default gas purchase items for Gas Purchase category
+  const defaultGasItems = [
+    { itemName: 'Domestic (11.8kg) Gas', quantity: 0, unitPrice: 0, totalPrice: 0 },
+    { itemName: 'Standard (15kg) Gas', quantity: 0, unitPrice: 0, totalPrice: 0 },
+    { itemName: 'Commercial (45.4kg) Gas', quantity: 0, unitPrice: 0, totalPrice: 0 }
+  ];
+
+  // Default vaporizer purchase items for Vaporizer Purchase category
+  const defaultVaporizerItems = [
+    { itemName: '20kg Vaporiser', quantity: 0, unitPrice: 0, totalPrice: 0 },
+    { itemName: '30kg Vaporiser', quantity: 0, unitPrice: 0, totalPrice: 0 },
+    { itemName: '40kg Vaporiser', quantity: 0, unitPrice: 0, totalPrice: 0 }
+  ];
+
+  // Default accessories purchase items for Accessories Purchase category
+  const defaultAccessoriesItems = [
+    { itemName: 'Regulator', quantity: 0, unitPrice: 0, totalPrice: 0 },
+    { itemName: 'Stove', quantity: 0, unitPrice: 0, totalPrice: 0 },
+    { itemName: 'Pipe', quantity: 0, unitPrice: 0, totalPrice: 0 }
+  ];
+
+  const [purchaseItems, setPurchaseItems] = useState<any[]>([]);
+  const [purchaseFormData, setPurchaseFormData] = useState({
+    invoiceNumber: '',
+    notes: '',
+    paidAmount: 0
+  });
+
+  // Item form state
+  const [showItemForm, setShowItemForm] = useState(false);
+  const [itemFormData, setItemFormData] = useState({
+    name: '',
+    description: '',
+    category: ''
+  });
 
   useEffect(() => {
-    if (vendorId) {
-      fetchVendorDetails();
-    }
+    fetchVendor();
   }, [vendorId]);
 
   useEffect(() => {
-    if (action === 'purchase') {
-      setShowPurchaseForm(true);
+    if (activeTab === 'financial') {
+      fetchFinancialReport();
     }
-  }, [action]);
+  }, [activeTab, reportPeriod]);
 
-  const fetchVendorDetails = async () => {
+  // Initialize purchase items based on vendor category
+  useEffect(() => {
+    if (vendor?.category?.slug === 'cylinder_purchase') {
+      setPurchaseItems(defaultCylinderItems);
+    } else if (vendor?.category?.slug === 'gas_purchase') {
+      setPurchaseItems(defaultGasItems);
+    } else if (vendor?.category?.slug === 'vaporizer_purchase') {
+      setPurchaseItems(defaultVaporizerItems);
+    } else if (vendor?.category?.slug === 'accessories_purchase') {
+      setPurchaseItems(defaultAccessoriesItems);
+    } else {
+      setPurchaseItems([{ itemName: '', quantity: 1, unitPrice: 0, totalPrice: 0 }]);
+    }
+  }, [vendor?.category?.slug]);
+
+  const fetchVendor = async () => {
     try {
-      setLoading(true);
       const response = await fetch(`/api/vendors/${vendorId}`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch vendor details');
-      }
-
+      if (!response.ok) throw new Error('Failed to fetch vendor');
       const data = await response.json();
-      setVendor(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch vendor details');
+      setVendor(data.vendor);
+    } catch (error) {
+      console.error('Error fetching vendor:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePurchaseEntry = async (formData: any) => {
+  const fetchFinancialReport = async () => {
     try {
-      // Convert category to API format if needed
-      const apiFormData = {
-        ...formData,
-        category: formData.category.replace('-', '_').toUpperCase()
-      };
+      const response = await fetch(
+        `/api/vendors/${vendorId}/financial-report?period=${reportPeriod}`
+      );
+      if (!response.ok) throw new Error('Failed to fetch report');
+      const data = await response.json();
+      setFinancialReport(data.report);
+    } catch (error) {
+      console.error('Error fetching financial report:', error);
+    }
+  };
 
-      const response = await fetch('/api/vendors/purchases', {
+  const handleAddPurchaseItem = () => {
+    // Only allow adding custom items for accessories and generic categories
+    if (vendor?.category?.slug === 'accessories_purchase' || 
+        !['cylinder_purchase', 'gas_purchase', 'vaporizer_purchase'].includes(vendor?.category?.slug || '')) {
+      setPurchaseItems([
+        ...purchaseItems,
+        { itemName: '', quantity: 1, unitPrice: 0, totalPrice: 0 }
+      ]);
+    }
+  };
+
+  const handleRemovePurchaseItem = (index: number) => {
+    // Don't allow removing fixed items for specific categories
+    if (['cylinder_purchase', 'gas_purchase', 'vaporizer_purchase'].includes(vendor?.category?.slug || '')) {
+      return;
+    }
+    
+    if (purchaseItems.length > 1) {
+      setPurchaseItems(purchaseItems.filter((_, i) => i !== index));
+    }
+  };
+
+  const handlePurchaseItemChange = (index: number, field: string, value: any) => {
+    const newItems = [...purchaseItems];
+    newItems[index] = {
+      ...newItems[index],
+      [field]: value
+    };
+    
+    // Auto-calculate total price
+    if (field === 'quantity' || field === 'unitPrice') {
+      newItems[index].totalPrice = 
+        Number(newItems[index].quantity) * Number(newItems[index].unitPrice);
+    }
+    
+    setPurchaseItems(newItems);
+  };
+
+  const calculatePurchaseTotal = () => {
+    return purchaseItems.reduce((sum, item) => sum + Number(item.totalPrice), 0);
+  };
+
+  const handleSubmitPurchase = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Filter items that have quantity > 0
+    const validItems = purchaseItems.filter(item => 
+      item.itemName.trim() && item.quantity > 0 && item.unitPrice > 0
+    );
+
+    if (validItems.length === 0) {
+      alert('Please add at least one item with quantity and price');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/vendors/${vendorId}/purchases`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(apiFormData),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: validItems,
+          invoiceNumber: purchaseFormData.invoiceNumber,
+          notes: purchaseFormData.notes,
+          paidAmount: purchaseFormData.paidAmount
+        })
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create purchase entry');
+        const error = await response.json();
+        alert(error.error || 'Failed to create purchase');
+        return;
       }
 
-      // Refresh vendor details to show new purchase
-      fetchVendorDetails();
+      // Reset form
       setShowPurchaseForm(false);
       
-      // Refresh vendor dashboard stats if available
-      if ((window as any).refreshVendorStats) {
-        (window as any).refreshVendorStats();
+      // Reset to default items based on category
+      if (vendor?.category?.slug === 'cylinder_purchase') {
+        setPurchaseItems(defaultCylinderItems);
+      } else if (vendor?.category?.slug === 'gas_purchase') {
+        setPurchaseItems(defaultGasItems);
+      } else if (vendor?.category?.slug === 'vaporizer_purchase') {
+        setPurchaseItems(defaultVaporizerItems);
+      } else if (vendor?.category?.slug === 'accessories_purchase') {
+        setPurchaseItems(defaultAccessoriesItems);
+      } else {
+        setPurchaseItems([{ itemName: '', quantity: 1, unitPrice: 0, totalPrice: 0 }]);
       }
-    } catch (err) {
-      console.error('Failed to create purchase entry:', err);
+      
+      setPurchaseFormData({ invoiceNumber: '', notes: '', paidAmount: 0 });
+      fetchVendor();
+    } catch (error) {
+      console.error('Error creating purchase:', error);
+      alert('Failed to create purchase');
+    }
+  };
+
+  const handleAddItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!itemFormData.name.trim()) return;
+
+    try {
+      const response = await fetch(`/api/vendors/${vendorId}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(itemFormData)
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        alert(error.error || 'Failed to add item');
+        return;
+      }
+
+      setShowItemForm(false);
+      setItemFormData({ name: '', description: '', category: '' });
+      fetchVendor();
+    } catch (error) {
+      console.error('Error adding item:', error);
+      alert('Failed to add item');
     }
   };
 
@@ -143,213 +315,871 @@ export default function VendorDetailsPage() {
     }).format(amount);
   };
 
-  const getStatusBadgeColor = (status: string) => {
-    switch (status) {
-      case 'CONFIRMED':
-        return 'bg-green-100 text-green-800';
-      case 'PENDING':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'CANCELLED':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-PK', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
   };
 
   if (loading) {
     return (
       <div className="p-6">
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+        <div className="flex justify-center items-center h-64">
+          <div className="text-lg">Loading vendor details...</div>
         </div>
       </div>
     );
   }
 
-  if (error || !vendor) {
+  if (!vendor) {
     return (
       <div className="p-6">
-        <div className="text-center text-red-600">
-          <p>Error: {error || 'Vendor not found'}</p>
-        </div>
+        <Card>
+          <CardContent className="py-12 text-center">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              Vendor not found
+            </h3>
+            <Link href="/vendors">
+              <Button>Back to Vendors</Button>
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <Link href="/vendors/dashboard">
-            <Button variant="outline" size="sm">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Dashboard
-            </Button>
+      <div className="mb-6">
+        <Link
+          href={`/vendors/category/${vendor.category.id}`}
+          className="inline-flex items-center text-blue-600 hover:text-blue-700 mb-4"
+        >
+          <ArrowLeftIcon className="w-4 h-4 mr-2" />
+          Back to {vendor.category.name}
           </Link>
+
+        <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">{vendor.companyName}</h1>
-            <p className="text-gray-600">{vendor.vendorCode} • {vendor.category?.replace('_', ' ')}</p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              {vendor.name}
+            </h1>
+            <p className="text-gray-600">{vendor.vendorCode}</p>
           </div>
-        </div>
-        <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            onClick={() => setShowEditModal(true)}
-            className="flex items-center gap-2"
-          >
-            <Edit className="h-4 w-4" />
-            Edit Vendor
-          </Button>
-          <Button 
-            onClick={() => setShowPurchaseForm(true)}
-            className="flex items-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            New Purchase
-          </Button>
         </div>
       </div>
 
-      {/* Vendor Information */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Vendor Information</h3>
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <Building className="h-5 w-5 text-gray-400" />
-              <div>
-                <p className="font-medium">{vendor.companyName}</p>
-                <p className="text-sm text-gray-500">{vendor.vendorCode}</p>
-              </div>
-            </div>
-            
-            {vendor.contactPerson && (
-              <div className="flex items-center gap-3">
-                <Package className="h-5 w-5 text-gray-400" />
+      {/* Contact Info */}
+      {(vendor.contactPerson || vendor.phone || vendor.email || vendor.address) && (
+        <Card className="mb-6">
+          <CardContent className="p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+              {vendor.contactPerson && (
                 <div>
-                  <p className="font-medium">{vendor.contactPerson}</p>
-                  <p className="text-sm text-gray-500">Contact Person</p>
+                  <span className="text-gray-500">Contact:</span>
+                  <span className="ml-2 font-medium">{vendor.contactPerson}</span>
                 </div>
+              )}
+              {vendor.phone && (
+              <div>
+                  <span className="text-gray-500">Phone:</span>
+                  <span className="ml-2 font-medium">{vendor.phone}</span>
               </div>
-            )}
-            
-            {vendor.email && (
-              <div className="flex items-center gap-3">
-                <Mail className="h-5 w-5 text-gray-400" />
-                <p className="text-sm">{vendor.email}</p>
+              )}
+              {vendor.email && (
+                <div>
+                  <span className="text-gray-500">Email:</span>
+                  <span className="ml-2 font-medium">{vendor.email}</span>
+            </div>
+              )}
+              {vendor.address && (
+                <div>
+                  <span className="text-gray-500">Address:</span>
+                  <span className="ml-2 font-medium">{vendor.address}</span>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Financial Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Cash Out (Purchases)</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {formatCurrency(vendor.financialSummary.cashOut)}
+                </p>
               </div>
-            )}
-            
-            {vendor.phone && (
-              <div className="flex items-center gap-3">
-                <Phone className="h-5 w-5 text-gray-400" />
-                <p className="text-sm">{vendor.phone}</p>
-              </div>
-            )}
-            
-            {vendor.address && (
-              <div className="flex items-center gap-3">
-                <MapPin className="h-5 w-5 text-gray-400" />
-                <p className="text-sm">{vendor.address}</p>
-              </div>
-            )}
-            
-            <div className="pt-3 border-t">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Payment Terms:</span>
-                <span className="text-sm font-medium">{vendor.paymentTerms} days</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Status:</span>
-                <Badge variant={vendor.isActive ? "default" : "secondary"}>
-                  {vendor.isActive ? 'Active' : 'Inactive'}
-                </Badge>
+              <div className="p-3 bg-red-100 rounded-lg">
+                <ShoppingCartIcon className="w-8 h-8 text-red-600" />
               </div>
             </div>
-          </div>
+          </CardContent>
         </Card>
 
-        {/* Recent Purchases */}
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Purchases</h3>
-          <div className="space-y-3">
-            {vendor.purchaseEntries && vendor.purchaseEntries.length > 0 ? (
-              vendor.purchaseEntries.slice(0, 5).map((purchase) => (
-                <div key={purchase.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="font-medium text-gray-900">{purchase.itemName}</p>
-                    <p className="text-sm text-gray-600">
-                      {purchase.quantity} units × {formatCurrency(purchase.unitPrice)}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {new Date(purchase.purchaseDate).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-gray-900">
-                      {formatCurrency(purchase.totalPrice)}
-                    </p>
-                    <Badge className={`text-xs ${getStatusBadgeColor(purchase.status)}`}>
-                      {purchase.status}
-                    </Badge>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-gray-500 text-center py-4">No purchases found</p>
-            )}
-          </div>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Cash In (Payments)</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {formatCurrency(vendor.financialSummary.cashIn)}
+                </p>
+              </div>
+              <div className="p-3 bg-green-100 rounded-lg">
+                <BanknotesIcon className="w-8 h-8 text-green-600" />
+              </div>
+            </div>
+          </CardContent>
         </Card>
 
-        {/* Financial Summary */}
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Financial Summary</h3>
-          {vendor.financialReports && vendor.financialReports.length > 0 ? (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Net Balance:</span>
-                <span className={`font-semibold ${
-                  Number(vendor.financialReports[0].netBalance) >= 0 ? 'text-green-600' : 'text-red-600'
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Net Balance (Outstanding)</p>
+                <p className={`text-2xl font-bold ${
+                  vendor.financialSummary.netBalance > 0 ? 'text-red-600' : 'text-gray-900'
                 }`}>
-                  {formatCurrency(vendor.financialReports[0].netBalance)}
+                  {formatCurrency(vendor.financialSummary.netBalance)}
+                </p>
+              </div>
+              <div className={`p-3 rounded-lg ${
+                vendor.financialSummary.netBalance > 0 ? 'bg-yellow-100' : 'bg-gray-100'
+              }`}>
+                <CurrencyDollarIcon className={`w-8 h-8 ${
+                  vendor.financialSummary.netBalance > 0 ? 'text-yellow-600' : 'text-gray-600'
+                }`} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Tabs */}
+      <div className="mb-6">
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab('purchases')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'purchases'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Purchase Entries
+            </button>
+            <button
+              onClick={() => setActiveTab('items')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'items'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Items ({vendor.items.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('financial')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'financial'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Financial Report
+            </button>
+          </nav>
+        </div>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'purchases' && (
+        <div>
+          <div className="mb-6 flex justify-between items-center">
+            <h2 className="text-xl font-semibold text-gray-900">
+              Purchase Entries
+            </h2>
+            <Button
+              onClick={() => setShowPurchaseForm(!showPurchaseForm)}
+              className="flex items-center gap-2"
+            >
+              <PlusIcon className="w-5 h-5" />
+              Add Purchase Entry
+            </Button>
+          </div>
+
+          {/* Purchase Form */}
+          {showPurchaseForm && (
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Add New Purchase Entry</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSubmitPurchase} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Invoice Number
+                      </label>
+                      <Input
+                        value={purchaseFormData.invoiceNumber}
+                        onChange={(e) => setPurchaseFormData({
+                          ...purchaseFormData,
+                          invoiceNumber: e.target.value
+                        })}
+                        placeholder="INV-001"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Notes
+                      </label>
+                      <Input
+                        value={purchaseFormData.notes}
+                        onChange={(e) => setPurchaseFormData({
+                          ...purchaseFormData,
+                          notes: e.target.value
+                        })}
+                        placeholder="Additional notes"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    {['cylinder_purchase', 'gas_purchase', 'vaporizer_purchase', 'accessories_purchase'].includes(vendor?.category?.slug || '') ? (
+                      // Category-specific table format
+                      <div>
+                        <div className="flex justify-between items-center mb-4">
+                          <label className="text-lg font-semibold text-gray-900">
+                            {vendor.category.name}
+                          </label>
+                          {/* Show Add Item button only for accessories */}
+                          {vendor?.category?.slug === 'accessories_purchase' && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={handleAddPurchaseItem}
+                            >
+                              <PlusIcon className="w-4 h-4 mr-1" />
+                              Add Custom Item
+                            </Button>
+                          )}
+                        </div>
+                        
+                        <div className="overflow-x-auto">
+                          <table className="w-full border-collapse border border-gray-300">
+                            <thead>
+                              <tr className="bg-gray-50">
+                                <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-700">
+                                  Item
+                                </th>
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                  Quantity
+                                </th>
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                  Price per Unit
+                                </th>
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                  Price per Item
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {purchaseItems.map((item, index) => (
+                                <tr key={index}>
+                                  <td className="border border-gray-300 px-4 py-2 font-medium text-gray-900">
+                                    {/* Show item name for fixed items, input for custom items */}
+                                    {vendor?.category?.slug === 'accessories_purchase' && 
+                                     index >= defaultAccessoriesItems.length ? (
+                                      <Input
+                                        value={item.itemName}
+                                        onChange={(e) => handlePurchaseItemChange(
+                                          index,
+                                          'itemName',
+                                          e.target.value
+                                        )}
+                                        placeholder="Enter item name"
+                                        className="border-0 focus:ring-1 bg-transparent font-medium"
+                                      />
+                                    ) : (
+                                      item.itemName
+                                    )}
+                                  </td>
+                                  <td className="border border-gray-300 px-4 py-2">
+                                    <Input
+                                      type="number"
+                                      value={item.quantity}
+                                      onChange={(e) => handlePurchaseItemChange(
+                                        index,
+                                        'quantity',
+                                        e.target.value
+                                      )}
+                                      placeholder="Enter quantity"
+                                      min="0"
+                                      step="1"
+                                      className="text-center border-0 focus:ring-1 bg-transparent"
+                                    />
+                                  </td>
+                                  <td className="border border-gray-300 px-4 py-2">
+                                    <Input
+                                      type="number"
+                                      value={item.unitPrice}
+                                      onChange={(e) => handlePurchaseItemChange(
+                                        index,
+                                        'unitPrice',
+                                        e.target.value
+                                      )}
+                                      placeholder="Enter price per unit"
+                                      min="0"
+                                      step="0.01"
+                                      className="text-center border-0 focus:ring-1 bg-transparent"
+                                    />
+                                  </td>
+                                  <td className="border border-gray-300 px-4 py-2 text-center font-medium">
+                                    {formatCurrency(item.totalPrice)}
+                                  </td>
+                                </tr>
+                              ))}
+                              <tr className="bg-gray-50 font-bold">
+                                <td colSpan={3} className="border border-gray-300 px-4 py-2 text-right">
+                                  Total =
+                                </td>
+                                <td className="border border-gray-300 px-4 py-2 text-center">
+                                  {formatCurrency(calculatePurchaseTotal())}
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ) : (
+                      // Generic form for other categories
+                      <div>
+                        <div className="flex justify-between items-center mb-3">
+                          <label className="text-sm font-medium text-gray-700">
+                            Items
+                          </label>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleAddPurchaseItem}
+                          >
+                            <PlusIcon className="w-4 h-4 mr-1" />
+                            Add Item
+                          </Button>
+                        </div>
+
+                        <div className="space-y-3">
+                          {purchaseItems.map((item, index) => (
+                            <div key={index} className="flex gap-3 items-start">
+                              <div className="flex-1">
+                                <Input
+                                  value={item.itemName}
+                                  onChange={(e) => handlePurchaseItemChange(
+                                    index,
+                                    'itemName',
+                                    e.target.value
+                                  )}
+                                  placeholder="Item name"
+                                  required
+                                />
+                              </div>
+                              <div className="w-24">
+                                <Input
+                                  type="number"
+                                  value={item.quantity}
+                                  onChange={(e) => handlePurchaseItemChange(
+                                    index,
+                                    'quantity',
+                                    e.target.value
+                                  )}
+                                  placeholder="Qty"
+                                  min="0"
+                                  step="0.01"
+                                  required
+                                />
+                              </div>
+                              <div className="w-32">
+                                <Input
+                                  type="number"
+                                  value={item.unitPrice}
+                                  onChange={(e) => handlePurchaseItemChange(
+                                    index,
+                                    'unitPrice',
+                                    e.target.value
+                                  )}
+                                  placeholder="Price/Unit"
+                                  min="0"
+                                  step="0.01"
+                                  required
+                                />
+                              </div>
+                              <div className="w-32">
+                                <Input
+                                  type="number"
+                                  value={item.totalPrice}
+                                  readOnly
+                                  placeholder="Total"
+                                  className="bg-gray-50"
+                                />
+                              </div>
+                              {purchaseItems.length > 1 && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleRemovePurchaseItem(index)}
+                                >
+                                  <TrashIcon className="w-4 h-4" />
+                                </Button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
+                          <span className="font-semibold text-gray-900">
+                            Total Amount:
+                          </span>
+                          <span className="text-xl font-bold text-gray-900">
+                            {formatCurrency(calculatePurchaseTotal())}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Paid Amount (Optional)
+                    </label>
+                    <Input
+                      type="number"
+                      value={purchaseFormData.paidAmount}
+                      onChange={(e) => setPurchaseFormData({
+                        ...purchaseFormData,
+                        paidAmount: Number(e.target.value)
+                      })}
+                      placeholder="Amount paid now"
+                      min="0"
+                      step="0.01"
+                    />
+                    <p className="text-sm text-gray-500 mt-1">
+                      Leave as 0 if payment will be made later
+                    </p>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <Button type="submit">Create Purchase Entry</Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setShowPurchaseForm(false);
+                        setPurchaseItems([{ itemName: '', quantity: 1, unitPrice: 0, totalPrice: 0 }]);
+                        setPurchaseFormData({ invoiceNumber: '', notes: '', paidAmount: 0 });
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Purchases List */}
+          {vendor.purchases.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <ShoppingCartIcon className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  No purchase entries yet
+                </h3>
+                <p className="text-gray-500 mb-4">
+                  Start by adding your first purchase entry
+                </p>
+                <Button onClick={() => setShowPurchaseForm(true)}>
+                  <PlusIcon className="w-5 h-5 mr-2" />
+                  Add First Purchase
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {vendor.purchases.map((purchase) => (
+                <Card key={purchase.id}>
+                  <CardContent className="p-6">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h3 className="font-semibold text-gray-900">
+                          {purchase.invoiceNumber || 'No Invoice Number'}
+                        </h3>
+                        <p className="text-sm text-gray-500">
+                          {formatDate(purchase.purchaseDate)}
+                        </p>
+                      </div>
+                      <span
+                        className={`px-3 py-1 text-sm font-medium rounded-full ${
+                          purchase.paymentStatus === 'PAID'
+                            ? 'bg-green-100 text-green-700'
+                            : purchase.paymentStatus === 'PARTIAL'
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : 'bg-red-100 text-red-700'
+                        }`}
+                      >
+                        {purchase.paymentStatus}
+                      </span>
+                    </div>
+
+                    {/* Items Table */}
+                    <div className="mb-4">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-2 text-left font-medium text-gray-700">
+                              Item
+                            </th>
+                            <th className="px-4 py-2 text-right font-medium text-gray-700">
+                              Qty
+                            </th>
+                            <th className="px-4 py-2 text-right font-medium text-gray-700">
+                              Unit Price
+                            </th>
+                            <th className="px-4 py-2 text-right font-medium text-gray-700">
+                              Total
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {purchase.items.map((item) => (
+                            <tr key={item.id} className="border-t border-gray-200">
+                              <td className="px-4 py-2">{item.itemName}</td>
+                              <td className="px-4 py-2 text-right">{item.quantity}</td>
+                              <td className="px-4 py-2 text-right">
+                                {formatCurrency(Number(item.unitPrice))}
+                              </td>
+                              <td className="px-4 py-2 text-right font-medium">
+                                {formatCurrency(Number(item.totalPrice))}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Purchase Summary */}
+                    <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200">
+                      <div>
+                        <div className="text-xs text-gray-500 mb-1">Total Amount</div>
+                        <div className="text-lg font-semibold text-gray-900">
+                          {formatCurrency(Number(purchase.totalAmount))}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500 mb-1">Paid</div>
+                        <div className="text-lg font-semibold text-green-600">
+                          {formatCurrency(Number(purchase.paidAmount))}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500 mb-1">Balance</div>
+                        <div className="text-lg font-semibold text-red-600">
+                          {formatCurrency(Number(purchase.balanceAmount))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Payments */}
+                    {purchase.payments.length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <h4 className="text-sm font-medium text-gray-700 mb-2">
+                          Payments
+                        </h4>
+                        <div className="space-y-2">
+                          {purchase.payments.map((payment) => (
+                            <div
+                              key={payment.id}
+                              className="flex justify-between text-sm"
+                            >
+                              <span className="text-gray-600">
+                                {formatDate(payment.paymentDate)} - {payment.paymentMethod}
+                              </span>
+                              <span className="font-medium text-green-600">
+                                {formatCurrency(Number(payment.amount))}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'items' && (
+        <div>
+          <div className="mb-6 flex justify-between items-center">
+            <h2 className="text-xl font-semibold text-gray-900">
+              Vendor Items
+            </h2>
+            <Button
+              onClick={() => setShowItemForm(!showItemForm)}
+              className="flex items-center gap-2"
+            >
+              <PlusIcon className="w-5 h-5" />
+              Add Item
+            </Button>
+          </div>
+
+          {/* Item Form */}
+          {showItemForm && (
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Add New Item</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleAddItem} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Item Name *
+                    </label>
+                    <Input
+                      value={itemFormData.name}
+                      onChange={(e) => setItemFormData({
+                        ...itemFormData,
+                        name: e.target.value
+                      })}
+                      placeholder="e.g., Domestic (11.8kg) Cylinder"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Category
+                    </label>
+                    <Input
+                      value={itemFormData.category}
+                      onChange={(e) => setItemFormData({
+                        ...itemFormData,
+                        category: e.target.value
+                      })}
+                      placeholder="e.g., Cylinder, Gas, Vaporizer"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Description
+                    </label>
+                    <Input
+                      value={itemFormData.description}
+                      onChange={(e) => setItemFormData({
+                        ...itemFormData,
+                        description: e.target.value
+                      })}
+                      placeholder="Item description"
+                    />
+                  </div>
+                  <div className="flex gap-3">
+                    <Button type="submit">Add Item</Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setShowItemForm(false);
+                        setItemFormData({ name: '', description: '', category: '' });
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                </div>
+                </form>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Items List */}
+          {vendor.items.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  No items added yet
+                </h3>
+                <p className="text-gray-500 mb-4">
+                  Add items to quickly select them when creating purchase entries
+                </p>
+                <Button onClick={() => setShowItemForm(true)}>
+                  <PlusIcon className="w-5 h-5 mr-2" />
+                  Add First Item
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {vendor.items.map((item) => (
+                <Card key={item.id}>
+                  <CardContent className="p-4">
+                    <h3 className="font-semibold text-gray-900 mb-1">
+                      {item.name}
+                    </h3>
+                    {item.category && (
+                      <p className="text-sm text-gray-500 mb-2">
+                        {item.category}
+                      </p>
+                    )}
+                    {item.description && (
+                      <p className="text-sm text-gray-600">
+                        {item.description}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'financial' && (
+        <div>
+          <div className="mb-6 flex justify-between items-center">
+            <h2 className="text-xl font-semibold text-gray-900">
+              Financial Report
+            </h2>
+            <div className="flex gap-3">
+              <select
+                value={reportPeriod}
+                onChange={(e) => setReportPeriod(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg"
+              >
+                <option value="all">All Time</option>
+                <option value="daily">Today</option>
+                <option value="monthly">This Month</option>
+                <option value="yearly">This Year</option>
+              </select>
+            </div>
+          </div>
+
+          {financialReport ? (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <Card>
+                  <CardContent className="p-6">
+                    <p className="text-sm text-gray-500 mb-1">Cash Out</p>
+                    <p className="text-2xl font-bold text-red-600">
+                      {formatCurrency(financialReport.cashOut)}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Total Purchases
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-6">
+                    <p className="text-sm text-gray-500 mb-1">Cash In</p>
+                    <p className="text-2xl font-bold text-green-600">
+                      {formatCurrency(financialReport.cashIn)}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Total Payments
+                    </p>
+                  </CardContent>
+        </Card>
+
+                <Card>
+                  <CardContent className="p-6">
+                    <p className="text-sm text-gray-500 mb-1">Net Balance</p>
+                    <p className={`text-2xl font-bold ${
+                      financialReport.netBalance > 0 ? 'text-red-600' : 'text-gray-900'
+                    }`}>
+                      {formatCurrency(financialReport.netBalance)}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Outstanding
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-6">
+                    <p className="text-sm text-gray-500 mb-1">Purchases</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {financialReport.purchaseCount}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {reportPeriod === 'all' ? 'Total' : 'In Period'}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Period Summary</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex justify-between py-2 border-b border-gray-200">
+                      <span className="text-gray-700">Period:</span>
+                      <span className="font-medium">
+                        {reportPeriod === 'all' && 'All Time'}
+                        {reportPeriod === 'daily' && formatDate(financialReport.startDate)}
+                        {reportPeriod === 'monthly' && 
+                          `${formatDate(financialReport.startDate)} - ${formatDate(financialReport.endDate)}`}
+                        {reportPeriod === 'yearly' &&
+                          new Date(financialReport.startDate).getFullYear()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-2 border-b border-gray-200">
+                      <span className="text-gray-700">Total Purchases:</span>
+                      <span className="font-medium text-red-600">
+                        {formatCurrency(financialReport.totalPurchases)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-2 border-b border-gray-200">
+                      <span className="text-gray-700">Total Payments:</span>
+                      <span className="font-medium text-green-600">
+                        {formatCurrency(financialReport.totalPayments)}
                 </span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Cash In:</span>
-                <span className="text-sm text-green-600">
-                  {formatCurrency(vendor.financialReports[0].cashIn)}
+                    <div className="flex justify-between py-2">
+                      <span className="text-gray-700 font-semibold">Outstanding Balance:</span>
+                      <span className={`font-bold text-lg ${
+                        financialReport.outstandingBalance > 0 ? 'text-red-600' : 'text-gray-900'
+                      }`}>
+                        {formatCurrency(financialReport.outstandingBalance)}
                 </span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Cash Out:</span>
-                <span className="text-sm text-red-600">
-                  {formatCurrency(vendor.financialReports[0].cashOut)}
-                </span>
-              </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           ) : (
-            <p className="text-gray-500 text-center py-4">No financial data available</p>
+            <Card>
+              <CardContent className="py-12 text-center">
+                <div className="text-lg">Loading financial report...</div>
+              </CardContent>
+            </Card>
           )}
-        </Card>
-      </div>
-
-      {/* Financial Report */}
-      <VendorFinancialReport vendorId={vendorId} vendorName={`${vendor.companyName} - Financial Report`} />
-
-      {/* Purchase Entry Modal */}
-      {showPurchaseForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <PurchaseEntryForm
-              vendor={vendor}
-              category={vendor.category || 'CYLINDER_PURCHASE'}
-              onSave={handlePurchaseEntry}
-              onCancel={() => setShowPurchaseForm(false)}
-            />
-          </div>
         </div>
       )}
     </div>
   );
 }
+

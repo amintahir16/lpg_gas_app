@@ -1,669 +1,309 @@
 "use client";
-import { useState, useEffect, useRef } from 'react';
+
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Select } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { 
+import {
   PlusIcon,
-  MagnifyingGlassIcon,
-  EyeIcon,
-  PencilIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  ChartBarIcon,
-  CubeIcon
+  CubeIcon,
+  BuildingStorefrontIcon,
+  WrenchScrewdriverIcon,
+  ShoppingBagIcon,
+  CogIcon,
 } from '@heroicons/react/24/outline';
 
-interface Vendor {
+interface VendorCategory {
   id: string;
-  vendorCode: string;
-  companyName: string;
-  contactPerson: string;
-  email: string;
-  phone: string;
-  address: string;
-  taxId: string;
-  paymentTerms: number;
-  isActive: boolean;
-}
-
-interface VendorsResponse {
-  vendors: Vendor[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    pages: number;
-  };
+  name: string;
+  slug: string;
+  description?: string;
+  icon?: string;
+  vendorCount: number;
+  sortOrder: number;
 }
 
 export default function VendorsPage() {
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const { data: session, status } = useSession();
+  const [categories, setCategories] = useState<VendorCategory[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 10,
-    total: 0,
-    pages: 0
-  });
   const [showAddForm, setShowAddForm] = useState(false);
-  const [showEditForm, setShowEditForm] = useState(false);
-  const [showViewModal, setShowViewModal] = useState(false);
-  const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryDescription, setNewCategoryDescription] = useState('');
 
-  // Debounce search term
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearchTerm(searchTerm);
-    }, 500); // 500ms delay
+    if (status === 'authenticated') {
+      fetchCategories();
+    } else if (status === 'unauthenticated') {
+      setLoading(false);
+    }
+  }, [status]);
 
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
-
-  // Reset pagination when search changes
-  useEffect(() => {
-    if (debouncedSearchTerm !== searchTerm) return;
-    setPagination(prev => ({ ...prev, page: 1 }));
-  }, [debouncedSearchTerm]);
-
-  const fetchVendors = async () => {
+  const fetchCategories = async () => {
     try {
-      // Only show loading spinner on initial load, not during search
-      if (vendors.length === 0) {
-        setLoading(true);
-      }
-      const params = new URLSearchParams({
-        search: debouncedSearchTerm,
-        page: pagination.page.toString(),
-        limit: pagination.limit.toString()
-      });
-
-      const response = await fetch(`/api/vendors?${params}`);
+      console.log('🔄 Fetching categories...');
+      console.log('Session status:', status);
+      console.log('User:', session?.user);
+      
+      const response = await fetch('/api/vendor-categories');
+      console.log('Response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error('Failed to fetch vendors');
+        const errorData = await response.json();
+        console.error('API Error:', errorData);
+        throw new Error(errorData.error || `HTTP ${response.status}: Failed to fetch categories`);
       }
-
-      const data: VendorsResponse = await response.json();
-      setVendors(data.vendors);
-      setPagination(data.pagination);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch vendors');
+      
+      const data = await response.json();
+      console.log('✅ Categories fetched:', data);
+      setCategories(data.categories || []);
+    } catch (error) {
+      console.error('❌ Error fetching categories:', error);
+      alert(`Error loading categories: ${error.message}\n\nPlease check:\n1. You are logged in\n2. Browser console for details\n3. Server is running`);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchVendors();
-  }, [debouncedSearchTerm, pagination.page]);
+  const handleAddCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCategoryName.trim()) return;
 
-  const handleEditVendor = (vendor: Vendor) => {
-    setSelectedVendor(vendor);
-    setShowEditForm(true);
-  };
-
-  const handleViewVendor = (vendor: Vendor) => {
-    setSelectedVendor(vendor);
-    setShowViewModal(true);
-  };
-
-  const handleUpdateVendor = async (formData: any) => {
-    if (!selectedVendor) return;
-    
     try {
-      const response = await fetch('/api/vendors', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          id: selectedVendor.id,
-          ...formData
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update vendor');
-      }
-
-      // Refresh vendors after updating
-      fetchVendors();
-      setShowEditForm(false);
-      setSelectedVendor(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update vendor');
-    }
-  };
-
-  const handleAddVendor = async (formData: any) => {
-    try {
-      const response = await fetch('/api/vendors', {
+      const response = await fetch('/api/vendor-categories', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newCategoryName,
+          description: newCategoryDescription
+        })
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create vendor');
+        const error = await response.json();
+        alert(error.error || 'Failed to create category');
+        return;
       }
 
-      // Refresh vendors after creating
-      fetchVendors();
+      setNewCategoryName('');
+      setNewCategoryDescription('');
       setShowAddForm(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create vendor');
+      fetchCategories();
+    } catch (error) {
+      console.error('Error creating category:', error);
+      alert('Failed to create category');
     }
   };
 
-  if (loading) {
+  const getCategoryIcon = (slug: string) => {
+    const iconMap: { [key: string]: any } = {
+      'cylinder_purchase': CubeIcon,
+      'gas_purchase': BuildingStorefrontIcon,
+      'vaporizer_purchase': WrenchScrewdriverIcon,
+      'accessories_purchase': ShoppingBagIcon,
+      'valves_purchase': CogIcon,
+    };
+    return iconMap[slug] || CubeIcon;
+  };
+
+  const getCategoryColor = (index: number) => {
+    const colors = [
+      'bg-blue-500',
+      'bg-green-500',
+      'bg-purple-500',
+      'bg-orange-500',
+      'bg-red-500',
+      'bg-indigo-500',
+      'bg-pink-500',
+      'bg-teal-500',
+    ];
+    return colors[index % colors.length];
+  };
+
+  // Show loading state
+  if (status === 'loading' || loading) {
     return (
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Vendor Management</h1>
-            <p className="text-gray-600">Loading vendors...</p>
-          </div>
+      <div className="p-6">
+        <div className="flex justify-center items-center h-64">
+          <div className="text-lg">Loading vendor categories...</div>
         </div>
       </div>
     );
   }
 
-  if (error) {
+  // Show login required
+  if (status === 'unauthenticated') {
     return (
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Vendor Management</h1>
-            <p className="text-red-600">Error: {error}</p>
-          </div>
-        </div>
+      <div className="p-6">
+        <Card>
+          <CardContent className="py-12 text-center">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              Login Required
+            </h3>
+            <p className="text-gray-500">
+              Please log in to access the vendor management system.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     );
+  }
+
+  // Show session debug info
+  if (status === 'authenticated') {
+    console.log('✅ User authenticated:', {
+      name: session?.user?.name,
+      email: session?.user?.email,
+      role: session?.user?.role,
+      id: session?.user?.id
+    });
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Vendor Management</h1>
-          <p className="text-gray-600">Manage your suppliers and vendors</p>
+    <div className="p-6">
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Vendor Management</h1>
+        <p className="text-gray-600">
+          Manage your vendors by category. Track purchases, payments, and financial reports.
+        </p>
+        {/* Debug info */}
+        <div className="mt-2 text-sm text-gray-500">
+          User: {session?.user?.name || session?.user?.email} | 
+          Role: {session?.user?.role} | 
+          Status: {status}
         </div>
-        <Button 
-          onClick={() => setShowAddForm(true)}
-          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-lg"
+      </div>
+
+      {/* Add Category Button */}
+      <div className="mb-6 flex justify-between items-center">
+        <div className="text-sm text-gray-500">
+          {categories.length} {categories.length === 1 ? 'category' : 'categories'}
+        </div>
+        <Button
+          onClick={() => setShowAddForm(!showAddForm)}
+          className="flex items-center gap-2"
         >
-          <PlusIcon className="w-4 h-4 mr-2" />
-          Add Vendor
+          <PlusIcon className="w-5 h-5" />
+          Add New Category
         </Button>
       </div>
 
-      {/* Navigation Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Link href="/vendors/dashboard">
-          <Card className="p-6 hover:shadow-lg transition-shadow cursor-pointer">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <ChartBarIcon className="h-6 w-6 text-blue-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Vendor Dashboard</h3>
-                <p className="text-gray-600">View categorized vendors and analytics</p>
-              </div>
-            </div>
-          </Card>
-        </Link>
-
-        <Link href="/vendors/category/cylinder-purchase">
-          <Card className="p-6 hover:shadow-lg transition-shadow cursor-pointer">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <CubeIcon className="h-6 w-6 text-green-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Category Management</h3>
-                <p className="text-gray-600">Manage vendors by categories</p>
-              </div>
-            </div>
-          </Card>
-        </Link>
-      </div>
-
-      {/* Vendor Stats */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-        {[
-          { name: 'Total Vendors', value: vendors.length },
-          { name: 'Active Vendors', value: vendors.filter(v => v.isActive).length },
-          { name: 'Inactive Vendors', value: vendors.filter(v => !v.isActive).length },
-        ].map((stat) => (
-          <Card key={stat.name} className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-            <CardContent className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-blue-500 rounded-md flex items-center justify-center">
-                    <span className="text-white text-sm font-medium">🏢</span>
-                  </div>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      {stat.name}
-                    </dt>
-                    <dd className="text-lg font-medium text-gray-900">
-                      {stat.value}
-                    </dd>
-                  </dl>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Search */}
-      <div className="flex gap-4">
-        <div className="flex-1 relative">
-          <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            ref={searchInputRef}
-            placeholder="Search vendors..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-            onFocus={(e) => e.target.select()}
-          />
-        </div>
-      </div>
-
-      {/* Vendors Table */}
-      <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Vendor Code
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Company Name
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Contact Person
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Email
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Phone
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Payment Terms
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {vendors.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-6 py-4 text-center text-gray-500">
-                      No vendors found. Add your first vendor to get started.
-                    </td>
-                  </tr>
-                ) : (
-                  vendors.map((vendor) => (
-                    <tr key={vendor.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {vendor.vendorCode}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {vendor.companyName}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        {vendor.contactPerson}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        {vendor.email}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        {vendor.phone}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        {vendor.paymentTerms} days
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge variant={vendor.isActive ? 'success' : 'destructive'} className="font-semibold">
-                          {vendor.isActive ? 'Active' : 'Inactive'}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => handleEditVendor(vendor)}
-                          >
-                            Edit
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => handleViewVendor(vendor)}
-                          >
-                            View
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Pagination */}
-      {pagination.pages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-700">
-            Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
-            {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
-            {pagination.total} vendors
-          </p>
-          <div className="flex space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={pagination.page === 1}
-              onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={pagination.page === pagination.pages}
-              onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Add Vendor Modal */}
+      {/* Add Category Form */}
       {showAddForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-900">Add New Vendor</h2>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowAddForm(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </Button>
-            </div>
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const formData = new FormData(e.target as HTMLFormElement);
-              handleAddVendor({
-                companyName: formData.get('companyName'),
-                contactPerson: formData.get('contactPerson'),
-                email: formData.get('email'),
-                phone: formData.get('phone'),
-                address: formData.get('address'),
-                taxId: formData.get('taxId'),
-                paymentTerms: formData.get('paymentTerms')
-              });
-            }} className="space-y-4">
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Add New Vendor Category</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleAddCategory} className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Company Name</label>
-                <Input name="companyName" type="text" placeholder="Company Name" required />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Contact Person</label>
-                <Input name="contactPerson" type="text" placeholder="Contact Person" />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
-                <Input name="email" type="email" placeholder="Email" />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Phone</label>
-                <Input name="phone" type="tel" placeholder="Phone" />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Address</label>
-                <Input name="address" type="text" placeholder="Address" />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Tax ID</label>
-                <Input name="taxId" type="text" placeholder="Tax ID" />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Terms (Days)</label>
-                <Input name="paymentTerms" type="number" placeholder="30" />
-              </div>
-              <div className="flex justify-end space-x-2 mt-6">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowAddForm(false)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white">
-                  Add Vendor
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Vendor Modal */}
-      {showEditForm && selectedVendor && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-900">Edit Vendor</h2>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setShowEditForm(false);
-                  setSelectedVendor(null);
-                }}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </Button>
-            </div>
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const formData = new FormData(e.target as HTMLFormElement);
-              handleUpdateVendor({
-                companyName: formData.get('companyName'),
-                contactPerson: formData.get('contactPerson'),
-                email: formData.get('email'),
-                phone: formData.get('phone'),
-                address: formData.get('address'),
-                taxId: formData.get('taxId'),
-                paymentTerms: formData.get('paymentTerms')
-              });
-            }}>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Company Name</label>
-                <Input 
-                  name="companyName" 
-                  type="text" 
-                  defaultValue={selectedVendor.companyName}
-                  placeholder="Company Name" 
-                  required 
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Category Name *
+                </label>
+                <Input
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  placeholder="e.g., Cylinder Purchase, Gas Purchase"
+                  required
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Contact Person</label>
-                <Input 
-                  name="contactPerson" 
-                  type="text" 
-                  defaultValue={selectedVendor.contactPerson || ''}
-                  placeholder="Contact Person" 
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description
+                </label>
+                <Input
+                  value={newCategoryDescription}
+                  onChange={(e) => setNewCategoryDescription(e.target.value)}
+                  placeholder="Brief description of this category"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
-                <Input 
-                  name="email" 
-                  type="email" 
-                  defaultValue={selectedVendor.email || ''}
-                  placeholder="Email" 
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Phone</label>
-                <Input 
-                  name="phone" 
-                  type="tel" 
-                  defaultValue={selectedVendor.phone || ''}
-                  placeholder="Phone" 
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Address</label>
-                <Input 
-                  name="address" 
-                  type="text" 
-                  defaultValue={selectedVendor.address || ''}
-                  placeholder="Address" 
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Tax ID</label>
-                <Input 
-                  name="taxId" 
-                  type="text" 
-                  defaultValue={selectedVendor.taxId || ''}
-                  placeholder="Tax ID" 
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Terms (Days)</label>
-                <Input 
-                  name="paymentTerms" 
-                  type="number" 
-                  defaultValue={selectedVendor.paymentTerms?.toString() || ''}
-                  placeholder="30" 
-                />
-              </div>
-              <div className="flex justify-end space-x-3 mt-6">
+              <div className="flex gap-3">
+                <Button type="submit">Create Category</Button>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => {
-                    setShowEditForm(false);
-                    setSelectedVendor(null);
+                    setShowAddForm(false);
+                    setNewCategoryName('');
+                    setNewCategoryDescription('');
                   }}
                 >
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white">
-                  Update Vendor
-                </Button>
               </div>
             </form>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
-      {/* View Vendor Modal */}
-      {showViewModal && selectedVendor && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-900">Vendor Details</h2>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setShowViewModal(false);
-                  setSelectedVendor(null);
-                }}
-                className="text-gray-400 hover:text-gray-600"
+      {/* Categories Grid */}
+      {categories.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <div className="text-gray-400 mb-4">
+              <CubeIcon className="w-16 h-16 mx-auto" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              No vendor categories yet
+            </h3>
+            <p className="text-gray-500 mb-4">
+              Get started by creating your first vendor category
+            </p>
+            <Button onClick={() => setShowAddForm(true)}>
+              <PlusIcon className="w-5 h-5 mr-2" />
+              Add First Category
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {categories.map((category, index) => {
+            const IconComponent = getCategoryIcon(category.slug);
+            const colorClass = getCategoryColor(index);
+
+            return (
+              <Link
+                key={category.id}
+                href={`/vendors/category/${category.id}`}
               >
-                ✕
-              </Button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Vendor Code</label>
-                <p className="text-gray-900 font-mono">{selectedVendor.vendorCode}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Company Name</label>
-                <p className="text-gray-900">{selectedVendor.companyName}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Contact Person</label>
-                <p className="text-gray-900">{selectedVendor.contactPerson || 'Not provided'}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Email</label>
-                <p className="text-gray-900">{selectedVendor.email || 'Not provided'}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Phone</label>
-                <p className="text-gray-900">{selectedVendor.phone || 'Not provided'}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Address</label>
-                <p className="text-gray-900">{selectedVendor.address || 'Not provided'}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Tax ID</label>
-                <p className="text-gray-900">{selectedVendor.taxId || 'Not provided'}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Payment Terms</label>
-                <p className="text-gray-900">{selectedVendor.paymentTerms ? `${selectedVendor.paymentTerms} days` : 'Not provided'}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Status</label>
-                <Badge variant={selectedVendor.isActive ? 'success' : 'destructive'} className="font-semibold">
-                  {selectedVendor.isActive ? 'Active' : 'Inactive'}
-                </Badge>
-              </div>
-            </div>
-            <div className="flex justify-end mt-6">
-              <Button
-                onClick={() => {
-                  setShowViewModal(false);
-                  setSelectedVendor(null);
-                }}
-              >
-                Close
-              </Button>
-            </div>
-          </div>
+                <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className={`p-3 rounded-lg ${colorClass} bg-opacity-10`}>
+                        <IconComponent className={`w-8 h-8 ${colorClass.replace('bg-', 'text-')}`} />
+                      </div>
+                      <div className="text-right">
+                        <div className="text-2xl font-bold text-gray-900">
+                          {category.vendorCount}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {category.vendorCount === 1 ? 'Vendor' : 'Vendors'}
+                        </div>
+                      </div>
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      {category.name}
+                    </h3>
+                    {category.description && (
+                      <p className="text-sm text-gray-600 line-clamp-2">
+                        {category.description}
+                      </p>
+                    )}
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <span className="text-sm text-blue-600 font-medium hover:text-blue-700">
+                        View Vendors →
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>
   );
-} 
+}

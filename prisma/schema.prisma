@@ -22,6 +22,7 @@ model User {
   invoices         Invoice[]        @relation("UserInvoices")
   notifications    Notification[]   @relation("UserNotifications")
   purchaseEntries  PurchaseEntry[]  @relation("UserPurchaseEntries")
+  vendorPurchases  VendorPurchase[] @relation("UserVendorPurchases")
 
   @@map("users")
 }
@@ -129,30 +130,66 @@ model Expense {
   @@map("expenses")
 }
 
+model VendorCategoryConfig {
+  id          String   @id @default(cuid())
+  name        String   @unique // e.g., "Cylinder Purchase", "Gas Purchase"
+  slug        String   @unique // e.g., "cylinder_purchase"
+  description String?
+  icon        String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  vendors     Vendor[]
+
+  @@map("vendor_category_configs")
+}
+
 model Vendor {
   id               String                  @id @default(cuid())
   vendorCode       String                  @unique
-  companyName      String
+  name             String? // Vendor name (e.g., "Khattak Plant", "Ali Dealer")
+  companyName      String? // Keep for backward compatibility
   contactPerson    String?
   email            String?
   phone            String?
   address          String?
   taxId            String?
   paymentTerms     Int                     @default(30)
-  category         VendorCategory?
+  categoryId       String? // Link to custom category
+  categoryType     VendorCategory? // Backward compatibility with enum
   isActive         Boolean                 @default(true)
   createdAt        DateTime                @default(now())
   updatedAt        DateTime                @updatedAt
+  category         VendorCategoryConfig?   @relation(fields: [categoryId], references: [id])
   invoices         Invoice[]
-  purchaseEntries  PurchaseEntry[]
+  purchases        VendorPurchase[]
   bankDetails      VendorBankDetails[]
   financialReports VendorFinancialReport[]
   inventories      VendorInventory[]
   orders           VendorOrder[]
   payments         VendorPayment[]
   supportRequests  VendorSupportRequest[]
+  items            VendorItem[]
 
   @@map("vendors")
+}
+
+model VendorItem {
+  id            String               @id @default(cuid())
+  vendorId      String
+  name          String // e.g., "Domestic (11.8kg) Cylinder"
+  description   String?
+  category      String // e.g., "Cylinder", "Gas", "Vaporizer"
+  defaultUnit   String               @default("piece")
+  isActive      Boolean              @default(true)
+  sortOrder     Int                  @default(0)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  vendor        Vendor               @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  purchaseItems VendorPurchaseItem[]
+
+  @@map("vendor_items")
 }
 
 model VendorBankDetails {
@@ -302,6 +339,60 @@ model Notification {
   @@map("notifications")
 }
 
+model VendorPurchase {
+  id            String                  @id @default(cuid())
+  vendorId      String
+  purchaseDate  DateTime                @default(now())
+  invoiceNumber String?
+  totalAmount   Decimal                 @db.Decimal(15, 2)
+  paidAmount    Decimal                 @default(0) @db.Decimal(15, 2)
+  balanceAmount Decimal                 @default(0) @db.Decimal(15, 2)
+  paymentStatus String                  @default("UNPAID") // UNPAID, PARTIAL, PAID
+  status        PurchaseEntryStatus     @default(CONFIRMED)
+  notes         String?
+  userId        String
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  vendor        Vendor                  @relation(fields: [vendorId], references: [id])
+  user          User                    @relation("UserVendorPurchases", fields: [userId], references: [id])
+  items         VendorPurchaseItem[]
+  payments      VendorPurchasePayment[]
+
+  @@map("vendor_purchases")
+}
+
+model VendorPurchaseItem {
+  id           String         @id @default(cuid())
+  purchaseId   String
+  vendorItemId String?
+  itemName     String
+  quantity     Decimal        @db.Decimal(10, 2)
+  unitPrice    Decimal        @db.Decimal(10, 2)
+  totalPrice   Decimal        @db.Decimal(15, 2)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  purchase     VendorPurchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  vendorItem   VendorItem?    @relation(fields: [vendorItemId], references: [id])
+
+  @@map("vendor_purchase_items")
+}
+
+model VendorPurchasePayment {
+  id            String         @id @default(cuid())
+  purchaseId    String
+  amount        Decimal        @db.Decimal(15, 2)
+  paymentDate   DateTime       @default(now())
+  paymentMethod String         @default("CASH") // CASH, BANK_TRANSFER, CHECK
+  reference     String?
+  notes         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  purchase      VendorPurchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  @@map("vendor_purchase_payments")
+}
+
+// Keep old model for backward compatibility (can be removed after migration)
 model PurchaseEntry {
   id              String              @id @default(cuid())
   vendorId        String
@@ -319,23 +410,25 @@ model PurchaseEntry {
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
   user            User                @relation("UserPurchaseEntries", fields: [userId], references: [id])
-  vendor          Vendor              @relation(fields: [vendorId], references: [id])
 
   @@map("purchase_entries")
 }
 
 model VendorFinancialReport {
-  id              String   @id @default(cuid())
-  vendorId        String
-  reportDate      DateTime
-  netBalance      Decimal  @db.Decimal(10, 2)
-  cashIn          Decimal  @default(0) @db.Decimal(10, 2)
-  cashOut         Decimal  @default(0) @db.Decimal(10, 2)
-  previousBalance Decimal  @default(0) @db.Decimal(10, 2)
-  notes           String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  vendor          Vendor   @relation(fields: [vendorId], references: [id])
+  id                 String   @id @default(cuid())
+  vendorId           String
+  reportDate         DateTime
+  netBalance         Decimal  @db.Decimal(15, 2)
+  cashIn             Decimal  @default(0) @db.Decimal(15, 2)
+  cashOut            Decimal  @default(0) @db.Decimal(15, 2)
+  previousBalance    Decimal  @default(0) @db.Decimal(15, 2)
+  totalPurchases     Decimal  @default(0) @db.Decimal(15, 2)
+  totalPayments      Decimal  @default(0) @db.Decimal(15, 2)
+  outstandingBalance Decimal  @default(0) @db.Decimal(15, 2)
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  vendor             Vendor   @relation(fields: [vendorId], references: [id])
 
   @@unique([vendorId, reportDate])
   @@map("vendor_financial_reports")
@@ -476,7 +569,7 @@ model BillSequence {
 }
 
 model B2CCustomer {
-  id                String            @id @default(cuid())
+  id                String               @id @default(cuid())
   name              String
   phone             String
   email             String?
@@ -486,12 +579,12 @@ model B2CCustomer {
   street            String?
   phase             String?
   area              String?
-  city              String            @default("Hayatabad")
+  city              String               @default("Hayatabad")
   googleMapLocation String?
-  totalProfit       Decimal           @default(0) @db.Decimal(15, 2)
-  isActive          Boolean           @default(true)
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  totalProfit       Decimal              @default(0) @db.Decimal(15, 2)
+  isActive          Boolean              @default(true)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
   transactions      B2CTransaction[]
   cylinderHoldings  B2CCylinderHolding[]
 
@@ -499,37 +592,37 @@ model B2CCustomer {
 }
 
 model B2CCylinderHolding {
-  id           String            @id @default(cuid())
-  customerId   String
-  cylinderType CylinderType
-  quantity     Int               @default(1)
-  securityAmount Decimal         @db.Decimal(10, 2)
-  issueDate    DateTime          @default(now())
-  returnDate   DateTime?
-  isReturned   Boolean           @default(false)
-  returnDeduction Decimal        @default(0) @db.Decimal(10, 2)
-  customer     B2CCustomer       @relation(fields: [customerId], references: [id])
+  id              String       @id @default(cuid())
+  customerId      String
+  cylinderType    CylinderType
+  quantity        Int          @default(1)
+  securityAmount  Decimal      @db.Decimal(10, 2)
+  issueDate       DateTime     @default(now())
+  returnDate      DateTime?
+  isReturned      Boolean      @default(false)
+  returnDeduction Decimal      @default(0) @db.Decimal(10, 2)
+  customer        B2CCustomer  @relation(fields: [customerId], references: [id])
 
   @@map("b2c_cylinder_holdings")
 }
 
 model B2CTransaction {
-  id              String                @id @default(cuid())
-  billSno         String                @unique
+  id              String                        @id @default(cuid())
+  billSno         String                        @unique
   customerId      String
   date            DateTime
   time            DateTime
-  totalAmount     Decimal               @db.Decimal(15, 2)
-  deliveryCharges Decimal               @default(0) @db.Decimal(10, 2)
-  finalAmount     Decimal               @db.Decimal(15, 2)
-  totalCost       Decimal               @default(0) @db.Decimal(15, 2)
-  deliveryCost    Decimal               @default(0) @db.Decimal(10, 2)
-  actualProfit    Decimal               @default(0) @db.Decimal(15, 2)
-  paymentMethod   String                @default("CASH")
+  totalAmount     Decimal                       @db.Decimal(15, 2)
+  deliveryCharges Decimal                       @default(0) @db.Decimal(10, 2)
+  finalAmount     Decimal                       @db.Decimal(15, 2)
+  totalCost       Decimal                       @default(0) @db.Decimal(15, 2)
+  deliveryCost    Decimal                       @default(0) @db.Decimal(10, 2)
+  actualProfit    Decimal                       @default(0) @db.Decimal(15, 2)
+  paymentMethod   String                        @default("CASH")
   notes           String?
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
-  customer        B2CCustomer           @relation(fields: [customerId], references: [id])
+  createdAt       DateTime                      @default(now())
+  updatedAt       DateTime                      @updatedAt
+  customer        B2CCustomer                   @relation(fields: [customerId], references: [id])
   gasItems        B2CTransactionGasItem[]
   securityItems   B2CTransactionSecurityItem[]
   accessoryItems  B2CTransactionAccessoryItem[]
@@ -538,44 +631,44 @@ model B2CTransaction {
 }
 
 model B2CTransactionGasItem {
-  id            String        @id @default(cuid())
+  id            String         @id @default(cuid())
   transactionId String
   cylinderType  CylinderType
-  quantity      Int           @default(1)
-  pricePerItem  Decimal       @db.Decimal(10, 2)
-  totalPrice    Decimal       @db.Decimal(15, 2)
-  costPrice     Decimal       @default(0) @db.Decimal(10, 2)
-  totalCost     Decimal       @default(0) @db.Decimal(15, 2)
-  profitMargin  Decimal       @default(0) @db.Decimal(15, 2)
+  quantity      Int            @default(1)
+  pricePerItem  Decimal        @db.Decimal(10, 2)
+  totalPrice    Decimal        @db.Decimal(15, 2)
+  costPrice     Decimal        @default(0) @db.Decimal(10, 2)
+  totalCost     Decimal        @default(0) @db.Decimal(15, 2)
+  profitMargin  Decimal        @default(0) @db.Decimal(15, 2)
   transaction   B2CTransaction @relation(fields: [transactionId], references: [id])
 
   @@map("b2c_transaction_gas_items")
 }
 
 model B2CTransactionSecurityItem {
-  id            String        @id @default(cuid())
+  id            String         @id @default(cuid())
   transactionId String
   cylinderType  CylinderType
-  quantity      Int           @default(1)
-  pricePerItem  Decimal       @db.Decimal(10, 2)
-  totalPrice    Decimal       @db.Decimal(15, 2)
-  isReturn      Boolean       @default(false)
-  deductionRate Decimal       @default(0.25) @db.Decimal(3, 2)
+  quantity      Int            @default(1)
+  pricePerItem  Decimal        @db.Decimal(10, 2)
+  totalPrice    Decimal        @db.Decimal(15, 2)
+  isReturn      Boolean        @default(false)
+  deductionRate Decimal        @default(0.25) @db.Decimal(3, 2)
   transaction   B2CTransaction @relation(fields: [transactionId], references: [id])
 
   @@map("b2c_transaction_security_items")
 }
 
 model B2CTransactionAccessoryItem {
-  id            String        @id @default(cuid())
+  id            String         @id @default(cuid())
   transactionId String
   itemName      String
-  quantity      Int           @default(1)
-  pricePerItem  Decimal       @db.Decimal(10, 2)
-  totalPrice    Decimal       @db.Decimal(15, 2)
-  costPrice     Decimal       @default(0) @db.Decimal(10, 2)
-  totalCost     Decimal       @default(0) @db.Decimal(15, 2)
-  profitMargin  Decimal       @default(0) @db.Decimal(15, 2)
+  quantity      Int            @default(1)
+  pricePerItem  Decimal        @db.Decimal(10, 2)
+  totalPrice    Decimal        @db.Decimal(15, 2)
+  costPrice     Decimal        @default(0) @db.Decimal(10, 2)
+  totalCost     Decimal        @default(0) @db.Decimal(15, 2)
+  profitMargin  Decimal        @default(0) @db.Decimal(15, 2)
   transaction   B2CTransaction @relation(fields: [transactionId], references: [id])
 
   @@map("b2c_transaction_accessory_items")

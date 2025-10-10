@@ -2,57 +2,74 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { Prisma } from '@prisma/client';
-import { createVendorAddedNotification } from '@/lib/notifications';
 
+// GET all vendors or filter by category
 export async function GET(request: NextRequest) {
   try {
-    // Get user info from headers (set by middleware)
     const session = await getServerSession(authOptions);
-    const userId = session?.user?.id;
-    const userRole = session?.user?.role;
-    
-    if (!userId) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
+    const categoryId = searchParams.get('categoryId');
     const search = searchParams.get('search') || '';
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
-    const skip = (page - 1) * limit;
 
-    const where: Prisma.VendorWhereInput = {
+    const where: any = {
       isActive: true,
-      OR: search ? [
-        { companyName: { contains: search, mode: 'insensitive' as Prisma.QueryMode } },
-        { contactPerson: { contains: search, mode: 'insensitive' as Prisma.QueryMode } },
-        { vendorCode: { contains: search, mode: 'insensitive' as Prisma.QueryMode } },
-        { email: { contains: search, mode: 'insensitive' as Prisma.QueryMode } }
-      ] : undefined
     };
 
-    const [vendors, total] = await Promise.all([
-      prisma.vendor.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' }
-      }),
-      prisma.vendor.count({ where })
-    ]);
+    if (categoryId) {
+      where.categoryId = categoryId;
+    }
 
-    return NextResponse.json({
-      vendors,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit)
-      }
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { companyName: { contains: search, mode: 'insensitive' } },
+        { vendorCode: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    const vendors = await prisma.vendor.findMany({
+      where,
+      include: {
+        category: true,
+        purchases: {
+          select: {
+            totalAmount: true,
+            paidAmount: true,
+            balanceAmount: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
     });
+
+    // Calculate totals for each vendor
+    const vendorsWithTotals = vendors.map(vendor => {
+      const totalPurchases = vendor.purchases.reduce(
+        (sum, p) => sum + Number(p.totalAmount), 0
+      );
+      const totalPaid = vendor.purchases.reduce(
+        (sum, p) => sum + Number(p.paidAmount), 0
+      );
+      const totalBalance = vendor.purchases.reduce(
+        (sum, p) => sum + Number(p.balanceAmount), 0
+      );
+
+      return {
+        ...vendor,
+        totalPurchases,
+        totalPaid,
+        totalBalance,
+        purchases: undefined
+      };
+    });
+
+    return NextResponse.json({ vendors: vendorsWithTotals });
   } catch (error) {
-    console.error('Vendors fetch error:', error);
+    console.error('Error fetching vendors:', error);
     return NextResponse.json(
       { error: 'Failed to fetch vendors' },
       { status: 500 }
@@ -60,55 +77,47 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// POST - Create new vendor
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
-    if (!session) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await request.json();
-    const {
-      companyName,
-      contactPerson,
-      email,
-      phone,
-      address,
-      taxId,
-      paymentTerms
-    } = body;
+    const { name, categoryId, contactPerson, phone, email, address } = body;
 
-    // Generate unique vendor code
-    const vendorCount = await prisma.vendor.count();
-    const vendorCode = `VEND${String(vendorCount + 1).padStart(3, '0')}`;
+    if (!name || !categoryId) {
+      return NextResponse.json(
+        { error: 'Name and category are required' },
+        { status: 400 }
+      );
+    }
+
+    // Generate vendor code
+    const count = await prisma.vendor.count();
+    const vendorCode = `VND-${String(count + 1).padStart(5, '0')}`;
 
     const vendor = await prisma.vendor.create({
       data: {
         vendorCode,
-        companyName,
+        name,
+        companyName: name,
+        categoryId,
         contactPerson,
-        email,
         phone,
-        address,
-        taxId,
-        paymentTerms: parseInt(paymentTerms) || 30,
-        isActive: true
+        email,
+        address
+      },
+      include: {
+        category: true
       }
     });
 
-    // Create notification for new vendor
-    try {
-      const userEmail = request.headers.get('x-user-email') || 'Unknown User';
-      await createVendorAddedNotification(companyName, userEmail, vendorCode);
-    } catch (notificationError) {
-      console.error('Failed to create notification:', notificationError);
-      // Don't fail the main operation if notification fails
-    }
-
-    return NextResponse.json(vendor, { status: 201 });
+    return NextResponse.json({ vendor }, { status: 201 });
   } catch (error) {
-    console.error('Vendor creation error:', error);
+    console.error('Error creating vendor:', error);
     return NextResponse.json(
       { error: 'Failed to create vendor' },
       { status: 500 }
@@ -116,55 +125,84 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// PUT - Update vendor
 export async function PUT(request: NextRequest) {
   try {
-    const userId = request.headers.get('x-user-id');
-    const userRole = request.headers.get('x-user-role');
-    
-    if (!userId) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await request.json();
-    const {
-      id,
-      companyName,
-      contactPerson,
-      email,
-      phone,
-      address,
-      taxId,
-      paymentTerms
-    } = body;
+    const { id, name, contactPerson, phone, email, address, isActive } = body;
 
-    // Check if vendor exists
-    const existingVendor = await prisma.vendor.findUnique({
-      where: { id }
-    });
-
-    if (!existingVendor) {
-      return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Vendor ID is required' },
+        { status: 400 }
+      );
     }
 
-    const updatedVendor = await prisma.vendor.update({
+    const updateData: any = {};
+    if (name !== undefined) {
+      updateData.name = name;
+      updateData.companyName = name;
+    }
+    if (contactPerson !== undefined) updateData.contactPerson = contactPerson;
+    if (phone !== undefined) updateData.phone = phone;
+    if (email !== undefined) updateData.email = email;
+    if (address !== undefined) updateData.address = address;
+    if (isActive !== undefined) updateData.isActive = isActive;
+
+    const vendor = await prisma.vendor.update({
       where: { id },
-      data: {
-        companyName,
-        contactPerson,
-        email,
-        phone,
-        address,
-        taxId,
-        paymentTerms: parseInt(paymentTerms) || 30
+      data: updateData,
+      include: {
+        category: true
       }
     });
 
-    return NextResponse.json(updatedVendor);
+    return NextResponse.json({ vendor });
   } catch (error) {
-    console.error('Vendor update error:', error);
+    console.error('Error updating vendor:', error);
     return NextResponse.json(
       { error: 'Failed to update vendor' },
       { status: 500 }
     );
   }
 }
+
+// DELETE - Delete vendor
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Vendor ID is required' },
+        { status: 400 }
+      );
+    }
+
+    // Soft delete
+    await prisma.vendor.update({
+      where: { id },
+      data: { isActive: false }
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting vendor:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete vendor' },
+      { status: 500 }
+    );
+  }
+}
+
