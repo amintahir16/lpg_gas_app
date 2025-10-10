@@ -63,9 +63,10 @@ export default function CategoryVendorsPage() {
 
   useEffect(() => {
     const filtered = vendors.filter(vendor =>
-      vendor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (vendor.name?.toLowerCase().includes(searchTerm.toLowerCase())) ||
       vendor.vendorCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      vendor.contactPerson?.toLowerCase().includes(searchTerm.toLowerCase())
+      vendor.contactPerson?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      vendor.companyName?.toLowerCase().includes(searchTerm.toLowerCase())
     );
     setFilteredVendors(filtered);
   }, [searchTerm, vendors]);
@@ -308,7 +309,7 @@ export default function CategoryVendorsPage() {
                   <div className="flex justify-between items-start mb-4">
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                        {vendor.name}
+                        {vendor.name || vendor.companyName || 'Unnamed Vendor'}
                       </h3>
                       <p className="text-sm text-gray-500">{vendor.vendorCode}</p>
                     </div>
