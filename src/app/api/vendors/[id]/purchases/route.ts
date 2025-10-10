@@ -145,7 +145,8 @@ export async function POST(
             vendorItemId: item.vendorItemId,
             quantity: Number(item.quantity),
             unitPrice: Number(item.unitPrice),
-            totalPrice: Number(item.totalPrice)
+            totalPrice: Number(item.totalPrice),
+            cylinderCodes: item.cylinderCodes || null
           }))
         },
         ...(paid > 0 && {

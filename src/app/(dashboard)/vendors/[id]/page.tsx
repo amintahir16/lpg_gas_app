@@ -68,6 +68,7 @@ interface PurchaseItem {
   quantity: number;
   unitPrice: number;
   totalPrice: number;
+  cylinderCodes?: string;
 }
 
 interface Payment {
@@ -93,9 +94,9 @@ export default function VendorDetailPage() {
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
   // Default cylinder purchase items for Cylinder Purchase category
   const defaultCylinderItems = [
-    { itemName: 'Domestic (11.8kg) Cylinder', quantity: 0, unitPrice: 0, totalPrice: 0 },
-    { itemName: 'Standard (15kg) Cylinder', quantity: 0, unitPrice: 0, totalPrice: 0 },
-    { itemName: 'Commercial (45.4kg) Cylinder', quantity: 0, unitPrice: 0, totalPrice: 0 }
+    { itemName: 'Domestic (11.8kg) Cylinder', quantity: 0, unitPrice: 0, totalPrice: 0, cylinderCodes: '' },
+    { itemName: 'Standard (15kg) Cylinder', quantity: 0, unitPrice: 0, totalPrice: 0, cylinderCodes: '' },
+    { itemName: 'Commercial (45.4kg) Cylinder', quantity: 0, unitPrice: 0, totalPrice: 0, cylinderCodes: '' }
   ];
 
   // Default gas purchase items for Gas Purchase category
@@ -620,6 +621,11 @@ export default function VendorDetailPage() {
                                 <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
                                   Price per Unit
                                 </th>
+                                {vendor?.category?.slug === 'cylinder_purchase' && (
+                                  <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                    Cylinder Codes
+                                  </th>
+                                )}
                                 <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
                                   Price per Item
                                 </th>
@@ -676,13 +682,28 @@ export default function VendorDetailPage() {
                                       className="text-center border-0 focus:ring-1 bg-transparent"
                                     />
                                   </td>
+                                  {vendor?.category?.slug === 'cylinder_purchase' && (
+                                    <td className="border border-gray-300 px-4 py-2">
+                                      <Input
+                                        type="text"
+                                        value={item.cylinderCodes || ''}
+                                        onChange={(e) => handlePurchaseItemChange(
+                                          index,
+                                          'cylinderCodes',
+                                          e.target.value
+                                        )}
+                                        placeholder="e.g., C001, C002, C003"
+                                        className="text-center border-0 focus:ring-1 bg-transparent text-sm"
+                                      />
+                                    </td>
+                                  )}
                                   <td className="border border-gray-300 px-4 py-2 text-center font-medium">
                                     {formatCurrency(item.totalPrice)}
                                   </td>
                                 </tr>
                               ))}
                               <tr className="bg-gray-50 font-bold">
-                                <td colSpan={3} className="border border-gray-300 px-4 py-2 text-right">
+                                <td colSpan={vendor?.category?.slug === 'cylinder_purchase' ? 4 : 3} className="border border-gray-300 px-4 py-2 text-right">
                                   Total =
                                 </td>
                                 <td className="border border-gray-300 px-4 py-2 text-center">
@@ -888,6 +909,11 @@ export default function VendorDetailPage() {
                             <th className="px-4 py-2 text-right font-medium text-gray-700">
                               Unit Price
                             </th>
+                            {vendor?.category?.slug === 'cylinder_purchase' && (
+                              <th className="px-4 py-2 text-left font-medium text-gray-700">
+                                Cylinder Codes
+                              </th>
+                            )}
                             <th className="px-4 py-2 text-right font-medium text-gray-700">
                               Total
                             </th>
@@ -901,6 +927,11 @@ export default function VendorDetailPage() {
                               <td className="px-4 py-2 text-right">
                                 {formatCurrency(Number(item.unitPrice))}
                               </td>
+                              {vendor?.category?.slug === 'cylinder_purchase' && (
+                                <td className="px-4 py-2 text-left text-xs text-gray-600">
+                                  {item.cylinderCodes || '-'}
+                                </td>
+                              )}
                               <td className="px-4 py-2 text-right font-medium">
                                 {formatCurrency(Number(item.totalPrice))}
                               </td>
