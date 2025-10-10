@@ -8,11 +8,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   PlusIcon,
-  CubeIcon,
-  BuildingStorefrontIcon,
-  WrenchScrewdriverIcon,
-  ShoppingBagIcon,
-  CogIcon,
+  // Cylinder icons
+  ArchiveBoxIcon, // Better representation for cylinders/containers
+  // Gas icons  
+  BoltIcon, // Lightning/energy for gas
+  // Vaporizer icons
+  CpuChipIcon, // Technology/electronic equipment
+  // Accessories icons
+  WrenchScrewdriverIcon, // Tools and accessories
+  // Valves icons
+  Cog6ToothIcon, // Control/mechanical components
 } from '@heroicons/react/24/outline';
 
 interface VendorCategory {
@@ -99,27 +104,24 @@ export default function VendorsPage() {
 
   const getCategoryIcon = (slug: string) => {
     const iconMap: { [key: string]: any } = {
-      'cylinder_purchase': CubeIcon,
-      'gas_purchase': BuildingStorefrontIcon,
-      'vaporizer_purchase': WrenchScrewdriverIcon,
-      'accessories_purchase': ShoppingBagIcon,
-      'valves_purchase': CogIcon,
+      'cylinder_purchase': ArchiveBoxIcon,      // Professional cylinder/container representation
+      'gas_purchase': BoltIcon,                 // Energy/power symbol for gas
+      'vaporizer_purchase': CpuChipIcon,        // Technology/electronic equipment
+      'accessories_purchase': WrenchScrewdriverIcon, // Tools and accessories
+      'valves_purchase': Cog6ToothIcon,         // Mechanical control components
     };
-    return iconMap[slug] || CubeIcon;
+    return iconMap[slug] || ArchiveBoxIcon;
   };
 
-  const getCategoryColor = (index: number) => {
-    const colors = [
-      'bg-blue-500',
-      'bg-green-500',
-      'bg-purple-500',
-      'bg-orange-500',
-      'bg-red-500',
-      'bg-indigo-500',
-      'bg-pink-500',
-      'bg-teal-500',
-    ];
-    return colors[index % colors.length];
+  const getCategoryColor = (slug: string) => {
+    const colorMap: { [key: string]: string } = {
+      'cylinder_purchase': 'bg-blue-500',      // Blue for cylinders (trust, reliability)
+      'gas_purchase': 'bg-green-500',          // Green for gas (natural, clean)
+      'vaporizer_purchase': 'bg-purple-500',   // Purple for machinery (innovation, tech)
+      'accessories_purchase': 'bg-orange-500', // Orange for accessories (energy, tools)
+      'valves_purchase': 'bg-red-500',         // Red for valves (control, safety)
+    };
+    return colorMap[slug] || 'bg-gray-500';
   };
 
   // Show loading state
@@ -244,7 +246,7 @@ export default function VendorsPage() {
         <Card>
           <CardContent className="py-12 text-center">
             <div className="text-gray-400 mb-4">
-              <CubeIcon className="w-16 h-16 mx-auto" />
+              <ShoppingBagIcon className="w-16 h-16 mx-auto" />
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">
               No vendor categories yet
@@ -262,7 +264,7 @@ export default function VendorsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {categories.map((category, index) => {
             const IconComponent = getCategoryIcon(category.slug);
-            const colorClass = getCategoryColor(index);
+            const colorClass = getCategoryColor(category.slug);
 
             return (
               <Link
@@ -272,7 +274,7 @@ export default function VendorsPage() {
                 <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
                   <CardContent className="p-6">
                     <div className="flex items-start justify-between mb-4">
-                      <div className={`p-3 rounded-lg ${colorClass} bg-opacity-10`}>
+                      <div className={`p-3 rounded-lg bg-gray-50 border border-gray-200`}>
                         <IconComponent className={`w-8 h-8 ${colorClass.replace('bg-', 'text-')}`} />
                       </div>
                       <div className="text-right">
