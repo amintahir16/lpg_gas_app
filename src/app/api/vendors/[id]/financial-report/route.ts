@@ -82,11 +82,18 @@ export async function GET(
 
     const totalPayments = purchases.reduce(
       (sum, p) => {
-        const periodPayments = p.payments.reduce(
+        // Check if there are separate payment records (newer system)
+        const separatePayments = p.payments.reduce(
           (pSum, payment) => pSum + Number(payment.amount),
           0
         );
-        return sum + periodPayments;
+        
+        // If there are separate payment records, use them; otherwise use paidAmount
+        if (separatePayments > 0) {
+          return sum + separatePayments;
+        } else {
+          return sum + Number(p.paidAmount);
+        }
       },
       0
     );
@@ -102,12 +109,23 @@ export async function GET(
       select: {
         totalAmount: true,
         paidAmount: true,
-        balanceAmount: true
+        balanceAmount: true,
+        payments: {
+          select: { amount: true }
+        }
       }
     });
 
     const overallBalance = allPurchases.reduce(
-      (sum, p) => sum + Number(p.balanceAmount),
+      (sum, p) => {
+        // Use balanceAmount if available, otherwise calculate it
+        if (Number(p.balanceAmount) !== 0) {
+          return sum + Number(p.balanceAmount);
+        } else {
+          // Calculate: totalAmount - paidAmount
+          return sum + (Number(p.totalAmount) - Number(p.paidAmount));
+        }
+      },
       0
     );
 
