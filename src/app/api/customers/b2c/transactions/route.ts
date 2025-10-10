@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { CylinderType } from '@prisma/client';
 
 export async function POST(request: NextRequest) {
   try {
@@ -224,6 +225,242 @@ export async function POST(request: NextRequest) {
           })
         });
       }
+
+      // ===== INVENTORY INTEGRATION =====
+      
+      // 1. Deduct cylinders from inventory when security is paid (gas purchase)
+      if (gasItems.length > 0) {
+        for (const gasItem of gasItems) {
+          if (gasItem.quantity > 0) {
+            const cylinderType = gasItem.cylinderType;
+            let mappedCylinderType: CylinderType;
+            
+            switch (cylinderType) {
+              case 'DOMESTIC_11_8KG': mappedCylinderType = CylinderType.DOMESTIC_11_8KG; break;
+              case 'STANDARD_15KG': mappedCylinderType = CylinderType.STANDARD_15KG; break;
+              case 'COMMERCIAL_45_4KG': mappedCylinderType = CylinderType.COMMERCIAL_45_4KG; break;
+              default: 
+                console.log(`Unknown cylinder type: ${cylinderType}`); 
+                continue;
+            }
+
+            // Find available cylinders of this type
+            const availableCylinders = await tx.cylinder.findMany({
+              where: {
+                cylinderType: mappedCylinderType,
+                currentStatus: 'FULL'
+              },
+              take: gasItem.quantity
+            });
+
+            if (availableCylinders.length < gasItem.quantity) {
+              throw new Error(`Insufficient inventory: Only ${availableCylinders.length} ${cylinderType} cylinders available, but ${gasItem.quantity} requested`);
+            }
+
+            // Update cylinders to "WITH_CUSTOMER" status
+            await tx.cylinder.updateMany({
+              where: {
+                id: { in: availableCylinders.map(c => c.id) }
+              },
+              data: {
+                currentStatus: 'WITH_CUSTOMER',
+                location: `B2C Customer: ${customer.name || 'B2C Customer'}`
+              }
+            });
+
+            console.log(`[B2C] Deducted ${gasItem.quantity} ${cylinderType} cylinders from inventory`);
+          }
+        }
+      }
+
+      // 2. Return cylinders back to inventory when customer returns them
+      if (securityItems.length > 0) {
+        for (const securityItem of securityItems) {
+          if (securityItem.isReturn && securityItem.quantity > 0) {
+            const cylinderType = securityItem.cylinderType;
+            let mappedCylinderType: CylinderType;
+            
+            switch (cylinderType) {
+              case 'DOMESTIC_11_8KG': mappedCylinderType = CylinderType.DOMESTIC_11_8KG; break;
+              case 'STANDARD_15KG': mappedCylinderType = CylinderType.STANDARD_15KG; break;
+              case 'COMMERCIAL_45_4KG': mappedCylinderType = CylinderType.COMMERCIAL_45_4KG; break;
+              default: 
+                console.log(`Unknown cylinder type: ${cylinderType}`); 
+                continue;
+            }
+
+            // Find cylinders that are with B2C customers
+            const cylindersWithCustomer = await tx.cylinder.findMany({
+              where: {
+                cylinderType: mappedCylinderType,
+                currentStatus: 'WITH_CUSTOMER',
+                location: { contains: 'B2C Customer' }
+              },
+              take: securityItem.quantity
+            });
+
+            if (cylindersWithCustomer.length >= securityItem.quantity) {
+              // Update existing cylinders to EMPTY status
+              await tx.cylinder.updateMany({
+                where: {
+                  id: { in: cylindersWithCustomer.slice(0, securityItem.quantity).map(c => c.id) }
+                },
+                data: {
+                  currentStatus: 'EMPTY',
+                  location: 'Store - Ready for Refill'
+                }
+              });
+              console.log(`[B2C] Returned ${securityItem.quantity} ${cylinderType} cylinders to inventory as EMPTY`);
+            } else {
+              // If not enough found with customer, create new empty cylinders
+              const cylindersToCreate = securityItem.quantity - cylindersWithCustomer.length;
+              if (cylindersWithCustomer.length > 0) {
+                await tx.cylinder.updateMany({
+                  where: {
+                    id: { in: cylindersWithCustomer.map(c => c.id) }
+                  },
+                  data: {
+                    currentStatus: 'EMPTY',
+                    location: 'Store - Ready for Refill'
+                  }
+                });
+              }
+
+              // Create new cylinders for the remaining quantity
+              const initialCylinderCount = await tx.cylinder.count();
+              for (let i = 0; i < cylindersToCreate; i++) {
+                const code = `CYL${String(initialCylinderCount + 1 + i).padStart(3, '0')}`;
+                await tx.cylinder.create({
+                  data: {
+                    code,
+                    cylinderType: mappedCylinderType,
+                    capacity: cylinderType === 'DOMESTIC_11_8KG' ? 11.8 : cylinderType === 'STANDARD_15KG' ? 15.0 : 45.4,
+                    currentStatus: 'EMPTY',
+                    location: 'Store - Ready for Refill',
+                  },
+                });
+              }
+              console.log(`[B2C] Returned ${securityItem.quantity} empty ${cylinderType} cylinders to inventory (${cylindersWithCustomer.length} updated, ${cylindersToCreate} created)`);
+            }
+          }
+        }
+      }
+
+      // 3. Deduct accessories from inventory
+      if (accessoryItems.length > 0) {
+        for (const accessory of accessoryItems) {
+          if (accessory.quantity > 0) {
+            const itemName = accessory.itemName.toLowerCase();
+
+            // Handle different accessory types
+            if (itemName.includes('stove')) {
+              // Extract quality from item name (e.g., "Stove - A" -> "A")
+              const qualityMatch = accessory.itemName.match(/(?:Stove|stove)\s*-?\s*([A-Z])/i);
+              const quality = qualityMatch ? qualityMatch[1].toUpperCase() : 'A';
+              
+              const stove = await tx.stove.findFirst({
+                where: { quality: quality }
+              });
+              
+              if (stove) {
+                if (stove.quantity < accessory.quantity) {
+                  throw new Error(`Insufficient stove inventory: Only ${stove.quantity} ${quality}-quality stoves available, but ${accessory.quantity} requested`);
+                }
+                
+                await tx.stove.update({
+                  where: { id: stove.id },
+                  data: {
+                    quantity: {
+                      decrement: accessory.quantity
+                    },
+                    totalCost: {
+                      decrement: accessory.quantity * stove.costPerPiece
+                    }
+                  }
+                });
+                console.log(`[B2C] Deducted ${accessory.quantity} ${quality}-quality stoves from inventory`);
+              } else {
+                console.warn(`[B2C] Stove with quality ${quality} not found in inventory`);
+              }
+            } else if (itemName.includes('regulator')) {
+              // Handle regulators
+              const regulator = await tx.regulator.findFirst();
+              
+              if (regulator) {
+                if (regulator.quantity < accessory.quantity) {
+                  throw new Error(`Insufficient regulator inventory: Only ${regulator.quantity} regulators available, but ${accessory.quantity} requested`);
+                }
+                
+                await tx.regulator.update({
+                  where: { id: regulator.id },
+                  data: {
+                    quantity: {
+                      decrement: accessory.quantity
+                    },
+                    totalCost: {
+                      decrement: accessory.quantity * regulator.costPerPiece
+                    }
+                  }
+                });
+                console.log(`[B2C] Deducted ${accessory.quantity} regulators from inventory`);
+              } else {
+                console.warn(`[B2C] Regulator not found in inventory`);
+              }
+            } else if (itemName.includes('pipe') || itemName.includes('hose')) {
+              // Handle gas pipes
+              const gasPipe = await tx.gasPipe.findFirst();
+              
+              if (gasPipe) {
+                if (gasPipe.quantity < accessory.quantity) {
+                  throw new Error(`Insufficient gas pipe inventory: Only ${gasPipe.quantity} gas pipes available, but ${accessory.quantity} requested`);
+                }
+                
+                await tx.gasPipe.update({
+                  where: { id: gasPipe.id },
+                  data: {
+                    quantity: {
+                      decrement: accessory.quantity
+                    }
+                  }
+                });
+                console.log(`[B2C] Deducted ${accessory.quantity} gas pipes from inventory`);
+              } else {
+                console.warn(`[B2C] Gas pipe not found in inventory`);
+              }
+            } else {
+              // Handle other accessories from Product table
+              const product = await tx.product.findFirst({
+                where: { 
+                  name: { 
+                    contains: accessory.itemName,
+                    mode: 'insensitive'
+                  } 
+                }
+              });
+              
+              if (product) {
+                if (product.stockQuantity < accessory.quantity) {
+                  throw new Error(`Insufficient ${accessory.itemName} inventory: Only ${product.stockQuantity} available, but ${accessory.quantity} requested`);
+                }
+                
+                await tx.product.update({
+                  where: { id: product.id },
+                  data: {
+                    stockQuantity: {
+                      decrement: accessory.quantity
+                    }
+                  }
+                });
+                console.log(`[B2C] Deducted ${accessory.quantity} ${accessory.itemName} from inventory`);
+              } else {
+                console.warn(`[B2C] Product ${accessory.itemName} not found in inventory`);
+              }
+            }
+          }
+        }
+      }
+
+      // ===== END INVENTORY INTEGRATION =====
 
       // Update customer's actual profit margin
       // Profit = (Selling Price - Cost Price) for all items + Security Deductions + Delivery Profit
