@@ -107,6 +107,14 @@ export async function POST(
     const body = await request.json();
     const { items, invoiceNumber, notes, purchaseDate, paidAmount } = body;
 
+    console.log('Received purchase data:', {
+      vendorId: id,
+      invoiceNumber,
+      itemsCount: items?.length,
+      notes,
+      paidAmount
+    });
+
     if (!items || items.length === 0) {
       return NextResponse.json(
         { error: 'At least one item is required' },
@@ -128,6 +136,8 @@ export async function POST(
     else if (paid > 0) paymentStatus = 'PARTIAL';
 
     // Create purchase with items
+    console.log('Creating purchase with invoice number:', invoiceNumber);
+    
     const purchase = await prisma.vendorPurchase.create({
       data: {
         vendorId: id,
@@ -163,6 +173,12 @@ export async function POST(
         items: true,
         payments: true
       }
+    });
+
+    console.log('Purchase created successfully:', {
+      id: purchase.id,
+      invoiceNumber: purchase.invoiceNumber,
+      totalAmount: purchase.totalAmount
     });
 
     return NextResponse.json({ purchase }, { status: 201 });

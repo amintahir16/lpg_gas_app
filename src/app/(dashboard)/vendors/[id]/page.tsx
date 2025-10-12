@@ -186,6 +186,51 @@ export default function VendorDetailPage() {
     }
   };
 
+  const generateInvoiceNumber = async () => {
+    try {
+      const response = await fetch('/api/vendors/invoice-sequence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Include session cookies
+        body: JSON.stringify({
+          vendorId: vendorId,
+          categorySlug: vendor?.category?.slug
+        })
+      });
+
+      if (!response.ok) {
+        console.error('Invoice generation failed:', response.status, response.statusText);
+        throw new Error('Failed to generate invoice number');
+      }
+      
+      const data = await response.json();
+      console.log('Generated invoice number:', data.invoiceNumber);
+      return data.invoiceNumber;
+    } catch (error) {
+      console.error('Error generating invoice number:', error);
+      // Fallback to timestamp-based generation
+      const timestamp = Date.now().toString().slice(-8);
+      const prefix = vendor?.category?.slug === 'cylinder_purchase' ? 'CYL' :
+                    vendor?.category?.slug === 'gas_purchase' ? 'GAS' :
+                    vendor?.category?.slug === 'vaporizer_purchase' ? 'VAP' :
+                    vendor?.category?.slug === 'accessories_purchase' ? 'ACC' :
+                    vendor?.category?.slug === 'valves_purchase' ? 'VAL' : 'VEN';
+      const fallbackInvoice = `${prefix}-${timestamp}`;
+      console.log('Using fallback invoice number:', fallbackInvoice);
+      return fallbackInvoice;
+    }
+  };
+
+  const handleOpenPurchaseForm = async () => {
+    const invoiceNumber = await generateInvoiceNumber();
+    setPurchaseFormData({
+      invoiceNumber: invoiceNumber,
+      notes: '',
+      paidAmount: 0
+    });
+    setShowPurchaseForm(true);
+  };
+
   const handleAddPurchaseItem = () => {
     // Only allow adding custom items for accessories and generic categories
     if (vendor?.category?.slug === 'accessories_purchase' || 
@@ -241,6 +286,14 @@ export default function VendorDetailPage() {
       return;
     }
 
+    console.log('Submitting purchase with invoice number:', purchaseFormData.invoiceNumber);
+    console.log('Purchase data:', {
+      items: validItems,
+      invoiceNumber: purchaseFormData.invoiceNumber,
+      notes: purchaseFormData.notes,
+      paidAmount: purchaseFormData.paidAmount
+    });
+
     try {
       const response = await fetch(`/api/vendors/${vendorId}/purchases`, {
         method: 'POST',
@@ -255,9 +308,13 @@ export default function VendorDetailPage() {
 
       if (!response.ok) {
         const error = await response.json();
+        console.error('Purchase creation failed:', error);
         alert(error.error || 'Failed to create purchase');
         return;
       }
+
+      const result = await response.json();
+      console.log('Purchase created successfully:', result);
 
       // Reset form
       setShowPurchaseForm(false);
@@ -541,11 +598,11 @@ export default function VendorDetailPage() {
               Purchase Entries
             </h2>
             <Button
-              onClick={() => setShowPurchaseForm(!showPurchaseForm)}
+              onClick={showPurchaseForm ? () => setShowPurchaseForm(false) : handleOpenPurchaseForm}
               className="flex items-center gap-2"
             >
               <PlusIcon className="w-5 h-5" />
-              Add Purchase Entry
+              {showPurchaseForm ? 'Cancel' : 'Add Purchase Entry'}
             </Button>
           </div>
 
@@ -564,12 +621,13 @@ export default function VendorDetailPage() {
                       </label>
                       <Input
                         value={purchaseFormData.invoiceNumber}
-                        onChange={(e) => setPurchaseFormData({
-                          ...purchaseFormData,
-                          invoiceNumber: e.target.value
-                        })}
-                        placeholder="INV-001"
+                        readOnly
+                        className="bg-gray-50 text-gray-900 cursor-not-allowed"
+                        placeholder="Auto-generated"
                       />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Invoice number is automatically generated
+                      </p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -875,7 +933,7 @@ export default function VendorDetailPage() {
                 <p className="text-gray-500 mb-4">
                   Start by adding your first purchase entry
                 </p>
-                <Button onClick={() => setShowPurchaseForm(true)}>
+                <Button onClick={handleOpenPurchaseForm}>
                   <PlusIcon className="w-5 h-5 mr-2" />
                   Add First Purchase
                 </Button>

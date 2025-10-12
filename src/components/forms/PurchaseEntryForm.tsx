@@ -144,7 +144,40 @@ export default function PurchaseEntryForm({
       setFormData(prev => ({ ...prev, vendorId: vendor.id }));
     }
     fetchVendors();
+    generateInvoiceNumber();
   }, [vendor, category]);
+
+  const generateInvoiceNumber = async () => {
+    try {
+      const response = await fetch('/api/vendors/invoice-sequence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Include session cookies
+        body: JSON.stringify({
+          vendorId: vendor?.id || '',
+          categorySlug: category
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setFormData(prev => ({ ...prev, invoiceNumber: data.invoiceNumber }));
+      } else {
+        console.error('Invoice generation failed:', response.status);
+        throw new Error('Failed to generate invoice number');
+      }
+    } catch (error) {
+      console.error('Error generating invoice number:', error);
+      // Fallback to timestamp-based generation
+      const timestamp = Date.now().toString().slice(-8);
+      const prefix = category === 'cylinder-purchase' ? 'CYL' :
+                    category === 'gas-purchase' ? 'GAS' :
+                    category === 'vaporizer-purchase' ? 'VAP' :
+                    category === 'accessories-purchase' ? 'ACC' :
+                    category === 'valves-purchase' ? 'VAL' : 'VEN';
+      setFormData(prev => ({ ...prev, invoiceNumber: `${prefix}-${timestamp}` }));
+    }
+  };
 
   const fetchVendors = async () => {
     try {
@@ -306,11 +339,14 @@ export default function PurchaseEntryForm({
               <FileText className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
                 value={formData.invoiceNumber}
-                onChange={(e) => handleInputChange('invoiceNumber', e.target.value)}
-                placeholder="Enter invoice number"
-                className="pl-10"
+                readOnly
+                placeholder="Auto-generated"
+                className="pl-10 bg-gray-50 text-gray-900 cursor-not-allowed"
               />
             </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Invoice number is automatically generated
+            </p>
           </div>
         </div>
 
