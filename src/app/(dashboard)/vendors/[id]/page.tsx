@@ -549,13 +549,23 @@ export default function VendorDetailPage() {
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
-              <div>
+              <div className="flex-1">
                 <p className="text-sm text-gray-500 mb-1">Net Balance (Outstanding)</p>
                 <p className={`text-2xl font-bold ${
                   vendor.financialSummary.netBalance > 0 ? 'text-red-600' : 'text-gray-900'
                 }`}>
                   {formatCurrency(vendor.financialSummary.netBalance)}
                 </p>
+                {vendor.financialSummary.netBalance > 0 && (
+                  <p className="text-xs text-red-500 mt-1">
+                    You owe this amount to the vendor
+                  </p>
+                )}
+                {vendor.financialSummary.netBalance < 0 && (
+                  <p className="text-xs text-green-500 mt-1">
+                    Vendor has credit balance
+                  </p>
+                )}
               </div>
               <div className={`p-3 rounded-lg ${
                 vendor.financialSummary.netBalance > 0 ? 'bg-yellow-100' : 'bg-gray-100'
