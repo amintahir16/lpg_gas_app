@@ -235,28 +235,34 @@ async function createAccessories() {
   // Create regulators
   const regulatorData = [
     {
-      type: 'High Pressure Adjustable',
+      type: 'Adjustable',
       costPerPiece: 1200,
       quantity: 25,
       totalCost: 30000
     },
     {
-      type: 'Standard 5-Star',
-      costPerPiece: 800,
-      quantity: 50,
-      totalCost: 40000
-    },
-    {
-      type: 'Low Pressure Domestic',
-      costPerPiece: 600,
-      quantity: 30,
-      totalCost: 18000
-    },
-    {
-      type: 'Commercial Heavy Duty',
-      costPerPiece: 2000,
-      quantity: 15,
+      type: 'Ideal High Pressure',
+      costPerPiece: 1500,
+      quantity: 20,
       totalCost: 30000
+    },
+    {
+      type: '5 Star High Pressure',
+      costPerPiece: 1800,
+      quantity: 30,
+      totalCost: 54000
+    },
+    {
+      type: '3 Star Low Pressure Q1',
+      costPerPiece: 800,
+      quantity: 40,
+      totalCost: 32000
+    },
+    {
+      type: '3 Star Low Pressure Q2',
+      costPerPiece: 600,
+      quantity: 35,
+      totalCost: 21000
     }
   ];
 

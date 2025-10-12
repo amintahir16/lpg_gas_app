@@ -25,16 +25,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { type, costPerPiece, quantity } = body;
-
-    const totalCost = parseFloat(costPerPiece) * parseInt(quantity);
+    const { type, costPerPiece, quantity, totalCost } = body;
 
     const regulator = await prisma.regulator.create({
       data: {
         type,
         costPerPiece: parseFloat(costPerPiece),
         quantity: parseInt(quantity),
-        totalCost
+        totalCost: parseFloat(totalCost)
       }
     });
 

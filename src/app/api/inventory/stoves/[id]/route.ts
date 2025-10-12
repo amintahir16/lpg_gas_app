@@ -3,25 +3,26 @@ import { prisma } from '@/lib/prisma';
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
-    const { quality, quantity, costPerPiece } = body;
+    const { quality, quantity, costPerPiece, totalCost } = body;
 
     const quantityNum = parseInt(quantity);
     const costPerPieceNum = parseFloat(costPerPiece);
-    const totalCost = quantityNum * costPerPieceNum;
+    const totalCostNum = parseFloat(totalCost);
 
     const stove = await prisma.stove.update({
       where: {
-        id: params.id
+        id
       },
       data: {
         quality,
         quantity: quantityNum,
         costPerPiece: costPerPieceNum,
-        totalCost: totalCost
+        totalCost: totalCostNum
       }
     });
 
@@ -47,12 +48,13 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     await prisma.stove.delete({
       where: {
-        id: params.id
+        id
       }
     });
 

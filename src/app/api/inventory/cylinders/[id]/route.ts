@@ -3,15 +3,16 @@ import { prisma } from '@/lib/prisma';
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const { cylinderType, capacity, currentStatus, location, storeId, vehicleId, purchaseDate, purchasePrice, lastMaintenanceDate, nextMaintenanceDate } = body;
 
     const cylinder = await prisma.cylinder.update({
       where: {
-        id: params.id
+        id
       },
       data: {
         cylinderType,
@@ -42,12 +43,13 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     await prisma.cylinder.delete({
       where: {
-        id: params.id
+        id
       }
     });
 

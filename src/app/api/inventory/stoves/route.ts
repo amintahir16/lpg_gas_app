@@ -32,18 +32,18 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { quality, quantity, costPerPiece } = body;
+    const { quality, quantity, costPerPiece, totalCost } = body;
 
     const quantityNum = parseInt(quantity);
     const costPerPieceNum = parseFloat(costPerPiece);
-    const totalCost = quantityNum * costPerPieceNum;
+    const totalCostNum = parseFloat(totalCost);
 
     const stove = await prisma.stove.create({
       data: {
         quality,
         quantity: quantityNum,
         costPerPiece: costPerPieceNum,
-        totalCost: totalCost
+        totalCost: totalCostNum
       }
     });
 

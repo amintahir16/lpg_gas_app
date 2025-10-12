@@ -158,6 +158,52 @@ export default function AccessoriesInventoryPage() {
     setShowEditForm(true);
   };
 
+  const handleUpdateRegulator = async (id: string, formData: any) => {
+    try {
+      const response = await fetch(`/api/inventory/regulators/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update regulator');
+      }
+
+      await fetchData();
+      setShowEditForm(false);
+      setSelectedItem(null);
+    } catch (error) {
+      console.error('Failed to update regulator:', error);
+    }
+  };
+
+  const handleUpdateGasPipe = async (id: string, formData: any) => {
+    try {
+      const response = await fetch(`/api/inventory/pipes/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update gas pipe');
+      }
+
+      await fetchData();
+      setShowEditForm(false);
+      setSelectedItem(null);
+    } catch (error) {
+      console.error('Failed to update gas pipe:', error);
+    }
+  };
+
   const handleUpdateStove = async (id: string, formData: any) => {
     try {
       const response = await fetch(`/api/inventory/stoves/${id}`, {
@@ -736,23 +782,26 @@ export default function AccessoriesInventoryPage() {
                   data = {
                     type: form.type.value,
                     costPerPiece: parseFloat(form.costPerPiece.value),
-                    quantity: parseInt(form.quantity.value)
+                    quantity: parseInt(form.quantity.value),
+                    totalCost: parseFloat(form.totalCost.value)
                   };
+                  handleUpdateRegulator(selectedItem.id, data);
                 } else if (activeTab === 'pipes') {
                   data = {
                     type: form.type.value,
                     quantity: parseFloat(form.quantity.value),
                     totalCost: parseFloat(form.totalCost.value)
                   };
+                  handleUpdateGasPipe(selectedItem.id, data);
                 } else if (activeTab === 'stoves') {
                   data = {
                     quality: form.quality.value,
                     quantity: parseInt(form.quantity.value),
-                    costPerPiece: parseFloat(form.costPerPiece.value)
+                    costPerPiece: parseFloat(form.costPerPiece.value),
+                    totalCost: parseFloat(form.totalCost.value)
                   };
+                  handleUpdateStove(selectedItem.id, data);
                 }
-                
-                handleUpdateStove(selectedItem.id, data);
               }}>
                 {activeTab === 'regulators' && selectedItem && (
                   <>
@@ -765,8 +814,12 @@ export default function AccessoriesInventoryPage() {
                       <Input name="costPerPiece" type="number" defaultValue={(selectedItem as Regulator).costPerPiece} required />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity</label>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity in Store</label>
                       <Input name="quantity" type="number" defaultValue={(selectedItem as Regulator).quantity} required />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Total Cost (PKR)</label>
+                      <Input name="totalCost" type="number" defaultValue={(selectedItem as Regulator).totalCost} required />
                     </div>
                   </>
                 )}
@@ -779,6 +832,10 @@ export default function AccessoriesInventoryPage() {
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity (Meters)</label>
                       <Input name="quantity" type="number" defaultValue={(selectedItem as GasPipe).quantity} required />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Cost Per Meter (PKR)</label>
+                      <Input name="costPerMeter" type="number" defaultValue={((selectedItem as GasPipe).totalCost / (selectedItem as GasPipe).quantity).toFixed(2)} required />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Total Cost (PKR)</label>
@@ -800,12 +857,16 @@ export default function AccessoriesInventoryPage() {
                       </select>
                     </div>
                     <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity</label>
+                      <Input name="quantity" type="number" defaultValue={(selectedItem as Stove).quantity} required />
+                    </div>
+                    <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Cost per Piece (PKR)</label>
                       <Input name="costPerPiece" type="number" defaultValue={(selectedItem as Stove).costPerPiece || 0} required />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity</label>
-                      <Input name="quantity" type="number" defaultValue={(selectedItem as Stove).quantity} required />
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Total Cost (PKR)</label>
+                      <Input name="totalCost" type="number" defaultValue={(selectedItem as Stove).totalCost || 0} required />
                     </div>
                   </>
                 )}
@@ -847,7 +908,8 @@ export default function AccessoriesInventoryPage() {
                   data = {
                     type: form.type.value,
                     costPerPiece: parseFloat(form.costPerPiece.value),
-                    quantity: parseInt(form.quantity.value)
+                    quantity: parseInt(form.quantity.value),
+                    totalCost: parseFloat(form.totalCost.value)
                   };
                 } else if (activeTab === 'pipes') {
                   data = {
@@ -859,7 +921,8 @@ export default function AccessoriesInventoryPage() {
                   data = {
                     quality: form.quality.value,
                     quantity: parseInt(form.quantity.value),
-                    costPerPiece: parseFloat(form.costPerPiece.value)
+                    costPerPiece: parseFloat(form.costPerPiece.value),
+                    totalCost: parseFloat(form.totalCost.value)
                   };
                 }
                 
@@ -876,8 +939,12 @@ export default function AccessoriesInventoryPage() {
                       <Input name="costPerPiece" type="number" placeholder="1000" required />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity</label>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity in Store</label>
                       <Input name="quantity" type="number" placeholder="10" required />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Total Cost (PKR)</label>
+                      <Input name="totalCost" type="number" placeholder="10000" required />
                     </div>
                   </>
                 )}
@@ -890,6 +957,10 @@ export default function AccessoriesInventoryPage() {
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity (Meters)</label>
                       <Input name="quantity" type="number" placeholder="100" required />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Cost Per Meter (PKR)</label>
+                      <Input name="costPerMeter" type="number" placeholder="50" required />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Total Cost (PKR)</label>
@@ -911,12 +982,16 @@ export default function AccessoriesInventoryPage() {
                       </select>
                     </div>
                     <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity</label>
+                      <Input name="quantity" type="number" placeholder="5" required />
+                    </div>
+                    <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Cost per Piece (PKR)</label>
                       <Input name="costPerPiece" type="number" placeholder="1000" required />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity</label>
-                      <Input name="quantity" type="number" placeholder="5" required />
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Total Cost (PKR)</label>
+                      <Input name="totalCost" type="number" placeholder="5000" required />
                     </div>
                   </>
                 )}
