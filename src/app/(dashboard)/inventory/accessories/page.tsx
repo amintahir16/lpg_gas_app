@@ -1127,7 +1127,7 @@ export default function AccessoriesInventoryPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity in Store</label>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity</label>
                       <Input 
                         name="quantity" 
                         type="number" 
