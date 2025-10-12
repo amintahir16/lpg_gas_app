@@ -8,10 +8,10 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { type, quantity } = body;
+    const { type, quantity, totalCost } = body;
 
     const quantityNum = parseFloat(quantity);
-    const totalCost = quantityNum * 50; // Assuming cost per meter is 50 PKR
+    const totalCostNum = parseFloat(totalCost);
 
     const gasPipe = await prisma.gasPipe.update({
       where: {
@@ -20,7 +20,7 @@ export async function PUT(
       data: {
         type,
         quantity: quantityNum,
-        totalCost: totalCost
+        totalCost: totalCostNum
       }
     });
 

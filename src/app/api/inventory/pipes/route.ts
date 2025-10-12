@@ -9,9 +9,16 @@ export async function GET(request: NextRequest) {
       }
     });
 
+    // Convert Decimal values to numbers for proper JSON serialization
+    const gasPipesWithNumbers = gasPipes.map(pipe => ({
+      ...pipe,
+      quantity: parseFloat(pipe.quantity.toString()),
+      totalCost: parseFloat(pipe.totalCost.toString())
+    }));
+
     return NextResponse.json({
       success: true,
-      gasPipes
+      gasPipes: gasPipesWithNumbers
     });
   } catch (error) {
     console.error('Error fetching gas pipes:', error);
@@ -35,9 +42,16 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    // Convert Decimal values to numbers for proper JSON serialization
+    const gasPipeWithNumbers = {
+      ...gasPipe,
+      quantity: parseFloat(gasPipe.quantity.toString()),
+      totalCost: parseFloat(gasPipe.totalCost.toString())
+    };
+
     return NextResponse.json({
       success: true,
-      gasPipe
+      gasPipe: gasPipeWithNumbers
     });
   } catch (error) {
     console.error('Error creating gas pipe:', error);

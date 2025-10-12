@@ -67,6 +67,72 @@ export default function AccessoriesInventoryPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Regulator | GasPipe | Stove | null>(null);
+  
+  // Form calculation states
+  const [formValues, setFormValues] = useState({
+    quantity: '',
+    costPerPiece: '',
+    costPerMeter: '',
+    totalCost: ''
+  });
+  
+  const [editFormValues, setEditFormValues] = useState({
+    quantity: '',
+    costPerPiece: '',
+    costPerMeter: '',
+    totalCost: ''
+  });
+
+  // Auto-calculate total cost
+  const calculateTotalCost = (quantity: string, costPerPiece: string) => {
+    const qty = parseFloat(quantity) || 0;
+    const cost = parseFloat(costPerPiece) || 0;
+    const total = qty * cost;
+    return total > 0 ? total.toString() : '';
+  };
+
+  const handleFormInputChange = (field: string, value: string) => {
+    const newValues = { ...formValues, [field]: value };
+    
+    // Auto-calculate total cost for regulators and stoves
+    if ((activeTab === 'regulators' || activeTab === 'stoves') && 
+        (field === 'quantity' || field === 'costPerPiece')) {
+      const quantity = field === 'quantity' ? value : newValues.quantity;
+      const costPerPiece = field === 'costPerPiece' ? value : newValues.costPerPiece;
+      newValues.totalCost = calculateTotalCost(quantity, costPerPiece);
+    }
+    
+    // Auto-calculate total cost for pipes (quantity * costPerMeter)
+    if (activeTab === 'pipes' && (field === 'quantity' || field === 'costPerMeter')) {
+      const quantity = field === 'quantity' ? value : newValues.quantity;
+      const costPerMeter = field === 'costPerMeter' ? value : newValues.costPerMeter;
+      newValues.totalCost = calculateTotalCost(quantity, costPerMeter);
+    }
+    
+    setFormValues(newValues);
+  };
+
+  const handleEditFormInputChange = (field: string, value: string) => {
+    const newValues = { ...editFormValues, [field]: value };
+    
+    // Auto-calculate total cost for regulators and stoves
+    if ((activeTab === 'regulators' || activeTab === 'stoves') && 
+        (field === 'quantity' || field === 'costPerPiece')) {
+      const quantity = field === 'quantity' ? value : newValues.quantity;
+      const costPerPiece = field === 'costPerPiece' ? value : newValues.costPerPiece;
+      newValues.totalCost = calculateTotalCost(quantity, costPerPiece);
+    }
+    
+    // Auto-calculate total cost for pipes (quantity * costPerMeter)
+    if (activeTab === 'pipes' && (field === 'quantity' || field === 'costPerMeter')) {
+      const quantity = field === 'quantity' ? value : newValues.quantity;
+      const costPerMeter = field === 'costPerMeter' ? value : newValues.costPerMeter;
+      newValues.totalCost = calculateTotalCost(quantity, costPerMeter);
+      console.log('Gas pipe edit calculation:', { quantity, costPerMeter, totalCost: newValues.totalCost });
+    }
+    
+    setEditFormValues(newValues);
+  };
 
   useEffect(() => {
     fetchData();
@@ -79,12 +145,14 @@ export default function AccessoriesInventoryPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
+      console.log('Fetching data for tab:', activeTab);
       const response = await fetch(`/api/inventory/${activeTab}`, {
         credentials: 'include'
       });
       
       if (response.ok) {
         const data = await response.json();
+        console.log('Fetched data:', data);
         switch (activeTab) {
           case 'regulators':
             setRegulators(data.regulators || []);
@@ -96,6 +164,8 @@ export default function AccessoriesInventoryPage() {
             setStoves(data.stoves || []);
             break;
         }
+      } else {
+        console.error('Failed to fetch data:', response.status, response.statusText);
       }
     } catch (error) {
       console.error(`Failed to fetch ${activeTab}:`, error);
@@ -145,21 +215,49 @@ export default function AccessoriesInventoryPage() {
 
   const handleEditRegulator = (regulator: Regulator) => {
     setSelectedItem(regulator);
+    setEditFormValues({
+      quantity: regulator.quantity.toString(),
+      costPerPiece: regulator.costPerPiece.toString(),
+      costPerMeter: '',
+      totalCost: regulator.totalCost.toString()
+    });
     setShowEditForm(true);
   };
 
   const handleEditGasPipe = (gasPipe: GasPipe) => {
+    console.log('Editing gas pipe:', gasPipe);
+    const costPerMeter = (gasPipe.totalCost / gasPipe.quantity).toString();
+    console.log('Calculated cost per meter:', costPerMeter);
+    
     setSelectedItem(gasPipe);
+    setEditFormValues({
+      quantity: gasPipe.quantity.toString(),
+      costPerPiece: '',
+      costPerMeter: costPerMeter,
+      totalCost: gasPipe.totalCost.toString()
+    });
+    console.log('Set edit form values:', {
+      quantity: gasPipe.quantity.toString(),
+      costPerMeter: costPerMeter,
+      totalCost: gasPipe.totalCost.toString()
+    });
     setShowEditForm(true);
   };
 
   const handleEditStove = (stove: Stove) => {
     setSelectedItem(stove);
+    setEditFormValues({
+      quantity: stove.quantity.toString(),
+      costPerPiece: stove.costPerPiece.toString(),
+      costPerMeter: '',
+      totalCost: stove.totalCost.toString()
+    });
     setShowEditForm(true);
   };
 
   const handleUpdateRegulator = async (id: string, formData: any) => {
     try {
+      console.log('Updating regulator:', id, formData);
       const response = await fetch(`/api/inventory/regulators/${id}`, {
         method: 'PUT',
         headers: {
@@ -170,9 +268,13 @@ export default function AccessoriesInventoryPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update regulator');
+        const errorText = await response.text();
+        throw new Error(`Failed to update regulator: ${errorText}`);
       }
 
+      const result = await response.json();
+      console.log('Update successful:', result);
+      
       await fetchData();
       setShowEditForm(false);
       setSelectedItem(null);
@@ -183,6 +285,13 @@ export default function AccessoriesInventoryPage() {
 
   const handleUpdateGasPipe = async (id: string, formData: any) => {
     try {
+      console.log('Updating gas pipe:', id, formData);
+      console.log('Form data types:', {
+        type: typeof formData.type,
+        quantity: typeof formData.quantity,
+        totalCost: typeof formData.totalCost
+      });
+      
       const response = await fetch(`/api/inventory/pipes/${id}`, {
         method: 'PUT',
         headers: {
@@ -193,9 +302,14 @@ export default function AccessoriesInventoryPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update gas pipe');
+        const errorText = await response.text();
+        throw new Error(`Failed to update gas pipe: ${errorText}`);
       }
 
+      const result = await response.json();
+      console.log('Update successful:', result);
+      console.log('Updated gas pipe data:', result.gasPipe);
+      
       await fetchData();
       setShowEditForm(false);
       setSelectedItem(null);
@@ -206,6 +320,7 @@ export default function AccessoriesInventoryPage() {
 
   const handleUpdateStove = async (id: string, formData: any) => {
     try {
+      console.log('Updating stove:', id, formData);
       const response = await fetch(`/api/inventory/stoves/${id}`, {
         method: 'PUT',
         headers: {
@@ -216,9 +331,13 @@ export default function AccessoriesInventoryPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update stove');
+        const errorText = await response.text();
+        throw new Error(`Failed to update stove: ${errorText}`);
       }
 
+      const result = await response.json();
+      console.log('Update successful:', result);
+      
       await fetchData();
       setShowEditForm(false);
       setSelectedItem(null);
@@ -781,27 +900,29 @@ export default function AccessoriesInventoryPage() {
                 if (activeTab === 'regulators') {
                   data = {
                     type: form.type.value,
-                    costPerPiece: parseFloat(form.costPerPiece.value),
-                    quantity: parseInt(form.quantity.value),
-                    totalCost: parseFloat(form.totalCost.value)
+                    costPerPiece: parseFloat(editFormValues.costPerPiece),
+                    quantity: parseInt(editFormValues.quantity),
+                    totalCost: parseFloat(editFormValues.totalCost)
                   };
                   handleUpdateRegulator(selectedItem.id, data);
                 } else if (activeTab === 'pipes') {
                   data = {
                     type: form.type.value,
-                    quantity: parseFloat(form.quantity.value),
-                    totalCost: parseFloat(form.totalCost.value)
+                    quantity: parseFloat(editFormValues.quantity),
+                    totalCost: parseFloat(editFormValues.totalCost)
                   };
                   handleUpdateGasPipe(selectedItem.id, data);
                 } else if (activeTab === 'stoves') {
                   data = {
                     quality: form.quality.value,
-                    quantity: parseInt(form.quantity.value),
-                    costPerPiece: parseFloat(form.costPerPiece.value),
-                    totalCost: parseFloat(form.totalCost.value)
+                    quantity: parseInt(editFormValues.quantity),
+                    costPerPiece: parseFloat(editFormValues.costPerPiece),
+                    totalCost: parseFloat(editFormValues.totalCost)
                   };
                   handleUpdateStove(selectedItem.id, data);
                 }
+                // Reset edit form values after submission
+                setEditFormValues({ quantity: '', costPerPiece: '', costPerMeter: '', totalCost: '' });
               }}>
                 {activeTab === 'regulators' && selectedItem && (
                   <>
@@ -811,15 +932,34 @@ export default function AccessoriesInventoryPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Cost per Piece (PKR)</label>
-                      <Input name="costPerPiece" type="number" defaultValue={(selectedItem as Regulator).costPerPiece} required />
+                      <Input 
+                        name="costPerPiece" 
+                        type="number" 
+                        value={editFormValues.costPerPiece}
+                        onChange={(e) => handleEditFormInputChange('costPerPiece', e.target.value)}
+                        required 
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity in Store</label>
-                      <Input name="quantity" type="number" defaultValue={(selectedItem as Regulator).quantity} required />
+                      <Input 
+                        name="quantity" 
+                        type="number" 
+                        value={editFormValues.quantity}
+                        onChange={(e) => handleEditFormInputChange('quantity', e.target.value)}
+                        required 
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Total Cost (PKR)</label>
-                      <Input name="totalCost" type="number" defaultValue={(selectedItem as Regulator).totalCost} required />
+                      <Input 
+                        name="totalCost" 
+                        type="number" 
+                        value={editFormValues.totalCost}
+                        readOnly
+                        className="bg-gray-50"
+                        required 
+                      />
                     </div>
                   </>
                 )}
@@ -831,15 +971,34 @@ export default function AccessoriesInventoryPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity (Meters)</label>
-                      <Input name="quantity" type="number" defaultValue={(selectedItem as GasPipe).quantity} required />
+                      <Input 
+                        name="quantity" 
+                        type="number" 
+                        value={editFormValues.quantity}
+                        onChange={(e) => handleEditFormInputChange('quantity', e.target.value)}
+                        required 
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Cost Per Meter (PKR)</label>
-                      <Input name="costPerMeter" type="number" defaultValue={((selectedItem as GasPipe).totalCost / (selectedItem as GasPipe).quantity).toFixed(2)} required />
+                      <Input 
+                        name="costPerMeter" 
+                        type="number" 
+                        value={editFormValues.costPerMeter}
+                        onChange={(e) => handleEditFormInputChange('costPerMeter', e.target.value)}
+                        required 
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Total Cost (PKR)</label>
-                      <Input name="totalCost" type="number" defaultValue={(selectedItem as GasPipe).totalCost} required />
+                      <Input 
+                        name="totalCost" 
+                        type="number" 
+                        value={editFormValues.totalCost}
+                        readOnly
+                        className="bg-gray-50"
+                        required 
+                      />
                     </div>
                   </>
                 )}
@@ -858,15 +1017,34 @@ export default function AccessoriesInventoryPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity</label>
-                      <Input name="quantity" type="number" defaultValue={(selectedItem as Stove).quantity} required />
+                      <Input 
+                        name="quantity" 
+                        type="number" 
+                        value={editFormValues.quantity}
+                        onChange={(e) => handleEditFormInputChange('quantity', e.target.value)}
+                        required 
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Cost per Piece (PKR)</label>
-                      <Input name="costPerPiece" type="number" defaultValue={(selectedItem as Stove).costPerPiece || 0} required />
+                      <Input 
+                        name="costPerPiece" 
+                        type="number" 
+                        value={editFormValues.costPerPiece}
+                        onChange={(e) => handleEditFormInputChange('costPerPiece', e.target.value)}
+                        required 
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Total Cost (PKR)</label>
-                      <Input name="totalCost" type="number" defaultValue={(selectedItem as Stove).totalCost || 0} required />
+                      <Input 
+                        name="totalCost" 
+                        type="number" 
+                        value={editFormValues.totalCost}
+                        readOnly
+                        className="bg-gray-50"
+                        required 
+                      />
                     </div>
                   </>
                 )}
@@ -877,6 +1055,7 @@ export default function AccessoriesInventoryPage() {
                     onClick={() => {
                       setShowEditForm(false);
                       setSelectedItem(null);
+                      setEditFormValues({ quantity: '', costPerPiece: '', costPerMeter: '', totalCost: '' });
                     }}
                   >
                     Cancel
@@ -907,26 +1086,28 @@ export default function AccessoriesInventoryPage() {
                 if (activeTab === 'regulators') {
                   data = {
                     type: form.type.value,
-                    costPerPiece: parseFloat(form.costPerPiece.value),
-                    quantity: parseInt(form.quantity.value),
-                    totalCost: parseFloat(form.totalCost.value)
+                    costPerPiece: parseFloat(formValues.costPerPiece),
+                    quantity: parseInt(formValues.quantity),
+                    totalCost: parseFloat(formValues.totalCost)
                   };
                 } else if (activeTab === 'pipes') {
                   data = {
                     type: form.type.value,
-                    quantity: parseFloat(form.quantity.value),
-                    totalCost: parseFloat(form.totalCost.value)
+                    quantity: parseFloat(formValues.quantity),
+                    totalCost: parseFloat(formValues.totalCost)
                   };
                 } else if (activeTab === 'stoves') {
                   data = {
                     quality: form.quality.value,
-                    quantity: parseInt(form.quantity.value),
-                    costPerPiece: parseFloat(form.costPerPiece.value),
-                    totalCost: parseFloat(form.totalCost.value)
+                    quantity: parseInt(formValues.quantity),
+                    costPerPiece: parseFloat(formValues.costPerPiece),
+                    totalCost: parseFloat(formValues.totalCost)
                   };
                 }
                 
                 handleAddItem(data);
+                // Reset form values after submission
+                setFormValues({ quantity: '', costPerPiece: '', costPerMeter: '', totalCost: '' });
               }}>
                 {activeTab === 'regulators' && (
                   <>
@@ -936,15 +1117,37 @@ export default function AccessoriesInventoryPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Cost per Piece (PKR)</label>
-                      <Input name="costPerPiece" type="number" placeholder="1000" required />
+                      <Input 
+                        name="costPerPiece" 
+                        type="number" 
+                        placeholder="1000" 
+                        value={formValues.costPerPiece}
+                        onChange={(e) => handleFormInputChange('costPerPiece', e.target.value)}
+                        required 
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity in Store</label>
-                      <Input name="quantity" type="number" placeholder="10" required />
+                      <Input 
+                        name="quantity" 
+                        type="number" 
+                        placeholder="10" 
+                        value={formValues.quantity}
+                        onChange={(e) => handleFormInputChange('quantity', e.target.value)}
+                        required 
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Total Cost (PKR)</label>
-                      <Input name="totalCost" type="number" placeholder="10000" required />
+                      <Input 
+                        name="totalCost" 
+                        type="number" 
+                        placeholder="10000" 
+                        value={formValues.totalCost}
+                        readOnly
+                        className="bg-gray-50"
+                        required 
+                      />
                     </div>
                   </>
                 )}
@@ -956,15 +1159,37 @@ export default function AccessoriesInventoryPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity (Meters)</label>
-                      <Input name="quantity" type="number" placeholder="100" required />
+                      <Input 
+                        name="quantity" 
+                        type="number" 
+                        placeholder="100" 
+                        value={formValues.quantity}
+                        onChange={(e) => handleFormInputChange('quantity', e.target.value)}
+                        required 
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Cost Per Meter (PKR)</label>
-                      <Input name="costPerMeter" type="number" placeholder="50" required />
+                      <Input 
+                        name="costPerMeter" 
+                        type="number" 
+                        placeholder="50" 
+                        value={formValues.costPerMeter}
+                        onChange={(e) => handleFormInputChange('costPerMeter', e.target.value)}
+                        required 
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Total Cost (PKR)</label>
-                      <Input name="totalCost" type="number" placeholder="5000" required />
+                      <Input 
+                        name="totalCost" 
+                        type="number" 
+                        placeholder="5000" 
+                        value={formValues.totalCost}
+                        readOnly
+                        className="bg-gray-50"
+                        required 
+                      />
                     </div>
                   </>
                 )}
@@ -983,15 +1208,37 @@ export default function AccessoriesInventoryPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity</label>
-                      <Input name="quantity" type="number" placeholder="5" required />
+                      <Input 
+                        name="quantity" 
+                        type="number" 
+                        placeholder="5" 
+                        value={formValues.quantity}
+                        onChange={(e) => handleFormInputChange('quantity', e.target.value)}
+                        required 
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Cost per Piece (PKR)</label>
-                      <Input name="costPerPiece" type="number" placeholder="1000" required />
+                      <Input 
+                        name="costPerPiece" 
+                        type="number" 
+                        placeholder="1000" 
+                        value={formValues.costPerPiece}
+                        onChange={(e) => handleFormInputChange('costPerPiece', e.target.value)}
+                        required 
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Total Cost (PKR)</label>
-                      <Input name="totalCost" type="number" placeholder="5000" required />
+                      <Input 
+                        name="totalCost" 
+                        type="number" 
+                        placeholder="5000" 
+                        value={formValues.totalCost}
+                        readOnly
+                        className="bg-gray-50"
+                        required 
+                      />
                     </div>
                   </>
                 )}
@@ -999,7 +1246,10 @@ export default function AccessoriesInventoryPage() {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setShowAddForm(false)}
+                    onClick={() => {
+                      setShowAddForm(false);
+                      setFormValues({ quantity: '', costPerPiece: '', costPerMeter: '', totalCost: '' });
+                    }}
                   >
                     Cancel
                   </Button>
