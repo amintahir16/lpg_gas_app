@@ -35,4 +35,24 @@ export function generateInvoiceNumber(): string {
 
 export function generateVendorCode(): string {
   return `VEND${Date.now().toString().slice(-6)}`
+}
+
+export function generateCylinderCodes(itemName: string, quantity: number, startNumber: number = 1): string[] {
+  // Generate prefix based on cylinder type
+  let prefix = 'C';
+  if (itemName.includes('Domestic') || itemName.includes('11.8kg')) {
+    prefix = 'D';
+  } else if (itemName.includes('Standard') || itemName.includes('15kg')) {
+    prefix = 'S';
+  } else if (itemName.includes('Commercial') || itemName.includes('45.4kg')) {
+    prefix = 'C';
+  }
+
+  const codes = [];
+  for (let i = 0; i < quantity; i++) {
+    const codeNumber = (startNumber + i).toString().padStart(2, '0');
+    codes.push(`${prefix}${codeNumber}`);
+  }
+
+  return codes;
 } 

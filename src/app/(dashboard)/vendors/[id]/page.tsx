@@ -126,6 +126,7 @@ export default function VendorDetailPage() {
     notes: '',
     paidAmount: 0
   });
+  const [usedCodes, setUsedCodes] = useState<Set<string>>(new Set());
 
   // Item form state
   const [showItemForm, setShowItemForm] = useState(false);
@@ -228,6 +229,7 @@ export default function VendorDetailPage() {
       notes: '',
       paidAmount: 0
     });
+    setUsedCodes(new Set()); // Reset used codes for new form
     setShowPurchaseForm(true);
   };
 
@@ -253,6 +255,28 @@ export default function VendorDetailPage() {
     }
   };
 
+  const generateCylinderCodes = (itemName: string, quantity: number, currentUsedCodes: Set<string>) => {
+    if (!quantity || quantity <= 0) return '';
+    
+    // Generate prefix based on cylinder type
+    const prefix = itemName.includes('Domestic') ? 'D' :
+                  itemName.includes('Standard') ? 'S' : 'C';
+    
+    const codes = [];
+    let codeNumber = 1;
+    
+    // Find available codes that aren't already used in this form
+    while (codes.length < quantity) {
+      const code = `${prefix}${codeNumber.toString().padStart(2, '0')}`;
+      if (!currentUsedCodes.has(code)) {
+        codes.push(code);
+      }
+      codeNumber++;
+    }
+    
+    return codes.join(', ');
+  };
+
   const handlePurchaseItemChange = (index: number, field: string, value: any) => {
     const newItems = [...purchaseItems];
     newItems[index] = {
@@ -264,6 +288,29 @@ export default function VendorDetailPage() {
     if (field === 'quantity' || field === 'unitPrice') {
       newItems[index].totalPrice = 
         Number(newItems[index].quantity) * Number(newItems[index].unitPrice);
+    }
+
+    // Auto-generate cylinder codes when quantity changes for cylinder purchases
+    if (field === 'quantity' && 
+        vendor?.category?.slug === 'cylinder_purchase' && 
+        value > 0) {
+      
+      // Collect all currently used codes from other items
+      const currentUsedCodes = new Set<string>();
+      newItems.forEach((item, i) => {
+        if (i !== index && item.cylinderCodes) {
+          const codes = item.cylinderCodes.split(',').map(code => code.trim());
+          codes.forEach(code => currentUsedCodes.add(code));
+        }
+      });
+      
+      // Generate codes locally - much faster!
+      const generatedCodes = generateCylinderCodes(
+        newItems[index].itemName,
+        Number(value),
+        currentUsedCodes
+      );
+      newItems[index].cylinderCodes = generatedCodes;
     }
     
     setPurchaseItems(newItems);
@@ -742,17 +789,22 @@ export default function VendorDetailPage() {
                                   </td>
                                   {vendor?.category?.slug === 'cylinder_purchase' && (
                                     <td className="border border-gray-300 px-4 py-2">
-                                      <Input
-                                        type="text"
-                                        value={item.cylinderCodes || ''}
-                                        onChange={(e) => handlePurchaseItemChange(
-                                          index,
-                                          'cylinderCodes',
-                                          e.target.value
-                                        )}
-                                        placeholder="e.g., C001, C002, C003"
-                                        className="text-center border-0 focus:ring-1 bg-transparent text-sm"
-                                      />
+                                      <div className="space-y-1">
+                                        <Input
+                                          type="text"
+                                          value={item.cylinderCodes || ''}
+                                          onChange={(e) => handlePurchaseItemChange(
+                                            index,
+                                            'cylinderCodes',
+                                            e.target.value
+                                          )}
+                                          placeholder="Auto-generated when quantity is entered"
+                                          className="text-center border-0 focus:ring-1 bg-transparent text-sm"
+                                        />
+                                        <p className="text-xs text-gray-500 text-center">
+                                          {item.cylinderCodes ? '✓ Auto-generated' : 'Enter quantity to auto-generate'}
+                                        </p>
+                                      </div>
                                     </td>
                                   )}
                                   <td className="border border-gray-300 px-4 py-2 text-center font-medium">
@@ -912,6 +964,7 @@ export default function VendorDetailPage() {
                         }
                         
                         setPurchaseFormData({ invoiceNumber: '', notes: '', paidAmount: 0 });
+                        setUsedCodes(new Set()); // Reset used codes
                       }}
                     >
                       Cancel
