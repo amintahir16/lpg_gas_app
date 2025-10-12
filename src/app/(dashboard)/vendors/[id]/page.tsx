@@ -839,7 +839,20 @@ export default function VendorDetailPage() {
                       variant="outline"
                       onClick={() => {
                         setShowPurchaseForm(false);
-                        setPurchaseItems([{ itemName: '', quantity: 1, unitPrice: 0, totalPrice: 0 }]);
+                        
+                        // Reset to default items based on vendor category
+                        if (vendor?.category?.slug === 'cylinder_purchase') {
+                          setPurchaseItems(defaultCylinderItems);
+                        } else if (vendor?.category?.slug === 'gas_purchase') {
+                          setPurchaseItems(defaultGasItems);
+                        } else if (vendor?.category?.slug === 'vaporizer_purchase') {
+                          setPurchaseItems(defaultVaporizerItems);
+                        } else if (vendor?.category?.slug === 'accessories_purchase') {
+                          setPurchaseItems(defaultAccessoriesItems);
+                        } else {
+                          setPurchaseItems([{ itemName: '', quantity: 1, unitPrice: 0, totalPrice: 0 }]);
+                        }
+                        
                         setPurchaseFormData({ invoiceNumber: '', notes: '', paidAmount: 0 });
                       }}
                     >
