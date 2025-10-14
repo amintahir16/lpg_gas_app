@@ -206,11 +206,14 @@ Address: ${customer.address || 'N/A'}
               <CardTitle className="text-sm font-semibold text-gray-600">
                 {getTypeDisplayName(stat.type)}
               </CardTitle>
-              <UserGroupIcon className="w-5 h-5 text-gray-400" />
+              <UserGroupIcon className="w-5 h-5 text-blue-500" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-gray-900 mb-1">{stat.count}</div>
-              <p className="text-sm text-gray-600">With Customers</p>
+              <div className="flex items-center space-x-2">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <p className="text-sm text-blue-600 font-medium">With Customers</p>
+              </div>
               {stat.totalValue > 0 && (
                 <p className="text-xs text-gray-500 mt-1">
                   Total Value: PKR {stat.totalValue.toLocaleString()}
