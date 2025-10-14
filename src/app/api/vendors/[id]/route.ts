@@ -29,6 +29,11 @@ export async function GET(
             payments: true
           },
           orderBy: { purchaseDate: 'desc' }
+        },
+        payments: {
+          where: {
+            status: 'COMPLETED'
+          }
         }
       }
     });
@@ -40,16 +45,41 @@ export async function GET(
       );
     }
 
-    // Calculate financial summary
+    // Calculate purchase-related totals
     const totalPurchases = vendor.purchases.reduce(
       (sum, p) => sum + Number(p.totalAmount), 0
     );
-    const totalPaid = vendor.purchases.reduce(
-      (sum, p) => sum + Number(p.paidAmount), 0
+    
+    // Calculate purchase-related payments
+    const totalPurchasePayments = vendor.purchases.reduce(
+      (sum, p) => {
+        // Check if there are separate payment records (newer system)
+        const separatePayments = p.payments.reduce(
+          (pSum, payment) => pSum + Number(payment.amount),
+          0
+        );
+        
+        // If there are separate payment records, use them; otherwise use paidAmount
+        if (separatePayments > 0) {
+          return sum + separatePayments;
+        } else {
+          return sum + Number(p.paidAmount);
+        }
+      },
+      0
     );
-    const outstandingBalance = vendor.purchases.reduce(
-      (sum, p) => sum + Number(p.balanceAmount), 0
+
+    // Calculate direct payments
+    const totalDirectPayments = vendor.payments.reduce(
+      (sum, payment) => sum + Number(payment.amount),
+      0
     );
+
+    // Total payments = purchase payments + direct payments
+    const totalPaid = totalPurchasePayments + totalDirectPayments;
+
+    // Outstanding balance = total purchases - total payments
+    const outstandingBalance = totalPurchases - totalPaid;
 
     return NextResponse.json({
       vendor: {
@@ -60,7 +90,9 @@ export async function GET(
           outstandingBalance,
           cashIn: totalPaid,
           cashOut: totalPurchases,
-          netBalance: outstandingBalance
+          netBalance: outstandingBalance,
+          purchasePayments: totalPurchasePayments,
+          directPayments: totalDirectPayments
         }
       }
     });

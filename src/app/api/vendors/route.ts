@@ -39,7 +39,20 @@ export async function GET(request: NextRequest) {
           select: {
             totalAmount: true,
             paidAmount: true,
-            balanceAmount: true
+            balanceAmount: true,
+            payments: {
+              select: {
+                amount: true
+              }
+            }
+          }
+        },
+        payments: {
+          where: {
+            status: 'COMPLETED'
+          },
+          select: {
+            amount: true
           }
         }
       },
@@ -51,19 +64,35 @@ export async function GET(request: NextRequest) {
       const totalPurchases = vendor.purchases.reduce(
         (sum, p) => sum + Number(p.totalAmount), 0
       );
-      const totalPaid = vendor.purchases.reduce(
-        (sum, p) => sum + Number(p.paidAmount), 0
+      
+      // Calculate purchase-related payments
+      const totalPurchasePayments = vendor.purchases.reduce(
+        (sum, p) => {
+          const separatePayments = p.payments.reduce(
+            (pSum, payment) => pSum + Number(payment.amount),
+            0
+          );
+          return separatePayments > 0 ? sum + separatePayments : sum + Number(p.paidAmount);
+        },
+        0
       );
-      const totalBalance = vendor.purchases.reduce(
-        (sum, p) => sum + Number(p.balanceAmount), 0
+
+      // Calculate direct payments
+      const totalDirectPayments = vendor.payments.reduce(
+        (sum, payment) => sum + Number(payment.amount),
+        0
       );
+
+      const totalPaid = totalPurchasePayments + totalDirectPayments;
+      const totalBalance = totalPurchases - totalPaid;
 
       return {
         ...vendor,
         totalPurchases,
         totalPaid,
         totalBalance,
-        purchases: undefined
+        purchases: undefined,
+        payments: undefined
       };
     });
 

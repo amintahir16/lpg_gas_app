@@ -16,6 +16,7 @@ import {
   TrashIcon,
   PencilIcon,
 } from '@heroicons/react/24/outline';
+import VendorPaymentModal from '@/components/VendorPaymentModal';
 
 interface Vendor {
   id: string;
@@ -78,6 +79,16 @@ interface Payment {
   paymentMethod: string;
 }
 
+interface DirectPayment {
+  id: string;
+  amount: number;
+  paymentDate: string;
+  method: string;
+  reference?: string;
+  description?: string;
+  status: string;
+}
+
 export default function VendorDetailPage() {
   const params = useParams();
   const vendorId = params?.id as string;
@@ -89,6 +100,10 @@ export default function VendorDetailPage() {
   // Financial report state
   const [reportPeriod, setReportPeriod] = useState('all');
   const [financialReport, setFinancialReport] = useState<any>(null);
+  
+  // Payment modal state
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [directPayments, setDirectPayments] = useState<DirectPayment[]>([]);
 
   // Purchase form state
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
@@ -143,6 +158,7 @@ export default function VendorDetailPage() {
   useEffect(() => {
     if (activeTab === 'financial') {
       fetchFinancialReport();
+      fetchDirectPayments();
     }
   }, [activeTab, reportPeriod]);
 
@@ -185,6 +201,23 @@ export default function VendorDetailPage() {
     } catch (error) {
       console.error('Error fetching financial report:', error);
     }
+  };
+
+  const fetchDirectPayments = async () => {
+    try {
+      const response = await fetch(`/api/vendors/${vendorId}/direct-payments`);
+      if (!response.ok) throw new Error('Failed to fetch payments');
+      const data = await response.json();
+      setDirectPayments(data.payments || []);
+    } catch (error) {
+      console.error('Error fetching direct payments:', error);
+    }
+  };
+
+  const handlePaymentSuccess = () => {
+    fetchVendor();
+    fetchFinancialReport();
+    fetchDirectPayments();
   };
 
   const generateInvoiceNumber = async () => {
@@ -548,7 +581,7 @@ export default function VendorDetailPage() {
 
         <Card>
           <CardContent className="p-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mb-3">
               <div className="flex-1">
                 <p className="text-sm text-gray-500 mb-1">Net Balance (Outstanding)</p>
                 <p className={`text-2xl font-bold ${
@@ -575,6 +608,16 @@ export default function VendorDetailPage() {
                 }`} />
               </div>
             </div>
+            {vendor.financialSummary.outstandingBalance > 0 && (
+              <Button
+                onClick={() => setShowPaymentModal(true)}
+                className="w-full bg-green-600 hover:bg-green-700 text-white"
+                size="sm"
+              >
+                <BanknotesIcon className="h-4 w-4 mr-2" />
+                Make Payment
+              </Button>
+            )}
           </CardContent>
         </Card>
 
@@ -1352,19 +1395,87 @@ export default function VendorDetailPage() {
                       <span className="text-gray-700">Total Payments:</span>
                       <span className="font-medium text-green-600">
                         {formatCurrency(financialReport.totalPayments)}
-                </span>
-              </div>
+                      </span>
+                    </div>
+                    {financialReport.directPayments > 0 && (
+                      <div className="flex justify-between py-2 border-b border-gray-200 pl-4">
+                        <span className="text-sm text-gray-600">• Direct Payments:</span>
+                        <span className="text-sm font-medium text-green-600">
+                          {formatCurrency(financialReport.directPayments)}
+                        </span>
+                      </div>
+                    )}
+                    {financialReport.purchasePayments > 0 && (
+                      <div className="flex justify-between py-2 border-b border-gray-200 pl-4">
+                        <span className="text-sm text-gray-600">• Purchase Payments:</span>
+                        <span className="text-sm font-medium text-green-600">
+                          {formatCurrency(financialReport.purchasePayments)}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between py-2">
                       <span className="text-gray-700 font-semibold">Outstanding Balance:</span>
                       <span className={`font-bold text-lg ${
                         financialReport.outstandingBalance > 0 ? 'text-red-600' : 'text-gray-900'
                       }`}>
                         {formatCurrency(financialReport.outstandingBalance)}
-                </span>
-              </div>
+                      </span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Payment History */}
+              {directPayments.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <BanknotesIcon className="h-5 w-5 text-green-600" />
+                      Payment History
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {directPayments.map((payment) => (
+                        <div key={payment.id} className="flex justify-between items-center py-3 border-b border-gray-200 last:border-0">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3">
+                              <div className="flex-shrink-0 w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                                <BanknotesIcon className="h-5 w-5 text-green-600" />
+                              </div>
+                              <div>
+                                <p className="font-medium text-gray-900">
+                                  {formatCurrency(Number(payment.amount))}
+                                </p>
+                                <p className="text-sm text-gray-500">
+                                  {formatDate(payment.paymentDate)} • {payment.method}
+                                </p>
+                                {payment.description && (
+                                  <p className="text-xs text-gray-500 mt-1">{payment.description}</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            {payment.reference && (
+                              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                Ref: {payment.reference}
+                              </span>
+                            )}
+                            <span className={`px-3 py-1 text-xs font-medium rounded-full ${
+                              payment.status === 'COMPLETED' 
+                                ? 'bg-green-100 text-green-700' 
+                                : 'bg-yellow-100 text-yellow-700'
+                            }`}>
+                              {payment.status}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           ) : (
             <Card>
@@ -1374,6 +1485,18 @@ export default function VendorDetailPage() {
             </Card>
           )}
         </div>
+      )}
+
+      {/* Payment Modal */}
+      {vendor && (
+        <VendorPaymentModal
+          isOpen={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          vendorId={vendorId}
+          vendorName={vendor.name}
+          outstandingBalance={vendor.financialSummary.outstandingBalance}
+          onPaymentSuccess={handlePaymentSuccess}
+        />
       )}
     </div>
   );

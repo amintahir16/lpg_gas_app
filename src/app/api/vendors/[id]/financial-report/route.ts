@@ -74,13 +74,26 @@ export async function GET(
       }
     });
 
+    // Get direct vendor payments in date range
+    const directPayments = await prisma.vendorPayment.findMany({
+      where: {
+        vendorId: id,
+        paymentDate: {
+          gte: startDate,
+          lte: endDate
+        },
+        status: 'COMPLETED'
+      }
+    });
+
     // Calculate financial metrics
     const totalPurchases = purchases.reduce(
       (sum, p) => sum + Number(p.totalAmount),
       0
     );
 
-    const totalPayments = purchases.reduce(
+    // Calculate payments from purchases
+    const purchasePayments = purchases.reduce(
       (sum, p) => {
         // Check if there are separate payment records (newer system)
         const separatePayments = p.payments.reduce(
@@ -98,10 +111,17 @@ export async function GET(
       0
     );
 
-    const outstandingBalance = purchases.reduce(
-      (sum, p) => sum + Number(p.balanceAmount),
+    // Calculate direct payments
+    const directPaymentsTotal = directPayments.reduce(
+      (sum, payment) => sum + Number(payment.amount),
       0
     );
+
+    // Total payments = purchase payments + direct payments
+    const totalPayments = purchasePayments + directPaymentsTotal;
+
+    // Calculate period outstanding balance (period purchases - period payments)
+    const periodOutstandingBalance = totalPurchases - totalPayments;
 
     // Get overall balance (all time)
     const allPurchases = await prisma.vendorPurchase.findMany({
@@ -116,18 +136,45 @@ export async function GET(
       }
     });
 
-    const overallBalance = allPurchases.reduce(
+    // Get all direct payments (all time)
+    const allDirectPayments = await prisma.vendorPayment.findMany({
+      where: { 
+        vendorId: id,
+        status: 'COMPLETED'
+      },
+      select: { amount: true }
+    });
+
+    // Calculate total purchases (all time)
+    const allTimeTotalPurchases = allPurchases.reduce(
+      (sum, p) => sum + Number(p.totalAmount),
+      0
+    );
+
+    // Calculate all purchase-related payments
+    const allPurchasePayments = allPurchases.reduce(
       (sum, p) => {
-        // Use balanceAmount if available, otherwise calculate it
-        if (Number(p.balanceAmount) !== 0) {
-          return sum + Number(p.balanceAmount);
+        const separatePayments = p.payments.reduce(
+          (pSum, payment) => pSum + Number(payment.amount),
+          0
+        );
+        if (separatePayments > 0) {
+          return sum + separatePayments;
         } else {
-          // Calculate: totalAmount - paidAmount
-          return sum + (Number(p.totalAmount) - Number(p.paidAmount));
+          return sum + Number(p.paidAmount);
         }
       },
       0
     );
+
+    // Calculate all direct payments
+    const allTimeDirectPayments = allDirectPayments.reduce(
+      (sum, payment) => sum + Number(payment.amount),
+      0
+    );
+
+    // Overall balance = total purchases - (purchase payments + direct payments)
+    const overallBalance = allTimeTotalPurchases - (allPurchasePayments + allTimeDirectPayments);
 
     const report = {
       period,
@@ -136,11 +183,14 @@ export async function GET(
       cashOut: totalPurchases, // Money going out (purchases)
       cashIn: totalPayments,   // Money coming in (payments made)
       netBalance: overallBalance,
-      periodBalance: totalPurchases - totalPayments,
+      periodBalance: periodOutstandingBalance,
       totalPurchases,
       totalPayments,
-      outstandingBalance,
-      purchaseCount: purchases.length
+      purchasePayments: purchasePayments,
+      directPayments: directPaymentsTotal,
+      outstandingBalance: overallBalance, // Use overall balance for outstanding
+      purchaseCount: purchases.length,
+      directPaymentCount: directPayments.length
     };
 
     return NextResponse.json({ report });
