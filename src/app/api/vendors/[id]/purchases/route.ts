@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { InventoryIntegrationService } from '@/lib/inventory-integration';
 
 // GET all purchases for a vendor
 export async function GET(
@@ -135,53 +136,71 @@ export async function POST(
     if (paid >= totalAmount) paymentStatus = 'PAID';
     else if (paid > 0) paymentStatus = 'PARTIAL';
 
-    // Create purchase with items
+    // Create purchase with items and integrate with inventory
     console.log('Creating purchase with invoice number:', invoiceNumber);
     
-    const purchase = await prisma.vendorPurchase.create({
-      data: {
-        vendorId: id,
-        userId: session.user.id,
-        purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),
-        invoiceNumber,
-        notes,
-        totalAmount,
-        paidAmount: paid,
-        balanceAmount: balance,
-        paymentStatus,
-        items: {
-          create: items.map((item: any) => ({
-            itemName: item.itemName,
-            vendorItemId: item.vendorItemId,
-            quantity: Number(item.quantity),
-            unitPrice: Number(item.unitPrice),
-            totalPrice: Number(item.totalPrice),
-            cylinderCodes: item.cylinderCodes || null
-          }))
-        },
-        ...(paid > 0 && {
-          payments: {
-            create: {
-              amount: paid,
-              paymentDate: new Date(),
-              paymentMethod: 'CASH'
+    // Use database transaction to ensure both purchase and inventory updates succeed
+    const purchase = await prisma.$transaction(async (tx) => {
+      // Create the vendor purchase
+      const newPurchase = await tx.vendorPurchase.create({
+        data: {
+          vendorId: id,
+          userId: session.user.id,
+          purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),
+          invoiceNumber,
+          notes,
+          totalAmount,
+          paidAmount: paid,
+          balanceAmount: balance,
+          paymentStatus,
+          items: {
+            create: items.map((item: any) => ({
+              itemName: item.itemName,
+              vendorItemId: item.vendorItemId,
+              quantity: Number(item.quantity),
+              unitPrice: Number(item.unitPrice),
+              totalPrice: Number(item.totalPrice),
+              cylinderCodes: item.cylinderCodes || null
+            }))
+          },
+          ...(paid > 0 && {
+            payments: {
+              create: {
+                amount: paid,
+                paymentDate: new Date(),
+                paymentMethod: 'CASH'
+              }
             }
-          }
-        })
-      },
-      include: {
-        items: true,
-        payments: true
+          })
+        },
+        include: {
+          items: true,
+          payments: true
+        }
+      });
+
+      // Integrate purchased items with inventory system
+      try {
+        await InventoryIntegrationService.processPurchaseItems(items);
+        console.log('✅ Inventory integration completed successfully');
+      } catch (inventoryError) {
+        console.error('❌ Inventory integration failed:', inventoryError);
+        throw new Error(`Purchase created but inventory update failed: ${inventoryError}`);
       }
+
+      return newPurchase;
     });
 
-    console.log('Purchase created successfully:', {
+    console.log('Purchase created and inventory updated successfully:', {
       id: purchase.id,
       invoiceNumber: purchase.invoiceNumber,
       totalAmount: purchase.totalAmount
     });
 
-    return NextResponse.json({ purchase }, { status: 201 });
+    return NextResponse.json({ 
+      purchase,
+      message: 'Purchase created and inventory updated successfully'
+    }, { status: 201 });
   } catch (error) {
     console.error('Error creating purchase:', error);
     return NextResponse.json(
