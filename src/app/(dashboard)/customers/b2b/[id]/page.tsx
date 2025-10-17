@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { useInventoryValidation } from '@/hooks/useInventoryValidation';
 import { 
   ArrowLeftIcon,
   DocumentTextIcon,
@@ -113,6 +114,9 @@ export default function B2BCustomerDetailPage() {
   
   // Pricing information
   const [pricingInfo, setPricingInfo] = useState<any>(null);
+
+  // Inventory validation
+  const { validateInventory, isFieldValid, hasAnyErrors } = useInventoryValidation();
 
   // Accessories transaction form data
   const [accessoryItems, setAccessoryItems] = useState([
@@ -323,6 +327,29 @@ export default function B2BCustomerDetailPage() {
     }
     
     setGasItems(newItems);
+
+    // Validate inventory when quantity changes
+    if (field === 'delivered' && transactionType === 'SALE') {
+      const cylinders = newItems
+        .filter(item => item.delivered > 0)
+        .map(item => ({
+          cylinderType: item.cylinderType,
+          requested: item.delivered
+        }));
+      
+      const accessories = accessoryItems
+        .filter(item => item.quantity > 0)
+        .map(item => ({
+          itemName: item.name,
+          itemType: item.name === 'Stove' ? 'stove' : 
+                   item.name.includes('Regulator') ? 'regulator' :
+                   item.name.includes('Pipe') ? 'gasPipe' : 'product',
+          quality: item.quality || '',
+          requested: item.quantity
+        }));
+
+      validateInventory(cylinders, accessories);
+    }
   };
 
   const applyCalculatedPrices = () => {
@@ -817,7 +844,11 @@ export default function B2BCustomerDetailPage() {
                                         min="0"
                                         value={item.delivered}
                                         onChange={(e) => updateGasItem(index, 'delivered', parseInt(e.target.value) || 0)}
-                                        className="w-20"
+                                        className={`w-20 ${
+                                          !isFieldValid(item.cylinderType) && item.delivered > 0
+                                            ? 'border-red-500 bg-red-50 text-red-900 focus:border-red-500 focus:ring-red-500'
+                                            : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                                        }`}
                                       />
                                     </td>
                                     <td className="py-2">
@@ -1128,7 +1159,11 @@ export default function B2BCustomerDetailPage() {
                   >
                     Cancel
                   </Button>
-                  <Button type="submit" className="font-medium">
+                  <Button 
+                    type="submit" 
+                    className="font-medium"
+                    disabled={transactionType === 'SALE' && hasAnyErrors()}
+                  >
                     Create Transaction
                   </Button>
                 </div>

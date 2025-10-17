@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeftIcon, PlusIcon, TrashIcon, CalculatorIcon } from '@heroicons/react/24/outline';
+import { useInventoryValidation } from '@/hooks/useInventoryValidation';
 
 interface B2CCustomer {
   id: string;
@@ -85,6 +86,9 @@ export default function B2CTransactionPage() {
   // Pricing information
   const [pricingInfo, setPricingInfo] = useState<any>(null);
 
+  // Inventory validation
+  const { validateInventory, isFieldValid, hasAnyErrors } = useInventoryValidation();
+
   useEffect(() => {
     if (customerId) {
       fetchCustomerDetails();
@@ -160,6 +164,29 @@ export default function B2CTransactionPage() {
     }
     
     setGasItems(updated);
+
+    // Validate inventory when quantity changes
+    if (field === 'quantity') {
+      const cylinders = updated
+        .filter(item => item.quantity > 0)
+        .map(item => ({
+          cylinderType: item.cylinderType,
+          requested: item.quantity
+        }));
+      
+      const accessories = accessoryItems
+        .filter(item => item.quantity > 0)
+        .map(item => ({
+          itemName: item.name,
+          itemType: item.name === 'Stove' ? 'stove' : 
+                   item.name.includes('Regulator') ? 'regulator' :
+                   item.name.includes('Pipe') ? 'gasPipe' : 'product',
+          quality: item.quality || '',
+          requested: item.quantity
+        }));
+
+      validateInventory(cylinders, accessories);
+    }
   };
 
   const applyCalculatedPrices = () => {
@@ -494,6 +521,11 @@ export default function B2CTransactionPage() {
                     min="1"
                     value={item.quantity}
                     onChange={(e) => updateGasItem(index, 'quantity', parseInt(e.target.value) || 1)}
+                    className={
+                      !isFieldValid(item.cylinderType) && item.quantity > 0
+                        ? 'border-red-500 bg-red-50 text-red-900 focus:border-red-500 focus:ring-red-500'
+                        : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                    }
                   />
                 </div>
                 <div>
@@ -877,7 +909,7 @@ export default function B2CTransactionPage() {
           </Button>
           <Button
             type="submit"
-            disabled={submitting || (!gasItems.length && !securityItems.length && !accessoryItems.length)}
+            disabled={submitting || (!gasItems.length && !securityItems.length && !accessoryItems.length) || hasAnyErrors()}
             className="font-semibold"
           >
             {submitting ? 'Creating...' : 'Create Transaction'}
