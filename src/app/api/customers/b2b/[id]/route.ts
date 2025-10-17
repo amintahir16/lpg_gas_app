@@ -64,43 +64,49 @@ export async function PUT(
       marginCategoryId
     } = body;
 
-    // Validate required fields
-    if (!name || !contactPerson || !phone) {
+    // Validate required fields only if they are being updated
+    if (name !== undefined && (!name || !contactPerson || !phone)) {
       return NextResponse.json(
         { error: 'Name, contact person, and phone are required' },
         { status: 400 }
       );
     }
 
-    // Check if another customer with same phone already exists
-    const existingCustomer = await prisma.customer.findFirst({
-      where: { 
-        phone,
-        id: { not: customerId }
-      }
-    });
+    // Check if another customer with same phone already exists (only if phone is being updated)
+    if (phone) {
+      const existingCustomer = await prisma.customer.findFirst({
+        where: { 
+          phone,
+          id: { not: customerId }
+        }
+      });
 
-    if (existingCustomer) {
-      return NextResponse.json(
-        { error: 'Another customer with this phone number already exists' },
-        { status: 400 }
-      );
+      if (existingCustomer) {
+        return NextResponse.json(
+          { error: 'Another customer with this phone number already exists' },
+          { status: 400 }
+        );
+      }
     }
+
+    // Build update data object with only provided fields
+    const updateData: any = {};
+    
+    if (name !== undefined) updateData.name = name;
+    if (contactPerson !== undefined) updateData.contactPerson = contactPerson;
+    if (email !== undefined) updateData.email = email || null;
+    if (phone !== undefined) updateData.phone = phone;
+    if (address !== undefined) updateData.address = address || null;
+    if (creditLimit !== undefined) updateData.creditLimit = creditLimit ? parseFloat(creditLimit) : 0;
+    if (paymentTermsDays !== undefined) updateData.paymentTermsDays = paymentTermsDays ? parseInt(paymentTermsDays) : 30;
+    if (notes !== undefined) updateData.notes = notes || null;
+    if (isActive !== undefined) updateData.isActive = isActive;
+    if (marginCategoryId !== undefined) updateData.marginCategoryId = marginCategoryId || null;
 
     const customer = await prisma.customer.update({
       where: { id: customerId },
-      data: {
-        name,
-        contactPerson,
-        email: email || null,
-        phone,
-        address: address || null,
-        creditLimit: creditLimit ? parseFloat(creditLimit) : 0,
-        paymentTermsDays: paymentTermsDays ? parseInt(paymentTermsDays) : 30,
-        notes: notes || null,
-        isActive: isActive !== undefined ? isActive : true,
-        marginCategoryId: marginCategoryId || null
-      }
+      data: updateData,
+      include: { marginCategory: true }
     });
 
     return NextResponse.json(customer);

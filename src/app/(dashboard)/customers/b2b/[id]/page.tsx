@@ -38,6 +38,11 @@ interface B2BCustomer {
   notes: string | null;
   isActive: boolean;
   createdAt: string;
+  marginCategory?: {
+    id: string;
+    name: string;
+    marginPerKg: number;
+  };
 }
 
 interface B2BTransaction {
@@ -118,6 +123,13 @@ export default function B2BCustomerDetailPage() {
   // Inventory validation
   const { validateInventory, isFieldValid, hasAnyErrors } = useInventoryValidation();
 
+  // Margin category editing
+  const [showCategoryEdit, setShowCategoryEdit] = useState(false);
+  const [marginCategories, setMarginCategories] = useState<any[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(true);
+  const [updatingCategory, setUpdatingCategory] = useState(false);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
+
   // Accessories transaction form data
   const [accessoryItems, setAccessoryItems] = useState([
     { name: 'Gas Pipe (ft)', quantity: 0, pricePerItem: 0, quality: '' },
@@ -134,6 +146,25 @@ export default function B2BCustomerDetailPage() {
       fetchCustomerLedger();
     }
   }, [customerId, pagination.page]);
+
+  // Fetch margin categories for B2B customers
+  useEffect(() => {
+    const fetchMarginCategories = async () => {
+      try {
+        const response = await fetch('/api/admin/margin-categories?customerType=B2B');
+        if (response.ok) {
+          const data = await response.json();
+          setMarginCategories(data);
+        }
+      } catch (error) {
+        console.error('Error fetching margin categories:', error);
+      } finally {
+        setLoadingCategories(false);
+      }
+    };
+
+    fetchMarginCategories();
+  }, []);
 
 
   // Update gas items with current cylinder dues when customer data loads
@@ -241,6 +272,53 @@ export default function B2BCustomerDetailPage() {
     } catch (error) {
       console.error('Error fetching calculated prices:', error);
     }
+  };
+
+  const updateCustomerCategory = async () => {
+    if (!selectedCategoryId) {
+      alert('Please select a category first');
+      return;
+    }
+
+    try {
+      setUpdatingCategory(true);
+      
+      const response = await fetch(`/api/customers/b2b/${customerId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          marginCategoryId: selectedCategoryId
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('API Error:', errorData);
+        throw new Error(`Failed to update customer category: ${errorData.error || 'Unknown error'}`);
+      }
+
+      // Refresh customer data and pricing
+      await Promise.all([
+        fetchCustomerLedger(),
+        fetchCalculatedPrices()
+      ]);
+      
+      setShowCategoryEdit(false);
+      setSelectedCategoryId('');
+      alert('Customer margin category updated successfully!');
+    } catch (error) {
+      console.error('Error updating customer category:', error);
+      alert(`Failed to update customer category: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setUpdatingCategory(false);
+    }
+  };
+
+  const handleModalOpen = () => {
+    setSelectedCategoryId(customer?.marginCategory?.id || '');
+    setShowCategoryEdit(true);
   };
 
   const formatCurrency = (amount: number) => {
@@ -560,7 +638,17 @@ export default function B2BCustomerDetailPage() {
         {/* Customer Information */}
         <Card className="lg:col-span-2 border-0 shadow-sm bg-white/80 backdrop-blur-sm">
           <CardHeader>
-            <CardTitle className="text-lg font-semibold text-gray-900">Customer Information</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg font-semibold text-gray-900">Customer Information</CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleModalOpen}
+                className="text-xs font-medium"
+              >
+                Edit Margin Category
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -579,6 +667,15 @@ export default function B2BCustomerDetailPage() {
               <div>
                 <p className="text-sm font-medium text-gray-500">Payment Terms</p>
                 <p className="text-lg font-semibold text-gray-900">{customer.paymentTermsDays} days</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Margin Category</p>
+                <p className="text-lg font-semibold text-gray-900">
+                  {customer.marginCategory ? 
+                    `${customer.marginCategory.name} (Rs ${customer.marginCategory.marginPerKg}/kg)` : 
+                    'Not assigned'
+                  }
+                </p>
               </div>
               <div className="md:col-span-2">
                 <p className="text-sm font-medium text-gray-500">Address</p>
@@ -1302,6 +1399,78 @@ export default function B2BCustomerDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Margin Category Edit Modal */}
+      {showCategoryEdit && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Change Margin Category</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Select a new margin category for <strong>{customer?.name}</strong>. This will affect pricing for all future transactions.
+              </p>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Current Category
+                  </label>
+                  <div className="p-3 bg-gray-50 rounded-md border">
+                    <p className="text-sm font-medium text-gray-900">
+                      {customer?.marginCategory ? 
+                        `${customer.marginCategory.name} (Rs ${customer.marginCategory.marginPerKg}/kg)` : 
+                        'Not assigned'
+                      }
+                    </p>
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    New Category *
+                  </label>
+                  <Select
+                    disabled={loadingCategories || updatingCategory}
+                    value={selectedCategoryId}
+                    onChange={(e) => {
+                      setSelectedCategoryId(e.target.value);
+                    }}
+                  >
+                    <option value="">Select new margin category</option>
+                    {marginCategories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name} - Rs {category.marginPerKg}/kg
+                      </option>
+                    ))}
+                  </Select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    This will immediately affect pricing for new transactions
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-3 mt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowCategoryEdit(false);
+                    setSelectedCategoryId('');
+                  }}
+                  disabled={updatingCategory}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={updateCustomerCategory}
+                  disabled={updatingCategory || !selectedCategoryId}
+                >
+                  {updatingCategory ? 'Updating...' : 'Update Category'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

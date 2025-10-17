@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { useToast } from '@/components/ui/notification-toast';
@@ -171,20 +171,19 @@ export default function TestNotificationsPage() {
           <CardContent className="space-y-4">
             <div>
               <Label htmlFor="type">Notification Type</Label>
-              <Select value={notificationData.type} onValueChange={(value) => setNotificationData(prev => ({ ...prev, type: value }))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="SYSTEM_ALERT">System Alert</SelectItem>
-                  <SelectItem value="USER_ACTIVITY">User Activity</SelectItem>
-                  <SelectItem value="CUSTOMER_ADDED">Customer Added</SelectItem>
-                  <SelectItem value="VENDOR_ADDED">Vendor Added</SelectItem>
-                  <SelectItem value="CYLINDER_ADDED">Cylinder Added</SelectItem>
-                  <SelectItem value="PAYMENT_RECEIVED">Payment Received</SelectItem>
-                  <SelectItem value="LOW_INVENTORY">Low Inventory</SelectItem>
-                  <SelectItem value="MAINTENANCE_DUE">Maintenance Due</SelectItem>
-                </SelectContent>
+              <Select 
+                value={notificationData.type} 
+                onChange={(e) => setNotificationData(prev => ({ ...prev, type: e.target.value }))}
+              >
+                <option value="">Select notification type</option>
+                <option value="SYSTEM_ALERT">System Alert</option>
+                <option value="USER_ACTIVITY">User Activity</option>
+                <option value="CUSTOMER_ADDED">Customer Added</option>
+                <option value="VENDOR_ADDED">Vendor Added</option>
+                <option value="CYLINDER_ADDED">Cylinder Added</option>
+                <option value="PAYMENT_RECEIVED">Payment Received</option>
+                <option value="LOW_INVENTORY">Low Inventory</option>
+                <option value="MAINTENANCE_DUE">Maintenance Due</option>
               </Select>
             </div>
 
@@ -211,16 +210,15 @@ export default function TestNotificationsPage() {
 
             <div>
               <Label htmlFor="priority">Priority</Label>
-              <Select value={notificationData.priority} onValueChange={(value: any) => setNotificationData(prev => ({ ...prev, priority: value }))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="LOW">Low</SelectItem>
-                  <SelectItem value="MEDIUM">Medium</SelectItem>
-                  <SelectItem value="HIGH">High</SelectItem>
-                  <SelectItem value="URGENT">Urgent</SelectItem>
-                </SelectContent>
+              <Select 
+                value={notificationData.priority} 
+                onChange={(e) => setNotificationData(prev => ({ ...prev, priority: e.target.value }))}
+              >
+                <option value="">Select priority</option>
+                <option value="LOW">Low</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="HIGH">High</option>
+                <option value="URGENT">Urgent</option>
               </Select>
             </div>
 

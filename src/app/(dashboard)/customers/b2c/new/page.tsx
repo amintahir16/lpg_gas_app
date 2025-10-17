@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select } from '@/components/ui/select';
 import { ArrowLeftIcon, HomeIcon, PlusIcon } from '@heroicons/react/24/outline';
 
 export default function NewB2CCustomerPage() {
@@ -181,19 +181,15 @@ export default function NewB2CCustomerPage() {
               </label>
               <Select
                 value={formData.marginCategoryId}
-                onValueChange={(value) => handleInputChange('marginCategoryId', value)}
+                onChange={(e) => handleInputChange('marginCategoryId', e.target.value)}
                 disabled={loadingCategories}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder={loadingCategories ? "Loading categories..." : "Select margin category"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {marginCategories.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.name} - Rs {category.marginPerKg}/kg
-                    </SelectItem>
-                  ))}
-                </SelectContent>
+                <option value="">{loadingCategories ? "Loading categories..." : "Select margin category"}</option>
+                {marginCategories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name} - Rs {category.marginPerKg}/kg
+                  </option>
+                ))}
               </Select>
               <p className="text-sm text-gray-500 mt-1">
                 This determines the automatic pricing for gas cylinders

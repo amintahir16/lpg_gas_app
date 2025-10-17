@@ -531,9 +531,6 @@ export default function B2CTransactionPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Selling Price
-                    {pricingInfo && item.cylinderType && (
-                      <span className="text-blue-600 text-xs ml-2">✨ Auto-calculated</span>
-                    )}
                   </label>
                   <Input
                     type="number"

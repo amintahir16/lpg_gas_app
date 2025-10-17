@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select } from '@/components/ui/select';
 import { 
   PlusIcon, 
   MagnifyingGlassIcon, 
@@ -62,6 +63,10 @@ export default function B2BCustomersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
 
+  // Margin categories for B2B customers
+  const [marginCategories, setMarginCategories] = useState<any[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(true);
+
   // Debounce search term
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -90,6 +95,25 @@ export default function B2BCustomersPage() {
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
+  // Fetch margin categories for B2B customers
+  useEffect(() => {
+    const fetchMarginCategories = async () => {
+      try {
+        const response = await fetch('/api/admin/margin-categories?customerType=B2B');
+        if (response.ok) {
+          const data = await response.json();
+          setMarginCategories(data);
+        }
+      } catch (error) {
+        console.error('Error fetching margin categories:', error);
+      } finally {
+        setLoadingCategories(false);
+      }
+    };
+
+    fetchMarginCategories();
   }, []);
 
   const fetchB2BCustomers = async () => {
@@ -485,7 +509,8 @@ export default function B2BCustomersPage() {
                   creditLimit: formData.get('creditLimit'),
                   paymentTermsDays: formData.get('paymentTermsDays'),
                   notes: formData.get('notes'),
-                  customerType: formData.get('customerType')
+                  customerType: formData.get('customerType'),
+                  marginCategoryId: formData.get('marginCategoryId')
                 });
               }}>
                 <div>
@@ -503,6 +528,26 @@ export default function B2BCustomersPage() {
                     <option value="INDUSTRIAL">Industrial</option>
                     <option value="RESTAURANT">Restaurant</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Margin Category *
+                  </label>
+                  <Select
+                    name="marginCategoryId"
+                    required
+                    disabled={loadingCategories}
+                  >
+                    <option value="">{loadingCategories ? "Loading categories..." : "Select margin category"}</option>
+                    {marginCategories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name} - Rs {category.marginPerKg}/kg
+                      </option>
+                    ))}
+                  </Select>
+                  <p className="text-sm text-gray-500 mt-1">
+                    This determines the automatic pricing for gas cylinders
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Contact Person</label>
