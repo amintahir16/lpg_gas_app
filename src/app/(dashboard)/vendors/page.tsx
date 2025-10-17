@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import {
   PlusIcon,
   CurrencyDollarIcon,
+  ShoppingBagIcon,
   // Cylinder icons
   ArchiveBoxIcon, // Better representation for cylinders/containers
   // Gas icons  
