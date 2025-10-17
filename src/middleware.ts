@@ -171,6 +171,7 @@ function checkRouteAccess(pathname: string, userRole: string): boolean {
 function getRedirectUrl(userRole: string): string {
   switch (userRole) {
     case 'ADMIN':
+      return '/admin';
     case 'SUPER_ADMIN':
       return '/dashboard';
     case 'USER':

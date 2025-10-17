@@ -33,14 +33,24 @@ interface NavigationItem {
   roles: string[];
 }
 
-const navigation: NavigationItem[] = [
-  { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, roles: ['ADMIN', 'SUPER_ADMIN'] },
-  { name: 'Customers', href: '/customers', icon: UsersIcon, roles: ['ADMIN', 'SUPER_ADMIN'] },
-  { name: 'Inventory', href: '/inventory', icon: CubeIcon, roles: ['ADMIN', 'SUPER_ADMIN'] },
-  { name: 'Financial', href: '/financial', icon: CurrencyDollarIcon, roles: ['ADMIN', 'SUPER_ADMIN'] },
-  { name: 'Vendors', href: '/vendors', icon: BuildingOfficeIcon, roles: ['ADMIN', 'SUPER_ADMIN'] },
-  { name: 'Reports', href: '/reports', icon: ChartBarIcon, roles: ['ADMIN', 'SUPER_ADMIN'] },
-  { name: 'Settings', href: '/settings', icon: CogIcon, roles: ['ADMIN', 'SUPER_ADMIN'] },
+const superAdminNavigation: NavigationItem[] = [
+  { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, roles: ['SUPER_ADMIN'] },
+  { name: 'Customers', href: '/customers', icon: UsersIcon, roles: ['SUPER_ADMIN'] },
+  { name: 'Inventory', href: '/inventory', icon: CubeIcon, roles: ['SUPER_ADMIN'] },
+  { name: 'Financial', href: '/financial', icon: CurrencyDollarIcon, roles: ['SUPER_ADMIN'] },
+  { name: 'Vendors', href: '/vendors', icon: BuildingOfficeIcon, roles: ['SUPER_ADMIN'] },
+  { name: 'Reports', href: '/reports', icon: ChartBarIcon, roles: ['SUPER_ADMIN'] },
+  { name: 'Settings', href: '/settings', icon: CogIcon, roles: ['SUPER_ADMIN'] },
+];
+
+const adminNavigation: NavigationItem[] = [
+  { name: 'Admin Dashboard', href: '/admin', icon: HomeIcon, roles: ['ADMIN'] },
+  { name: 'Customers', href: '/customers', icon: UsersIcon, roles: ['ADMIN'] },
+  { name: 'Inventory', href: '/inventory', icon: CubeIcon, roles: ['ADMIN'] },
+  { name: 'Financial', href: '/financial', icon: CurrencyDollarIcon, roles: ['ADMIN'] },
+  { name: 'Vendors', href: '/vendors', icon: BuildingOfficeIcon, roles: ['ADMIN'] },
+  { name: 'Reports', href: '/reports', icon: ChartBarIcon, roles: ['ADMIN'] },
+  { name: 'Settings', href: '/settings', icon: CogIcon, roles: ['ADMIN'] },
 ];
 
 const customerNavigation: NavigationItem[] = [
@@ -89,7 +99,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const userRole = session?.user?.role || 'USER';
   const isCustomer = userRole === 'USER';
-  const currentNavigation = isCustomer ? customerNavigation : navigation;
+  const isAdmin = userRole === 'ADMIN';
+  const isSuperAdmin = userRole === 'SUPER_ADMIN';
+  
+  let currentNavigation;
+  if (isCustomer) {
+    currentNavigation = customerNavigation;
+  } else if (isAdmin) {
+    currentNavigation = adminNavigation;
+  } else if (isSuperAdmin) {
+    currentNavigation = superAdminNavigation;
+  } else {
+    currentNavigation = customerNavigation; // fallback
+  }
 
   const handleLogout = () => {
     signOut({ callbackUrl: '/login' });

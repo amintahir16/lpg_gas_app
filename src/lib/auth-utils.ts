@@ -194,6 +194,7 @@ export function createPermissionGuard(permission: Permission) {
 export function getDashboardUrl(userRole: Role): string {
   switch (userRole) {
     case 'ADMIN':
+      return '/admin';
     case 'SUPER_ADMIN':
       return '/dashboard';
     case 'USER':

@@ -227,6 +227,44 @@ export default function NewReturnPage() {
 
   const fetchOriginalPrice = async (cylinderType: string, itemId: string) => {
     try {
+      // First try to get price from current pricing system
+      const pricingResponse = await fetch(
+        `/api/pricing/calculate?customerId=${customerId}&customerType=B2B`
+      );
+      
+      if (pricingResponse.ok) {
+        const pricingData = await pricingResponse.json();
+        let calculatedPrice = 0;
+        
+        switch (cylinderType) {
+          case 'DOMESTIC_11_8KG':
+            calculatedPrice = pricingData.finalPrices.domestic118kg;
+            break;
+          case 'STANDARD_15KG':
+            calculatedPrice = pricingData.finalPrices.standard15kg;
+            break;
+          case 'COMMERCIAL_45_4KG':
+            calculatedPrice = pricingData.finalPrices.commercial454kg;
+            break;
+        }
+        
+        if (calculatedPrice > 0) {
+          setReturnItems(items => items.map(item => {
+            if (item.id === itemId) {
+              const updatedItem = { ...item, originalSoldPrice: calculatedPrice };
+              if (updatedItem.condition === 'PARTIAL' || updatedItem.condition === 'FULL') {
+                updatedItem.buybackPricePerItem = updatedItem.originalSoldPrice * updatedItem.buybackRate;
+                updatedItem.buybackTotal = updatedItem.buybackPricePerItem * updatedItem.quantity;
+              }
+              return updatedItem;
+            }
+            return item;
+          }));
+          return;
+        }
+      }
+      
+      // Fallback to historical transaction data
       const response = await fetch(
         `/api/customers/${customerId}/original-price?productName=${encodeURIComponent(cylinderType)}&cylinderType=${encodeURIComponent(cylinderType)}`
       );

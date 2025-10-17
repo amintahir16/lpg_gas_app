@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { CylinderType } from '@prisma/client';
+import { CylinderType, CylinderStatus } from '@prisma/client';
 
 export async function POST(request: NextRequest) {
   try {
@@ -250,7 +250,7 @@ export async function POST(request: NextRequest) {
           domestic118kgDue: newDomestic118kgDue,
           standard15kgDue: newStandard15kgDue,
           commercial454kgDue: newCommercial454kgDue,
-          updatedBy: userId,
+          updatedBy: session.user.id,
         },
       });
       console.log(`Customer ${customerId} ledger balance updated successfully`);
@@ -274,7 +274,7 @@ export async function POST(request: NextRequest) {
             const availableCylinders = await tx.cylinder.findMany({
               where: {
                 cylinderType: mappedCylinderType,
-                currentStatus: 'FULL'
+                currentStatus: CylinderStatus.FULL
               },
               take: gasItem.delivered
             });
@@ -289,8 +289,8 @@ export async function POST(request: NextRequest) {
                 id: { in: availableCylinders.map(c => c.id) }
               },
               data: {
-                currentStatus: 'WITH_CUSTOMER',
-                location: `Customer: ${customer.name}`
+                currentStatus: CylinderStatus.WITH_CUSTOMER,
+                location: `Customer: ${customer.name || 'Unknown'}`
               }
             });
 
@@ -365,7 +365,7 @@ export async function POST(request: NextRequest) {
               const cylindersWithCustomer = await tx.cylinder.findMany({
                 where: {
                   cylinderType: mappedCylinderType,
-                  currentStatus: 'WITH_CUSTOMER',
+                  currentStatus: CylinderStatus.WITH_CUSTOMER,
                   location: { contains: customer.name }
                 },
                 take: quantity
@@ -378,7 +378,7 @@ export async function POST(request: NextRequest) {
                     id: { in: cylindersWithCustomer.slice(0, quantity).map(c => c.id) }
                   },
                   data: {
-                    currentStatus: 'EMPTY',
+                    currentStatus: CylinderStatus.EMPTY,
                     location: 'Store - Ready for Refill'
                   }
                 });
@@ -392,7 +392,7 @@ export async function POST(request: NextRequest) {
                       id: { in: cylindersWithCustomer.map(c => c.id) }
                     },
                     data: {
-                      currentStatus: 'EMPTY',
+                      currentStatus: CylinderStatus.EMPTY,
                       location: 'Store - Ready for Refill'
                     }
                   });
@@ -407,7 +407,7 @@ export async function POST(request: NextRequest) {
                       code,
                       cylinderType: mappedCylinderType,
                       capacity: cylinderType === 'DOMESTIC_11_8KG' ? 11.8 : cylinderType === 'STANDARD_15KG' ? 15.0 : 45.4,
-                      currentStatus: 'EMPTY',
+                      currentStatus: CylinderStatus.EMPTY,
                       location: 'Store - Ready for Refill',
                     },
                   });
@@ -425,8 +425,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     console.error('Error creating B2B transaction:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to create B2B transaction' },
+      { 
+        error: 'Failed to create B2B transaction',
+        details: errorMessage,
+        stack: error instanceof Error ? error.stack : undefined
+      },
       { status: 500 }
     );
   }

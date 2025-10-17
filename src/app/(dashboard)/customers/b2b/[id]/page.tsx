@@ -144,6 +144,34 @@ export default function B2BCustomerDetailPage() {
     }
   }, [customer]);
 
+  // Auto-populate original prices from pricing system when pricing info is available
+  useEffect(() => {
+    if (pricingInfo && transactionType === 'BUYBACK') {
+      setGasItems(prevItems => 
+        prevItems.map(item => {
+          let calculatedPrice = 0;
+          
+          switch (item.cylinderType) {
+            case 'DOMESTIC_11_8KG':
+              calculatedPrice = pricingInfo.finalPrices.domestic118kg;
+              break;
+            case 'STANDARD_15KG':
+              calculatedPrice = pricingInfo.finalPrices.standard15kg;
+              break;
+            case 'COMMERCIAL_45_4KG':
+              calculatedPrice = pricingInfo.finalPrices.commercial454kg;
+              break;
+          }
+          
+          return {
+            ...item,
+            originalSoldPrice: calculatedPrice
+          };
+        })
+      );
+    }
+  }, [pricingInfo, transactionType]);
+
   // Update remaining due calculation when transaction type changes
   useEffect(() => {
     if (customer) {
@@ -691,9 +719,9 @@ export default function B2BCustomerDetailPage() {
                           <p><strong>Gas Buyback Logic:</strong></p>
                           <ul className="mt-1 space-y-1">
                             <li>• Enter remaining gas quantity (e.g., 5kg, 10kg)</li>
-                            <li>• Enter original selling price of the cylinder</li>
+                            <li>• Original selling price is automatically calculated from pricing system</li>
                             <li>• System calculates 60% buyback rate automatically</li>
-                            <li>• Buyback amount = Original Price × (Remaining Gas / Total Gas) × 60%</li>
+                            <li>• Buyback amount = Auto Price × (Remaining Gas / Total Gas) × 60%</li>
                           </ul>
                         </div>
                       )}
@@ -765,7 +793,7 @@ export default function B2BCustomerDetailPage() {
                               {transactionType === 'BUYBACK' && (
                                 <>
                                   <th className="text-left py-2">Remaining Gas (kg)</th>
-                                  <th className="text-left py-2">Original Price</th>
+                                  <th className="text-left py-2">Original Price (Auto)</th>
                                   <th className="text-left py-2">Buyback Rate (60%)</th>
                                   <th className="text-left py-2">Buyback Amount</th>
                                 </>
@@ -837,9 +865,9 @@ export default function B2BCustomerDetailPage() {
                                         min="0"
                                         step="0.01"
                                         value={item.originalSoldPrice}
-                                        onChange={(e) => updateGasItem(index, 'originalSoldPrice', parseFloat(e.target.value) || 0)}
-                                        className="w-24"
-                                        placeholder="Original price"
+                                        readOnly
+                                        className="w-24 bg-gray-50 text-gray-700 cursor-not-allowed"
+                                        placeholder="Auto-calculated"
                                       />
                                     </td>
                                     <td className="py-2 text-center font-semibold text-green-600">
