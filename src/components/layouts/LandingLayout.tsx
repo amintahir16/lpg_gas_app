@@ -14,6 +14,7 @@ export default function LandingLayout({
   // Check if the current route is an admin/authenticated route
   const isAdminRoute = pathname?.startsWith('/dashboard') || 
                      pathname?.startsWith('/settings') || 
+                     pathname?.startsWith('/admin') ||
                      pathname?.startsWith('/api') ||
                      pathname?.startsWith('/auth') ||
                      pathname?.startsWith('/vendor') ||

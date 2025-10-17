@@ -109,6 +109,9 @@ export default function B2BCustomerDetailPage() {
     { cylinderType: 'STANDARD_15KG', delivered: 0, pricePerItem: 0, emptyReturned: 0, remainingDue: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackPricePerItem: 0, buybackTotal: 0 },
     { cylinderType: 'COMMERCIAL_45_4KG', delivered: 0, pricePerItem: 0, emptyReturned: 0, remainingDue: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackPricePerItem: 0, buybackTotal: 0 }
   ]);
+  
+  // Pricing information
+  const [pricingInfo, setPricingInfo] = useState<any>(null);
 
   // Accessories transaction form data
   const [accessoryItems, setAccessoryItems] = useState([
@@ -183,11 +186,27 @@ export default function B2BCustomerDetailPage() {
       setCustomer(data.customer);
       setTransactions(data.transactions);
       setPagination(data.pagination);
+      
+      // Fetch calculated prices for this customer
+      await fetchCalculatedPrices();
     } catch (err) {
       console.error('Error fetching customer ledger:', err);
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCalculatedPrices = async () => {
+    try {
+      const response = await fetch(`/api/pricing/calculate?customerId=${customerId}&customerType=B2B`);
+      
+      if (response.ok) {
+        const pricingData = await response.json();
+        setPricingInfo(pricingData);
+      }
+    } catch (error) {
+      console.error('Error fetching calculated prices:', error);
     }
   };
 
@@ -221,6 +240,28 @@ export default function B2BCustomerDetailPage() {
     const newItems = [...gasItems];
     newItems[index] = { ...newItems[index], [field]: value };
     
+    // Auto-apply calculated price when delivered quantity is set
+    if (field === 'delivered' && value > 0 && pricingInfo) {
+      const cylinderType = newItems[index].cylinderType;
+      let calculatedPrice = 0;
+      
+      switch (cylinderType) {
+        case 'DOMESTIC_11_8KG':
+          calculatedPrice = pricingInfo.finalPrices.domestic118kg;
+          break;
+        case 'STANDARD_15KG':
+          calculatedPrice = pricingInfo.finalPrices.standard15kg;
+          break;
+        case 'COMMERCIAL_45_4KG':
+          calculatedPrice = pricingInfo.finalPrices.commercial454kg;
+          break;
+      }
+      
+      if (calculatedPrice > 0) {
+        newItems[index].pricePerItem = calculatedPrice;
+      }
+    }
+    
     // Calculate buyback if it's a buyback transaction
     if (transactionType === 'BUYBACK') {
       if (newItems[index].remainingKg > 0 && newItems[index].originalSoldPrice > 0) {
@@ -253,6 +294,33 @@ export default function B2BCustomerDetailPage() {
     }
     
     setGasItems(newItems);
+  };
+
+  const applyCalculatedPrices = () => {
+    if (!pricingInfo) return;
+    
+    const updatedItems = gasItems.map(item => {
+      let calculatedPrice = 0;
+      
+      switch (item.cylinderType) {
+        case 'DOMESTIC_11_8KG':
+          calculatedPrice = pricingInfo.finalPrices.domestic118kg;
+          break;
+        case 'STANDARD_15KG':
+          calculatedPrice = pricingInfo.finalPrices.standard15kg;
+          break;
+        case 'COMMERCIAL_45_4KG':
+          calculatedPrice = pricingInfo.finalPrices.commercial454kg;
+          break;
+      }
+      
+      return {
+        ...item,
+        pricePerItem: calculatedPrice > 0 ? calculatedPrice : item.pricePerItem
+      };
+    });
+    
+    setGasItems(updatedItems);
   };
 
   const getCurrentCylinderDue = (cylinderType: string) => {
@@ -639,6 +707,40 @@ export default function B2BCustomerDetailPage() {
                         </div>
                       )}
                     </CardHeader>
+                    
+                    {/* Pricing Information Banner */}
+                    {pricingInfo && transactionType === 'SALE' && (
+                      <div className="px-6 pb-4">
+                        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h4 className="font-semibold text-blue-900">Auto-Pricing Information</h4>
+                              <p className="text-sm text-blue-700">
+                                Category: <strong>{pricingInfo.category.name}</strong> | 
+                                Plant Price: <strong>Rs {pricingInfo.plantPrice.price118kg}</strong> | 
+                                Margin: <strong>Rs {pricingInfo.category.marginPerKg}/kg</strong>
+                              </p>
+                              <p className="text-sm text-blue-600 mt-1">
+                                Calculated Prices: 11.8kg = Rs {pricingInfo.finalPrices.domestic118kg} | 
+                                15kg = Rs {pricingInfo.finalPrices.standard15kg} | 
+                                45.4kg = Rs {pricingInfo.finalPrices.commercial454kg}
+                              </p>
+                            </div>
+                            <Button 
+                              type="button" 
+                              onClick={applyCalculatedPrices} 
+                              variant="outline" 
+                              size="sm"
+                              className="bg-blue-50 text-blue-700 border-blue-200"
+                            >
+                              <CalculatorIcon className="w-4 h-4 mr-2" />
+                              Apply Auto-Pricing
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
                     <CardContent>
                       <div className="overflow-x-auto">
                         <table className="w-full">

@@ -81,6 +81,9 @@ export default function B2CTransactionPage() {
   const [gasItems, setGasItems] = useState<GasItem[]>([]);
   const [securityItems, setSecurityItems] = useState<SecurityItem[]>([]);
   const [accessoryItems, setAccessoryItems] = useState<AccessoryItem[]>([]);
+  
+  // Pricing information
+  const [pricingInfo, setPricingInfo] = useState<any>(null);
 
   useEffect(() => {
     if (customerId) {
@@ -99,10 +102,26 @@ export default function B2CTransactionPage() {
       
       const data = await response.json();
       setCustomer(data);
+      
+      // Fetch calculated prices for this customer
+      await fetchCalculatedPrices();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCalculatedPrices = async () => {
+    try {
+      const response = await fetch(`/api/pricing/calculate?customerId=${customerId}&customerType=B2C`);
+      
+      if (response.ok) {
+        const pricingData = await response.json();
+        setPricingInfo(pricingData);
+      }
+    } catch (error) {
+      console.error('Error fetching calculated prices:', error);
     }
   };
 
@@ -117,7 +136,57 @@ export default function B2CTransactionPage() {
   const updateGasItem = (index: number, field: keyof GasItem, value: any) => {
     const updated = [...gasItems];
     updated[index] = { ...updated[index], [field]: value };
+    
+    // Auto-apply calculated price when cylinder type is selected
+    if (field === 'cylinderType' && pricingInfo) {
+      const cylinderType = value;
+      let calculatedPrice = 0;
+      
+      switch (cylinderType) {
+        case 'DOMESTIC_11_8KG':
+          calculatedPrice = pricingInfo.finalPrices.domestic118kg;
+          break;
+        case 'STANDARD_15KG':
+          calculatedPrice = pricingInfo.finalPrices.standard15kg;
+          break;
+        case 'COMMERCIAL_45_4KG':
+          calculatedPrice = pricingInfo.finalPrices.commercial454kg;
+          break;
+      }
+      
+      if (calculatedPrice > 0) {
+        updated[index].pricePerItem = calculatedPrice;
+      }
+    }
+    
     setGasItems(updated);
+  };
+
+  const applyCalculatedPrices = () => {
+    if (!pricingInfo) return;
+    
+    const updatedItems = gasItems.map(item => {
+      let calculatedPrice = 0;
+      
+      switch (item.cylinderType) {
+        case 'DOMESTIC_11_8KG':
+          calculatedPrice = pricingInfo.finalPrices.domestic118kg;
+          break;
+        case 'STANDARD_15KG':
+          calculatedPrice = pricingInfo.finalPrices.standard15kg;
+          break;
+        case 'COMMERCIAL_45_4KG':
+          calculatedPrice = pricingInfo.finalPrices.commercial454kg;
+          break;
+      }
+      
+      return {
+        ...item,
+        pricePerItem: calculatedPrice > 0 ? calculatedPrice : item.pricePerItem
+      };
+    });
+    
+    setGasItems(updatedItems);
   };
 
   const addSecurityItem = () => {
@@ -360,11 +429,46 @@ export default function B2CTransactionPage() {
                   Add gas cylinder sales
                 </CardDescription>
               </div>
-              <Button type="button" onClick={addGasItem} variant="outline" size="sm">
-                <PlusIcon className="w-4 h-4 mr-2" />
-                Add Gas
-              </Button>
+              <div className="flex gap-2">
+                {pricingInfo && (
+                  <Button 
+                    type="button" 
+                    onClick={applyCalculatedPrices} 
+                    variant="outline" 
+                    size="sm"
+                    className="bg-blue-50 text-blue-700 border-blue-200"
+                  >
+                    <CalculatorIcon className="w-4 h-4 mr-2" />
+                    Apply Auto-Pricing
+                  </Button>
+                )}
+                <Button type="button" onClick={addGasItem} variant="outline" size="sm">
+                  <PlusIcon className="w-4 h-4 mr-2" />
+                  Add Gas
+                </Button>
+              </div>
             </div>
+            
+            {/* Pricing Information Banner */}
+            {pricingInfo && (
+              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-semibold text-blue-900">Auto-Pricing Information</h4>
+                    <p className="text-sm text-blue-700">
+                      Category: <strong>{pricingInfo.category.name}</strong> | 
+                      Plant Price: <strong>Rs {pricingInfo.plantPrice.price118kg}</strong> | 
+                      Margin: <strong>Rs {pricingInfo.category.marginPerKg}/kg</strong>
+                    </p>
+                    <p className="text-sm text-blue-600 mt-1">
+                      Calculated Prices: 11.8kg = Rs {pricingInfo.finalPrices.domestic118kg} | 
+                      15kg = Rs {pricingInfo.finalPrices.standard15kg} | 
+                      45.4kg = Rs {pricingInfo.finalPrices.commercial454kg}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             {gasItems.map((item, index) => (
@@ -393,13 +497,19 @@ export default function B2CTransactionPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Selling Price
+                    {pricingInfo && item.cylinderType && (
+                      <span className="text-blue-600 text-xs ml-2">✨ Auto-calculated</span>
+                    )}
+                  </label>
                   <Input
                     type="number"
                     min="0"
                     step="0.01"
                     value={item.pricePerItem}
                     onChange={(e) => updateGasItem(index, 'pricePerItem', parseFloat(e.target.value) || 0)}
+                    className={pricingInfo && item.cylinderType ? 'bg-blue-50 border-blue-200' : ''}
                   />
                 </div>
                 <div>

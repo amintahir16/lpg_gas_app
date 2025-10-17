@@ -23,6 +23,7 @@ model User {
   notifications    Notification[]   @relation("UserNotifications")
   purchaseEntries  PurchaseEntry[]  @relation("UserPurchaseEntries")
   vendorPurchases  VendorPurchase[] @relation("UserVendorPurchases")
+  dailyPlantPrices DailyPlantPrice[]
 
   @@map("users")
 }
@@ -47,6 +48,8 @@ model Customer {
   createdAt          DateTime         @default(now())
   updatedBy          String?
   updatedAt          DateTime         @updatedAt
+  marginCategoryId   String?
+  marginCategory     MarginCategory?  @relation(fields: [marginCategoryId], references: [id])
   b2bTransactions    B2BTransaction[]
   ledger             CustomerLedger[]
   cylinderRentals    CylinderRental[]
@@ -569,6 +572,34 @@ model BillSequence {
   @@map("bill_sequences")
 }
 
+model MarginCategory {
+  id            String   @id @default(cuid())
+  name          String
+  customerType  String   // 'B2C' or 'B2B'
+  marginPerKg   Decimal  @db.Decimal(10, 2)
+  description   String?
+  isActive      Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  b2cCustomers  B2CCustomer[]
+  b2bCustomers  Customer[]
+
+  @@map("margin_categories")
+}
+
+model DailyPlantPrice {
+  id                String   @id @default(cuid())
+  date              DateTime @unique
+  plantPrice118kg   Decimal  @default(0) @db.Decimal(10, 2)
+  notes             String?
+  createdBy         String?
+  createdAt         DateTime @default(now())
+  createdByUser     User?    @relation(fields: [createdBy], references: [id])
+
+  @@map("daily_plant_prices")
+}
+
 model B2CCustomer {
   id                String               @id @default(cuid())
   name              String
@@ -584,6 +615,8 @@ model B2CCustomer {
   googleMapLocation String?
   totalProfit       Decimal              @default(0) @db.Decimal(15, 2)
   isActive          Boolean              @default(true)
+  marginCategoryId  String?
+  marginCategory    MarginCategory?      @relation(fields: [marginCategoryId], references: [id])
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   transactions      B2CTransaction[]

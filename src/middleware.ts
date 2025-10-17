@@ -25,6 +25,7 @@ const routePermissions = {
     '/vendors',
     '/reports',
     '/settings',
+    '/admin',
     '/api/customers',
     '/api/customers/b2b',
     '/api/cylinders',
@@ -36,7 +37,10 @@ const routePermissions = {
     '/api/settings',
     '/api/inventory',
     '/api/b2b-transactions',
-    '/api/customers/b2b/transactions'
+    '/api/customers/b2b/transactions',
+    '/api/admin/margin-categories',
+    '/api/admin/plant-prices',
+    '/api/pricing'
   ],
   
   // Notification routes (accessible by all authenticated users)

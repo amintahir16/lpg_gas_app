@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -27,6 +28,7 @@ interface SystemSettings {
 }
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -149,7 +151,12 @@ export default function SettingsPage() {
           <p className="text-gray-600 mt-1">Manage your business configuration and preferences</p>
         </div>
         {!isEditing ? (
-          <Button onClick={() => setIsEditing(true)}>Edit Settings</Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => router.push('/admin/pricing')}>
+              Price Management
+            </Button>
+            <Button onClick={() => setIsEditing(true)}>Edit Settings</Button>
+          </div>
         ) : (
           <div className="flex gap-2">
             <Button onClick={handleSave} disabled={saving}>
