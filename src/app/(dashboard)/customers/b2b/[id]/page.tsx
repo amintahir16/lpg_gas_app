@@ -17,7 +17,8 @@ import {
   EyeIcon,
   BuildingOfficeIcon,
   CurrencyDollarIcon,
-  CubeIcon
+  CubeIcon,
+  CalculatorIcon
 } from '@heroicons/react/24/outline';
 
 interface B2BCustomer {

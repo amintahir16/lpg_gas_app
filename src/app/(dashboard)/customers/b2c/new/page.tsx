@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeftIcon, HomeIcon, PlusIcon } from '@heroicons/react/24/outline';
 
 export default function NewB2CCustomerPage() {
@@ -24,18 +25,41 @@ export default function NewB2CCustomerPage() {
     phase: '',
     area: '',
     city: 'Hayatabad',
-    googleMapLocation: ''
+    googleMapLocation: '',
+    marginCategoryId: ''
   });
+
+  const [marginCategories, setMarginCategories] = useState<any[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(true);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  // Fetch margin categories on component mount
+  useEffect(() => {
+    const fetchMarginCategories = async () => {
+      try {
+        const response = await fetch('/api/admin/margin-categories?customerType=B2C');
+        if (response.ok) {
+          const data = await response.json();
+          setMarginCategories(data);
+        }
+      } catch (error) {
+        console.error('Error fetching margin categories:', error);
+      } finally {
+        setLoadingCategories(false);
+      }
+    };
+
+    fetchMarginCategories();
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name || !formData.phone || !formData.address) {
-      setError('Name, phone, and address are required');
+    if (!formData.name || !formData.phone || !formData.address || !formData.marginCategoryId) {
+      setError('Name, phone, address, and margin category are required');
       return;
     }
 
@@ -138,6 +162,42 @@ export default function NewB2CCustomerPage() {
                 onChange={(e) => handleInputChange('email', e.target.value)}
                 placeholder="Enter email address (optional)"
               />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Pricing Category */}
+        <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold text-gray-900">Pricing Category</CardTitle>
+            <CardDescription className="text-gray-600 font-medium">
+              Select the margin category for automatic pricing calculation
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Margin Category *
+              </label>
+              <Select
+                value={formData.marginCategoryId}
+                onValueChange={(value) => handleInputChange('marginCategoryId', value)}
+                disabled={loadingCategories}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={loadingCategories ? "Loading categories..." : "Select margin category"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {marginCategories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name} - Rs {category.marginPerKg}/kg
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-gray-500 mt-1">
+                This determines the automatic pricing for gas cylinders
+              </p>
             </div>
           </CardContent>
         </Card>

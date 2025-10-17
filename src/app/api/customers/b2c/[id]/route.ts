@@ -73,7 +73,8 @@ export async function PUT(
       area,
       city,
       googleMapLocation,
-      isActive
+      isActive,
+      marginCategoryId
     } = body;
 
     // Validate required fields
@@ -113,7 +114,8 @@ export async function PUT(
         area: area || null,
         city: city || 'Hayatabad',
         googleMapLocation: googleMapLocation || null,
-        isActive: isActive !== undefined ? isActive : true
+        isActive: isActive !== undefined ? isActive : true,
+        marginCategoryId: marginCategoryId || null
       }
     });
 

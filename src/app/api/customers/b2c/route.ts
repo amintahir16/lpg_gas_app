@@ -140,7 +140,8 @@ export async function POST(request: NextRequest) {
       phase,
       area,
       city = 'Hayatabad',
-      googleMapLocation
+      googleMapLocation,
+      marginCategoryId
     } = body;
 
     // Validate required fields
@@ -176,6 +177,7 @@ export async function POST(request: NextRequest) {
         area: area || null,
         city,
         googleMapLocation: googleMapLocation || null,
+        marginCategoryId: marginCategoryId || null,
         totalProfit: 0
       }
     });

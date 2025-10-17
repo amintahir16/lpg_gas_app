@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/db';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
@@ -58,38 +60,10 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const userId = request.headers.get('x-user-id');
+    const session = await getServerSession(authOptions);
     
-    console.log('Received userId from headers:', userId);
-    
-    if (!userId) {
+    if (!session?.user || (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Verify user exists in database
-    let user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, email: true }
-    });
-
-    if (!user) {
-      console.log('User not found in database:', userId);
-      console.log('Looking for any admin user to use instead...');
-      
-      // If user not found, try to find any admin user
-      user = await prisma.user.findFirst({
-        where: { role: 'ADMIN' },
-        select: { id: true, email: true }
-      });
-      
-      if (!user) {
-        console.log('No admin users found in database');
-        return NextResponse.json({ error: 'No valid user found' }, { status: 401 });
-      }
-      
-      console.log('Using admin user instead:', user);
-    } else {
-      console.log('User found:', user);
     }
 
     const body = await request.json();
@@ -103,7 +77,8 @@ export async function POST(request: NextRequest) {
       paymentTermsDays,
       notes,
       customerType,
-      type = 'B2B'
+      type = 'B2B',
+      marginCategoryId
     } = body;
 
     // Combine customer type with notes
@@ -122,7 +97,8 @@ export async function POST(request: NextRequest) {
         paymentTermsDays: paymentTermsDays ? parseInt(paymentTermsDays) : 30,
         notes: combinedNotes,
         type,
-        createdBy: user.id,
+        createdBy: session.user.id,
+        marginCategoryId: marginCategoryId || null,
       },
     });
 
