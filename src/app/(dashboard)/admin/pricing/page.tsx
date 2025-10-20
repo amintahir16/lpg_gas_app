@@ -101,10 +101,11 @@ export default function PricingManagementPage() {
       setPlantPrices(pricesData);
     } catch (error) {
       console.error('Error fetching data:', error);
-      if (error.message.includes('Authentication required')) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      if (errorMessage.includes('Authentication required')) {
         showMessage('error', 'Please log in as an admin user to access pricing management. Use admin@lpg.com / admin123');
       } else {
-        showMessage('error', `Failed to load pricing data: ${error.message}`);
+        showMessage('error', `Failed to load pricing data: ${errorMessage}`);
       }
     } finally {
       setLoading(false);
@@ -141,9 +142,10 @@ export default function PricingManagementPage() {
       showMessage('success', 'Category updated successfully');
       cancelEditingCategory();
       fetchData();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error updating category:', error);
-      showMessage('error', error.message || 'Failed to update category');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update category';
+      showMessage('error', errorMessage);
     }
   };
 
@@ -184,9 +186,10 @@ export default function PricingManagementPage() {
       showMessage('success', 'Plant price set successfully');
       setNewPriceForm({ plantPrice118kg: '', notes: '' });
       fetchData();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error setting plant price:', error);
-      showMessage('error', error.message || 'Failed to set plant price');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to set plant price';
+      showMessage('error', errorMessage);
     }
   };
 
