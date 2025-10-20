@@ -112,7 +112,6 @@ export async function POST(request: NextRequest) {
     const vendor = await prisma.vendor.create({
       data: {
         vendorCode,
-        name,
         companyName: name,
         categoryId,
         contactPerson,

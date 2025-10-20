@@ -10,6 +10,8 @@ import {
   PlusIcon,
   CurrencyDollarIcon,
   ShoppingBagIcon,
+  PencilIcon,
+  TrashIcon,
   // Cylinder icons
   ArchiveBoxIcon, // Better representation for cylinders/containers
   // Gas icons  
@@ -39,6 +41,15 @@ export default function VendorsPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryDescription, setNewCategoryDescription] = useState('');
+  
+  // Edit category state
+  const [editingCategory, setEditingCategory] = useState<VendorCategory | null>(null);
+  const [editCategoryName, setEditCategoryName] = useState('');
+  const [editCategoryDescription, setEditCategoryDescription] = useState('');
+  
+  // Delete confirmation state
+  const [deletingCategory, setDeletingCategory] = useState<VendorCategory | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -102,6 +113,82 @@ export default function VendorsPage() {
       console.error('Error creating category:', error);
       alert('Failed to create category');
     }
+  };
+
+  const handleEditCategory = (category: VendorCategory) => {
+    setEditingCategory(category);
+    setEditCategoryName(category.name);
+    setEditCategoryDescription(category.description || '');
+  };
+
+  const handleUpdateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCategory || !editCategoryName.trim()) return;
+
+    try {
+      const response = await fetch('/api/vendor-categories', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingCategory.id,
+          name: editCategoryName,
+          description: editCategoryDescription
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        alert(error.error || 'Failed to update category');
+        return;
+      }
+
+      setEditingCategory(null);
+      setEditCategoryName('');
+      setEditCategoryDescription('');
+      fetchCategories();
+    } catch (error) {
+      console.error('Error updating category:', error);
+      alert('Failed to update category');
+    }
+  };
+
+  const handleDeleteCategory = (category: VendorCategory) => {
+    setDeletingCategory(category);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteCategory = async () => {
+    if (!deletingCategory) return;
+
+    try {
+      const response = await fetch(`/api/vendor-categories?id=${deletingCategory.id}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        alert(error.error || 'Failed to delete category');
+        return;
+      }
+
+      setDeletingCategory(null);
+      setShowDeleteConfirm(false);
+      fetchCategories();
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      alert('Failed to delete category');
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditingCategory(null);
+    setEditCategoryName('');
+    setEditCategoryDescription('');
+  };
+
+  const cancelDelete = () => {
+    setDeletingCategory(null);
+    setShowDeleteConfirm(false);
   };
 
   const getCategoryIcon = (slug: string) => {
@@ -277,43 +364,185 @@ export default function VendorsPage() {
             const colorClass = getCategoryColor(category.slug);
 
             return (
-              <Link
-                key={category.id}
-                href={`/vendors/category/${category.id}`}
-              >
-                <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className={`p-3 rounded-lg bg-gray-50 border border-gray-200`}>
-                        <IconComponent className={`w-8 h-8 ${colorClass.replace('bg-', 'text-')}`} />
+              <Card key={category.id} className="hover:shadow-lg transition-shadow h-full">
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className={`p-3 rounded-lg bg-gray-50 border border-gray-200`}>
+                      <IconComponent className={`w-8 h-8 ${colorClass.replace('bg-', 'text-')}`} />
+                    </div>
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-gray-900">
+                        {category.vendorCount}
                       </div>
-                      <div className="text-right">
-                        <div className="text-2xl font-bold text-gray-900">
-                          {category.vendorCount}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {category.vendorCount === 1 ? 'Vendor' : 'Vendors'}
-                        </div>
+                      <div className="text-sm text-gray-500">
+                        {category.vendorCount === 1 ? 'Vendor' : 'Vendors'}
                       </div>
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                      {category.name}
-                    </h3>
-                    {category.description && (
-                      <p className="text-sm text-gray-600 line-clamp-2">
-                        {category.description}
-                      </p>
-                    )}
-                    <div className="mt-4 pt-4 border-t border-gray-200">
-                      <span className="text-sm text-blue-600 font-medium hover:text-blue-700">
+                  </div>
+                  
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    {category.name}
+                  </h3>
+                  {category.description && (
+                    <p className="text-sm text-gray-600 line-clamp-2">
+                      {category.description}
+                    </p>
+                  )}
+                  
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <Link
+                        href={`/vendors/category/${category.id}`}
+                        className="text-sm text-blue-600 font-medium hover:text-blue-700"
+                      >
                         View Vendors →
-                      </span>
+                      </Link>
+                      
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handleEditCategory(category);
+                          }}
+                          className="h-8 w-8 p-0"
+                          title="Edit Category"
+                        >
+                          <PencilIcon className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handleDeleteCategory(category);
+                          }}
+                          className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          title="Delete Category"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
-                  </CardContent>
-                </Card>
-              </Link>
+                  </div>
+                </CardContent>
+              </Card>
             );
           })}
+        </div>
+      )}
+
+      {/* Edit Category Modal */}
+      {editingCategory && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md mx-4">
+            <CardHeader>
+              <CardTitle>Edit Category</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleUpdateCategory} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Category Name *
+                  </label>
+                  <Input
+                    value={editCategoryName}
+                    onChange={(e) => setEditCategoryName(e.target.value)}
+                    placeholder="e.g., Cylinder Purchase, Gas Purchase"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Description
+                  </label>
+                  <Input
+                    value={editCategoryDescription}
+                    onChange={(e) => setEditCategoryDescription(e.target.value)}
+                    placeholder="Brief description of this category"
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <Button type="submit">Update Category</Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={cancelEdit}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && deletingCategory && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md mx-4">
+            <CardHeader>
+              <CardTitle className="text-red-600">Delete Category</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <p className="text-gray-700">
+                  Are you sure you want to delete the category <strong>"{deletingCategory.name}"</strong>?
+                </p>
+                
+                {deletingCategory.vendorCount > 0 && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="flex items-start">
+                      <div className="flex-shrink-0">
+                        <TrashIcon className="h-5 w-5 text-red-400" />
+                      </div>
+                      <div className="ml-3">
+                        <h3 className="text-sm font-medium text-red-800">
+                          Cannot Delete Category
+                        </h3>
+                        <div className="mt-2 text-sm text-red-700">
+                          <p>
+                            This category has <strong>{deletingCategory.vendorCount}</strong> vendor(s). 
+                            You must delete or move all vendors from this category before deleting it.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="flex gap-3">
+                  {deletingCategory.vendorCount === 0 ? (
+                    <>
+                      <Button
+                        onClick={confirmDeleteCategory}
+                        className="bg-red-600 hover:bg-red-700 text-white"
+                      >
+                        <TrashIcon className="w-4 h-4 mr-2" />
+                        Delete Category
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={cancelDelete}
+                      >
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      onClick={cancelDelete}
+                      className="w-full"
+                    >
+                      Close
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>

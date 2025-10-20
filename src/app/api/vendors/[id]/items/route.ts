@@ -16,12 +16,12 @@ export async function GET(
 
     const { id } = await params;
 
-    const items = await prisma.vendorItem.findMany({
+    const items = await prisma.vendorInventory.findMany({
       where: {
         vendorId: id,
-        isActive: true
+        status: 'IN_STOCK'
       },
-      orderBy: { sortOrder: 'asc' }
+      orderBy: { createdAt: 'asc' }
     });
 
     return NextResponse.json({ items });
@@ -56,21 +56,16 @@ export async function POST(
       );
     }
 
-    // Get max sort order
-    const maxSort = await prisma.vendorItem.findFirst({
-      where: { vendorId: id },
-      orderBy: { sortOrder: 'desc' },
-      select: { sortOrder: true }
-    });
-
-    const item = await prisma.vendorItem.create({
+    // Create vendor inventory item
+    const item = await prisma.vendorInventory.create({
       data: {
         vendorId: id,
         name,
         description,
         category: category || 'General',
-        defaultUnit: defaultUnit || 'piece',
-        sortOrder: (maxSort?.sortOrder || 0) + 1
+        quantity: 0, // Default quantity for new items
+        unitPrice: 0, // Default unit price
+        status: 'IN_STOCK'
       }
     });
 
@@ -106,10 +101,11 @@ export async function PUT(request: NextRequest) {
     if (name !== undefined) updateData.name = name;
     if (description !== undefined) updateData.description = description;
     if (category !== undefined) updateData.category = category;
-    if (defaultUnit !== undefined) updateData.defaultUnit = defaultUnit;
-    if (isActive !== undefined) updateData.isActive = isActive;
+    if (quantity !== undefined) updateData.quantity = Number(quantity);
+    if (unitPrice !== undefined) updateData.unitPrice = Number(unitPrice);
+    if (status !== undefined) updateData.status = status;
 
-    const item = await prisma.vendorItem.update({
+    const item = await prisma.vendorInventory.update({
       where: { id },
       data: updateData
     });
@@ -142,10 +138,10 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Soft delete
-    await prisma.vendorItem.update({
+    // Soft delete by changing status
+    await prisma.vendorInventory.update({
       where: { id },
-      data: { isActive: false }
+      data: { status: 'OUT_OF_STOCK' }
     });
 
     return NextResponse.json({ success: true });

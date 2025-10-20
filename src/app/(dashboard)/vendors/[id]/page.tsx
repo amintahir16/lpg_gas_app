@@ -674,7 +674,7 @@ export default function VendorDetailPage() {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              Items ({vendor.items.length})
+              Items ({vendor.inventories.length})
             </button>
             <button
               onClick={() => setActiveTab('financial')}
@@ -1029,7 +1029,7 @@ export default function VendorDetailPage() {
           )}
 
           {/* Purchases List */}
-          {vendor.purchases.length === 0 ? (
+          {vendor.purchase_entries.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
                 <ShoppingCartIcon className="w-16 h-16 mx-auto text-gray-400 mb-4" />
@@ -1047,7 +1047,7 @@ export default function VendorDetailPage() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {vendor.purchases.map((purchase) => (
+              {vendor.purchase_entries.map((purchase) => (
                 <Card key={purchase.id}>
                   <CardContent className="p-6">
                     <div className="flex justify-between items-start mb-4">
@@ -1061,14 +1061,14 @@ export default function VendorDetailPage() {
                       </div>
                       <span
                         className={`px-3 py-1 text-sm font-medium rounded-full ${
-                          purchase.paymentStatus === 'PAID'
+                          purchase.status === 'COMPLETED'
                             ? 'bg-green-100 text-green-700'
-                            : purchase.paymentStatus === 'PARTIAL'
+                            : purchase.status === 'PENDING'
                             ? 'bg-yellow-100 text-yellow-700'
                             : 'bg-red-100 text-red-700'
                         }`}
                       >
-                        {purchase.paymentStatus}
+                        {purchase.status}
                       </span>
                     </div>
 
@@ -1097,63 +1097,59 @@ export default function VendorDetailPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {purchase.items.map((item) => (
-                            <tr key={item.id} className="border-t border-gray-200">
-                              <td className="px-4 py-2">{item.itemName}</td>
-                              <td className="px-4 py-2 text-right">{item.quantity}</td>
-                              <td className="px-4 py-2 text-right">
-                                {formatCurrency(Number(item.unitPrice))}
+                          <tr className="border-t border-gray-200">
+                            <td className="px-4 py-2">{purchase.itemName}</td>
+                            <td className="px-4 py-2 text-right">{purchase.quantity}</td>
+                            <td className="px-4 py-2 text-right">
+                              {formatCurrency(Number(purchase.unitPrice))}
+                            </td>
+                            {vendor?.category?.slug === 'cylinder_purchase' && (
+                              <td className="px-4 py-2 text-left text-xs text-gray-600">
+                                -
                               </td>
-                              {vendor?.category?.slug === 'cylinder_purchase' && (
-                                <td className="px-4 py-2 text-left text-xs text-gray-600">
-                                  {item.cylinderCodes || '-'}
-                                </td>
-                              )}
-                              <td className="px-4 py-2 text-right font-medium">
-                                {formatCurrency(Number(item.totalPrice))}
-                              </td>
-                            </tr>
-                          ))}
+                            )}
+                            <td className="px-4 py-2 text-right font-medium">
+                              {formatCurrency(Number(purchase.totalPrice))}
+                            </td>
+                          </tr>
                         </tbody>
                       </table>
                     </div>
 
                     {/* Purchase Summary */}
-                    <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200">
+                    <div className="grid grid-cols-1 gap-4 pt-4 border-t border-gray-200">
                       <div>
                         <div className="text-xs text-gray-500 mb-1">Total Amount</div>
                         <div className="text-lg font-semibold text-gray-900">
-                          {formatCurrency(Number(purchase.totalAmount))}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500 mb-1">Paid</div>
-                        <div className="text-lg font-semibold text-green-600">
-                          {formatCurrency(Number(purchase.paidAmount))}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500 mb-1">Balance</div>
-                        <div className="text-lg font-semibold text-red-600">
-                          {formatCurrency(Number(purchase.balanceAmount))}
+                          {formatCurrency(Number(purchase.totalPrice))}
                         </div>
                       </div>
                     </div>
 
-                    {/* Payments */}
-                    {purchase.payments.length > 0 && (
+                    {/* Notes */}
+                    {purchase.notes && (
                       <div className="mt-4 pt-4 border-t border-gray-200">
                         <h4 className="text-sm font-medium text-gray-700 mb-2">
-                          Payments
+                          Notes
+                        </h4>
+                        <p className="text-sm text-gray-600">{purchase.notes}</p>
+                      </div>
+                    )}
+
+                    {/* Payments - Show all vendor payments since purchase entries don't have direct payment relations */}
+                    {vendor.payments && vendor.payments.length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <h4 className="text-sm font-medium text-gray-700 mb-2">
+                          Recent Payments
                         </h4>
                         <div className="space-y-2">
-                          {purchase.payments.map((payment) => (
+                          {vendor.payments.slice(0, 3).map((payment) => (
                             <div
                               key={payment.id}
                               className="flex justify-between text-sm"
                             >
                               <span className="text-gray-600">
-                                {formatDate(payment.paymentDate)} - {payment.paymentMethod}
+                                {formatDate(payment.paymentDate)} - {payment.method}
                               </span>
                               <span className="font-medium text-green-600">
                                 {formatCurrency(Number(payment.amount))}
@@ -1253,7 +1249,7 @@ export default function VendorDetailPage() {
           )}
 
           {/* Items List */}
-          {vendor.items.length === 0 ? (
+          {vendor.inventories.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
                 <h3 className="text-lg font-medium text-gray-900 mb-2">
@@ -1270,7 +1266,7 @@ export default function VendorDetailPage() {
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {vendor.items.map((item) => (
+              {vendor.inventories.map((item) => (
                 <Card key={item.id}>
                   <CardContent className="p-4">
                     <h3 className="font-semibold text-gray-900 mb-1">

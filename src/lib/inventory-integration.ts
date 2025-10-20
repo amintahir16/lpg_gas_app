@@ -103,7 +103,9 @@ export class InventoryIntegrationService {
    * Process cylinder purchases - create individual cylinder records
    */
   private static async processCylinderPurchase(item: VendorPurchaseItem): Promise<void> {
-    const { itemName, quantity, unitPrice, cylinderCodes } = item;
+    const { itemName, quantity: rawQuantity, unitPrice: rawUnitPrice, cylinderCodes } = item;
+    const quantity = Number(rawQuantity);
+    const unitPrice = Number(rawUnitPrice);
     
     // Extract cylinder type from item name
     const cylinderType = this.extractCylinderType(itemName);
@@ -143,7 +145,9 @@ export class InventoryIntegrationService {
    * Process regulator purchases - update existing or create new regulator
    */
   private static async processRegulatorPurchase(item: VendorPurchaseItem): Promise<void> {
-    const { itemName, quantity, unitPrice } = item;
+    const { itemName, quantity: rawQuantity, unitPrice: rawUnitPrice } = item;
+    const quantity = Number(rawQuantity);
+    const unitPrice = Number(rawUnitPrice);
     
     // Find existing regulator or create new one
     const existingRegulator = await prisma.regulator.findFirst({
@@ -185,7 +189,9 @@ export class InventoryIntegrationService {
    * Process stove purchases - update existing or create new stove
    */
   private static async processStovePurchase(item: VendorPurchaseItem): Promise<void> {
-    const { itemName, quantity, unitPrice } = item;
+    const { itemName, quantity: rawQuantity, unitPrice: rawUnitPrice } = item;
+    const quantity = Number(rawQuantity);
+    const unitPrice = Number(rawUnitPrice);
     
     // Find existing stove or create new one
     const existingStove = await prisma.stove.findFirst({
@@ -227,7 +233,9 @@ export class InventoryIntegrationService {
    * Process gas pipe purchases - update existing or create new pipe
    */
   private static async processGasPipePurchase(item: VendorPurchaseItem): Promise<void> {
-    const { itemName, quantity, unitPrice } = item;
+    const { itemName, quantity: rawQuantity, unitPrice: rawUnitPrice } = item;
+    const quantity = Number(rawQuantity);
+    const unitPrice = Number(rawUnitPrice);
     
     // Find existing gas pipe or create new one
     const existingPipe = await prisma.gasPipe.findFirst({
@@ -268,7 +276,9 @@ export class InventoryIntegrationService {
    * Process generic products - add to Product table
    */
   private static async processGenericProduct(item: VendorPurchaseItem): Promise<void> {
-    const { itemName, quantity, unitPrice } = item;
+    const { itemName, quantity: rawQuantity, unitPrice: rawUnitPrice } = item;
+    const quantity = Number(rawQuantity);
+    const unitPrice = Number(rawUnitPrice);
     
     // Find existing product or create new one
     const existingProduct = await prisma.product.findFirst({

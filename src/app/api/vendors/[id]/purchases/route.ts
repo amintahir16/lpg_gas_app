@@ -141,43 +141,42 @@ export async function POST(
     
     // Use database transaction to ensure both purchase and inventory updates succeed
     const purchase = await prisma.$transaction(async (tx) => {
-      // Create the vendor purchase
-      const newPurchase = await tx.vendorPurchase.create({
-        data: {
-          vendorId: id,
-          userId: session.user.id,
-          purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),
-          invoiceNumber,
-          notes,
-          totalAmount,
-          paidAmount: paid,
-          balanceAmount: balance,
-          paymentStatus,
-          items: {
-            create: items.map((item: any) => ({
+      // Create individual purchase entries for each item
+      const purchaseEntries = await Promise.all(
+        items.map((item: any) =>
+          tx.purchaseEntry.create({
+            data: {
+              vendorId: id,
+              userId: session.user.id,
+              category: 'GAS_PURCHASE', // Default category, can be made dynamic
               itemName: item.itemName,
-              vendorItemId: item.vendorItemId,
+              itemDescription: item.itemDescription || null,
               quantity: Number(item.quantity),
               unitPrice: Number(item.unitPrice),
               totalPrice: Number(item.totalPrice),
-              cylinderCodes: item.cylinderCodes || null
-            }))
-          },
-          ...(paid > 0 && {
-            payments: {
-              create: {
-                amount: paid,
-                paymentDate: new Date(),
-                paymentMethod: 'CASH'
-              }
+              status: 'PENDING',
+              purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),
+              invoiceNumber,
+              notes
             }
           })
-        },
-        include: {
-          items: true,
-          payments: true
-        }
-      });
+        )
+      );
+
+      // Create payment if paid amount > 0
+      let payment = null;
+      if (paid > 0) {
+        payment = await tx.vendorPayment.create({
+          data: {
+            vendorId: id,
+            amount: paid,
+            paymentDate: new Date(),
+            method: 'CASH',
+            status: 'COMPLETED',
+            description: `Payment for invoice ${invoiceNumber}`
+          }
+        });
+      }
 
       // Integrate purchased items with inventory system
       try {
@@ -188,12 +187,18 @@ export async function POST(
         throw new Error(`Purchase created but inventory update failed: ${inventoryError}`);
       }
 
-      return newPurchase;
+      return {
+        purchaseEntries,
+        payment,
+        totalAmount,
+        paidAmount: paid,
+        balanceAmount: balance
+      };
     });
 
     console.log('Purchase created and inventory updated successfully:', {
-      id: purchase.id,
-      invoiceNumber: purchase.invoiceNumber,
+      purchaseEntriesCount: purchase.purchaseEntries.length,
+      invoiceNumber,
       totalAmount: purchase.totalAmount
     });
 
