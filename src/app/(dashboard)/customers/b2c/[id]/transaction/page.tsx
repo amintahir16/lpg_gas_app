@@ -101,12 +101,20 @@ export default function B2CTransactionPage() {
   
   // Accessory validation state
   const [hasAccessoryErrors, setHasAccessoryErrors] = useState(false);
+  
+  // Security return validation state
+  const [hasSecurityReturnErrors, setHasSecurityReturnErrors] = useState(false);
 
   useEffect(() => {
     if (customerId) {
       fetchCustomerDetails();
     }
   }, [customerId]);
+
+  // Check for security return errors when securityItems change
+  useEffect(() => {
+    checkSecurityReturnErrors();
+  }, [securityItems, customer?.cylinderHoldings]);
 
   const fetchCustomerDetails = async () => {
     try {
@@ -320,6 +328,24 @@ export default function B2CTransactionPage() {
       .reduce((sum, holding) => sum + holding.quantity, 0);
   };
 
+  // Check if security return quantities exceed available holdings
+  const checkSecurityReturnErrors = () => {
+    if (!customer?.cylinderHoldings) {
+      setHasSecurityReturnErrors(false);
+      return;
+    }
+
+    const hasErrors = securityItems.some(item => {
+      if (item.isReturn && item.cylinderType) {
+        const available = getAvailableHoldings(item.cylinderType);
+        return item.quantity > available;
+      }
+      return false;
+    });
+
+    setHasSecurityReturnErrors(hasErrors);
+  };
+
   const updateSecurityItem = (index: number, field: keyof SecurityItem, value: any) => {
     const updated = [...securityItems];
     updated[index] = { ...updated[index], [field]: value };
@@ -341,6 +367,11 @@ export default function B2CTransactionPage() {
     }
     
     setSecurityItems(updated);
+    
+    // Check for security return validation errors after update
+    setTimeout(() => {
+      checkSecurityReturnErrors();
+    }, 0);
   };
 
   const addAccessoryItem = () => {
@@ -1019,13 +1050,20 @@ export default function B2CTransactionPage() {
           >
             Cancel
           </Button>
-          <Button
-            type="submit"
-            disabled={submitting || (!gasItems.length && !securityItems.length && !accessoryItems.length) || hasAnyErrors() || hasAccessoryErrors}
-            className="font-semibold"
-          >
-            {submitting ? 'Creating...' : 'Create Transaction'}
-          </Button>
+          <div className="relative">
+            <Button
+              type="submit"
+              disabled={submitting || (!gasItems.length && !securityItems.length && !accessoryItems.length) || hasAnyErrors() || hasAccessoryErrors || hasSecurityReturnErrors}
+              className="font-semibold"
+            >
+              {submitting ? 'Creating...' : 'Create Transaction'}
+            </Button>
+            {hasSecurityReturnErrors && (
+              <div className="absolute -top-12 right-0 bg-red-100 border border-red-300 text-red-700 px-3 py-2 rounded-lg text-sm whitespace-nowrap">
+                Fix security return quantities to continue
+              </div>
+            )}
+          </div>
         </div>
       </form>
     </div>
