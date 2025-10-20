@@ -19,15 +19,11 @@ export async function GET(
       where: { id },
       include: {
         category: true,
-        items: {
-          where: { isActive: true },
-          orderBy: { sortOrder: 'asc' }
+        inventories: {
+          where: { status: 'IN_STOCK' },
+          orderBy: { createdAt: 'desc' }
         },
-        purchases: {
-          include: {
-            items: true,
-            payments: true
-          },
+        purchase_entries: {
           orderBy: { purchaseDate: 'desc' }
         },
         payments: {
@@ -46,28 +42,12 @@ export async function GET(
     }
 
     // Calculate purchase-related totals
-    const totalPurchases = vendor.purchases.reduce(
-      (sum, p) => sum + Number(p.totalAmount), 0
+    const totalPurchases = vendor.purchase_entries.reduce(
+      (sum, p) => sum + Number(p.totalPrice), 0
     );
     
-    // Calculate purchase-related payments
-    const totalPurchasePayments = vendor.purchases.reduce(
-      (sum, p) => {
-        // Check if there are separate payment records (newer system)
-        const separatePayments = p.payments.reduce(
-          (pSum, payment) => pSum + Number(payment.amount),
-          0
-        );
-        
-        // If there are separate payment records, use them; otherwise use paidAmount
-        if (separatePayments > 0) {
-          return sum + separatePayments;
-        } else {
-          return sum + Number(p.paidAmount);
-        }
-      },
-      0
-    );
+    // Calculate purchase-related payments (simplified since purchase_entries don't have payments relation)
+    const totalPurchasePayments = 0; // Purchase entries don't have direct payment relations
 
     // Calculate direct payments
     const totalDirectPayments = vendor.payments.reduce(
