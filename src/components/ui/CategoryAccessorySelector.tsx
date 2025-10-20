@@ -18,9 +18,10 @@ interface CategoryAccessorySelectorProps {
   accessoryItems: AccessoryItem[];
   setAccessoryItems: (items: AccessoryItem[]) => void;
   onValidationChange?: (hasErrors: boolean) => void;
+  onInventoryValidationChange?: (hasErrors: boolean, firstInvalidItem?: {category: string, index: number}) => void;
 }
 
-export function CategoryAccessorySelector({ accessoryItems, setAccessoryItems, onValidationChange }: CategoryAccessorySelectorProps) {
+export function CategoryAccessorySelector({ accessoryItems, setAccessoryItems, onValidationChange, onInventoryValidationChange }: CategoryAccessorySelectorProps) {
   const [selectedCategory, setSelectedCategory] = useState<'regulators' | 'gasPipes' | 'stoves'>('regulators');
   
   // Fetch dynamic inventory data
@@ -64,19 +65,55 @@ export function CategoryAccessorySelector({ accessoryItems, setAccessoryItems, o
   };
 
   const checkValidationErrors = () => {
-    if (!inventoryData || !onValidationChange) return;
+    if (!inventoryData) return;
 
-    // Check all categories for validation errors
-    const hasErrors = [
-      ...inventoryData.regulators,
-      ...inventoryData.gasPipes,
-      ...inventoryData.stoves
-    ].some(dynamicItem => {
+    let firstInvalidItem: {category: string, index: number} | null = null;
+    let hasErrors = false;
+
+    // Check regulators
+    for (let i = 0; i < inventoryData.regulators.length; i++) {
+      const dynamicItem = inventoryData.regulators[i];
       const currentItem = accessoryItems.find(item => item.name === dynamicItem.name);
-      return currentItem && currentItem.quantity > dynamicItem.quantity;
-    });
+      if (currentItem && currentItem.quantity > dynamicItem.quantity) {
+        if (!firstInvalidItem) {
+          firstInvalidItem = { category: 'regulators', index: i };
+        }
+        hasErrors = true;
+      }
+    }
 
-    onValidationChange(hasErrors);
+    // Check gas pipes
+    for (let i = 0; i < inventoryData.gasPipes.length; i++) {
+      const dynamicItem = inventoryData.gasPipes[i];
+      const currentItem = accessoryItems.find(item => item.name === dynamicItem.name);
+      if (currentItem && currentItem.quantity > dynamicItem.quantity) {
+        if (!firstInvalidItem) {
+          firstInvalidItem = { category: 'gasPipes', index: i };
+        }
+        hasErrors = true;
+      }
+    }
+
+    // Check stoves
+    for (let i = 0; i < inventoryData.stoves.length; i++) {
+      const dynamicItem = inventoryData.stoves[i];
+      const currentItem = accessoryItems.find(item => item.name === dynamicItem.name);
+      if (currentItem && currentItem.quantity > dynamicItem.quantity) {
+        if (!firstInvalidItem) {
+          firstInvalidItem = { category: 'stoves', index: i };
+        }
+        hasErrors = true;
+      }
+    }
+
+    // Call both callbacks
+    if (onValidationChange) {
+      onValidationChange(hasErrors);
+    }
+    
+    if (onInventoryValidationChange) {
+      onInventoryValidationChange(hasErrors, firstInvalidItem || undefined);
+    }
   };
 
   // Check validation errors when inventory data or accessory items change
@@ -174,7 +211,11 @@ export function CategoryAccessorySelector({ accessoryItems, setAccessoryItems, o
                   const currentPrice = currentItem?.pricePerItem || autoCalculatedPrice;
 
               return (
-                <tr key={dynamicItem.id} className="border-b hover:bg-gray-50 transition-colors">
+                <tr 
+                  key={dynamicItem.id} 
+                  id={`inventory-item-${selectedCategory}-${index}`}
+                  className="border-b hover:bg-gray-50 transition-colors"
+                >
                   <td className="py-3 px-4 font-medium text-gray-900">
                     <div>
                       {dynamicItem.name}

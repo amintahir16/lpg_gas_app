@@ -104,6 +104,11 @@ export default function B2CTransactionPage() {
   
   // Security return validation state
   const [hasSecurityReturnErrors, setHasSecurityReturnErrors] = useState(false);
+  const [firstInvalidSecurityIndex, setFirstInvalidSecurityIndex] = useState<number | null>(null);
+  
+  // Inventory validation state
+  const [hasInventoryErrors, setHasInventoryErrors] = useState(false);
+  const [firstInvalidInventoryItem, setFirstInvalidInventoryItem] = useState<{category: string, index: number} | null>(null);
 
   useEffect(() => {
     if (customerId) {
@@ -115,6 +120,12 @@ export default function B2CTransactionPage() {
   useEffect(() => {
     checkSecurityReturnErrors();
   }, [securityItems, customer?.cylinderHoldings]);
+
+  // Handle inventory validation changes from CategoryAccessorySelector
+  const handleInventoryValidationChange = (hasErrors: boolean, firstInvalidItem?: {category: string, index: number}) => {
+    setHasInventoryErrors(hasErrors);
+    setFirstInvalidInventoryItem(firstInvalidItem || null);
+  };
 
   const fetchCustomerDetails = async () => {
     try {
@@ -332,18 +343,93 @@ export default function B2CTransactionPage() {
   const checkSecurityReturnErrors = () => {
     if (!customer?.cylinderHoldings) {
       setHasSecurityReturnErrors(false);
+      setFirstInvalidSecurityIndex(null);
       return;
     }
 
-    const hasErrors = securityItems.some(item => {
+    let firstInvalidIndex = null;
+    const hasErrors = securityItems.some((item, index) => {
       if (item.isReturn && item.cylinderType) {
         const available = getAvailableHoldings(item.cylinderType);
-        return item.quantity > available;
+        if (item.quantity > available) {
+          if (firstInvalidIndex === null) {
+            firstInvalidIndex = index;
+          }
+          return true;
+        }
       }
       return false;
     });
 
     setHasSecurityReturnErrors(hasErrors);
+    setFirstInvalidSecurityIndex(firstInvalidIndex);
+  };
+
+  // Scroll to and focus on the first invalid security item
+  const scrollToInvalidSecurityItem = () => {
+    if (firstInvalidSecurityIndex !== null) {
+      const elementId = `security-item-${firstInvalidSecurityIndex}`;
+      const element = document.getElementById(elementId);
+      
+      if (element) {
+        // Smooth scroll to the element
+        element.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center' 
+        });
+        
+        // Add a temporary highlight effect
+        element.classList.add('ring-2', 'ring-red-500', 'ring-opacity-75');
+        
+        // Focus on the quantity input within that security item
+        const quantityInput = element.querySelector('input[type="number"]') as HTMLInputElement;
+        if (quantityInput) {
+          setTimeout(() => {
+            quantityInput.focus();
+            quantityInput.select(); // Select the text for easy editing
+          }, 500); // Wait for scroll to complete
+        }
+        
+        // Remove highlight after 3 seconds
+        setTimeout(() => {
+          element.classList.remove('ring-2', 'ring-red-500', 'ring-opacity-75');
+        }, 3000);
+      }
+    }
+  };
+
+  // Scroll to and focus on the first invalid inventory item
+  const scrollToInvalidInventoryItem = () => {
+    if (firstInvalidInventoryItem) {
+      const { category, index } = firstInvalidInventoryItem;
+      const elementId = `inventory-item-${category}-${index}`;
+      const element = document.getElementById(elementId);
+      
+      if (element) {
+        // Smooth scroll to the element
+        element.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center' 
+        });
+        
+        // Add a temporary highlight effect
+        element.classList.add('ring-2', 'ring-red-500', 'ring-opacity-75');
+        
+        // Focus on the quantity input within that inventory item
+        const quantityInput = element.querySelector('input[type="number"]') as HTMLInputElement;
+        if (quantityInput) {
+          setTimeout(() => {
+            quantityInput.focus();
+            quantityInput.select(); // Select the text for easy editing
+          }, 500); // Wait for scroll to complete
+        }
+        
+        // Remove highlight after 3 seconds
+        setTimeout(() => {
+          element.classList.remove('ring-2', 'ring-red-500', 'ring-opacity-75');
+        }, 3000);
+      }
+    }
   };
 
   const updateSecurityItem = (index: number, field: keyof SecurityItem, value: any) => {
@@ -485,7 +571,19 @@ export default function B2CTransactionPage() {
       return;
     }
 
-    // Validate security returns
+    // Check for security return errors and scroll to first invalid item
+    if (hasSecurityReturnErrors) {
+      scrollToInvalidSecurityItem();
+      return;
+    }
+
+    // Check for inventory errors and scroll to first invalid item
+    if (hasInventoryErrors) {
+      scrollToInvalidInventoryItem();
+      return;
+    }
+
+    // Validate security returns (additional backend validation)
     if (!validateSecurityReturns()) {
       return;
     }
@@ -806,7 +904,11 @@ export default function B2CTransactionPage() {
           </CardHeader>
           <CardContent>
             {securityItems.map((item, index) => (
-              <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 bg-gray-50 rounded-lg mb-4">
+              <div 
+                key={index} 
+                id={`security-item-${index}`}
+                className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 bg-gray-50 rounded-lg mb-4"
+              >
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Cylinder Type</label>
                   <Select 
@@ -839,8 +941,8 @@ export default function B2CTransactionPage() {
                     onChange={(e) => updateSecurityItem(index, 'quantity', parseInt(e.target.value) || 1)}
                     className={
                       item.isReturn && item.cylinderType && item.quantity > getAvailableHoldings(item.cylinderType)
-                        ? 'border-red-500 bg-red-50'
-                        : ''
+                        ? 'border-red-500 bg-red-50 focus:border-red-500 focus:ring-red-500'
+                        : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
                     }
                   />
                   {item.isReturn && item.cylinderType && item.quantity > getAvailableHoldings(item.cylinderType) && (
@@ -900,6 +1002,7 @@ export default function B2CTransactionPage() {
               accessoryItems={accessoryItems}
               setAccessoryItems={setAccessoryItems}
               onValidationChange={setHasAccessoryErrors}
+              onInventoryValidationChange={handleInventoryValidationChange}
             />
           </CardContent>
         </Card>
@@ -1050,20 +1153,13 @@ export default function B2CTransactionPage() {
           >
             Cancel
           </Button>
-          <div className="relative">
-            <Button
-              type="submit"
-              disabled={submitting || (!gasItems.length && !securityItems.length && !accessoryItems.length) || hasAnyErrors() || hasAccessoryErrors || hasSecurityReturnErrors}
-              className="font-semibold"
-            >
-              {submitting ? 'Creating...' : 'Create Transaction'}
-            </Button>
-            {hasSecurityReturnErrors && (
-              <div className="absolute -top-12 right-0 bg-red-100 border border-red-300 text-red-700 px-3 py-2 rounded-lg text-sm whitespace-nowrap">
-                Fix security return quantities to continue
-              </div>
-            )}
-          </div>
+          <Button
+            type="submit"
+            disabled={submitting || (!gasItems.length && !securityItems.length && !accessoryItems.length) || hasAnyErrors()}
+            className="font-semibold"
+          >
+            {submitting ? 'Creating...' : 'Create Transaction'}
+          </Button>
         </div>
       </form>
     </div>
