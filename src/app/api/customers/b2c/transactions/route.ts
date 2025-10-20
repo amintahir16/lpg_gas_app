@@ -34,9 +34,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if customer exists
+    // Check if customer exists and get margin category
     const customer = await prisma.b2CCustomer.findUnique({
-      where: { id: customerId }
+      where: { id: customerId },
+      include: { marginCategory: true }
     });
 
     if (!customer) {
@@ -93,7 +94,35 @@ export async function POST(request: NextRequest) {
     }, 0);
     
     // Calculate profit margins
-    const gasProfit = gasTotal - gasCost;
+    const gasProfit = (() => {
+      if (!customer.marginCategory) return gasTotal - gasCost; // Fallback to old calculation
+      
+      // Calculate profit based on margin per kg for each gas item
+      return gasItems.reduce((total: number, item: any) => {
+        if (!item.cylinderType) return total;
+        
+        // Get cylinder weight based on type
+        let cylinderWeight = 0;
+        switch (item.cylinderType) {
+          case 'DOMESTIC_11_8KG':
+            cylinderWeight = 11.8;
+            break;
+          case 'STANDARD_15KG':
+            cylinderWeight = 15.0;
+            break;
+          case 'COMMERCIAL_45_4KG':
+            cylinderWeight = 45.4;
+            break;
+          default:
+            cylinderWeight = 15.0;
+        }
+        
+        // Calculate profit based on margin per kg: marginPerKg × cylinderWeight × quantity
+        const marginPerKg = customer.marginCategory.marginPerKg;
+        return total + (marginPerKg * cylinderWeight * item.quantity);
+      }, 0);
+    })();
+    
     const accessoryProfit = accessoryTotal - accessoryCost;
     const deliveryProfit = Number(deliveryCharges) - Number(deliveryCost || 0);
     
@@ -127,7 +156,30 @@ export async function POST(request: NextRequest) {
             const totalPrice = item.pricePerItem * item.quantity;
             const costPrice = item.costPrice || 0;
             const totalCost = costPrice * item.quantity;
-            const profitMargin = totalPrice - totalCost;
+            
+            // Calculate profit margin based on margin per kg if margin category is available
+            let profitMargin = totalPrice - totalCost; // Default fallback
+            if (customer.marginCategory && item.cylinderType) {
+              // Get cylinder weight based on type
+              let cylinderWeight = 0;
+              switch (item.cylinderType) {
+                case 'DOMESTIC_11_8KG':
+                  cylinderWeight = 11.8;
+                  break;
+                case 'STANDARD_15KG':
+                  cylinderWeight = 15.0;
+                  break;
+                case 'COMMERCIAL_45_4KG':
+                  cylinderWeight = 45.4;
+                  break;
+                default:
+                  cylinderWeight = 15.0;
+              }
+              
+              // Calculate profit based on margin per kg: marginPerKg × cylinderWeight × quantity
+              const marginPerKg = customer.marginCategory.marginPerKg;
+              profitMargin = marginPerKg * cylinderWeight * item.quantity;
+            }
             
             return {
               transactionId: newTransaction.id,

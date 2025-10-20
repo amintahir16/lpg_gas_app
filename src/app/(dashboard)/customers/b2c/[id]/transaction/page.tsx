@@ -150,21 +150,35 @@ export default function B2CTransactionPage() {
     if (field === 'cylinderType' && pricingInfo) {
       const cylinderType = value;
       let calculatedPrice = 0;
+      // derive cost/kg from plant price (11.8kg basis)
+      const plantPrice118 = Number(pricingInfo?.plantPrice?.price118kg) || 0;
+      const costPerKg = plantPrice118 > 0 ? (plantPrice118 / 11.8) : 0;
+      let cylinderWeightForCost = 0;
       
       switch (cylinderType) {
         case 'DOMESTIC_11_8KG':
           calculatedPrice = pricingInfo.finalPrices.domestic118kg;
+          cylinderWeightForCost = 11.8;
           break;
         case 'STANDARD_15KG':
           calculatedPrice = pricingInfo.finalPrices.standard15kg;
+          cylinderWeightForCost = 15.0;
           break;
         case 'COMMERCIAL_45_4KG':
           calculatedPrice = pricingInfo.finalPrices.commercial454kg;
+          cylinderWeightForCost = 45.4;
           break;
       }
       
       if (calculatedPrice > 0) {
         updated[index].pricePerItem = calculatedPrice;
+      }
+
+      // Option 1: Auto-calculate Cost Price from Plant Price
+      if (costPerKg > 0 && cylinderWeightForCost > 0) {
+        const autoCost = costPerKg * cylinderWeightForCost;
+        // Round to nearest rupee to match UI expectations
+        updated[index].costPrice = Math.round(autoCost);
       }
     }
     
@@ -223,24 +237,35 @@ export default function B2CTransactionPage() {
   const applyCalculatedPrices = () => {
     if (!pricingInfo) return;
     
+    const plantPrice118 = Number(pricingInfo?.plantPrice?.price118kg) || 0;
+    const costPerKg = plantPrice118 > 0 ? (plantPrice118 / 11.8) : 0;
+
     const updatedItems = gasItems.map(item => {
       let calculatedPrice = 0;
+      let cylinderWeightForCost = 0;
       
       switch (item.cylinderType) {
         case 'DOMESTIC_11_8KG':
           calculatedPrice = pricingInfo.finalPrices.domestic118kg;
+          cylinderWeightForCost = 11.8;
           break;
         case 'STANDARD_15KG':
           calculatedPrice = pricingInfo.finalPrices.standard15kg;
+          cylinderWeightForCost = 15.0;
           break;
         case 'COMMERCIAL_45_4KG':
           calculatedPrice = pricingInfo.finalPrices.commercial454kg;
+          cylinderWeightForCost = 45.4;
           break;
       }
       
       return {
         ...item,
-        pricePerItem: calculatedPrice > 0 ? calculatedPrice : item.pricePerItem
+        pricePerItem: calculatedPrice > 0 ? calculatedPrice : item.pricePerItem,
+        // Also apply Option 1 cost auto-calculation if possible
+        costPrice: (costPerKg > 0 && cylinderWeightForCost > 0)
+          ? Math.round(costPerKg * cylinderWeightForCost)
+          : item.costPrice
       };
     });
     
@@ -325,7 +350,35 @@ export default function B2CTransactionPage() {
   }, 0);
   
   // Calculate profit margins
-  const gasProfit = gasTotal - gasCost;
+  const gasProfit = (() => {
+    if (!pricingInfo) return gasTotal - gasCost; // Fallback to old calculation
+    
+    // Calculate profit based on margin per kg for each gas item
+    return gasItems.reduce((total, item) => {
+      if (!item.cylinderType) return total;
+      
+      // Get cylinder weight based on type
+      let cylinderWeight = 0;
+      switch (item.cylinderType) {
+        case 'DOMESTIC_11_8KG':
+          cylinderWeight = 11.8;
+          break;
+        case 'STANDARD_15KG':
+          cylinderWeight = 15.0;
+          break;
+        case 'COMMERCIAL_45_4KG':
+          cylinderWeight = 45.4;
+          break;
+        default:
+          cylinderWeight = 15.0;
+      }
+      
+      // Calculate profit based on margin per kg: marginPerKg × cylinderWeight × quantity
+      const marginPerKg = pricingInfo.category.marginPerKg;
+      return total + (marginPerKg * cylinderWeight * item.quantity);
+    }, 0);
+  })();
+  
   const accessoryProfit = accessoryTotal - accessoryCost;
   const deliveryProfit = Number(deliveryCharges) - Number(deliveryCost);
   const actualProfit = gasProfit + accessoryProfit + deliveryProfit + securityReturnProfit;
@@ -587,7 +640,30 @@ export default function B2CTransactionPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Profit</label>
                   <Input
                     type="number"
-                    value={((item.pricePerItem - item.costPrice) * item.quantity).toFixed(2)}
+                    value={(() => {
+                      if (!pricingInfo || !item.cylinderType) return '0.00';
+                      
+                      // Get cylinder weight based on type
+                      let cylinderWeight = 0;
+                      switch (item.cylinderType) {
+                        case 'DOMESTIC_11_8KG':
+                          cylinderWeight = 11.8;
+                          break;
+                        case 'STANDARD_15KG':
+                          cylinderWeight = 15.0;
+                          break;
+                        case 'COMMERCIAL_45_4KG':
+                          cylinderWeight = 45.4;
+                          break;
+                        default:
+                          cylinderWeight = 15.0;
+                      }
+                      
+                      // Calculate profit based on margin per kg: marginPerKg × cylinderWeight × quantity
+                      const marginPerKg = pricingInfo.category.marginPerKg;
+                      const profit = marginPerKg * cylinderWeight * item.quantity;
+                      return profit.toFixed(2);
+                    })()}
                     disabled
                     className="bg-green-50 font-semibold text-green-700"
                   />
