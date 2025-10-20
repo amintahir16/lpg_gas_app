@@ -5,7 +5,8 @@ export interface DynamicAccessoryItem {
   id: string;
   name: string;
   quantity: number;
-  pricePerItem: number;
+  pricePerItem: number; // Sale price (with markup)
+  inventoryCost: number; // Actual inventory cost
   quality?: string;
   category: 'regulators' | 'gasPipes' | 'stoves';
   stockStatus: 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
@@ -36,6 +37,7 @@ export async function GET(request: NextRequest) {
       name: r.type,
       quantity: r.quantity,
       pricePerItem: Number(r.costPerPiece) * 1.2, // 20% markup for sale price
+      inventoryCost: Number(r.costPerPiece), // Actual inventory cost
       category: 'regulators',
       stockStatus: r.quantity === 0 ? 'OUT_OF_STOCK' : (r.quantity <= 5 ? 'LOW_STOCK' : 'IN_STOCK'),
       costPerPiece: Number(r.costPerPiece),
@@ -47,6 +49,7 @@ export async function GET(request: NextRequest) {
       name: gp.type,
       quantity: Number(gp.quantity),
       pricePerItem: Number(gp.totalCost) / Number(gp.quantity) * 1.2, // 20% markup
+      inventoryCost: Number(gp.totalCost) / Number(gp.quantity), // Actual inventory cost per piece
       category: 'gasPipes',
       stockStatus: Number(gp.quantity) === 0 ? 'OUT_OF_STOCK' : (Number(gp.quantity) <= 10 ? 'LOW_STOCK' : 'IN_STOCK'),
     }));
@@ -57,6 +60,7 @@ export async function GET(request: NextRequest) {
       name: s.quality,
       quantity: s.quantity,
       pricePerItem: Number(s.costPerPiece) * 1.2, // 20% markup
+      inventoryCost: Number(s.costPerPiece), // Actual inventory cost
       category: 'stoves',
       quality: s.quality,
       stockStatus: s.quantity === 0 ? 'OUT_OF_STOCK' : (s.quantity <= 3 ? 'LOW_STOCK' : 'IN_STOCK'),

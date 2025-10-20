@@ -34,8 +34,8 @@ export function useDynamicInventory(): UseDynamicInventoryReturn {
         throw new Error(result.error || 'Failed to fetch inventory data');
       }
 
+      console.log('✅ Dynamic inventory fetched successfully:', result);
       setData(result.data);
-      console.log('✅ Dynamic inventory fetched successfully:', result.data);
     } catch (err) {
       console.error('❌ Error fetching dynamic inventory:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch inventory data');
