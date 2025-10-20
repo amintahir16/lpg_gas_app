@@ -22,6 +22,14 @@ interface B2CCustomer {
   phase: string | null;
   area: string | null;
   city: string;
+  cylinderHoldings?: {
+    id: string;
+    cylinderType: string;
+    quantity: number;
+    securityAmount: number;
+    issueDate: string;
+    isReturned: boolean;
+  }[];
 }
 
 interface GasItem {
@@ -280,28 +288,56 @@ export default function B2CTransactionPage() {
     setSecurityItems(securityItems.filter((_, i) => i !== index));
   };
 
+  // Get actual security amount from customer's holdings
+  const getActualSecurityAmount = (cylinderType: string): number => {
+    if (!customer?.cylinderHoldings) {
+      // Fallback to hardcoded values if no holdings data
+      const cylinderTypeData = CYLINDER_TYPES.find(t => t.value === cylinderType);
+      return cylinderTypeData?.securityPrice || 0;
+    }
+
+    // Find the most recent active holding for this cylinder type
+    const activeHoldings = customer.cylinderHoldings
+      .filter(holding => holding.cylinderType === cylinderType && !holding.isReturned)
+      .sort((a, b) => new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime());
+
+    if (activeHoldings.length > 0) {
+      // Return the actual security amount from the most recent holding
+      return Number(activeHoldings[0].securityAmount);
+    }
+
+    // Fallback to hardcoded values if no active holdings found
+    const cylinderTypeData = CYLINDER_TYPES.find(t => t.value === cylinderType);
+    return cylinderTypeData?.securityPrice || 0;
+  };
+
+  // Get available holdings count for a cylinder type
+  const getAvailableHoldings = (cylinderType: string): number => {
+    if (!customer?.cylinderHoldings) return 0;
+    
+    return customer.cylinderHoldings
+      .filter(holding => holding.cylinderType === cylinderType && !holding.isReturned)
+      .reduce((sum, holding) => sum + holding.quantity, 0);
+  };
+
   const updateSecurityItem = (index: number, field: keyof SecurityItem, value: any) => {
     const updated = [...securityItems];
     updated[index] = { ...updated[index], [field]: value };
     
     // Auto-fill security price when cylinder type is selected
     if (field === 'cylinderType') {
-      const cylinderType = CYLINDER_TYPES.find(t => t.value === value);
-      if (cylinderType) {
-        updated[index].pricePerItem = updated[index].isReturn 
-          ? cylinderType.securityPrice * 0.75 // 25% deduction for returns
-          : cylinderType.securityPrice;
-      }
+      const actualSecurityAmount = getActualSecurityAmount(value);
+      updated[index].pricePerItem = updated[index].isReturn 
+        ? actualSecurityAmount * 0.75 // 25% deduction for returns
+        : actualSecurityAmount;
     }
     
     // Recalculate price when return status changes
     if (field === 'isReturn') {
-      const cylinderType = CYLINDER_TYPES.find(t => t.value === updated[index].cylinderType);
-      if (cylinderType) {
-        updated[index].pricePerItem = value 
-          ? cylinderType.securityPrice * 0.75 // 25% deduction for returns
-          : cylinderType.securityPrice;
-      }
+      const actualSecurityAmount = getActualSecurityAmount(updated[index].cylinderType);
+      updated[index].pricePerItem = value 
+        ? actualSecurityAmount * 0.75 // 25% deduction for returns
+        : actualSecurityAmount;
     }
     
     setSecurityItems(updated);
@@ -383,11 +419,43 @@ export default function B2CTransactionPage() {
   const deliveryProfit = Number(deliveryCharges) - Number(deliveryCost);
   const actualProfit = gasProfit + accessoryProfit + deliveryProfit + securityReturnProfit;
 
+  // Validate security returns against customer holdings
+  const validateSecurityReturns = () => {
+    if (!customer?.cylinderHoldings) return true; // Skip validation if no holdings data
+    
+    for (const securityItem of securityItems) {
+      if (securityItem.isReturn && securityItem.cylinderType) {
+        const activeHoldings = customer.cylinderHoldings.filter(
+          holding => holding.cylinderType === securityItem.cylinderType && !holding.isReturned
+        );
+        
+        if (activeHoldings.length === 0) {
+          setError(`Cannot return ${securityItem.cylinderType} - customer has no active security holdings for this cylinder type`);
+          return false;
+        }
+        
+        // Check if trying to return more than available
+        const totalAvailable = activeHoldings.reduce((sum, holding) => sum + holding.quantity, 0);
+        if (securityItem.quantity > totalAvailable) {
+          setError(`Cannot return ${securityItem.quantity} ${securityItem.cylinderType} - customer only has ${totalAvailable} active holdings`);
+          return false;
+        }
+      }
+    }
+    
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!gasItems.length && !securityItems.length && !accessoryItems.length) {
       setError('Please add at least one item to the transaction');
+      return;
+    }
+
+    // Validate security returns
+    if (!validateSecurityReturns()) {
       return;
     }
 
@@ -715,21 +783,40 @@ export default function B2CTransactionPage() {
                     onChange={(e) => updateSecurityItem(index, 'cylinderType', e.target.value)}
                   >
                     <option value="">Select type</option>
-                    {CYLINDER_TYPES.map((type) => (
-                      <option key={type.value} value={type.value}>
-                        {type.label}
-                      </option>
-                    ))}
+                    {CYLINDER_TYPES.map((type) => {
+                      const available = getAvailableHoldings(type.value);
+                      return (
+                        <option key={type.value} value={type.value}>
+                          {type.label} {available > 0 && `(${available} available)`}
+                        </option>
+                      );
+                    })}
                   </Select>
+                  {item.cylinderType && item.isReturn && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Available for return: {getAvailableHoldings(item.cylinderType)}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
                   <Input
                     type="number"
                     min="1"
+                    max={item.isReturn ? getAvailableHoldings(item.cylinderType) : undefined}
                     value={item.quantity}
                     onChange={(e) => updateSecurityItem(index, 'quantity', parseInt(e.target.value) || 1)}
+                    className={
+                      item.isReturn && item.cylinderType && item.quantity > getAvailableHoldings(item.cylinderType)
+                        ? 'border-red-500 bg-red-50'
+                        : ''
+                    }
                   />
+                  {item.isReturn && item.cylinderType && item.quantity > getAvailableHoldings(item.cylinderType) && (
+                    <p className="text-xs text-red-600 mt-1">
+                      Cannot return more than {getAvailableHoldings(item.cylinderType)} available
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Price per Item</label>
