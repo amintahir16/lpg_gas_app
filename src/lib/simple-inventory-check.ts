@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
 import { CylinderType, CylinderStatus } from '@prisma/client';
 
 export interface InventoryCheck {
@@ -12,9 +12,7 @@ export interface InventoryCheck {
  * Check if requested quantity exceeds available inventory
  */
 export async function checkCylinderInventory(cylinderType: string, requested: number): Promise<InventoryCheck> {
-  if (requested <= 0) {
-    return { cylinderType, requested, available: 0, isValid: true };
-  }
+  // Always check inventory, even when requested is 0 (for stock information)
 
   // Map string cylinder type to enum
   let mappedCylinderType: CylinderType;
@@ -42,7 +40,8 @@ export async function checkCylinderInventory(cylinderType: string, requested: nu
     });
 
     const available = availableCylinders.length;
-    const isValid = available >= requested;
+    // If requested is 0, we're just getting stock info, so always valid
+    const isValid = requested <= 0 ? true : available >= requested;
 
     return { cylinderType, requested, available, isValid };
   } catch (error) {

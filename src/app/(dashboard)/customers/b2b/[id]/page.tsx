@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { useInventoryValidation } from '@/hooks/useInventoryValidation';
+import { useCylinderStock } from '@/hooks/useCylinderStock';
 import { CategoryAccessorySelector } from '@/components/ui/CategoryAccessorySelector';
 import { 
   ArrowLeftIcon,
@@ -124,8 +125,16 @@ export default function B2BCustomerDetailPage() {
   // Inventory validation
   const { validateInventory, isFieldValid, hasAnyErrors, clearValidationError, clearAllValidationErrors } = useInventoryValidation();
   
+  // Cylinder stock information
+  const { cylinders: cylinderStock, loading: stockLoading, getCylinderStock } = useCylinderStock();
+  
   // Accessory validation state
   const [hasAccessoryErrors, setHasAccessoryErrors] = useState(false);
+  
+  // Enhanced validation state for auto-scroll
+  const [hasInventoryErrors, setHasInventoryErrors] = useState(false);
+  const [firstInvalidInventoryItem, setFirstInvalidInventoryItem] = useState<{category: string, index: number} | null>(null);
+  const [firstInvalidCylinderIndex, setFirstInvalidCylinderIndex] = useState<number | null>(null);
 
   // Margin category editing
   const [showCategoryEdit, setShowCategoryEdit] = useState(false);
@@ -232,6 +241,11 @@ export default function B2BCustomerDetailPage() {
       );
     }
   }, [transactionType, customer]);
+
+  // Check for cylinder validation errors when gasItems or validation state changes
+  useEffect(() => {
+    checkCylinderValidationErrors();
+  }, [gasItems, cylinderStock, transactionType]);
 
 
   const fetchCustomerLedger = async () => {
@@ -457,6 +471,104 @@ export default function B2BCustomerDetailPage() {
     }
   };
 
+  // Handle inventory validation changes from CategoryAccessorySelector
+  const handleInventoryValidationChange = (hasErrors: boolean, firstInvalidItem?: {category: string, index: number}) => {
+    setHasInventoryErrors(hasErrors);
+    setFirstInvalidInventoryItem(firstInvalidItem || null);
+  };
+
+  // Check for cylinder validation errors
+  const checkCylinderValidationErrors = () => {
+    if (transactionType !== 'SALE') {
+      setFirstInvalidCylinderIndex(null);
+      return;
+    }
+
+    let firstInvalidIndex = null;
+    const hasErrors = gasItems.some((item, index) => {
+      if (item.delivered > 0) {
+        const stockInfo = getCylinderStock(item.cylinderType);
+        const isExceedingStock = stockInfo && item.delivered > stockInfo.available;
+        if (isExceedingStock) {
+          if (firstInvalidIndex === null) {
+            firstInvalidIndex = index;
+          }
+          return true;
+        }
+      }
+      return false;
+    });
+
+    setFirstInvalidCylinderIndex(firstInvalidIndex);
+  };
+
+  // Scroll to and focus on the first invalid cylinder item
+  const scrollToInvalidCylinderItem = () => {
+    if (firstInvalidCylinderIndex !== null) {
+      const elementId = `cylinder-item-${firstInvalidCylinderIndex}`;
+      const element = document.getElementById(elementId);
+      
+      if (element) {
+        // Smooth scroll to the element
+        element.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center' 
+        });
+        
+        // Add a temporary highlight effect
+        element.classList.add('ring-2', 'ring-red-500', 'ring-opacity-75');
+        
+        // Focus on the quantity input within that cylinder item
+        const quantityInput = element.querySelector('input[type="number"]') as HTMLInputElement;
+        if (quantityInput) {
+          setTimeout(() => {
+            quantityInput.focus();
+            quantityInput.select(); // Select the text for easy editing
+          }, 500); // Wait for scroll to complete
+        }
+        
+        // Remove highlight after 3 seconds
+        setTimeout(() => {
+          element.classList.remove('ring-2', 'ring-red-500', 'ring-opacity-75');
+        }, 3000);
+      }
+    }
+  };
+
+  // Scroll to and focus on the first invalid inventory item
+  const scrollToInvalidInventoryItem = () => {
+    if (firstInvalidInventoryItem) {
+      const { category, index } = firstInvalidInventoryItem;
+      const elementId = `inventory-item-${category}-${index}`;
+      const element = document.getElementById(elementId);
+      
+      if (element) {
+        // Smooth scroll to the element
+        element.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center' 
+        });
+        
+        // Add a temporary highlight effect
+        element.classList.add('ring-2', 'ring-red-500', 'ring-opacity-75');
+        
+        // Focus on the quantity input within that inventory item
+        const quantityInput = element.querySelector('input[type="number"]') as HTMLInputElement;
+        if (quantityInput) {
+          setTimeout(() => {
+            quantityInput.focus();
+            quantityInput.select(); // Select the text for easy editing
+          }, 500); // Wait for scroll to complete
+        }
+        
+        // Remove highlight after 3 seconds
+        setTimeout(() => {
+          element.classList.remove('ring-2', 'ring-red-500', 'ring-opacity-75');
+        }, 3000);
+      }
+    }
+  };
+
   const applyCalculatedPrices = () => {
     if (!pricingInfo) return;
     
@@ -504,6 +616,18 @@ export default function B2BCustomerDetailPage() {
     
     try {
       const formData = new FormData(e.currentTarget);
+      
+      // Check for cylinder validation errors and scroll to first invalid item
+      if (firstInvalidCylinderIndex !== null) {
+        scrollToInvalidCylinderItem();
+        return;
+      }
+
+      // Check for inventory validation errors and scroll to first invalid item
+      if (hasInventoryErrors) {
+        scrollToInvalidInventoryItem();
+        return;
+      }
       
       // Validate that there are items with quantity > 0
       if (transactionType === 'SALE') {
@@ -981,27 +1105,44 @@ export default function B2BCustomerDetailPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {gasItems.map((item, index) => (
-                              <tr key={index} className="border-b">
-                                <td className="py-2">
-                                  {item.cylinderType === 'DOMESTIC_11_8KG' ? 'Domestic (11.8kg)' :
-                                   item.cylinderType === 'STANDARD_15KG' ? 'Standard (15kg)' :
-                                   'Commercial (45.4kg)'}
-                                </td>
+                            {gasItems.map((item, index) => {
+                              const stockInfo = getCylinderStock(item.cylinderType);
+                              const isExceedingStock = item.delivered > 0 && stockInfo && item.delivered > stockInfo.available;
+                              
+                              return (
+                                <tr key={index} id={`cylinder-item-${index}`} className="border-b">
+                                  <td className="py-2">
+                                    <div>
+                                      {item.cylinderType === 'DOMESTIC_11_8KG' ? 'Domestic (11.8kg)' :
+                                       item.cylinderType === 'STANDARD_15KG' ? 'Standard (15kg)' :
+                                       'Commercial (45.4kg)'}
+                                      {stockInfo && (
+                                        <div className="text-xs text-gray-500 mt-1">
+                                          Stock: {stockInfo.available} units
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
                                 {transactionType === 'SALE' && (
                                   <>
                                     <td className="py-2">
                                       <Input
                                         type="number"
                                         min="0"
+                                        max={stockInfo ? stockInfo.available : undefined}
                                         value={item.delivered}
                                         onChange={(e) => updateGasItem(index, 'delivered', parseInt(e.target.value) || 0)}
                                         className={`w-20 ${
-                                          !isFieldValid(item.cylinderType) && item.delivered > 0
+                                          isExceedingStock
                                             ? 'border-red-500 bg-red-50 text-red-900 focus:border-red-500 focus:ring-red-500'
                                             : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
                                         }`}
                                       />
+                                      {isExceedingStock && (
+                                        <div className="text-xs text-red-600 mt-1">
+                                          Exceeds available stock ({stockInfo?.available})
+                                        </div>
+                                      )}
                                     </td>
                                     <td className="py-2">
                                       <Input
@@ -1077,7 +1218,8 @@ export default function B2BCustomerDetailPage() {
                                   </div>
                                 </td>
                               </tr>
-                            ))}
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
@@ -1096,6 +1238,7 @@ export default function B2BCustomerDetailPage() {
                         accessoryItems={accessoryItems}
                         setAccessoryItems={setAccessoryItems}
                         onValidationChange={setHasAccessoryErrors}
+                        onInventoryValidationChange={handleInventoryValidationChange}
                       />
                     </CardContent>
                   </Card>
@@ -1246,7 +1389,6 @@ export default function B2BCustomerDetailPage() {
                   <Button 
                     type="submit" 
                     className="font-medium"
-                    disabled={transactionType === 'SALE' && (hasAnyErrors() || hasAccessoryErrors)}
                   >
                     Create Transaction
                   </Button>
