@@ -9,6 +9,7 @@ import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeftIcon, PlusIcon, TrashIcon, CalculatorIcon } from '@heroicons/react/24/outline';
 import { useInventoryValidation } from '@/hooks/useInventoryValidation';
+import { CategoryAccessorySelector } from '@/components/ui/CategoryAccessorySelector';
 
 interface B2CCustomer {
   id: string;
@@ -38,10 +39,10 @@ interface SecurityItem {
 }
 
 interface AccessoryItem {
-  itemName: string;
+  name: string;
   quantity: number;
   pricePerItem: number;
-  costPrice: number;
+  quality?: string;
 }
 
 const CYLINDER_TYPES = [
@@ -81,13 +82,17 @@ export default function B2CTransactionPage() {
   // Transaction items
   const [gasItems, setGasItems] = useState<GasItem[]>([]);
   const [securityItems, setSecurityItems] = useState<SecurityItem[]>([]);
+  // Accessories transaction form data - now dynamically populated
   const [accessoryItems, setAccessoryItems] = useState<AccessoryItem[]>([]);
   
   // Pricing information
   const [pricingInfo, setPricingInfo] = useState<any>(null);
 
   // Inventory validation
-  const { validateInventory, isFieldValid, hasAnyErrors } = useInventoryValidation();
+  const { validateInventory, isFieldValid, hasAnyErrors, clearAllValidationErrors } = useInventoryValidation();
+  
+  // Accessory validation state
+  const [hasAccessoryErrors, setHasAccessoryErrors] = useState(false);
 
   useEffect(() => {
     if (customerId) {
@@ -186,6 +191,32 @@ export default function B2CTransactionPage() {
         }));
 
       validateInventory(cylinders, accessories);
+    }
+    
+    // Check if we need to clear validation errors for reduced quantities
+    if (field === 'quantity') {
+      // Trigger validation to check if the new quantity is valid
+      setTimeout(() => {
+        const cylinders = updated
+          .filter(item => item.quantity > 0)
+          .map(item => ({
+            cylinderType: item.cylinderType,
+            requested: item.quantity
+          }));
+        
+        const accessories = accessoryItems
+          .filter(item => item.quantity > 0)
+          .map(item => ({
+            itemName: item.name,
+            itemType: item.name === 'Stove' ? 'stove' : 
+                     item.name.includes('Regulator') ? 'regulator' :
+                     item.name.includes('Pipe') ? 'gasPipe' : 'product',
+            quality: item.quality || '',
+            requested: item.quantity
+          }));
+
+        validateInventory(cylinders, accessories);
+      }, 100);
     }
   };
 
@@ -665,96 +696,17 @@ export default function B2CTransactionPage() {
           </CardContent>
         </Card>
 
-        {/* Accessory Items */}
+        {/* Accessories */}
         <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-lg font-semibold text-gray-900">Accessories</CardTitle>
-                <CardDescription className="text-gray-600 font-medium">
-                  Add accessories and equipment
-                </CardDescription>
-              </div>
-              <Button type="button" onClick={addAccessoryItem} variant="outline" size="sm">
-                <PlusIcon className="w-4 h-4 mr-2" />
-                Add Accessory
-              </Button>
-            </div>
+            <CardTitle className="text-lg font-semibold text-gray-900">Accessories</CardTitle>
           </CardHeader>
           <CardContent>
-            {accessoryItems.map((item, index) => (
-              <div key={index} className="grid grid-cols-1 md:grid-cols-6 gap-4 p-4 bg-gray-50 rounded-lg mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Item Name</label>
-                  <Select 
-                    value={item.itemName} 
-                    onChange={(e) => updateAccessoryItem(index, 'itemName', e.target.value)}
-                  >
-                    <option value="">Select item</option>
-                    {ACCESSORY_OPTIONS.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={item.quantity}
-                    onChange={(e) => updateAccessoryItem(index, 'quantity', parseInt(e.target.value) || 1)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price</label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={item.pricePerItem}
-                    onChange={(e) => updateAccessoryItem(index, 'pricePerItem', parseFloat(e.target.value) || 0)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Cost Price</label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={item.costPrice}
-                    onChange={(e) => updateAccessoryItem(index, 'costPrice', parseFloat(e.target.value) || 0)}
-                    placeholder="0.00"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Profit</label>
-                  <Input
-                    type="number"
-                    value={((item.pricePerItem - item.costPrice) * item.quantity).toFixed(2)}
-                    disabled
-                    className="bg-green-50 font-semibold text-green-700"
-                  />
-                </div>
-                <div className="flex items-end">
-                  <Button
-                    type="button"
-                    onClick={() => removeAccessoryItem(index)}
-                    variant="outline"
-                    size="sm"
-                    className="text-red-600 hover:text-red-800"
-                  >
-                    <TrashIcon className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-            {accessoryItems.length === 0 && (
-              <div className="text-center py-6 text-gray-500">
-                No accessories added yet
-              </div>
-            )}
+            <CategoryAccessorySelector
+              accessoryItems={accessoryItems}
+              setAccessoryItems={setAccessoryItems}
+              onValidationChange={setHasAccessoryErrors}
+            />
           </CardContent>
         </Card>
 
@@ -906,7 +858,7 @@ export default function B2CTransactionPage() {
           </Button>
           <Button
             type="submit"
-            disabled={submitting || (!gasItems.length && !securityItems.length && !accessoryItems.length) || hasAnyErrors()}
+            disabled={submitting || (!gasItems.length && !securityItems.length && !accessoryItems.length) || hasAnyErrors() || hasAccessoryErrors}
             className="font-semibold"
           >
             {submitting ? 'Creating...' : 'Create Transaction'}

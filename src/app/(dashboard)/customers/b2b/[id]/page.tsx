@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { useInventoryValidation } from '@/hooks/useInventoryValidation';
+import { CategoryAccessorySelector } from '@/components/ui/CategoryAccessorySelector';
 import { 
   ArrowLeftIcon,
   DocumentTextIcon,
@@ -121,7 +122,10 @@ export default function B2BCustomerDetailPage() {
   const [pricingInfo, setPricingInfo] = useState<any>(null);
 
   // Inventory validation
-  const { validateInventory, isFieldValid, hasAnyErrors } = useInventoryValidation();
+  const { validateInventory, isFieldValid, hasAnyErrors, clearValidationError, clearAllValidationErrors } = useInventoryValidation();
+  
+  // Accessory validation state
+  const [hasAccessoryErrors, setHasAccessoryErrors] = useState(false);
 
   // Margin category editing
   const [showCategoryEdit, setShowCategoryEdit] = useState(false);
@@ -130,16 +134,13 @@ export default function B2BCustomerDetailPage() {
   const [updatingCategory, setUpdatingCategory] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
 
-  // Accessories transaction form data
-  const [accessoryItems, setAccessoryItems] = useState([
-    { name: 'Gas Pipe (ft)', quantity: 0, pricePerItem: 0, quality: '' },
-    { name: 'Stove', quantity: 0, pricePerItem: 0, quality: '' },
-    { name: 'Regulator Adjustable', quantity: 0, pricePerItem: 0, quality: '' },
-    { name: 'Regulator Ideal High Pressure', quantity: 0, pricePerItem: 0, quality: '' },
-    { name: 'Regulator 5 Star High Pressure', quantity: 0, pricePerItem: 0, quality: '' },
-    { name: 'Regulator 3 Star Low Pressure Q1', quantity: 0, pricePerItem: 0, quality: '' },
-    { name: 'Regulator 3 Star Low Pressure Q2', quantity: 0, pricePerItem: 0, quality: '' }
-  ]);
+  // Accessories transaction form data - now dynamically populated
+  const [accessoryItems, setAccessoryItems] = useState<Array<{
+    name: string;
+    quantity: number;
+    pricePerItem: number;
+    quality?: string;
+  }>>([]);
 
   useEffect(() => {
     if (customerId) {
@@ -428,6 +429,32 @@ export default function B2BCustomerDetailPage() {
 
       validateInventory(cylinders, accessories);
     }
+    
+    // Check if we need to clear validation errors for reduced quantities
+    if (field === 'delivered') {
+      // Trigger validation to check if the new quantity is valid
+      setTimeout(() => {
+        const cylinders = newItems
+          .filter(item => item.delivered > 0)
+          .map(item => ({
+            cylinderType: item.cylinderType,
+            requested: item.delivered
+          }));
+        
+        const accessories = accessoryItems
+          .filter(item => item.quantity > 0)
+          .map(item => ({
+            itemName: item.name,
+            itemType: item.name === 'Stove' ? 'stove' : 
+                     item.name.includes('Regulator') ? 'regulator' :
+                     item.name.includes('Pipe') ? 'gasPipe' : 'product',
+            quality: item.quality || '',
+            requested: item.quantity
+          }));
+
+        validateInventory(cylinders, accessories);
+      }, 100);
+    }
   };
 
   const applyCalculatedPrices = () => {
@@ -477,6 +504,24 @@ export default function B2BCustomerDetailPage() {
     
     try {
       const formData = new FormData(e.currentTarget);
+      
+      // Validate that there are items with quantity > 0
+      if (transactionType === 'SALE') {
+        const hasGasItems = gasItems.some(item => item.delivered > 0);
+        const hasAccessoryItems = accessoryItems.some(item => item.quantity > 0);
+        
+        if (!hasGasItems && !hasAccessoryItems) {
+          setError('Please add at least one item with quantity greater than 0 before creating a transaction.');
+          return;
+        }
+      } else if (transactionType === 'BUYBACK' || transactionType === 'RETURN_EMPTY') {
+        const hasReturnItems = gasItems.some(item => item.emptyReturned > 0);
+        
+        if (!hasReturnItems) {
+          setError('Please add at least one item to return before creating a transaction.');
+          return;
+        }
+      }
       
       // Calculate total amount based on transaction type
       let totalAmount = 0;
@@ -737,9 +782,13 @@ export default function B2BCustomerDetailPage() {
             {/* Quick Actions */}
             <div className="space-y-3">
               <Button
+                type="button"
                 onClick={() => {
                   setTransactionType('SALE');
                   setShowTransactionForm(true);
+                  setError(null); // Clear any previous errors
+                  setHasAccessoryErrors(false); // Clear accessory validation errors
+                  clearAllValidationErrors(); // Clear cylinder validation errors
                 }}
                 className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
               >
@@ -747,9 +796,11 @@ export default function B2BCustomerDetailPage() {
                 New Sale
               </Button>
               <Button
+                type="button"
                 onClick={() => {
                   setTransactionType('PAYMENT');
                   setShowTransactionForm(true);
+                  setError(null); // Clear any previous errors
                 }}
                 variant="outline"
                 className="w-full"
@@ -758,9 +809,11 @@ export default function B2BCustomerDetailPage() {
                 New Payment
               </Button>
               <Button
+                type="button"
                 onClick={() => {
                   setTransactionType('BUYBACK');
                   setShowTransactionForm(true);
+                  setError(null); // Clear any previous errors
                 }}
                 variant="outline"
                 className="w-full"
@@ -769,9 +822,11 @@ export default function B2BCustomerDetailPage() {
                 Gas Buyback
               </Button>
               <Button
+                type="button"
                 onClick={() => {
                   setTransactionType('RETURN_EMPTY');
                   setShowTransactionForm(true);
+                  setError(null); // Clear any previous errors
                 }}
                 variant="outline"
                 className="w-full"
@@ -1037,79 +1092,11 @@ export default function B2BCustomerDetailPage() {
                       <CardTitle className="text-lg font-semibold text-gray-900">Accessories</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
-                          <thead>
-                            <tr className="border-b bg-gray-50">
-                              <th className="text-left py-3 px-4 font-semibold text-gray-900">Item Name</th>
-                              <th className="text-left py-3 px-4 font-semibold text-gray-900">Quality</th>
-                              <th className="text-left py-3 px-4 font-semibold text-gray-900">Quantity</th>
-                              <th className="text-left py-3 px-4 font-semibold text-gray-900">Price Per Item</th>
-                              <th className="text-left py-3 px-4 font-semibold text-gray-900">Total Price</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {accessoryItems.map((item, index) => (
-                              <tr key={index} className="border-b hover:bg-gray-50 transition-colors">
-                                <td className="py-3 px-4 font-medium text-gray-900">{item.name}</td>
-                                <td className="py-3 px-4">
-                                  {item.name === 'Stove' ? (
-                                    <select
-                                      value={item.quality}
-                                      onChange={(e) => {
-                                        const newItems = [...accessoryItems];
-                                        newItems[index].quality = e.target.value;
-                                        setAccessoryItems(newItems);
-                                      }}
-                                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
-                                      required={item.quantity > 0}
-                                    >
-                                      <option value="">Select Quality</option>
-                                      <option value="Quality 1">Quality 1</option>
-                                      <option value="Quality 2">Quality 2</option>
-                                      <option value="Quality 3">Quality 3</option>
-                                      <option value="Quality 4">Quality 4</option>
-                                      <option value="Quality 5">Quality 5</option>
-                                    </select>
-                                  ) : (
-                                    <span className="text-gray-400 text-sm">N/A</span>
-                                  )}
-                                </td>
-                                <td className="py-3 px-4">
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    value={item.quantity}
-                                    onChange={(e) => {
-                                      const newItems = [...accessoryItems];
-                                      newItems[index].quantity = parseInt(e.target.value) || 0;
-                                      setAccessoryItems(newItems);
-                                    }}
-                                    className="w-20 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
-                                  />
-                                </td>
-                                <td className="py-3 px-4">
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={item.pricePerItem}
-                                    onChange={(e) => {
-                                      const newItems = [...accessoryItems];
-                                      newItems[index].pricePerItem = parseFloat(e.target.value) || 0;
-                                      setAccessoryItems(newItems);
-                                    }}
-                                    className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
-                                  />
-                                </td>
-                                <td className="py-3 px-4 font-semibold text-gray-900">
-                                  {formatCurrency(item.quantity * item.pricePerItem)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                      <CategoryAccessorySelector
+                        accessoryItems={accessoryItems}
+                        setAccessoryItems={setAccessoryItems}
+                        onValidationChange={setHasAccessoryErrors}
+                      />
                     </CardContent>
                   </Card>
                 )}
@@ -1259,7 +1246,7 @@ export default function B2BCustomerDetailPage() {
                   <Button 
                     type="submit" 
                     className="font-medium"
-                    disabled={transactionType === 'SALE' && hasAnyErrors()}
+                    disabled={transactionType === 'SALE' && (hasAnyErrors() || hasAccessoryErrors)}
                   >
                     Create Transaction
                   </Button>

@@ -68,11 +68,25 @@ export function useInventoryValidation() {
     return Object.values(validationState).some(isValid => isValid === false);
   }, [validationState]);
 
+  const clearValidationError = useCallback((fieldName: string) => {
+    setValidationState(prev => {
+      const newState = { ...prev };
+      delete newState[fieldName];
+      return newState;
+    });
+  }, []);
+
+  const clearAllValidationErrors = useCallback(() => {
+    setValidationState({});
+  }, []);
+
   return {
     validateInventory,
     isFieldValid,
     hasAnyErrors,
     isValidating,
-    validationState
+    validationState,
+    clearValidationError,
+    clearAllValidationErrors
   };
 }
