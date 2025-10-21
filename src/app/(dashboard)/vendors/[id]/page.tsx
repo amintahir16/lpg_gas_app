@@ -103,6 +103,9 @@ export default function VendorDetailPage() {
   const [reportPeriod, setReportPeriod] = useState('all');
   const [financialReport, setFinancialReport] = useState<any>(null);
   
+  // Purchase entries filter state
+  const [purchaseFilter, setPurchaseFilter] = useState('all');
+  
   // Payment modal state
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -229,6 +232,80 @@ export default function VendorDetailPage() {
     } catch (error) {
       console.error('Error fetching direct payments:', error);
     }
+  };
+
+  // Filter purchase entries based on selected period
+  const getFilteredPurchaseEntries = () => {
+    if (!vendor?.purchase_entries) return [];
+    
+    const now = new Date();
+    const filtered = vendor.purchase_entries.filter(entry => {
+      const entryDate = new Date(entry.purchaseDate);
+      
+      switch (purchaseFilter) {
+        case 'today':
+          return entryDate.toDateString() === now.toDateString();
+        case 'week':
+          const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          return entryDate >= weekAgo;
+        case 'twoWeeks':
+          const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+          return entryDate >= twoWeeksAgo;
+        case 'month':
+          const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          return entryDate >= monthAgo;
+        case 'twoMonths':
+          const twoMonthsAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+          return entryDate >= twoMonthsAgo;
+        case 'sixMonths':
+          const sixMonthsAgo = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+          return entryDate >= sixMonthsAgo;
+        case 'year':
+          const yearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+          return entryDate >= yearAgo;
+        default:
+          return true;
+      }
+    });
+    
+    return filtered;
+  };
+
+  // Filter payment history based on selected report period
+  const getFilteredPaymentHistory = () => {
+    if (!directPayments) return [];
+    
+    const now = new Date();
+    const filtered = directPayments.filter(payment => {
+      const paymentDate = new Date(payment.paymentDate);
+      
+      switch (reportPeriod) {
+        case 'daily':
+          return paymentDate.toDateString() === now.toDateString();
+        case 'weekly':
+          const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          return paymentDate >= weekAgo;
+        case 'twoWeeks':
+          const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+          return paymentDate >= twoWeeksAgo;
+        case 'monthly':
+          const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          return paymentDate >= monthAgo;
+        case 'twoMonths':
+          const twoMonthsAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+          return paymentDate >= twoMonthsAgo;
+        case 'sixMonths':
+          const sixMonthsAgo = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+          return paymentDate >= sixMonthsAgo;
+        case 'yearly':
+          const yearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+          return paymentDate >= yearAgo;
+        default:
+          return true;
+      }
+    });
+    
+    return filtered;
   };
 
   const handlePaymentSuccess = () => {
@@ -744,15 +821,31 @@ export default function VendorDetailPage() {
         <div>
           <div className="mb-6 flex justify-between items-center">
             <h2 className="text-xl font-semibold text-gray-900">
-              Purchase Entries
+              Purchase Entries (Total {getFilteredPurchaseEntries().length})
             </h2>
-            <Button
-              onClick={showPurchaseForm ? () => setShowPurchaseForm(false) : handleOpenPurchaseForm}
-              className="flex items-center gap-2"
-            >
-              <PlusIcon className="w-5 h-5" />
-              {showPurchaseForm ? 'Cancel' : 'Add Purchase Entry'}
-            </Button>
+            <div className="flex items-center gap-4">
+              <select
+                value={purchaseFilter}
+                onChange={(e) => setPurchaseFilter(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="week">This Week</option>
+                <option value="twoWeeks">Two Weeks</option>
+                <option value="month">This Month</option>
+                <option value="twoMonths">Two Months</option>
+                <option value="sixMonths">Six Months</option>
+                <option value="year">This Year</option>
+              </select>
+              <Button
+                onClick={showPurchaseForm ? () => setShowPurchaseForm(false) : handleOpenPurchaseForm}
+                className="flex items-center gap-2"
+              >
+                <PlusIcon className="w-5 h-5" />
+                {showPurchaseForm ? 'Cancel' : 'Add Purchase Entry'}
+              </Button>
+            </div>
           </div>
 
           {/* Purchase Form */}
@@ -1113,7 +1206,7 @@ export default function VendorDetailPage() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {vendor.purchase_entries.map((purchase, index) => (
+              {getFilteredPurchaseEntries().map((purchase, index) => (
                 <Card key={purchase.id}>
                   <CardContent className="p-6">
                     <div className="flex justify-between items-start mb-4">
@@ -1450,11 +1543,15 @@ export default function VendorDetailPage() {
               <select
                 value={reportPeriod}
                 onChange={(e) => setReportPeriod(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg"
+                className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="all">All Time</option>
                 <option value="daily">Today</option>
+                <option value="weekly">This Week</option>
+                <option value="twoWeeks">Two Weeks</option>
                 <option value="monthly">This Month</option>
+                <option value="twoMonths">Two Months</option>
+                <option value="sixMonths">Six Months</option>
                 <option value="yearly">This Year</option>
               </select>
             </div>
@@ -1462,7 +1559,7 @@ export default function VendorDetailPage() {
 
           {financialReport ? (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <Card>
                   <CardContent className="p-6">
                     <p className="text-sm text-gray-500 mb-1">Cash Out</p>
@@ -1501,17 +1598,6 @@ export default function VendorDetailPage() {
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardContent className="p-6">
-                    <p className="text-sm text-gray-500 mb-1">Purchases</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {financialReport.purchaseCount}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {reportPeriod === 'all' ? 'Total' : 'In Period'}
-                    </p>
-                  </CardContent>
-                </Card>
               </div>
 
               <Card>
@@ -1572,17 +1658,17 @@ export default function VendorDetailPage() {
               </Card>
 
               {/* Payment History */}
-              {directPayments.length > 0 && (
+              {getFilteredPaymentHistory().length > 0 && (
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <BanknotesIcon className="h-5 w-5 text-green-600" />
-                      Payment History
+                      Payment History ({getFilteredPaymentHistory().length})
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
-                      {directPayments.map((payment, index) => (
+                      {getFilteredPaymentHistory().map((payment, index) => (
                         <div key={payment.id} className="bg-gradient-to-r from-gray-50 to-blue-50 border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
                           <div className="flex items-start justify-between">
                             <div className="flex items-start gap-4">

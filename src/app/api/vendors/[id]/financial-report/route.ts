@@ -28,6 +28,18 @@ export async function GET(
         startDate.setHours(0, 0, 0, 0);
         endDate.setHours(23, 59, 59, 999);
         break;
+      case 'weekly':
+        startDate = new Date(date);
+        startDate.setDate(startDate.getDate() - 7);
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case 'twoWeeks':
+        startDate = new Date(date);
+        startDate.setDate(startDate.getDate() - 14);
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(23, 59, 59, 999);
+        break;
       case 'monthly':
         startDate = new Date(date);
         startDate.setDate(1);
@@ -35,6 +47,18 @@ export async function GET(
         endDate = new Date(startDate);
         endDate.setMonth(endDate.getMonth() + 1);
         endDate.setDate(0);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case 'twoMonths':
+        startDate = new Date(date);
+        startDate.setMonth(startDate.getMonth() - 2);
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case 'sixMonths':
+        startDate = new Date(date);
+        startDate.setMonth(startDate.getMonth() - 6);
+        startDate.setHours(0, 0, 0, 0);
         endDate.setHours(23, 59, 59, 999);
         break;
       case 'yearly':
