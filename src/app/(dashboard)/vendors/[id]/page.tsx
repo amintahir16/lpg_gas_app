@@ -121,6 +121,15 @@ export default function VendorDetailPage() {
     email: '',
     address: ''
   });
+  
+  // Edit vendor item state
+  const [showEditItemModal, setShowEditItemModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<any>(null);
+  const [editItemFormData, setEditItemFormData] = useState({
+    name: '',
+    description: '',
+    category: ''
+  });
 
   // Purchase form state
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
@@ -375,6 +384,66 @@ export default function VendorDetailPage() {
     } catch (error) {
       console.error('Error deleting vendor:', error);
       alert('Failed to delete vendor');
+    }
+  };
+
+  const handleEditItem = (item: any) => {
+    setEditingItem(item);
+    setEditItemFormData({
+      name: item.name || '',
+      description: item.description || '',
+      category: item.category || ''
+    });
+    setShowEditItemModal(true);
+  };
+
+  const handleUpdateItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      const response = await fetch(`/api/vendors/${vendorId}/items/${editingItem.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editItemFormData)
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to update item');
+      }
+
+      // Refresh vendor data
+      await fetchVendor();
+      
+      // Close modal
+      setShowEditItemModal(false);
+      setEditingItem(null);
+    } catch (error) {
+      console.error('Error updating item:', error);
+      alert('Failed to update item');
+    }
+  };
+
+  const handleDeleteItem = async (itemId: string) => {
+    if (!confirm('Are you sure you want to delete this item?')) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/vendors/${vendorId}/items/${itemId}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to delete item');
+      }
+
+      // Refresh vendor data
+      await fetchVendor();
+    } catch (error) {
+      console.error('Error deleting item:', error);
+      alert('Failed to delete item');
     }
   };
 
@@ -1565,11 +1634,31 @@ export default function VendorDetailPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {vendor.inventories.map((item) => (
-                <Card key={item.id}>
+                <Card key={item.id} className="hover:shadow-md transition-shadow">
                   <CardContent className="p-4">
-                    <h3 className="font-semibold text-gray-900 mb-1">
-                      {item.name}
-                    </h3>
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="font-semibold text-gray-900">
+                        {item.name}
+                      </h3>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditItem(item)}
+                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 p-1"
+                        >
+                          <PencilIcon className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDeleteItem(item.id)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
                     {item.category && (
                       <p className="text-sm text-gray-500 mb-2">
                         {item.category}
@@ -1909,6 +1998,82 @@ export default function VendorDetailPage() {
                     type="button"
                     variant="outline"
                     onClick={() => setShowEditModal(false)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Item Modal */}
+      {showEditItemModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Edit Item
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowEditItemModal(false);
+                    setEditingItem(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              <form onSubmit={handleUpdateItem} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Item Name *
+                  </label>
+                  <Input
+                    value={editItemFormData.name}
+                    onChange={(e) => setEditItemFormData({...editItemFormData, name: e.target.value})}
+                    placeholder="Enter item name"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Category
+                  </label>
+                  <Input
+                    value={editItemFormData.category}
+                    onChange={(e) => setEditItemFormData({...editItemFormData, category: e.target.value})}
+                    placeholder="Enter category"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Description
+                  </label>
+                  <Input
+                    value={editItemFormData.description}
+                    onChange={(e) => setEditItemFormData({...editItemFormData, description: e.target.value})}
+                    placeholder="Enter description"
+                  />
+                </div>
+                
+                <div className="flex gap-3">
+                  <Button type="submit">Update Item</Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setShowEditItemModal(false);
+                      setEditingItem(null);
+                    }}
                   >
                     Cancel
                   </Button>
