@@ -929,8 +929,11 @@ export default function VendorDetailPage() {
 
                         <div className="space-y-3">
                           {purchaseItems.map((item, index) => (
-                            <div key={index} className="flex gap-3 items-start">
+                            <div key={index} className="flex gap-3 items-end">
                               <div className="flex-1">
+                                <label className="block text-xs font-medium text-gray-600 mb-1">
+                                  Item name
+                                </label>
                                 <Input
                                   value={item.itemName}
                                   onChange={(e) => handlePurchaseItemChange(
@@ -943,6 +946,9 @@ export default function VendorDetailPage() {
                                 />
                               </div>
                               <div className="w-24">
+                                <label className="block text-xs font-medium text-gray-600 mb-1">
+                                  Quantity
+                                </label>
                                 <Input
                                   type="number"
                                   value={item.quantity}
@@ -958,6 +964,9 @@ export default function VendorDetailPage() {
                                 />
                               </div>
                               <div className="w-32">
+                                <label className="block text-xs font-medium text-gray-600 mb-1">
+                                  Price per Unit
+                                </label>
                                 <Input
                                   type="number"
                                   value={item.unitPrice}
@@ -973,6 +982,9 @@ export default function VendorDetailPage() {
                                 />
                               </div>
                               <div className="w-32">
+                                <label className="block text-xs font-medium text-gray-600 mb-1">
+                                  Price per item
+                                </label>
                                 <Input
                                   type="number"
                                   value={item.totalPrice}
