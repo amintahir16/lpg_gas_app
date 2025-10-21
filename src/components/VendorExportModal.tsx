@@ -479,25 +479,37 @@ export default function VendorExportModal({
             <div className="grid grid-cols-3 gap-3">
               <Button
                 type="button"
-                variant={exportType === 'purchases' ? 'default' : 'outline'}
+                variant="outline"
                 onClick={() => setExportType('purchases')}
-                className="h-12 border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50 text-blue-700 font-semibold transition-all duration-200"
+                className={`h-12 border-2 font-semibold transition-all duration-200 ${
+                  exportType === 'purchases'
+                    ? 'bg-blue-600 border-blue-600 text-white hover:bg-blue-700 hover:border-blue-700'
+                    : 'border-blue-300 text-blue-700 hover:border-blue-500 hover:bg-blue-50'
+                }`}
               >
                 Purchase Entries
               </Button>
               <Button
                 type="button"
-                variant={exportType === 'payments' ? 'default' : 'outline'}
+                variant="outline"
                 onClick={() => setExportType('payments')}
-                className="h-12 border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50 text-blue-700 font-semibold transition-all duration-200"
+                className={`h-12 border-2 font-semibold transition-all duration-200 ${
+                  exportType === 'payments'
+                    ? 'bg-green-600 border-green-600 text-white hover:bg-green-700 hover:border-green-700'
+                    : 'border-green-300 text-green-700 hover:border-green-500 hover:bg-green-50'
+                }`}
               >
                 Payment History
               </Button>
               <Button
                 type="button"
-                variant={exportType === 'both' ? 'default' : 'outline'}
+                variant="outline"
                 onClick={() => setExportType('both')}
-                className="h-12 border-2 border-green-200 hover:border-green-400 hover:bg-green-50 text-green-700 font-semibold transition-all duration-200"
+                className={`h-12 border-2 font-semibold transition-all duration-200 ${
+                  exportType === 'both'
+                    ? 'bg-purple-600 border-purple-600 text-white hover:bg-purple-700 hover:border-purple-700'
+                    : 'border-purple-300 text-purple-700 hover:border-purple-500 hover:bg-purple-50'
+                }`}
               >
                 Both Reports
               </Button>
