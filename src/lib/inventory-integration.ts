@@ -120,9 +120,10 @@ export class InventoryIntegrationService {
       if (codes[i]) {
         cylinderCode = codes[i];
       } else {
-        // Generate unique code
-        const count = await prisma.cylinder.count();
-        cylinderCode = `CYL-${String(count + i + 1).padStart(4, '0')}`;
+        // Generate unique code with timestamp and random component to avoid conflicts
+        const timestamp = Date.now();
+        const random = Math.floor(Math.random() * 1000);
+        cylinderCode = `CYL-${timestamp}-${String(i + 1).padStart(3, '0')}-${random}`;
       }
       
       await prisma.cylinder.create({

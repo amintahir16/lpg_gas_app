@@ -136,6 +136,11 @@ export async function POST(
     if (paid >= totalAmount) paymentStatus = 'PAID';
     else if (paid > 0) paymentStatus = 'PARTIAL';
 
+    // Determine individual purchase entry status
+    let entryStatus = 'PENDING';
+    if (paid >= totalAmount) entryStatus = 'PAID';
+    else if (paid > 0) entryStatus = 'PARTIAL';
+
     // Create purchase with items and integrate with inventory
     console.log('Creating purchase with invoice number:', invoiceNumber);
     
@@ -154,7 +159,7 @@ export async function POST(
               quantity: Number(item.quantity),
               unitPrice: Number(item.unitPrice),
               totalPrice: Number(item.totalPrice),
-              status: 'PENDING',
+              status: entryStatus,
               purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),
               invoiceNumber,
               notes

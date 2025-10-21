@@ -794,6 +794,8 @@ enum PurchaseEntryStatus {
   CONFIRMED
   CANCELLED
   COMPLETED
+  PAID
+  PARTIAL
 }
 
 enum NotificationType {

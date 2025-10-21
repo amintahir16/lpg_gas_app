@@ -143,6 +143,7 @@ export default function VendorDetailPage() {
     paidAmount: 0
   });
   const [usedCodes, setUsedCodes] = useState<Set<string>>(new Set());
+  const [vendorItems, setVendorItems] = useState<Array<{id: string, name: string, description?: string}>>([]);
 
   // Item form state
   const [showItemForm, setShowItemForm] = useState(false);
@@ -154,6 +155,7 @@ export default function VendorDetailPage() {
 
   useEffect(() => {
     fetchVendor();
+    fetchVendorItems();
   }, [vendorId]);
 
   useEffect(() => {
@@ -188,6 +190,17 @@ export default function VendorDetailPage() {
       console.error('Error fetching vendor:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchVendorItems = async () => {
+    try {
+      const response = await fetch(`/api/vendors/${vendorId}/items`);
+      if (!response.ok) throw new Error('Failed to fetch vendor items');
+      const data = await response.json();
+      setVendorItems(data.items || []);
+    } catch (error) {
+      console.error('Error fetching vendor items:', error);
     }
   };
 
@@ -461,6 +474,7 @@ export default function VendorDetailPage() {
       setShowItemForm(false);
       setItemFormData({ name: '', description: '', category: '' });
       fetchVendor();
+      fetchVendorItems();
     } catch (error) {
       console.error('Error adding item:', error);
       alert('Failed to add item');
@@ -934,16 +948,21 @@ export default function VendorDetailPage() {
                                 <label className="block text-xs font-medium text-gray-600 mb-1">
                                   Item name
                                 </label>
-                                <Input
+                                <Select
                                   value={item.itemName}
                                   onChange={(e) => handlePurchaseItemChange(
                                     index,
                                     'itemName',
                                     e.target.value
                                   )}
-                                  placeholder="Item name"
-                                  required
-                                />
+                                >
+                                  <option value="">Select item</option>
+                                  {vendorItems.map((vendorItem) => (
+                                    <option key={vendorItem.id} value={vendorItem.name}>
+                                      {vendorItem.name}
+                                    </option>
+                                  ))}
+                                </Select>
                               </div>
                               <div className="w-24">
                                 <label className="block text-xs font-medium text-gray-600 mb-1">
@@ -959,7 +978,7 @@ export default function VendorDetailPage() {
                                   )}
                                   placeholder="Qty"
                                   min="0"
-                                  step="0.01"
+                                  step="1"
                                   required
                                 />
                               </div>
@@ -1032,7 +1051,7 @@ export default function VendorDetailPage() {
                       })}
                       placeholder="Amount paid now"
                       min="0"
-                      step="0.01"
+                      step="1"
                     />
                     <p className="text-sm text-gray-500 mt-1">
                       Leave as 0 if payment will be made later
@@ -1105,9 +1124,9 @@ export default function VendorDetailPage() {
                       </div>
                       <span
                         className={`px-3 py-1 text-sm font-medium rounded-full ${
-                          purchase.status === 'COMPLETED'
+                          purchase.status === 'PAID'
                             ? 'bg-green-100 text-green-700'
-                            : purchase.status === 'PENDING'
+                            : purchase.status === 'PARTIAL'
                             ? 'bg-yellow-100 text-yellow-700'
                             : 'bg-red-100 text-red-700'
                         }`}
