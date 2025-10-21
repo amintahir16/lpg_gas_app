@@ -94,8 +94,8 @@ export async function GET(
     // Total payments = purchase payments + direct payments
     const totalPayments = purchasePayments + directPaymentsTotal;
 
-    // Calculate period outstanding balance (period purchases - period payments)
-    const periodOutstandingBalance = totalPurchases - totalPayments;
+    // Calculate period outstanding balance (period payments - period purchases)
+    const periodOutstandingBalance = totalPayments - totalPurchases;
 
     // Get overall balance (all time)
     const allPurchases = await prisma.purchaseEntry.findMany({
@@ -129,8 +129,8 @@ export async function GET(
       0
     );
 
-    // Overall balance = total purchases - (purchase payments + direct payments)
-    const overallBalance = allTimeTotalPurchases - (allPurchasePayments + allTimeDirectPayments);
+    // Overall balance = (purchase payments + direct payments) - total purchases
+    const overallBalance = (allPurchasePayments + allTimeDirectPayments) - allTimeTotalPurchases;
 
     const report = {
       period,

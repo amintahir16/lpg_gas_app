@@ -58,8 +58,9 @@ export async function GET(
     // Total payments = purchase payments + direct payments
     const totalPaid = totalPurchasePayments + totalDirectPayments;
 
-    // Outstanding balance = total purchases - total payments
-    const outstandingBalance = totalPurchases - totalPaid;
+    // Outstanding balance = total payments - total purchases
+    // Negative = vendor owes you, Positive = you owe vendor
+    const outstandingBalance = totalPaid - totalPurchases;
 
     return NextResponse.json({
       vendor: {

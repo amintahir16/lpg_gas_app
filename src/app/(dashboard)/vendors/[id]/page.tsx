@@ -642,7 +642,7 @@ export default function VendorDetailPage() {
                 )}
                 {vendor.financialSummary.netBalance < 0 && (
                   <p className="text-xs text-green-500 mt-1">
-                    Vendor has credit balance
+                    Vendor owes you this amount
                   </p>
                 )}
               </div>
@@ -1180,11 +1180,82 @@ export default function VendorDetailPage() {
                     </div>
 
                     {/* Purchase Summary */}
-                    <div className="grid grid-cols-1 gap-4 pt-4 border-t border-gray-200">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-200">
                       <div>
                         <div className="text-xs text-gray-500 mb-1">Total Amount</div>
                         <div className="text-lg font-semibold text-gray-900">
                           {formatCurrency(Number(purchase.totalPrice))}
+                        </div>
+                      </div>
+                      
+                      {/* Recent Payment Total */}
+                      <div>
+                        <div className="text-xs text-gray-500 mb-1">Recent Payment Total</div>
+                        <div className="text-lg font-semibold text-green-600">
+                          {(() => {
+                            // Calculate total payments for this specific purchase
+                            const purchasePayments = vendor.payments?.filter(payment => 
+                              payment.description?.includes(purchase.invoiceNumber || '')
+                            ) || [];
+                            
+                            // Debug logging
+                            console.log('Purchase invoice:', purchase.invoiceNumber);
+                            console.log('All payments:', vendor.payments);
+                            console.log('Filtered payments:', purchasePayments);
+                            
+                            const totalPaid = purchasePayments.reduce((sum, payment) => 
+                              sum + Number(payment.amount), 0
+                            );
+                            return formatCurrency(totalPaid);
+                          })()}
+                        </div>
+                      </div>
+                      
+                      {/* Net Affected Balance */}
+                      <div>
+                        <div className="text-xs text-gray-500 mb-1">Net Affected Balance</div>
+                        <div className={`text-lg font-semibold ${
+                          (() => {
+                            // Calculate running balance up to this transaction
+                            const currentIndex = vendor.purchase_entries.findIndex(p => p.id === purchase.id);
+                            const transactionsUpToThis = vendor.purchase_entries.slice(currentIndex);
+                            
+                            // Calculate total purchases up to this point
+                            const totalPurchasesUpToThis = transactionsUpToThis.reduce(
+                              (sum, p) => sum + Number(p.totalPrice), 0
+                            );
+                            
+                            // Calculate total payments up to this point
+                            const totalPaymentsUpToThis = vendor.payments?.reduce(
+                              (sum, payment) => sum + Number(payment.amount), 0
+                            ) || 0;
+                            
+                            // Running balance = payments - purchases
+                            const runningBalance = totalPaymentsUpToThis - totalPurchasesUpToThis;
+                            
+                            return runningBalance > 0 ? 'text-red-600' : 'text-green-600';
+                          })()
+                        }`}>
+                          {(() => {
+                            // Calculate running balance up to this transaction
+                            const currentIndex = vendor.purchase_entries.findIndex(p => p.id === purchase.id);
+                            const transactionsUpToThis = vendor.purchase_entries.slice(currentIndex);
+                            
+                            // Calculate total purchases up to this point
+                            const totalPurchasesUpToThis = transactionsUpToThis.reduce(
+                              (sum, p) => sum + Number(p.totalPrice), 0
+                            );
+                            
+                            // Calculate total payments up to this point
+                            const totalPaymentsUpToThis = vendor.payments?.reduce(
+                              (sum, payment) => sum + Number(payment.amount), 0
+                            ) || 0;
+                            
+                            // Running balance = payments - purchases
+                            const runningBalance = totalPaymentsUpToThis - totalPurchasesUpToThis;
+                            
+                            return formatCurrency(runningBalance);
+                          })()}
                         </div>
                       </div>
                     </div>
@@ -1199,29 +1270,35 @@ export default function VendorDetailPage() {
                       </div>
                     )}
 
-                    {/* Payments - Show only on the most recent purchase entry */}
-                    {index === 0 && vendor.payments && vendor.payments.length > 0 && (
-                      <div className="mt-4 pt-4 border-t border-gray-200">
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">
-                          Recent Payments
-                        </h4>
-                        <div className="space-y-2">
-                          {vendor.payments.slice(0, 3).map((payment) => (
-                            <div
-                              key={payment.id}
-                              className="flex justify-between text-sm"
-                            >
-                              <span className="text-gray-600">
-                                {formatDate(payment.paymentDate)} - {payment.method}
-                              </span>
-                              <span className="font-medium text-green-600">
-                                {formatCurrency(Number(payment.amount))}
-                              </span>
-                            </div>
-                          ))}
+                    {/* Payments - Show payments specific to this purchase entry */}
+                    {(() => {
+                      const purchasePayments = vendor.payments?.filter(payment => 
+                        payment.description?.includes(purchase.invoiceNumber || '')
+                      ) || [];
+                      
+                      return purchasePayments.length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          <h4 className="text-sm font-medium text-gray-700 mb-2">
+                            Recent Payments
+                          </h4>
+                          <div className="space-y-2">
+                            {purchasePayments.slice(0, 3).map((payment) => (
+                              <div
+                                key={payment.id}
+                                className="flex justify-between text-sm"
+                              >
+                                <span className="text-gray-600">
+                                  {formatDate(payment.paymentDate)} - {payment.method}
+                                </span>
+                                <span className="font-medium text-green-600">
+                                  {formatCurrency(Number(payment.amount))}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
                   </CardContent>
                 </Card>
               ))}
