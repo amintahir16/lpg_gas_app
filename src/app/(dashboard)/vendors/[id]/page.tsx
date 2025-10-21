@@ -104,6 +104,7 @@ export default function VendorDetailPage() {
   // Payment modal state
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [directPayments, setDirectPayments] = useState<DirectPayment[]>([]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Purchase form state
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
@@ -218,6 +219,26 @@ export default function VendorDetailPage() {
     fetchVendor();
     fetchFinancialReport();
     fetchDirectPayments();
+  };
+
+  const handleDeleteVendor = async () => {
+    try {
+      const response = await fetch(`/api/vendors?id=${vendorId}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        alert(error.error || 'Failed to delete vendor');
+        return;
+      }
+
+      // Redirect back to the category page
+      router.push(`/vendors/category/${vendor?.category.id}`);
+    } catch (error) {
+      console.error('Error deleting vendor:', error);
+      alert('Failed to delete vendor');
+    }
   };
 
   const generateInvoiceNumber = async () => {
@@ -507,6 +528,17 @@ export default function VendorDetailPage() {
               {vendor.name || vendor.companyName || 'Unnamed Vendor'}
             </h1>
             <p className="text-gray-600">{vendor.vendorCode}</p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowDeleteConfirm(true)}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
+              <TrashIcon className="w-4 h-4 mr-1" />
+              Delete Vendor
+            </Button>
           </div>
         </div>
       </div>
@@ -1493,6 +1525,41 @@ export default function VendorDetailPage() {
           outstandingBalance={vendor.financialSummary.outstandingBalance}
           onPaymentSuccess={handlePaymentSuccess}
         />
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+                <TrashIcon className="h-6 w-6 text-red-600" />
+              </div>
+              <div className="mt-3 text-center">
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  Delete Vendor
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Are you sure you want to delete this vendor? This action cannot be undone.
+                </p>
+                <div className="flex justify-center space-x-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowDeleteConfirm(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={handleDeleteVendor}
+                  >
+                    Delete Vendor
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
