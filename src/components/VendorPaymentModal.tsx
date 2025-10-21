@@ -86,7 +86,7 @@ export default function VendorPaymentModal({
   };
 
   const handleQuickAmount = (percentage: number) => {
-    const quickAmount = outstandingBalance * percentage;
+    const quickAmount = Math.abs(outstandingBalance) * percentage;
     setAmount(quickAmount.toFixed(2));
   };
 
@@ -116,20 +116,36 @@ export default function VendorPaymentModal({
 
         <form onSubmit={handleSubmit} className="px-8 py-6 space-y-8">
           {/* Outstanding Balance Display */}
-          <div className="bg-gradient-to-r from-red-50 to-pink-50 border-2 border-red-200 rounded-xl p-6 shadow-sm">
+          <div className={`rounded-xl p-6 shadow-sm ${
+            outstandingBalance < 0 
+              ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200' 
+              : 'bg-gradient-to-r from-red-50 to-pink-50 border-2 border-red-200'
+          }`}>
             <div className="flex justify-between items-center">
               <div>
-                <div className="text-sm text-red-600 font-semibold uppercase tracking-wide">Outstanding Balance</div>
-                <div className="text-3xl font-bold text-red-700 mt-2">
+                <div className={`text-sm font-semibold uppercase tracking-wide ${
+                  outstandingBalance < 0 ? 'text-green-600' : 'text-red-600'
+                }`}>Outstanding Balance</div>
+                <div className={`text-3xl font-bold mt-2 ${
+                  outstandingBalance < 0 ? 'text-red-700' : 'text-black'
+                }`}>
                   {formatCurrency(outstandingBalance)}
                 </div>
-                <div className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                  <div className="w-2 h-2 bg-red-400 rounded-full"></div>
-                  You owe this amount to the vendor
+                <div className={`text-xs mt-1 flex items-center gap-1 ${
+                  outstandingBalance < 0 ? 'text-red-500' : 'text-black'
+                }`}>
+                  <div className={`w-2 h-2 rounded-full ${
+                    outstandingBalance < 0 ? 'bg-red-400' : 'bg-black'
+                  }`}></div>
+                  {outstandingBalance < 0 ? 'Vendor owes you this amount' : 'You owe this amount to the vendor'}
                 </div>
               </div>
-              <div className="p-4 bg-red-100 rounded-full">
-                <BanknotesIcon className="h-8 w-8 text-red-600" />
+              <div className={`p-4 rounded-full ${
+                outstandingBalance < 0 ? 'bg-green-100' : 'bg-red-100'
+              }`}>
+                <BanknotesIcon className={`h-8 w-8 ${
+                  outstandingBalance < 0 ? 'text-green-600' : 'text-red-600'
+                }`} />
               </div>
             </div>
           </div>

@@ -1629,7 +1629,7 @@ export default function VendorDetailPage() {
           isOpen={showPaymentModal}
           onClose={() => setShowPaymentModal(false)}
           vendorId={vendorId}
-          vendorName={vendor.name}
+          vendorName={vendor.companyName}
           outstandingBalance={vendor.financialSummary.outstandingBalance}
           onPaymentSuccess={handlePaymentSuccess}
         />
