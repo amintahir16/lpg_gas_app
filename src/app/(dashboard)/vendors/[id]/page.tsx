@@ -133,6 +133,26 @@ export default function VendorDetailPage() {
 
   // Purchase form state
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
+  
+  // Smart category detection for cylinder purchase
+  const isCylinderPurchaseCategory = (categorySlug: string, categoryName: string) => {
+    // Normalize both slug and name for comparison
+    const normalizedSlug = categorySlug?.toLowerCase().replace(/[_-]/g, '') || '';
+    const normalizedName = categoryName?.toLowerCase().replace(/[_-]/g, '') || '';
+    
+    // Check for various cylinder purchase patterns
+    const cylinderPatterns = [
+      'cylinderpurchase',
+      'cylinderspurchase', 
+      'cylinderpurchases',
+      'cylinderspurchases'
+    ];
+    
+    return cylinderPatterns.some(pattern => 
+      normalizedSlug.includes(pattern) || 
+      normalizedName.includes(pattern)
+    );
+  };
   // Default cylinder purchase items for Cylinder Purchase category
   const defaultCylinderItems = [
     { itemName: 'Domestic (11.8kg) Cylinder', quantity: 0, unitPrice: 0, totalPrice: 0, cylinderCodes: '' },
@@ -170,6 +190,20 @@ export default function VendorDetailPage() {
   const [usedCodes, setUsedCodes] = useState<Set<string>>(new Set());
   const [vendorItems, setVendorItems] = useState<Array<{id: string, name: string, description?: string}>>([]);
 
+  // Auto-populate purchase items when vendor items are loaded
+  useEffect(() => {
+    if (vendorItems.length > 0 && purchaseItems.length === 0) {
+      const autoItems = vendorItems.map(item => ({
+        itemName: item.name,
+        quantity: 0,
+        unitPrice: 0,
+        totalPrice: 0,
+        cylinderCodes: ''
+      }));
+      setPurchaseItems(autoItems);
+    }
+  }, [vendorItems, purchaseItems.length]);
+
   // Item form state
   const [showItemForm, setShowItemForm] = useState(false);
   const [itemFormData, setItemFormData] = useState({
@@ -192,7 +226,7 @@ export default function VendorDetailPage() {
 
   // Initialize purchase items based on vendor category
   useEffect(() => {
-    if (vendor?.category?.slug === 'cylinder_purchase') {
+    if (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
       setPurchaseItems(defaultCylinderItems);
     } else if (vendor?.category?.slug === 'gas_purchase') {
       setPurchaseItems(defaultGasItems);
@@ -447,6 +481,7 @@ export default function VendorDetailPage() {
     }
   };
 
+
   const generateInvoiceNumber = async () => {
     try {
       const response = await fetch('/api/vendors/invoice-sequence', {
@@ -499,7 +534,7 @@ export default function VendorDetailPage() {
         !['cylinder_purchase', 'gas_purchase', 'vaporizer_purchase'].includes(vendor?.category?.slug || '')) {
       setPurchaseItems([
         ...purchaseItems,
-        { itemName: '', quantity: 1, unitPrice: 0, totalPrice: 0 }
+        { itemName: '', quantity: 1, unitPrice: 0, totalPrice: 0, cylinderCodes: '' }
       ]);
     }
   };
@@ -519,8 +554,8 @@ export default function VendorDetailPage() {
     if (!quantity || quantity <= 0) return '';
     
     // Generate prefix based on cylinder type
-    const prefix = itemName.includes('Domestic') ? 'D' :
-                  itemName.includes('Standard') ? 'S' : 'C';
+    const prefix = itemName.includes('Domestic') ? 'DM' :
+                  itemName.includes('Standard') ? 'ST' : 'CM';
     
     const codes = [];
     let codeNumber = 1;
@@ -552,7 +587,7 @@ export default function VendorDetailPage() {
 
     // Auto-generate cylinder codes when quantity changes for cylinder purchases
     if (field === 'quantity' && 
-        vendor?.category?.slug === 'cylinder_purchase' && 
+        isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && 
         value > 0) {
       
       // Collect all currently used codes from other items
@@ -627,7 +662,7 @@ export default function VendorDetailPage() {
       setShowPurchaseForm(false);
       
       // Reset to default items based on category
-      if (vendor?.category?.slug === 'cylinder_purchase') {
+      if (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
         setPurchaseItems(defaultCylinderItems);
       } else if (vendor?.category?.slug === 'gas_purchase') {
         setPurchaseItems(defaultGasItems);
@@ -1052,7 +1087,7 @@ export default function VendorDetailPage() {
                                 <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
                                   Price per Unit
                                 </th>
-                                {vendor?.category?.slug === 'cylinder_purchase' && (
+                                {isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && (
                                   <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
                                     Cylinder Codes
                                   </th>
@@ -1109,28 +1144,23 @@ export default function VendorDetailPage() {
                                       )}
                                       placeholder="Enter price per unit"
                                       min="0"
-                                      step="0.01"
+                                      step="1"
                                       className="text-center border-0 focus:ring-1 bg-transparent"
                                     />
                                   </td>
-                                  {vendor?.category?.slug === 'cylinder_purchase' && (
+                                  {isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && (
                                     <td className="border border-gray-300 px-4 py-2">
-                                      <div className="space-y-1">
-                                        <Input
-                                          type="text"
-                                          value={item.cylinderCodes || ''}
-                                          onChange={(e) => handlePurchaseItemChange(
-                                            index,
-                                            'cylinderCodes',
-                                            e.target.value
-                                          )}
-                                          placeholder="Auto-generated when quantity is entered"
-                                          className="text-center border-0 focus:ring-1 bg-transparent text-sm"
-                                        />
-                                        <p className="text-xs text-gray-500 text-center">
-                                          {item.cylinderCodes ? '✓ Auto-generated' : 'Enter quantity to auto-generate'}
-                                        </p>
-                                      </div>
+                                      <Input
+                                        type="text"
+                                        value={item.cylinderCodes || ''}
+                                        onChange={(e) => handlePurchaseItemChange(
+                                          index,
+                                          'cylinderCodes',
+                                          e.target.value
+                                        )}
+                                        placeholder="Auto-generated when quantity is entered"
+                                        className="text-center border-0 focus:ring-1 bg-transparent text-sm"
+                                      />
                                     </td>
                                   )}
                                   <td className="border border-gray-300 px-4 py-2 text-center font-medium">
@@ -1139,7 +1169,7 @@ export default function VendorDetailPage() {
                                 </tr>
                               ))}
                               <tr className="bg-gray-50 font-bold">
-                                <td colSpan={vendor?.category?.slug === 'cylinder_purchase' ? 4 : 3} className="border border-gray-300 px-4 py-2 text-right">
+                                <td colSpan={isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') ? 4 : 3} className="border border-gray-300 px-4 py-2 text-right">
                                   Total =
                                 </td>
                                 <td className="border border-gray-300 px-4 py-2 text-center">
@@ -1168,89 +1198,95 @@ export default function VendorDetailPage() {
                           </Button>
                         </div>
 
-                        <div className="space-y-3">
-                          {purchaseItems.map((item, index) => (
-                            <div key={index} className="flex gap-3 items-end">
-                              <div className="flex-1">
-                                <label className="block text-xs font-medium text-gray-600 mb-1">
-                                  Item name
-                                </label>
-                                <Select
-                                  value={item.itemName}
-                                  onChange={(e) => handlePurchaseItemChange(
-                                    index,
-                                    'itemName',
-                                    e.target.value
-                                  )}
-                                >
-                                  <option value="">Select item</option>
-                                  {vendorItems.map((vendorItem) => (
-                                    <option key={vendorItem.id} value={vendorItem.name}>
-                                      {vendorItem.name}
-                                    </option>
-                                  ))}
-                                </Select>
-                              </div>
-                              <div className="w-24">
-                                <label className="block text-xs font-medium text-gray-600 mb-1">
+                        <div className="overflow-x-auto">
+                          <table className="w-full border-collapse border border-gray-300">
+                            <thead>
+                              <tr className="bg-gray-50">
+                                <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-700">
+                                  Item
+                                </th>
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
                                   Quantity
-                                </label>
-                                <Input
-                                  type="number"
-                                  value={item.quantity}
-                                  onChange={(e) => handlePurchaseItemChange(
-                                    index,
-                                    'quantity',
-                                    e.target.value
-                                  )}
-                                  placeholder="Qty"
-                                  min="0"
-                                  step="1"
-                                  required
-                                />
-                              </div>
-                              <div className="w-32">
-                                <label className="block text-xs font-medium text-gray-600 mb-1">
+                                </th>
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
                                   Price per Unit
-                                </label>
-                                <Input
-                                  type="number"
-                                  value={item.unitPrice}
-                                  onChange={(e) => handlePurchaseItemChange(
-                                    index,
-                                    'unitPrice',
-                                    e.target.value
+                                </th>
+                                {isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && (
+                                  <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                    Cylinder Codes
+                                  </th>
+                                )}
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                  Price per Item
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {purchaseItems.map((item, index) => (
+                                <tr key={index}>
+                                  <td className="border border-gray-300 px-4 py-2 font-medium text-gray-900">
+                                    {item.itemName}
+                                  </td>
+                                  <td className="border border-gray-300 px-4 py-2">
+                                    <Input
+                                      type="number"
+                                      value={item.quantity}
+                                      onChange={(e) => handlePurchaseItemChange(
+                                        index,
+                                        'quantity',
+                                        e.target.value
+                                      )}
+                                      placeholder="Enter quantity"
+                                      min="0"
+                                      step="1"
+                                      className="text-center border-0 focus:ring-1 bg-transparent"
+                                    />
+                                  </td>
+                                  <td className="border border-gray-300 px-4 py-2">
+                                    <Input
+                                      type="number"
+                                      value={item.unitPrice}
+                                      onChange={(e) => handlePurchaseItemChange(
+                                        index,
+                                        'unitPrice',
+                                        e.target.value
+                                      )}
+                                      placeholder="Enter price per unit"
+                                      min="0"
+                                      step="1"
+                                      className="text-center border-0 focus:ring-1 bg-transparent"
+                                    />
+                                  </td>
+                                  {isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && (
+                                    <td className="border border-gray-300 px-4 py-2">
+                                      <Input
+                                        type="text"
+                                        value={item.cylinderCodes || ''}
+                                        onChange={(e) => handlePurchaseItemChange(
+                                          index,
+                                          'cylinderCodes',
+                                          e.target.value
+                                        )}
+                                        placeholder="Auto-generated when quantity is entered"
+                                        className="text-center border-0 focus:ring-1 bg-transparent text-sm"
+                                      />
+                                    </td>
                                   )}
-                                  placeholder="Price/Unit"
-                                  min="0"
-                                  step="0.01"
-                                  required
-                                />
-                              </div>
-                              <div className="w-32">
-                                <label className="block text-xs font-medium text-gray-600 mb-1">
-                                  Price per item
-                                </label>
-                                <Input
-                                  type="number"
-                                  value={item.totalPrice}
-                                  readOnly
-                                  placeholder="Total"
-                                  className="bg-gray-50"
-                                />
-                              </div>
-                              {purchaseItems.length > 1 && (
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleRemovePurchaseItem(index)}
-                                >
-                                  <TrashIcon className="w-4 h-4" />
-                                </Button>
-                              )}
-                            </div>
-                          ))}
+                                  <td className="border border-gray-300 px-4 py-2 text-center font-medium">
+                                    {formatCurrency(item.totalPrice)}
+                                  </td>
+                                </tr>
+                              ))}
+                              <tr className="bg-gray-50 font-bold">
+                                <td colSpan={isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') ? 4 : 3} className="border border-gray-300 px-4 py-2 text-right">
+                                  Total =
+                                </td>
+                                <td className="border border-gray-300 px-4 py-2 text-center">
+                                  {formatCurrency(calculatePurchaseTotal())}
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
                         </div>
 
                         <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
@@ -1294,7 +1330,7 @@ export default function VendorDetailPage() {
                         setShowPurchaseForm(false);
                         
                         // Reset to default items based on vendor category
-                        if (vendor?.category?.slug === 'cylinder_purchase') {
+                        if (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
                           setPurchaseItems(defaultCylinderItems);
                         } else if (vendor?.category?.slug === 'gas_purchase') {
                           setPurchaseItems(defaultGasItems);
