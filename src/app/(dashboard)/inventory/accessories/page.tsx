@@ -44,29 +44,42 @@ interface Stove {
   updatedAt: string;
 }
 
+interface Valve {
+  id: string;
+  type: string;
+  quantity: number;
+  costPerPiece: number;
+  totalCost: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface EquipmentStats {
   totalRegulators: number;
   totalGasPipes: number; // in meters
   totalStoves: number;
+  totalValves: number;
   totalValue: number;
 }
 
 export default function AccessoriesInventoryPage() {
-  const [activeTab, setActiveTab] = useState<'regulators' | 'pipes' | 'stoves'>('regulators');
+  const [activeTab, setActiveTab] = useState<'regulators' | 'pipes' | 'stoves' | 'valves'>('regulators');
   const [regulators, setRegulators] = useState<Regulator[]>([]);
   const [gasPipes, setGasPipes] = useState<GasPipe[]>([]);
   const [stoves, setStoves] = useState<Stove[]>([]);
+  const [valves, setValves] = useState<Valve[]>([]);
   const [stats, setStats] = useState<EquipmentStats>({
     totalRegulators: 0,
     totalGasPipes: 0,
     totalStoves: 0,
+    totalValves: 0,
     totalValue: 0
   });
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<Regulator | GasPipe | Stove | null>(null);
+  const [selectedItem, setSelectedItem] = useState<Regulator | GasPipe | Stove | Valve | null>(null);
   
   // Form calculation states
   const [formValues, setFormValues] = useState({
@@ -94,8 +107,8 @@ export default function AccessoriesInventoryPage() {
   const handleFormInputChange = (field: string, value: string) => {
     const newValues = { ...formValues, [field]: value };
     
-    // Auto-calculate total cost for regulators and stoves
-    if ((activeTab === 'regulators' || activeTab === 'stoves') && 
+    // Auto-calculate total cost for regulators, stoves, and valves
+    if ((activeTab === 'regulators' || activeTab === 'stoves' || activeTab === 'valves') && 
         (field === 'quantity' || field === 'costPerPiece')) {
       const quantity = field === 'quantity' ? value : newValues.quantity;
       const costPerPiece = field === 'costPerPiece' ? value : newValues.costPerPiece;
@@ -115,8 +128,8 @@ export default function AccessoriesInventoryPage() {
   const handleEditFormInputChange = (field: string, value: string) => {
     const newValues = { ...editFormValues, [field]: value };
     
-    // Auto-calculate total cost for regulators and stoves
-    if ((activeTab === 'regulators' || activeTab === 'stoves') && 
+    // Auto-calculate total cost for regulators, stoves, and valves
+    if ((activeTab === 'regulators' || activeTab === 'stoves' || activeTab === 'valves') && 
         (field === 'quantity' || field === 'costPerPiece')) {
       const quantity = field === 'quantity' ? value : newValues.quantity;
       const costPerPiece = field === 'costPerPiece' ? value : newValues.costPerPiece;
@@ -163,6 +176,9 @@ export default function AccessoriesInventoryPage() {
           case 'stoves':
             setStoves(data.stoves || []);
             break;
+          case 'valves':
+            setValves(data.valves || []);
+            break;
         }
       } else {
         console.error('Failed to fetch data:', response.status, response.statusText);
@@ -200,6 +216,10 @@ export default function AccessoriesInventoryPage() {
     stove.quality.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const filteredValves = valves.filter(valve =>
+    valve.type.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   const getTabDisplayName = (tab: string) => {
     switch (tab) {
       case 'regulators':
@@ -208,6 +228,8 @@ export default function AccessoriesInventoryPage() {
         return 'Gas Pipes';
       case 'stoves':
         return 'Stoves';
+      case 'valves':
+        return 'Valves';
       default:
         return tab;
     }
@@ -397,12 +419,69 @@ export default function AccessoriesInventoryPage() {
     }
   };
 
+  const handleEditValve = (valve: Valve) => {
+    setSelectedItem(valve);
+    setEditFormValues({
+      quantity: valve.quantity.toString(),
+      costPerPiece: valve.costPerPiece.toString(),
+      costPerMeter: '',
+      totalCost: valve.totalCost.toString()
+    });
+    setShowEditForm(true);
+  };
+
+  const handleUpdateValve = async (id: string, formData: any) => {
+    try {
+      console.log('Updating valve:', id, formData);
+      const response = await fetch(`/api/inventory/valves/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to update valve: ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('Update successful:', result);
+      
+      await fetchData();
+      setShowEditForm(false);
+      setSelectedItem(null);
+    } catch (error) {
+      console.error('Failed to update valve:', error);
+    }
+  };
+
+  const handleDeleteValve = async (id: string) => {
+    if (confirm('Are you sure you want to delete this valve?')) {
+      try {
+        const response = await fetch(`/api/inventory/valves/${id}`, {
+          method: 'DELETE',
+          credentials: 'include'
+        });
+
+        if (response.ok) {
+          fetchData();
+        }
+      } catch (error) {
+        console.error('Failed to delete valve:', error);
+      }
+    }
+  };
+
   const handleAddItem = async (formData: any) => {
     try {
       console.log('Submitting item data:', formData);
       
       const endpoint = activeTab === 'regulators' ? '/api/inventory/regulators' : 
-                      activeTab === 'pipes' ? '/api/inventory/pipes' : '/api/inventory/stoves';
+                      activeTab === 'pipes' ? '/api/inventory/pipes' : 
+                      activeTab === 'stoves' ? '/api/inventory/stoves' : '/api/inventory/valves';
       
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -463,7 +542,7 @@ export default function AccessoriesInventoryPage() {
       </div>
 
       {/* Statistics */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-5">
         <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-semibold text-gray-600">Regulators</CardTitle>
@@ -493,6 +572,17 @@ export default function AccessoriesInventoryPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-gray-900">{stats.totalStoves}</div>
+            <p className="text-xs text-gray-500 mt-1">Total pieces</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-semibold text-gray-600">Valves</CardTitle>
+            <WrenchScrewdriverIcon className="w-5 h-5 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-gray-900">{stats.totalValves}</div>
             <p className="text-xs text-gray-500 mt-1">Total pieces</p>
           </CardContent>
         </Card>
@@ -541,6 +631,16 @@ export default function AccessoriesInventoryPage() {
             }`}
           >
             Stoves ({stoves.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('valves')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'valves'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Valves ({valves.length})
           </button>
         </nav>
       </div>
@@ -884,6 +984,112 @@ export default function AccessoriesInventoryPage() {
         </Card>
       )}
 
+      {/* Valves Table */}
+      {activeTab === 'valves' && (
+        <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold text-gray-900">
+              Valves Inventory
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      Type
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      Cost per Piece (PKR)
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      Quantity in Store
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      Total Cost
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-4 text-center">
+                        <div className="animate-pulse">Loading valves...</div>
+                      </td>
+                    </tr>
+                  ) : filteredValves.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
+                        No valves found.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredValves.map((valve) => (
+                      <tr key={valve.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-semibold text-gray-900">{valve.type}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                          PKR {valve.costPerPiece.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {valve.quantity}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                          PKR {valve.totalCost.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex space-x-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handleEditValve(valve)}
+                            >
+                              Edit
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => handleDeleteValve(valve.id)}
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                  {/* Totals Row for Valves */}
+                  {filteredValves.length > 0 && (
+                    <tr className="bg-blue-50 border-t-2 border-blue-200">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-bold text-blue-900">Total</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-900">
+                        -
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-900">
+                        {filteredValves.reduce((sum, valve) => sum + Number(valve.quantity), 0)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-900">
+                        PKR {filteredValves.reduce((sum, valve) => sum + Number(valve.totalCost), 0).toLocaleString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-bold text-blue-900">-</div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Edit Form Modal */}
       {showEditForm && selectedItem && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
@@ -920,6 +1126,14 @@ export default function AccessoriesInventoryPage() {
                     totalCost: parseFloat(editFormValues.totalCost)
                   };
                   handleUpdateStove(selectedItem.id, data);
+                } else if (activeTab === 'valves') {
+                  data = {
+                    type: form.type.value,
+                    costPerPiece: parseFloat(editFormValues.costPerPiece),
+                    quantity: parseInt(editFormValues.quantity),
+                    totalCost: parseFloat(editFormValues.totalCost)
+                  };
+                  handleUpdateValve(selectedItem.id, data);
                 }
                 // Reset edit form values after submission
                 setEditFormValues({ quantity: '', costPerPiece: '', costPerMeter: '', totalCost: '' });
@@ -1048,6 +1262,45 @@ export default function AccessoriesInventoryPage() {
                     </div>
                   </>
                 )}
+                {activeTab === 'valves' && selectedItem && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Type</label>
+                      <Input name="type" type="text" defaultValue={(selectedItem as Valve).type} required />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Cost per Piece (PKR)</label>
+                      <Input 
+                        name="costPerPiece" 
+                        type="number" 
+                        value={editFormValues.costPerPiece}
+                        onChange={(e) => handleEditFormInputChange('costPerPiece', e.target.value)}
+                        required 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity</label>
+                      <Input 
+                        name="quantity" 
+                        type="number" 
+                        value={editFormValues.quantity}
+                        onChange={(e) => handleEditFormInputChange('quantity', e.target.value)}
+                        required 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Total Cost (PKR)</label>
+                      <Input 
+                        name="totalCost" 
+                        type="number" 
+                        value={editFormValues.totalCost}
+                        readOnly
+                        className="bg-gray-50"
+                        required 
+                      />
+                    </div>
+                  </>
+                )}
                 <div className="flex justify-end space-x-3">
                   <Button
                     type="button"
@@ -1099,6 +1352,13 @@ export default function AccessoriesInventoryPage() {
                 } else if (activeTab === 'stoves') {
                   data = {
                     quality: form.quality.value,
+                    quantity: parseInt(formValues.quantity),
+                    costPerPiece: parseFloat(formValues.costPerPiece),
+                    totalCost: parseFloat(formValues.totalCost)
+                  };
+                } else if (activeTab === 'valves') {
+                  data = {
+                    type: form.type.value,
                     quantity: parseInt(formValues.quantity),
                     costPerPiece: parseFloat(formValues.costPerPiece),
                     totalCost: parseFloat(formValues.totalCost)
@@ -1223,6 +1483,48 @@ export default function AccessoriesInventoryPage() {
                         name="costPerPiece" 
                         type="number" 
                         placeholder="1000" 
+                        value={formValues.costPerPiece}
+                        onChange={(e) => handleFormInputChange('costPerPiece', e.target.value)}
+                        required 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Total Cost (PKR)</label>
+                      <Input 
+                        name="totalCost" 
+                        type="number" 
+                        placeholder="5000" 
+                        value={formValues.totalCost}
+                        readOnly
+                        className="bg-gray-50"
+                        required 
+                      />
+                    </div>
+                  </>
+                )}
+                {activeTab === 'valves' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Type</label>
+                      <Input name="type" type="text" placeholder="Ball Valve" required />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity</label>
+                      <Input 
+                        name="quantity" 
+                        type="number" 
+                        placeholder="10" 
+                        value={formValues.quantity}
+                        onChange={(e) => handleFormInputChange('quantity', e.target.value)}
+                        required 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Cost per Piece (PKR)</label>
+                      <Input 
+                        name="costPerPiece" 
+                        type="number" 
+                        placeholder="500" 
                         value={formValues.costPerPiece}
                         onChange={(e) => handleFormInputChange('costPerPiece', e.target.value)}
                         required 

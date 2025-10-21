@@ -83,6 +83,13 @@ export async function checkAccessoryInventory(itemName: string, itemType: string
         available = gasPipe ? Number(gasPipe.quantity) : 0;
         break;
 
+      case 'valve':
+        const valve = await prisma.valve.findFirst({
+          where: { type: itemName }
+        });
+        available = valve ? Number(valve.quantity) : 0;
+        break;
+
       case 'product':
         const product = await prisma.product.findFirst({
           where: {

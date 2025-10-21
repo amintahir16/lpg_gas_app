@@ -549,6 +549,18 @@ model Stove {
   @@map("stoves")
 }
 
+model Valve {
+  id           String   @id @default(cuid())
+  type         String
+  quantity     Int      @default(0)
+  costPerPiece Decimal  @db.Decimal(10, 2)
+  totalCost    Decimal  @db.Decimal(10, 2)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("valves")
+}
+
 model B2BTransaction {
   id               String               @id @default(cuid())
   transactionType  B2BTransactionType
