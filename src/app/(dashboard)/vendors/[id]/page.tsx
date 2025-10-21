@@ -598,7 +598,7 @@ export default function VendorDetailPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500 mb-1">Cash Out (Purchases)</p>
-                <p className="text-2xl font-bold text-gray-900">
+                <p className="text-2xl font-bold text-red-600">
                   {formatCurrency(vendor.financialSummary.cashOut)}
                 </p>
               </div>
@@ -614,7 +614,7 @@ export default function VendorDetailPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500 mb-1">Cash In (Payments)</p>
-                <p className="text-2xl font-bold text-gray-900">
+                <p className="text-2xl font-bold text-green-600">
                   {formatCurrency(vendor.financialSummary.cashIn)}
                 </p>
               </div>
@@ -1110,7 +1110,7 @@ export default function VendorDetailPage() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {vendor.purchase_entries.map((purchase) => (
+              {vendor.purchase_entries.map((purchase, index) => (
                 <Card key={purchase.id}>
                   <CardContent className="p-6">
                     <div className="flex justify-between items-start mb-4">
@@ -1199,8 +1199,8 @@ export default function VendorDetailPage() {
                       </div>
                     )}
 
-                    {/* Payments - Show all vendor payments since purchase entries don't have direct payment relations */}
-                    {vendor.payments && vendor.payments.length > 0 && (
+                    {/* Payments - Show only on the most recent purchase entry */}
+                    {index === 0 && vendor.payments && vendor.payments.length > 0 && (
                       <div className="mt-4 pt-4 border-t border-gray-200">
                         <h4 className="text-sm font-medium text-gray-700 mb-2">
                           Recent Payments

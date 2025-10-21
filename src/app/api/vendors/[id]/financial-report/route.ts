@@ -53,23 +53,12 @@ export async function GET(
     }
 
     // Get purchases in date range
-    const purchases = await prisma.vendorPurchase.findMany({
+    const purchases = await prisma.purchaseEntry.findMany({
       where: {
         vendorId: id,
         purchaseDate: {
           gte: startDate,
           lte: endDate
-        }
-      },
-      include: {
-        items: true,
-        payments: {
-          where: {
-            paymentDate: {
-              gte: startDate,
-              lte: endDate
-            }
-          }
         }
       }
     });
@@ -88,28 +77,13 @@ export async function GET(
 
     // Calculate financial metrics
     const totalPurchases = purchases.reduce(
-      (sum, p) => sum + Number(p.totalAmount),
+      (sum, p) => sum + Number(p.totalPrice),
       0
     );
 
-    // Calculate payments from purchases
-    const purchasePayments = purchases.reduce(
-      (sum, p) => {
-        // Check if there are separate payment records (newer system)
-        const separatePayments = p.payments.reduce(
-          (pSum, payment) => pSum + Number(payment.amount),
-          0
-        );
-        
-        // If there are separate payment records, use them; otherwise use paidAmount
-        if (separatePayments > 0) {
-          return sum + separatePayments;
-        } else {
-          return sum + Number(p.paidAmount);
-        }
-      },
-      0
-    );
+    // For PurchaseEntry model, we need to get payments from VendorPayment model
+    // that are linked to these purchase entries via invoice numbers or other means
+    const purchasePayments = 0; // Will be calculated from VendorPayment records
 
     // Calculate direct payments
     const directPaymentsTotal = directPayments.reduce(
@@ -124,15 +98,10 @@ export async function GET(
     const periodOutstandingBalance = totalPurchases - totalPayments;
 
     // Get overall balance (all time)
-    const allPurchases = await prisma.vendorPurchase.findMany({
+    const allPurchases = await prisma.purchaseEntry.findMany({
       where: { vendorId: id },
       select: {
-        totalAmount: true,
-        paidAmount: true,
-        balanceAmount: true,
-        payments: {
-          select: { amount: true }
-        }
+        totalPrice: true
       }
     });
 
@@ -147,25 +116,12 @@ export async function GET(
 
     // Calculate total purchases (all time)
     const allTimeTotalPurchases = allPurchases.reduce(
-      (sum, p) => sum + Number(p.totalAmount),
+      (sum, p) => sum + Number(p.totalPrice),
       0
     );
 
-    // Calculate all purchase-related payments
-    const allPurchasePayments = allPurchases.reduce(
-      (sum, p) => {
-        const separatePayments = p.payments.reduce(
-          (pSum, payment) => pSum + Number(payment.amount),
-          0
-        );
-        if (separatePayments > 0) {
-          return sum + separatePayments;
-        } else {
-          return sum + Number(p.paidAmount);
-        }
-      },
-      0
-    );
+    // Calculate all purchase-related payments (from VendorPayment records)
+    const allPurchasePayments = 0; // Will be calculated from VendorPayment records
 
     // Calculate all direct payments
     const allTimeDirectPayments = allDirectPayments.reduce(
