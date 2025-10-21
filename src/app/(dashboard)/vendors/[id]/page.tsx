@@ -15,8 +15,10 @@ import {
   BanknotesIcon,
   TrashIcon,
   PencilIcon,
+  DocumentArrowDownIcon,
 } from '@heroicons/react/24/outline';
 import VendorPaymentModal from '@/components/VendorPaymentModal';
+import VendorExportModal from '@/components/VendorExportModal';
 
 interface Vendor {
   id: string;
@@ -103,6 +105,7 @@ export default function VendorDetailPage() {
   
   // Payment modal state
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [directPayments, setDirectPayments] = useState<DirectPayment[]>([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -1437,6 +1440,13 @@ export default function VendorDetailPage() {
               Financial Report
             </h2>
             <div className="flex gap-3">
+              <Button
+                onClick={() => setShowExportModal(true)}
+                className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold px-4 py-2 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200"
+              >
+                <DocumentArrowDownIcon className="h-5 w-5 mr-2" />
+                Export Report
+              </Button>
               <select
                 value={reportPeriod}
                 onChange={(e) => setReportPeriod(e.target.value)}
@@ -1668,6 +1678,18 @@ export default function VendorDetailPage() {
           vendorName={vendor.companyName}
           outstandingBalance={vendor.financialSummary.outstandingBalance}
           onPaymentSuccess={handlePaymentSuccess}
+        />
+      )}
+
+      {/* Export Modal */}
+      {vendor && (
+        <VendorExportModal
+          isOpen={showExportModal}
+          onClose={() => setShowExportModal(false)}
+          vendorName={vendor.companyName}
+          vendorId={vendorId}
+          purchaseEntries={vendor.purchase_entries || []}
+          paymentHistory={directPayments}
         />
       )}
 
