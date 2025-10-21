@@ -654,7 +654,7 @@ export default function VendorDetailPage() {
                 }`} />
               </div>
             </div>
-            {vendor.financialSummary.outstandingBalance > 0 && (
+            {vendor.financialSummary.outstandingBalance < 0 && (
               <Button
                 onClick={() => setShowPaymentModal(true)}
                 className="w-full bg-green-600 hover:bg-green-700 text-white"

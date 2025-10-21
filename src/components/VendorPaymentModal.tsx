@@ -211,11 +211,11 @@ export default function VendorPaymentModal({
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-600 font-medium">Remaining Balance:</span>
                   <span className={`font-bold text-lg ${
-                    outstandingBalance - parseFloat(amount) > 0 
+                    Math.abs(outstandingBalance) - parseFloat(amount) > 0 
                       ? 'text-red-600' 
                       : 'text-green-600'
                   }`}>
-                    {formatCurrency(Math.max(0, outstandingBalance - parseFloat(amount)))}
+                    {formatCurrency(Math.max(0, Math.abs(outstandingBalance) - parseFloat(amount)))}
                   </span>
                 </div>
               </div>
