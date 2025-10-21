@@ -631,7 +631,7 @@ export default function VendorDetailPage() {
               <div className="flex-1">
                 <p className="text-sm text-gray-500 mb-1">Net Balance (Outstanding)</p>
                 <p className={`text-2xl font-bold ${
-                  vendor.financialSummary.netBalance > 0 ? 'text-red-600' : 'text-gray-900'
+                  vendor.financialSummary.netBalance > 0 ? 'text-green-600' : 'text-red-600'
                 }`}>
                   {formatCurrency(vendor.financialSummary.netBalance)}
                 </p>
@@ -641,7 +641,7 @@ export default function VendorDetailPage() {
                   </p>
                 )}
                 {vendor.financialSummary.netBalance < 0 && (
-                  <p className="text-xs text-green-500 mt-1">
+                  <p className="text-xs text-red-500 mt-1">
                     Vendor owes you this amount
                   </p>
                 )}
