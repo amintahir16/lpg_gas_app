@@ -111,6 +111,16 @@ export default function VendorDetailPage() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [directPayments, setDirectPayments] = useState<DirectPayment[]>([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  
+  // Edit vendor state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    contactPerson: '',
+    phone: '',
+    email: '',
+    address: ''
+  });
 
   // Purchase form state
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
@@ -312,6 +322,40 @@ export default function VendorDetailPage() {
     fetchVendor();
     fetchFinancialReport();
     fetchDirectPayments();
+  };
+
+  const handleEditVendor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      const response = await fetch(`/api/vendors/${vendorId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editFormData.name,
+          contactPerson: editFormData.contactPerson,
+          phone: editFormData.phone,
+          email: editFormData.email,
+          address: editFormData.address
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to update vendor');
+      }
+
+      // Refresh vendor data
+      await fetchVendor();
+      
+      // Close modal
+      setShowEditModal(false);
+      
+      alert('Vendor updated successfully!');
+    } catch (error) {
+      console.error('Error updating vendor:', error);
+      alert('Failed to update vendor');
+    }
   };
 
   const handleDeleteVendor = async () => {
@@ -624,6 +668,24 @@ export default function VendorDetailPage() {
             <p className="text-gray-600">{vendor.vendorCode}</p>
           </div>
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setEditFormData({
+                  name: vendor.name || vendor.companyName || '',
+                  contactPerson: vendor.contactPerson || '',
+                  phone: vendor.phone || '',
+                  email: vendor.email || '',
+                  address: vendor.address || ''
+                });
+                setShowEditModal(true);
+              }}
+              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+            >
+              <PencilIcon className="w-4 h-4 mr-1" />
+              Edit Vendor
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -1765,6 +1827,96 @@ export default function VendorDetailPage() {
           outstandingBalance={vendor.financialSummary.outstandingBalance}
           onPaymentSuccess={handlePaymentSuccess}
         />
+      )}
+
+      {/* Edit Vendor Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Edit Vendor Details
+                </h3>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              <form onSubmit={handleEditVendor} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Vendor Name *
+                    </label>
+                    <Input
+                      value={editFormData.name}
+                      onChange={(e) => setEditFormData({...editFormData, name: e.target.value})}
+                      placeholder="e.g., Khattak Plant, Ali Dealer"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Contact Person
+                    </label>
+                    <Input
+                      value={editFormData.contactPerson}
+                      onChange={(e) => setEditFormData({...editFormData, contactPerson: e.target.value})}
+                      placeholder="Contact person name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Phone
+                    </label>
+                    <Input
+                      value={editFormData.phone}
+                      onChange={(e) => setEditFormData({...editFormData, phone: e.target.value})}
+                      placeholder="Phone number"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Email
+                    </label>
+                    <Input
+                      type="email"
+                      value={editFormData.email}
+                      onChange={(e) => setEditFormData({...editFormData, email: e.target.value})}
+                      placeholder="Email address"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Address
+                  </label>
+                  <Input
+                    value={editFormData.address}
+                    onChange={(e) => setEditFormData({...editFormData, address: e.target.value})}
+                    placeholder="Full address"
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <Button type="submit">Update Vendor</Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowEditModal(false)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Export Modal */}

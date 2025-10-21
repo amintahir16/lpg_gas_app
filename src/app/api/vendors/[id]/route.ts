@@ -86,3 +86,64 @@ export async function GET(
   }
 }
 
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const body = await request.json();
+    const { name, contactPerson, phone, email, address } = body;
+
+    // Validate required fields
+    if (!name || name.trim() === '') {
+      return NextResponse.json(
+        { error: 'Vendor name is required' },
+        { status: 400 }
+      );
+    }
+
+    // Check if vendor exists
+    const existingVendor = await prisma.vendor.findUnique({
+      where: { id }
+    });
+
+    if (!existingVendor) {
+      return NextResponse.json(
+        { error: 'Vendor not found' },
+        { status: 404 }
+      );
+    }
+
+    // Update vendor
+    const updatedVendor = await prisma.vendor.update({
+      where: { id },
+      data: {
+        name: name.trim(),
+        contactPerson: contactPerson?.trim() || null,
+        phone: phone?.trim() || null,
+        email: email?.trim() || null,
+        address: address?.trim() || null,
+        updatedAt: new Date()
+      }
+    });
+
+    return NextResponse.json({
+      message: 'Vendor updated successfully',
+      vendor: updatedVendor
+    });
+
+  } catch (error) {
+    console.error('Error updating vendor:', error);
+    return NextResponse.json(
+      { error: 'Failed to update vendor' },
+      { status: 500 }
+    );
+  }
+}
+
