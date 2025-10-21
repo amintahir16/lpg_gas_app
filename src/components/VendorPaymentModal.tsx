@@ -207,11 +207,11 @@ export default function VendorPaymentModal({
               <Input
                 id="amount"
                 type="number"
-                step="0.01"
+                step="1"
                 min="0"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                placeholder="0.00"
+                placeholder="0"
                 className="pl-12 pr-4 py-4 text-xl font-bold border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg"
                 required
               />
