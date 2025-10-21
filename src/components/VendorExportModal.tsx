@@ -171,10 +171,10 @@ export default function VendorExportModal({
       // Company Logo Area (placeholder)
       doc.setFillColor(255, 255, 255);
       doc.circle(25, 18, 8, 'F');
-      doc.setFontSize(12);
+      doc.setFontSize(9);
       doc.setTextColor(41, 128, 185);
       doc.setFont('helvetica', 'bold');
-      doc.text('LPG', 22, 22);
+      doc.text('Flamora', 25, 20, { align: 'center' });
       
       // Report Title
       doc.setTextColor(255, 255, 255);
@@ -400,7 +400,7 @@ export default function VendorExportModal({
       doc.setTextColor(100, 100, 100);
       doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
-      doc.text('This report was generated automatically by LPG Gas Management System', pageWidth / 2, yPosition, { align: 'center' });
+      doc.text('This report was generated automatically by Flamora Gas Management System', pageWidth / 2, yPosition, { align: 'center' });
       doc.text(`Page 1 of 1 | Confidential Document`, pageWidth / 2, yPosition + 5, { align: 'center' });
       
       // Save PDF
