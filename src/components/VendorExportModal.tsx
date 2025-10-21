@@ -249,6 +249,19 @@ export default function VendorExportModal({
             purchase.status || 'PENDING'
           ]);
           
+          // Add total row
+          const totalPurchases = purchases.reduce((sum, p) => sum + Number(p.totalPrice), 0);
+          purchaseData.push([
+            '',
+            '',
+            '',
+            '',
+            '',
+            'TOTAL:',
+            formatCurrencyForPDF(totalPurchases),
+            ''
+          ]);
+          
           autoTable(doc, {
             head: [['#', 'Invoice', 'Date', 'Item', 'Qty', 'Unit Price (Rs)', 'Total (Rs)', 'Status']],
             body: purchaseData,
@@ -277,7 +290,7 @@ export default function VendorExportModal({
               5: { halign: 'right', cellWidth: 25, overflow: 'linebreak' },
               6: { halign: 'right', cellWidth: 25, overflow: 'linebreak' },
               7: { halign: 'center', cellWidth: 20 }
-            }
+            },
           });
           
           yPosition = (doc as any).lastAutoTable.finalY + 25;
@@ -312,6 +325,18 @@ export default function VendorExportModal({
             payment.description || 'N/A'
           ]);
           
+          // Add total row
+          const totalPayments = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+          paymentData.push([
+            '',
+            '',
+            'TOTAL:',
+            formatCurrencyForPDF(totalPayments),
+            '',
+            '',
+            ''
+          ]);
+          
           autoTable(doc, {
             head: [['#', 'Date', 'Method', 'Amount (Rs)', 'Reference', 'Status', 'Description']],
             body: paymentData,
@@ -339,14 +364,14 @@ export default function VendorExportModal({
               4: { cellWidth: 30 },
               5: { halign: 'center', cellWidth: 20 },
               6: { cellWidth: 40 }
-            }
+            },
           });
           
           yPosition = (doc as any).lastAutoTable.finalY + 25;
         }
       }
       
-      // Financial Summary Section
+      // Financial Summary Section (Date Range Specific)
       const totalPurchases = purchases.reduce((sum, p) => sum + Number(p.totalPrice), 0);
       const totalPayments = payments.reduce((sum, p) => sum + Number(p.amount), 0);
       const netBalance = totalPayments - totalPurchases;
@@ -356,7 +381,7 @@ export default function VendorExportModal({
         yPosition = 20;
       }
       
-      // Summary Header
+      // Summary Header with Date Range
       doc.setFillColor(155, 89, 182);
       doc.rect(15, yPosition, pageWidth - 30, 8, 'F');
       doc.setTextColor(255, 255, 255);
@@ -368,9 +393,18 @@ export default function VendorExportModal({
       
       // Summary Box
       doc.setFillColor(248, 249, 250);
-      doc.rect(15, yPosition, pageWidth - 30, 50, 'F');
+      doc.rect(15, yPosition, pageWidth - 30, 60, 'F');
       doc.setDrawColor(200, 200, 200);
-      doc.rect(15, yPosition, pageWidth - 30, 50, 'S');
+      doc.rect(15, yPosition, pageWidth - 30, 60, 'S');
+      
+      // Date Range Info
+      doc.setTextColor(100, 100, 100);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      const dateRangeText = startDate && endDate 
+        ? `Summary for Period: ${formatDate(startDate)} - ${formatDate(endDate)}`
+        : 'Summary for All Time';
+      doc.text(dateRangeText, 25, yPosition + 10);
       
       // Summary Content
       doc.setTextColor(0, 0, 0);
@@ -378,22 +412,31 @@ export default function VendorExportModal({
       doc.setFont('helvetica', 'bold');
       
       // Total Purchases
-      doc.text('Total Purchases:', 25, yPosition + 15);
+      doc.text('Total Purchases:', 25, yPosition + 25);
       doc.setFont('helvetica', 'normal');
-      doc.text(formatCurrency(totalPurchases), pageWidth - 50, yPosition + 15, { align: 'right' });
+      doc.text(formatCurrency(totalPurchases), pageWidth - 50, yPosition + 25, { align: 'right' });
       
       // Total Payments
       doc.setFont('helvetica', 'bold');
-      doc.text('Total Payments:', 25, yPosition + 25);
+      doc.text('Total Payments:', 25, yPosition + 35);
       doc.setFont('helvetica', 'normal');
-      doc.text(formatCurrency(totalPayments), pageWidth - 50, yPosition + 25, { align: 'right' });
+      doc.text(formatCurrency(totalPayments), pageWidth - 50, yPosition + 35, { align: 'right' });
       
       // Net Balance
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(14);
-      doc.text('Net Balance:', 25, yPosition + 40);
+      doc.text('Net Balance:', 25, yPosition + 50);
       doc.setTextColor(netBalance >= 0 ? 39 : 231, netBalance >= 0 ? 174 : 76, netBalance >= 0 ? 96 : 60);
-      doc.text(formatCurrency(netBalance), pageWidth - 50, yPosition + 40, { align: 'right' });
+      doc.text(formatCurrency(netBalance), pageWidth - 50, yPosition + 50, { align: 'right' });
+      
+      // Balance Interpretation
+      doc.setTextColor(100, 100, 100);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'italic');
+      const balanceText = netBalance >= 0 
+        ? 'You owe this amount to the vendor'
+        : 'Vendor owes you this amount';
+      doc.text(balanceText, 25, yPosition + 58);
       
       // Footer
       yPosition += 70;
