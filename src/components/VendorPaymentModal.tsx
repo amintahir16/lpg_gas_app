@@ -42,9 +42,9 @@ export default function VendorPaymentModal({
       return;
     }
 
-    if (paymentAmount > outstandingBalance) {
+    if (paymentAmount > Math.abs(outstandingBalance)) {
       const confirmOverpay = confirm(
-        `The payment amount (Rs ${paymentAmount.toLocaleString()}) exceeds the outstanding balance (Rs ${outstandingBalance.toLocaleString()}).\n\nThis will create a credit balance in your favor. Do you want to proceed?`
+        `The payment amount (Rs ${paymentAmount.toLocaleString()}) exceeds the outstanding balance (Rs ${Math.abs(outstandingBalance).toLocaleString()}).\n\nThis will create a credit balance in your favor. Do you want to proceed?`
       );
       if (!confirmOverpay) return;
     }

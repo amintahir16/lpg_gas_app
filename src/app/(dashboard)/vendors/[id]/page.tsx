@@ -219,7 +219,7 @@ export default function VendorDetailPage() {
 
   const fetchDirectPayments = async () => {
     try {
-      const response = await fetch(`/api/vendors/${vendorId}/direct-payments`);
+      const response = await fetch(`/api/vendors/${vendorId}/direct-payments?t=${Date.now()}`);
       if (!response.ok) throw new Error('Failed to fetch payments');
       const data = await response.json();
       setDirectPayments(data.payments || []);
@@ -1571,40 +1571,76 @@ export default function VendorDetailPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-3">
-                      {directPayments.map((payment) => (
-                        <div key={payment.id} className="flex justify-between items-center py-3 border-b border-gray-200 last:border-0">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3">
-                              <div className="flex-shrink-0 w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                                <BanknotesIcon className="h-5 w-5 text-green-600" />
+                    <div className="space-y-4">
+                      {directPayments.map((payment, index) => (
+                        <div key={payment.id} className="bg-gradient-to-r from-gray-50 to-blue-50 border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-start gap-4">
+                              <div className="flex-shrink-0">
+                                <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center shadow-lg">
+                                  <BanknotesIcon className="h-6 w-6 text-white" />
+                                </div>
                               </div>
-                              <div>
-                                <p className="font-medium text-gray-900">
-                                  {formatCurrency(Number(payment.amount))}
-                                </p>
-                                <p className="text-sm text-gray-500">
-                                  {formatDate(payment.paymentDate)} • {payment.method}
-                                </p>
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3 mb-2">
+                                  <h4 className="text-xl font-bold text-gray-900">
+                                    {formatCurrency(Number(payment.amount))}
+                                  </h4>
+                                  <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                                    payment.status === 'COMPLETED' 
+                                      ? 'bg-green-100 text-green-800 border border-green-200' 
+                                      : 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                                  }`}>
+                                    {payment.status}
+                                  </span>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-gray-500 font-medium">Date:</span>
+                                    <span className="text-gray-700 font-semibold">{formatDate(payment.paymentDate)}</span>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-gray-500 font-medium">Method:</span>
+                                    <span className="text-gray-700 font-semibold">{payment.method}</span>
+                                  </div>
+                                  
+                                  {payment.reference && (
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-gray-500 font-medium">Reference:</span>
+                                      <span className="text-blue-600 font-semibold bg-blue-50 px-2 py-1 rounded text-xs">
+                                        {payment.reference}
+                                      </span>
+                                    </div>
+                                  )}
+                                  
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-gray-500 font-medium">Transaction ID:</span>
+                                    <span className="text-gray-600 font-mono text-xs bg-gray-100 px-2 py-1 rounded">
+                                      {payment.id.slice(-8).toUpperCase()}
+                                    </span>
+                                  </div>
+                                </div>
+                                
                                 {payment.description && (
-                                  <p className="text-xs text-gray-500 mt-1">{payment.description}</p>
+                                  <div className="mt-3 p-3 bg-white rounded-lg border border-gray-100">
+                                    <p className="text-sm text-gray-600">
+                                      <span className="font-medium text-gray-700">Description:</span> {payment.description}
+                                    </p>
+                                  </div>
                                 )}
                               </div>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            {payment.reference && (
-                              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                                Ref: {payment.reference}
-                              </span>
-                            )}
-                            <span className={`px-3 py-1 text-xs font-medium rounded-full ${
-                              payment.status === 'COMPLETED' 
-                                ? 'bg-green-100 text-green-700' 
-                                : 'bg-yellow-100 text-yellow-700'
-                            }`}>
-                              {payment.status}
-                            </span>
+                            
+                            <div className="flex flex-col items-end gap-2">
+                              <div className="text-xs text-gray-400 font-medium">
+                                #{index + 1}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {new Date(payment.createdAt).toLocaleTimeString()}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       ))}

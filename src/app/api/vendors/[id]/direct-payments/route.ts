@@ -34,9 +34,14 @@ export async function GET(
         vendorId: id,
         ...dateFilter
       },
-      orderBy: {
-        paymentDate: 'desc'
-      }
+      orderBy: [
+        {
+          createdAt: 'desc'
+        },
+        {
+          paymentDate: 'desc'
+        }
+      ]
     });
 
     return NextResponse.json({ payments });
