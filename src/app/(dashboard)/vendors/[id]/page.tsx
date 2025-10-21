@@ -525,6 +525,10 @@ export default function VendorDetailPage() {
       paidAmount: 0
     });
     setUsedCodes(new Set()); // Reset used codes for new form
+    
+    // Reset purchase items to trigger auto-population
+    setPurchaseItems([]);
+    
     setShowPurchaseForm(true);
   };
 
