@@ -1104,23 +1104,20 @@ export default function VendorDetailPage() {
                             <tbody>
                               {purchaseItems.map((item, index) => (
                                 <tr key={index}>
-                                  <td className="border border-gray-300 px-4 py-2 font-medium text-gray-900">
-                                    {/* Show item name for fixed items, input for custom items */}
-                                    {vendor?.category?.slug === 'accessories_purchase' && 
-                                     index >= defaultAccessoriesItems.length ? (
-                                      <Input
-                                        value={item.itemName}
-                                        onChange={(e) => handlePurchaseItemChange(
-                                          index,
-                                          'itemName',
-                                          e.target.value
-                                        )}
-                                        placeholder="Enter item name"
-                                        className="border-0 focus:ring-1 bg-transparent font-medium"
-                                      />
-                                    ) : (
-                                      item.itemName
-                                    )}
+                                  <td className="border border-gray-300 px-4 py-2">
+                                    {/* Use input field for all items to maintain consistent alignment */}
+                                    <Input
+                                      value={item.itemName}
+                                      onChange={(e) => handlePurchaseItemChange(
+                                        index,
+                                        'itemName',
+                                        e.target.value
+                                      )}
+                                      placeholder="Enter item name"
+                                      className="border-0 focus:ring-1 bg-transparent text-sm font-medium text-gray-900"
+                                      readOnly={vendor?.category?.slug === 'accessories_purchase' && 
+                                               index < defaultAccessoriesItems.length}
+                                    />
                                   </td>
                                   <td className="border border-gray-300 px-4 py-2">
                                     <Input
