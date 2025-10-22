@@ -408,7 +408,7 @@ export default function CategoryVendorsPage() {
                     <div>
                       <div className="text-xs text-gray-500 mb-1">Balance</div>
                       <div className={`text-sm font-semibold ${vendor.totalBalance > 0 ? 'text-red-600' : 'text-gray-600'}`}>
-                        {formatCurrency(vendor.totalBalance)}
+                        {vendor.totalBalance > 0 ? '-' : ''}{formatCurrency(Math.abs(vendor.totalBalance))}
                       </div>
                     </div>
                   </div>
