@@ -183,9 +183,15 @@ export async function POST(
         });
       }
 
+      // Get vendor category for inventory integration
+      const vendor = await tx.vendor.findUnique({
+        where: { id },
+        include: { category: true }
+      });
+
       // Integrate purchased items with inventory system
       try {
-        await InventoryIntegrationService.processPurchaseItems(items);
+        await InventoryIntegrationService.processPurchaseItems(items, vendor?.category?.slug);
         console.log('✅ Inventory integration completed successfully');
       } catch (inventoryError) {
         console.error('❌ Inventory integration failed:', inventoryError);

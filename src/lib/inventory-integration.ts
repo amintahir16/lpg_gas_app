@@ -7,6 +7,7 @@ export interface VendorPurchaseItem {
   totalPrice: number;
   cylinderCodes?: string;
   status?: string;
+  selectedCylinderIds?: string[];
 }
 
 /**
@@ -17,12 +18,13 @@ export class InventoryIntegrationService {
   /**
    * Process vendor purchase items and add them to appropriate inventory tables
    */
-  static async processPurchaseItems(items: VendorPurchaseItem[]): Promise<void> {
+  static async processPurchaseItems(items: VendorPurchaseItem[], vendorCategory?: string): Promise<void> {
     console.log('🔄 Processing vendor purchase items for inventory integration...');
+    console.log(`🏪 Vendor category: ${vendorCategory}`);
     
     for (const item of items) {
       try {
-        await this.processItem(item);
+        await this.processItem(item, vendorCategory);
         console.log(`✅ Successfully processed: ${item.itemName} (${item.quantity} units)`);
       } catch (error) {
         console.error(`❌ Failed to process item ${item.itemName}:`, error);
@@ -36,24 +38,59 @@ export class InventoryIntegrationService {
   /**
    * Process individual item based on its name and type
    */
-  private static async processItem(item: VendorPurchaseItem): Promise<void> {
+  private static async processItem(item: VendorPurchaseItem, vendorCategory?: string): Promise<void> {
     const itemName = item.itemName.toLowerCase();
     const quantity = item.quantity;
     const unitPrice = item.unitPrice;
 
-    // Determine item type and route to appropriate handler
+    console.log(`🔍 Processing item: ${item.itemName} (${itemName})`);
+    console.log(`🔍 Vendor category: ${vendorCategory}`);
+
+    // Check vendor category FIRST - if it's a gas purchase vendor, all items are gas purchases
+    if (this.isGasPurchaseVendor(vendorCategory)) {
+      console.log(`⛽ Processing as gas purchase (vendor category: ${vendorCategory})`);
+      await this.processGasPurchase(item);
+      return;
+    }
+
+    // For non-gas vendors, use item name detection
+    console.log(`🔍 Is cylinder item: ${this.isCylinderItem(itemName)}`);
+    console.log(`🔍 Is gas item: ${this.isGasItem(itemName)}`);
+
     if (this.isCylinderItem(itemName)) {
+      console.log(`📦 Processing as cylinder purchase`);
       await this.processCylinderPurchase(item);
     } else if (this.isRegulatorItem(itemName)) {
+      console.log(`🔧 Processing as regulator purchase`);
       await this.processRegulatorPurchase(item);
     } else if (this.isStoveItem(itemName)) {
+      console.log(`🔥 Processing as stove purchase`);
       await this.processStovePurchase(item);
     } else if (this.isGasPipeItem(itemName)) {
+      console.log(`🔗 Processing as gas pipe purchase`);
       await this.processGasPipePurchase(item);
     } else {
+      console.log(`📦 Processing as generic product`);
       // Generic product - add to Product table
       await this.processGenericProduct(item);
     }
+  }
+
+  /**
+   * Check if vendor is a gas purchase vendor
+   */
+  private static isGasPurchaseVendor(categorySlug?: string): boolean {
+    if (!categorySlug) return false;
+    
+    const normalizedSlug = categorySlug.toLowerCase().replace(/[_-]/g, '');
+    const gasPatterns = [
+      'gaspurchase',
+      'gasfilling',
+      'gasrefill',
+      'gasrefilling'
+    ];
+    
+    return gasPatterns.some(pattern => normalizedSlug.includes(pattern));
   }
 
   /**
@@ -61,10 +98,18 @@ export class InventoryIntegrationService {
    */
   private static isCylinderItem(itemName: string): boolean {
     const cylinderKeywords = [
-      'cylinder', 'gas cylinder', 'lpg cylinder', 
-      'domestic', 'standard', 'commercial', '11.8kg', '15kg', '45.4kg'
+      'cylinder', 'gas cylinder', 'lpg cylinder'
     ];
-    return cylinderKeywords.some(keyword => itemName.includes(keyword));
+    
+    // More specific patterns for cylinder purchases (not gas filling)
+    const cylinderPatterns = [
+      'domestic cylinder', 'standard cylinder', 'commercial cylinder',
+      '11.8kg cylinder', '15kg cylinder', '45.4kg cylinder',
+      'domestic (11.8kg)', 'standard (15kg)', 'commercial (45.4kg)'
+    ];
+    
+    return cylinderKeywords.some(keyword => itemName.includes(keyword)) ||
+           cylinderPatterns.some(pattern => itemName.includes(pattern));
   }
 
   /**
@@ -98,6 +143,18 @@ export class InventoryIntegrationService {
       'mm', 'inch', 'connection'
     ];
     return pipeKeywords.some(keyword => itemName.includes(keyword));
+  }
+
+  /**
+   * Check if item is a gas purchase (for filling empty cylinders)
+   */
+  private static isGasItem(itemName: string): boolean {
+    const gasKeywords = [
+      'gas', 'domestic gas', 'standard gas', 'commercial gas',
+      '11.8kg gas', '15kg gas', '45.4kg gas',
+      'domestic (11.8kg) gas', 'standard (15kg) gas', 'commercial (45.4kg) gas'
+    ];
+    return gasKeywords.some(keyword => itemName.toLowerCase().includes(keyword));
   }
 
   /**
@@ -156,6 +213,35 @@ export class InventoryIntegrationService {
     }
     
     return cylinderCode;
+  }
+
+  /**
+   * Process gas purchases - update selected cylinders to FULL status
+   */
+  private static async processGasPurchase(item: VendorPurchaseItem): Promise<void> {
+    const { itemName, selectedCylinderIds } = item;
+    
+    console.log(`🔄 Processing gas purchase: ${itemName}`);
+    console.log(`📋 Selected cylinder IDs:`, selectedCylinderIds);
+    
+    if (!selectedCylinderIds || selectedCylinderIds.length === 0) {
+      console.log(`⚠️ No cylinders selected for gas purchase: ${itemName}`);
+      return;
+    }
+
+    // Update selected cylinders to FULL status
+    const updateResult = await prisma.cylinder.updateMany({
+      where: {
+        id: {
+          in: selectedCylinderIds
+        }
+      },
+      data: {
+        currentStatus: 'FULL'
+      }
+    });
+
+    console.log(`⛽ Updated ${updateResult.count} cylinders to FULL status for gas purchase: ${itemName}`);
   }
 
   /**
