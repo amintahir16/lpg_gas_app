@@ -561,6 +561,20 @@ model Valve {
   @@map("valves")
 }
 
+model CustomItem {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  type         String
+  quantity     Int      @default(0)
+  costPerPiece Decimal  @db.Decimal(10, 2)
+  totalCost    Decimal  @db.Decimal(10, 2)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("custom_items")
+}
+
 model B2BTransaction {
   id               String               @id @default(cuid())
   transactionType  B2BTransactionType
