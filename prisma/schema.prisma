@@ -514,10 +514,6 @@ model Vehicle {
   @@map("vehicles")
 }
 
-// Old hardcoded inventory models removed - now using dynamic CustomItem system
-// These models are deprecated: Regulator, GasPipe, Stove, Valve
-// All inventory is now managed through the CustomItem model
-
 model CustomItem {
   id           String   @id @default(cuid())
   createdAt    DateTime @default(now())
@@ -531,8 +527,6 @@ model CustomItem {
 
   @@map("custom_items")
 }
-
-// InventoryCategory model removed - categories are now managed dynamically through CustomItem.name
 
 model B2BTransaction {
   id               String               @id @default(cuid())

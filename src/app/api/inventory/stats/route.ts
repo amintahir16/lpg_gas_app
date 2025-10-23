@@ -39,11 +39,13 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Get accessories count
-    const regulatorsCount = await prisma.regulator.count();
-    const gasPipesCount = await prisma.gasPipe.count();
-    const stovesCount = await prisma.stove.count();
-    const accessoriesCount = regulatorsCount + gasPipesCount + stovesCount;
+    // Get accessories total quantity from CustomItem model
+    const accessoriesData = await prisma.customItem.findMany({
+      where: { isActive: true },
+      select: { quantity: true }
+    });
+    
+    const accessoriesCount = accessoriesData.reduce((sum, item) => sum + Number(item.quantity), 0);
 
     // Get cylinder type stats
     const cylinderTypeStats = await prisma.cylinder.groupBy({
