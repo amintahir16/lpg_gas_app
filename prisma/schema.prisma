@@ -8,21 +8,21 @@ datasource db {
 }
 
 model User {
-  id               String           @id @default(cuid())
-  email            String           @unique
+  id               String            @id @default(cuid())
+  email            String            @unique
   name             String?
   password         String
-  role             Role             @default(USER)
-  isActive         Boolean          @default(true)
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  role             Role              @default(USER)
+  isActive         Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
   b2b_transactions B2BTransaction[]
-  cylinderRentals  CylinderRental[] @relation("UserCylinderRentals")
-  expenses         Expense[]        @relation("UserExpenses")
-  invoices         Invoice[]        @relation("UserInvoices")
-  notifications    Notification[]   @relation("UserNotifications")
-  purchaseEntries  PurchaseEntry[]  @relation("UserPurchaseEntries")
+  cylinderRentals  CylinderRental[]  @relation("UserCylinderRentals")
   dailyPlantPrices DailyPlantPrice[]
+  expenses         Expense[]         @relation("UserExpenses")
+  invoices         Invoice[]         @relation("UserInvoices")
+  notifications    Notification[]    @relation("UserNotifications")
+  purchaseEntries  PurchaseEntry[]   @relation("UserPurchaseEntries")
 
   @@map("users")
 }
@@ -48,9 +48,9 @@ model Customer {
   updatedBy          String?
   updatedAt          DateTime         @updatedAt
   marginCategoryId   String?
-  marginCategory     MarginCategory?  @relation(fields: [marginCategoryId], references: [id])
   b2bTransactions    B2BTransaction[]
   ledger             CustomerLedger[]
+  marginCategory     MarginCategory?  @relation(fields: [marginCategoryId], references: [id])
   cylinderRentals    CylinderRental[]
   supportRequests    SupportRequest[]
 
@@ -58,25 +58,25 @@ model Customer {
 }
 
 model B2CCustomer {
-  id              String               @id @default(cuid())
-  name            String
-  phone           String
-  email           String?
-  address         String
-  houseNumber     String?
-  sector          String?
-  street          String?
-  phase           String?
-  area            String?
-  city            String               @default("Hayatabad")
-  totalProfit     Decimal              @default(0) @db.Decimal(10, 2)
-  isActive        Boolean              @default(true)
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
+  id               String               @id @default(cuid())
+  name             String
+  phone            String
+  email            String?
+  address          String
+  houseNumber      String?
+  sector           String?
+  street           String?
+  phase            String?
+  area             String?
+  city             String               @default("Hayatabad")
+  totalProfit      Decimal              @default(0) @db.Decimal(10, 2)
+  isActive         Boolean              @default(true)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
   marginCategoryId String?
-  marginCategory   MarginCategory?     @relation(fields: [marginCategoryId], references: [id])
+  marginCategory   MarginCategory?      @relation(fields: [marginCategoryId], references: [id])
   cylinderHoldings B2CCylinderHolding[]
-  transactions    B2CTransaction[]
+  transactions     B2CTransaction[]
 
   @@map("b2c_customers")
 }
@@ -97,76 +97,76 @@ model B2CCylinderHolding {
 }
 
 model B2CTransaction {
-  id              String                    @id @default(cuid())
-  billSno         String                    @unique
-  customerId      String
-  date            DateTime
-  time            DateTime
-  totalAmount     Decimal                   @db.Decimal(10, 2)
-  notes           String?
-  createdBy       String
-  createdAt       DateTime                  @default(now())
-  voided          Boolean                   @default(false)
-  voidedBy        String?
-  voidedAt        DateTime?
-  voidReason      String?
-  customer        B2CCustomer               @relation(fields: [customerId], references: [id])
-  gasItems        B2CTransactionGasItem[]
-  securityItems   B2CTransactionSecurityItem[]
-  accessoryItems  B2CTransactionAccessoryItem[]
+  id             String                        @id @default(cuid())
+  billSno        String                        @unique
+  customerId     String
+  date           DateTime
+  time           DateTime
+  totalAmount    Decimal                       @db.Decimal(10, 2)
+  notes          String?
+  createdBy      String
+  createdAt      DateTime                      @default(now())
+  voided         Boolean                       @default(false)
+  voidedBy       String?
+  voidedAt       DateTime?
+  voidReason     String?
+  accessoryItems B2CTransactionAccessoryItem[]
+  gasItems       B2CTransactionGasItem[]
+  securityItems  B2CTransactionSecurityItem[]
+  customer       B2CCustomer                   @relation(fields: [customerId], references: [id])
 
   @@map("b2c_transactions")
 }
 
 model B2CTransactionGasItem {
-  id            String        @id @default(cuid())
+  id            String         @id @default(cuid())
   transactionId String
   cylinderType  CylinderType
   quantity      Int
-  pricePerItem  Decimal       @db.Decimal(10, 2)
-  totalPrice    Decimal       @db.Decimal(10, 2)
+  pricePerItem  Decimal        @db.Decimal(10, 2)
+  totalPrice    Decimal        @db.Decimal(10, 2)
   transaction   B2CTransaction @relation(fields: [transactionId], references: [id])
 
   @@map("b2c_transaction_gas_items")
 }
 
 model B2CTransactionSecurityItem {
-  id            String        @id @default(cuid())
+  id            String         @id @default(cuid())
   transactionId String
   cylinderType  CylinderType
   quantity      Int
-  pricePerItem  Decimal       @db.Decimal(10, 2)
-  totalPrice    Decimal       @db.Decimal(10, 2)
-  isReturn      Boolean       @default(false)
+  pricePerItem  Decimal        @db.Decimal(10, 2)
+  totalPrice    Decimal        @db.Decimal(10, 2)
+  isReturn      Boolean        @default(false)
   transaction   B2CTransaction @relation(fields: [transactionId], references: [id])
 
   @@map("b2c_transaction_security_items")
 }
 
 model B2CTransactionAccessoryItem {
-  id            String        @id @default(cuid())
+  id            String         @id @default(cuid())
   transactionId String
   productName   String
   quantity      Int
-  pricePerItem  Decimal       @db.Decimal(10, 2)
-  totalPrice    Decimal       @db.Decimal(10, 2)
+  pricePerItem  Decimal        @db.Decimal(10, 2)
+  totalPrice    Decimal        @db.Decimal(10, 2)
   transaction   B2CTransaction @relation(fields: [transactionId], references: [id])
 
   @@map("b2c_transaction_accessory_items")
 }
 
 model MarginCategory {
-  id              String        @id @default(cuid())
-  name            String        @unique
-  customerType    String        // B2B or B2C
-  marginPerKg     Decimal       @db.Decimal(10, 2)
-  description     String?
-  isActive        Boolean       @default(true)
-  sortOrder       Int           @default(0)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  b2bCustomers    Customer[]
-  b2cCustomers    B2CCustomer[]
+  id           String        @id @default(cuid())
+  name         String        @unique
+  customerType String
+  marginPerKg  Decimal       @db.Decimal(10, 2)
+  description  String?
+  isActive     Boolean       @default(true)
+  sortOrder    Int           @default(0)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  b2cCustomers B2CCustomer[]
+  b2bCustomers Customer[]
 
   @@map("margin_categories")
 }
@@ -284,11 +284,10 @@ model Vendor {
   address          String?
   taxId            String?
   paymentTerms     Int                     @default(30)
-  categoryId       String?
-  category         VendorCategoryConfig?   @relation(fields: [categoryId], references: [id])
   isActive         Boolean                 @default(true)
   createdAt        DateTime                @default(now())
   updatedAt        DateTime                @updatedAt
+  categoryId       String?
   invoices         Invoice[]
   purchase_entries PurchaseEntry[]
   bankDetails      VendorBankDetails[]
@@ -297,6 +296,7 @@ model Vendor {
   orders           VendorOrder[]
   payments         VendorPayment[]
   supportRequests  VendorSupportRequest[]
+  category         VendorCategoryConfig?   @relation(fields: [categoryId], references: [id])
 
   @@map("vendors")
 }
@@ -514,66 +514,25 @@ model Vehicle {
   @@map("vehicles")
 }
 
-model Regulator {
-  id           String   @id @default(cuid())
-  type         String
-  costPerPiece Decimal  @db.Decimal(10, 2)
-  quantity     Int      @default(0)
-  totalCost    Decimal  @db.Decimal(10, 2)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  @@map("regulators")
-}
-
-model GasPipe {
-  id        String   @id @default(cuid())
-  type      String
-  quantity  Decimal  @db.Decimal(10, 2)
-  totalCost Decimal  @db.Decimal(10, 2)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("gas_pipes")
-}
-
-model Stove {
-  id           String   @id @default(cuid())
-  quality      String
-  quantity     Int      @default(0)
-  costPerPiece Decimal  @db.Decimal(10, 2)
-  totalCost    Decimal  @db.Decimal(10, 2)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  @@map("stoves")
-}
-
-model Valve {
-  id           String   @id @default(cuid())
-  type         String
-  quantity     Int      @default(0)
-  costPerPiece Decimal  @db.Decimal(10, 2)
-  totalCost    Decimal  @db.Decimal(10, 2)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  @@map("valves")
-}
+// Old hardcoded inventory models removed - now using dynamic CustomItem system
+// These models are deprecated: Regulator, GasPipe, Stove, Valve
+// All inventory is now managed through the CustomItem model
 
 model CustomItem {
   id           String   @id @default(cuid())
-  name         String   @unique
-  type         String
-  quantity     Int      @default(0)
-  costPerPiece Decimal  @db.Decimal(10, 2)
-  totalCost    Decimal  @db.Decimal(10, 2)
-  isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  costPerPiece Decimal  @db.Decimal(10, 2)
+  isActive     Boolean  @default(true)
+  name         String
+  quantity     Int      @default(0)
+  totalCost    Decimal  @db.Decimal(10, 2)
+  type         String
 
   @@map("custom_items")
 }
+
+// InventoryCategory model removed - categories are now managed dynamically through CustomItem.name
 
 model B2BTransaction {
   id               String               @id @default(cuid())

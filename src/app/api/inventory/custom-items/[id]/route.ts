@@ -6,10 +6,10 @@ const prisma = new PrismaClient();
 // PUT - Update custom item
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
     const { name, type, quantity, costPerPiece, totalCost } = body;
 
@@ -33,17 +33,19 @@ export async function PUT(
       );
     }
 
-    // Check if another custom item with same name exists (excluding current item)
+    // Check if another custom item with same name AND type exists (excluding current item)
     const duplicateItem = await prisma.customItem.findFirst({
       where: {
         name,
+        type,
+        isActive: true,
         id: { not: id }
       }
     });
 
     if (duplicateItem) {
       return NextResponse.json(
-        { error: 'Custom item with this name already exists' },
+        { error: 'Item with this type already exists in this category' },
         { status: 400 }
       );
     }
@@ -72,10 +74,10 @@ export async function PUT(
 // DELETE - Delete custom item
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     // Check if custom item exists
     const existingItem = await prisma.customItem.findUnique({

@@ -35,14 +35,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if custom item with same name already exists
-    const existingItem = await prisma.customItem.findUnique({
-      where: { name }
+    // Check if custom item with same name AND type already exists
+    const existingItem = await prisma.customItem.findFirst({
+      where: { 
+        name,
+        type,
+        isActive: true
+      }
     });
 
     if (existingItem) {
       return NextResponse.json(
-        { error: 'Custom item with this name already exists' },
+        { error: 'Item with this type already exists in this category' },
         { status: 400 }
       );
     }
