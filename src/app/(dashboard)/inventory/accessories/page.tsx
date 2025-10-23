@@ -530,15 +530,6 @@ export default function AccessoriesInventoryPage() {
             </p>
           </div>
         </div>
-        <div className="mt-4 sm:mt-0">
-          <Button 
-            onClick={() => setShowAddForm(true)}
-            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-lg"
-          >
-            <PlusIcon className="w-4 h-4 mr-2" />
-            Add {getTabDisplayName(activeTab)}
-          </Button>
-        </div>
       </div>
 
       {/* Statistics */}
