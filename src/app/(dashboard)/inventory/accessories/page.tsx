@@ -168,6 +168,25 @@ export default function AccessoriesInventoryPage() {
     fetchData();
   }, [activeTab]);
 
+  // Fetch custom items on initial load to show correct tab name
+  useEffect(() => {
+    const fetchCustomItems = async () => {
+      try {
+        const response = await fetch('/api/inventory/custom-items', {
+          credentials: 'include'
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setCustomItems(data.customItems || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch custom items on load:', error);
+      }
+    };
+    
+    fetchCustomItems();
+  }, []);
+
   useEffect(() => {
     fetchStats();
   }, [regulators, gasPipes, stoves]);
@@ -715,7 +734,7 @@ export default function AccessoriesInventoryPage() {
 
         <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-semibold text-gray-600">Custom Items</CardTitle>
+            <CardTitle className="text-sm font-semibold text-gray-600">{getCustomItemCategoryName()}</CardTitle>
             <WrenchScrewdriverIcon className="w-5 h-5 text-green-500" />
           </CardHeader>
           <CardContent>
