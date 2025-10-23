@@ -663,10 +663,17 @@ export default function AccessoriesInventoryPage() {
       {/* Regulators Table */}
       {activeTab === 'regulators' && (
         <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg font-semibold text-gray-900">
               Regulators Inventory
             </CardTitle>
+            <Button 
+              onClick={() => setShowAddForm(true)}
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-lg"
+            >
+              <PlusIcon className="w-4 h-4 mr-2" />
+              Add Regulator
+            </Button>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
@@ -769,10 +776,17 @@ export default function AccessoriesInventoryPage() {
       {/* Gas Pipes Table */}
       {activeTab === 'pipes' && (
         <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg font-semibold text-gray-900">
               Gas Pipes Inventory
             </CardTitle>
+            <Button 
+              onClick={() => setShowAddForm(true)}
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-lg"
+            >
+              <PlusIcon className="w-4 h-4 mr-2" />
+              Add Gas Pipe
+            </Button>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
@@ -878,10 +892,17 @@ export default function AccessoriesInventoryPage() {
       {/* Stoves Table */}
       {activeTab === 'stoves' && (
         <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg font-semibold text-gray-900">
               Stoves Inventory
             </CardTitle>
+            <Button 
+              onClick={() => setShowAddForm(true)}
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-lg"
+            >
+              <PlusIcon className="w-4 h-4 mr-2" />
+              Add Stove
+            </Button>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
@@ -987,10 +1008,17 @@ export default function AccessoriesInventoryPage() {
       {/* Valves Table */}
       {activeTab === 'valves' && (
         <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg font-semibold text-gray-900">
               Valves Inventory
             </CardTitle>
+            <Button 
+              onClick={() => setShowAddForm(true)}
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-lg"
+            >
+              <PlusIcon className="w-4 h-4 mr-2" />
+              Add Valve
+            </Button>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
