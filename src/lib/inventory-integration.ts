@@ -6,6 +6,7 @@ export interface VendorPurchaseItem {
   unitPrice: number;
   totalPrice: number;
   cylinderCodes?: string;
+  status?: string;
 }
 
 /**
@@ -100,38 +101,91 @@ export class InventoryIntegrationService {
   }
 
   /**
+   * Generate a unique cylinder code based on cylinder type
+   */
+  private static async generateUniqueCylinderCode(cylinderType: string): Promise<string> {
+    // Determine prefix based on cylinder type
+    let prefix: string;
+    if (cylinderType === 'DOMESTIC_11_8KG') {
+      prefix = 'DM';
+    } else if (cylinderType === 'STANDARD_15KG') {
+      prefix = 'ST';
+    } else if (cylinderType === 'COMMERCIAL_45_4KG') {
+      prefix = 'CM';
+    } else {
+      prefix = 'CYL'; // Fallback for unknown types
+    }
+    
+    // Find the highest existing number for this prefix
+    const existingCylinders = await prisma.cylinder.findMany({
+      where: {
+        code: {
+          startsWith: prefix
+        }
+      },
+      select: {
+        code: true
+      }
+    });
+    
+    // Extract numbers from existing codes and find the highest
+    let maxNumber = 0;
+    existingCylinders.forEach(cylinder => {
+      const match = cylinder.code.match(new RegExp(`^${prefix}(\\d+)$`));
+      if (match) {
+        const number = parseInt(match[1], 10);
+        if (number > maxNumber) {
+          maxNumber = number;
+        }
+      }
+    });
+    
+    // Generate the next sequential number
+    const nextNumber = maxNumber + 1;
+    const cylinderCode = `${prefix}${nextNumber.toString().padStart(3, '0')}`;
+    
+    // Double-check that this code doesn't exist (safety check)
+    const existingCylinder = await prisma.cylinder.findUnique({
+      where: { code: cylinderCode }
+    });
+    
+    if (existingCylinder) {
+      // If somehow it exists, add a timestamp to make it unique
+      const timestamp = Date.now().toString().slice(-6);
+      return `${prefix}${nextNumber.toString().padStart(3, '0')}-${timestamp}`;
+    }
+    
+    return cylinderCode;
+  }
+
+  /**
    * Process cylinder purchases - create individual cylinder records
    */
   private static async processCylinderPurchase(item: VendorPurchaseItem): Promise<void> {
-    const { itemName, quantity: rawQuantity, unitPrice: rawUnitPrice, cylinderCodes } = item;
+    const { itemName, quantity: rawQuantity, unitPrice: rawUnitPrice, cylinderCodes, status } = item;
     const quantity = Number(rawQuantity);
     const unitPrice = Number(rawUnitPrice);
     
     // Extract cylinder type from item name
     const cylinderType = this.extractCylinderType(itemName);
     
+    // Use status from form, default to 'EMPTY' if not provided
+    const cylinderStatus = status || 'EMPTY';
+    
     // If cylinder codes are provided, use them; otherwise generate
     const codes = cylinderCodes ? cylinderCodes.split(',').map(c => c.trim()) : [];
     
     // Create individual cylinder records
     for (let i = 0; i < quantity; i++) {
-      let cylinderCode: string;
-      
-      if (codes[i]) {
-        cylinderCode = codes[i];
-      } else {
-        // Generate unique code with timestamp and random component to avoid conflicts
-        const timestamp = Date.now();
-        const random = Math.floor(Math.random() * 1000);
-        cylinderCode = `CYL-${timestamp}-${String(i + 1).padStart(3, '0')}-${random}`;
-      }
+      // Generate unique codes based on cylinder type
+      const cylinderCode = await this.generateUniqueCylinderCode(cylinderType);
       
       await prisma.cylinder.create({
         data: {
           code: cylinderCode,
           cylinderType,
           capacity: this.getCylinderCapacity(cylinderType),
-          currentStatus: 'FULL',
+          currentStatus: cylinderStatus as any, // Use status from form
           location: 'Store',
           purchaseDate: new Date(),
           purchasePrice: unitPrice
@@ -139,7 +193,7 @@ export class InventoryIntegrationService {
       });
     }
     
-    console.log(`📦 Created ${quantity} ${cylinderType} cylinders`);
+    console.log(`📦 Created ${quantity} ${cylinderType} cylinders with status: ${cylinderStatus}`);
   }
 
   /**

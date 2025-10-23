@@ -72,6 +72,7 @@ interface PurchaseItem {
   unitPrice: number;
   totalPrice: number;
   cylinderCodes?: string;
+  status?: string;
 }
 
 interface Payment {
@@ -155,9 +156,9 @@ export default function VendorDetailPage() {
   };
   // Default cylinder purchase items for Cylinder Purchase category
   const defaultCylinderItems = [
-    { itemName: 'Domestic (11.8kg) Cylinder', quantity: 0, unitPrice: 0, totalPrice: 0, cylinderCodes: '' },
-    { itemName: 'Standard (15kg) Cylinder', quantity: 0, unitPrice: 0, totalPrice: 0, cylinderCodes: '' },
-    { itemName: 'Commercial (45.4kg) Cylinder', quantity: 0, unitPrice: 0, totalPrice: 0, cylinderCodes: '' }
+    { itemName: 'Domestic (11.8kg) Cylinder', quantity: 0, unitPrice: 0, totalPrice: 0, status: 'EMPTY' },
+    { itemName: 'Standard (15kg) Cylinder', quantity: 0, unitPrice: 0, totalPrice: 0, status: 'EMPTY' },
+    { itemName: 'Commercial (45.4kg) Cylinder', quantity: 0, unitPrice: 0, totalPrice: 0, status: 'EMPTY' }
   ];
 
   // Default gas purchase items for Gas Purchase category
@@ -554,27 +555,6 @@ export default function VendorDetailPage() {
     }
   };
 
-  const generateCylinderCodes = (itemName: string, quantity: number, currentUsedCodes: Set<string>) => {
-    if (!quantity || quantity <= 0) return '';
-    
-    // Generate prefix based on cylinder type
-    const prefix = itemName.includes('Domestic') ? 'DM' :
-                  itemName.includes('Standard') ? 'ST' : 'CM';
-    
-    const codes = [];
-    let codeNumber = 1;
-    
-    // Find available codes that aren't already used in this form
-    while (codes.length < quantity) {
-      const code = `${prefix}${codeNumber.toString().padStart(2, '0')}`;
-      if (!currentUsedCodes.has(code)) {
-        codes.push(code);
-      }
-      codeNumber++;
-    }
-    
-    return codes.join(', ');
-  };
 
   const handlePurchaseItemChange = (index: number, field: string, value: any) => {
     const newItems = [...purchaseItems];
@@ -589,28 +569,6 @@ export default function VendorDetailPage() {
         Number(newItems[index].quantity) * Number(newItems[index].unitPrice);
     }
 
-    // Auto-generate cylinder codes when quantity changes for cylinder purchases
-    if (field === 'quantity' && 
-        isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && 
-        value > 0) {
-      
-      // Collect all currently used codes from other items
-      const currentUsedCodes = new Set<string>();
-      newItems.forEach((item, i) => {
-        if (i !== index && item.cylinderCodes) {
-          const codes = item.cylinderCodes.split(',').map(code => code.trim());
-          codes.forEach(code => currentUsedCodes.add(code));
-        }
-      });
-      
-      // Generate codes locally - much faster!
-      const generatedCodes = generateCylinderCodes(
-        newItems[index].itemName,
-        Number(value),
-        currentUsedCodes
-      );
-      newItems[index].cylinderCodes = generatedCodes;
-    }
     
     setPurchaseItems(newItems);
   };
@@ -1093,7 +1051,7 @@ export default function VendorDetailPage() {
                                 </th>
                                 {isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && (
                                   <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
-                                    Cylinder Codes
+                                    Status
                                   </th>
                                 )}
                                 <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
@@ -1151,17 +1109,17 @@ export default function VendorDetailPage() {
                                   </td>
                                   {isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && (
                                     <td className="border border-gray-300 px-4 py-2">
-                                      <Input
-                                        type="text"
-                                        value={item.cylinderCodes || ''}
+                                      <Select
+                                        value={item.status || 'EMPTY'}
                                         onChange={(e) => handlePurchaseItemChange(
                                           index,
-                                          'cylinderCodes',
+                                          'status',
                                           e.target.value
                                         )}
-                                        placeholder="Auto-generated when quantity is entered"
-                                        className="text-center border-0 focus:ring-1 bg-transparent text-sm"
-                                      />
+                                      >
+                                        <option value="EMPTY">Empty</option>
+                                        <option value="FULL">Full</option>
+                                      </Select>
                                     </td>
                                   )}
                                   <td className="border border-gray-300 px-4 py-2 text-center font-medium">
@@ -1214,7 +1172,7 @@ export default function VendorDetailPage() {
                                 </th>
                                 {isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && (
                                   <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
-                                    Cylinder Codes
+                                    Status
                                   </th>
                                 )}
                                 <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
@@ -1260,17 +1218,17 @@ export default function VendorDetailPage() {
                                   </td>
                                   {isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && (
                                     <td className="border border-gray-300 px-4 py-2">
-                                      <Input
-                                        type="text"
-                                        value={item.cylinderCodes || ''}
+                                      <Select
+                                        value={item.status || 'EMPTY'}
                                         onChange={(e) => handlePurchaseItemChange(
                                           index,
-                                          'cylinderCodes',
+                                          'status',
                                           e.target.value
                                         )}
-                                        placeholder="Auto-generated when quantity is entered"
-                                        className="text-center border-0 focus:ring-1 bg-transparent text-sm"
-                                      />
+                                      >
+                                        <option value="EMPTY">Empty</option>
+                                        <option value="FULL">Full</option>
+                                      </Select>
                                     </td>
                                   )}
                                   <td className="border border-gray-300 px-4 py-2 text-center font-medium">
