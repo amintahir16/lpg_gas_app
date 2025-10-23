@@ -1037,24 +1037,24 @@ export default function VendorDetailPage() {
                         </div>
                         
                         <div className="overflow-x-auto">
-                          <table className="w-full border-collapse border border-gray-300">
+                          <table className="w-full border-collapse border border-gray-300 table-fixed">
                             <thead>
                               <tr className="bg-gray-50">
-                                <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-700 w-2/5">
                                   Item
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700 w-1/5">
                                   Quantity
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700 w-1/5">
                                   Price per Unit
                                 </th>
                                 {isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && (
-                                  <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                  <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700 w-1/5">
                                     Status
                                   </th>
                                 )}
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700 w-1/5">
                                   Price per Item
                                 </th>
                               </tr>
@@ -1158,24 +1158,24 @@ export default function VendorDetailPage() {
                         </div>
 
                         <div className="overflow-x-auto">
-                          <table className="w-full border-collapse border border-gray-300">
+                          <table className="w-full border-collapse border border-gray-300 table-fixed">
                             <thead>
                               <tr className="bg-gray-50">
-                                <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-700 w-2/5">
                                   Item
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700 w-1/5">
                                   Quantity
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700 w-1/5">
                                   Price per Unit
                                 </th>
                                 {isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && (
-                                  <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                  <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700 w-1/5">
                                     Status
                                   </th>
                                 )}
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700 w-1/5">
                                   Price per Item
                                 </th>
                               </tr>
