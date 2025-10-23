@@ -1752,7 +1752,7 @@ export default function AccessoriesInventoryPage() {
                 } else if (activeTab === 'custom') {
                   const formData = new FormData(form);
                   data = {
-                    name: formData.get('name') as string,
+                    name: customItems.length > 0 ? customItems[0].name : 'Custom Item',
                     type: formData.get('type') as string,
                     quantity: parseInt(formValues.quantity),
                     costPerPiece: parseFloat(formValues.costPerPiece),
@@ -1941,10 +1941,6 @@ export default function AccessoriesInventoryPage() {
                 )}
                 {activeTab === 'custom' && (
                   <>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Name</label>
-                      <Input name="name" type="text" placeholder="Custom Item Name" required />
-                    </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Type</label>
                       <Input name="type" type="text" placeholder="Item Type" required />
