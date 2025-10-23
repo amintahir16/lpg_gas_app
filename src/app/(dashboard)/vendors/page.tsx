@@ -305,7 +305,7 @@ export default function VendorsPage() {
                 <Input
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value)}
-                  placeholder="e.g., Cylinder Purchase, Gas Purchase"
+                  placeholder="e.g., Cylinder Purchase, Gas Purchase, Vaporizer Purchase, Accessories Purchase"
                   required
                 />
               </div>
@@ -449,7 +449,7 @@ export default function VendorsPage() {
                   <Input
                     value={editCategoryName}
                     onChange={(e) => setEditCategoryName(e.target.value)}
-                    placeholder="e.g., Cylinder Purchase, Gas Purchase"
+                    placeholder="e.g., Cylinder Purchase, Gas Purchase, Vaporizer Purchase, Accessories Purchase"
                     required
                   />
                 </div>
