@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ interface Vendor {
   id: string;
   vendorCode: string;
   name: string;
+  companyName?: string;
   contactPerson?: string;
   phone?: string;
   email?: string;
@@ -31,9 +32,13 @@ interface Vendor {
   category: {
     id: string;
     name: string;
+    slug?: string;
   };
   items: VendorItem[];
   purchases: Purchase[];
+  purchase_entries?: any[];
+  payments?: any[];
+  inventories?: any[];
   financialSummary: {
     totalPurchases: number;
     totalPaid: number;
@@ -87,6 +92,7 @@ interface DirectPayment {
   id: string;
   amount: number;
   paymentDate: string;
+  createdAt?: string;
   method: string;
   reference?: string;
   description?: string;
@@ -95,6 +101,7 @@ interface DirectPayment {
 
 export default function VendorDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const vendorId = params?.id as string;
   
   const [vendor, setVendor] = useState<Vendor | null>(null);
@@ -1058,7 +1065,7 @@ export default function VendorDetailPage() {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              Items ({vendor.inventories.length})
+              Items ({vendor.inventories?.length || 0})
             </button>
             <button
               onClick={() => setActiveTab('financial')}
@@ -1728,7 +1735,7 @@ export default function VendorDetailPage() {
           )}
 
           {/* Purchases List */}
-          {vendor.purchase_entries.length === 0 ? (
+          {(!vendor.purchase_entries || vendor.purchase_entries.length === 0) ? (
             <Card>
               <CardContent className="py-12 text-center">
                 <ShoppingCartIcon className="w-16 h-16 mx-auto text-gray-400 mb-4" />
@@ -1853,8 +1860,8 @@ export default function VendorDetailPage() {
                         <div className={`text-lg font-semibold ${
                           (() => {
                             // Calculate running balance up to this transaction
-                            const currentIndex = vendor.purchase_entries.findIndex(p => p.id === purchase.id);
-                            const transactionsUpToThis = vendor.purchase_entries.slice(currentIndex);
+                            const currentIndex = vendor.purchase_entries?.findIndex(p => p.id === purchase.id) || 0;
+                            const transactionsUpToThis = vendor.purchase_entries?.slice(currentIndex) || [];
                             
                             // Calculate total purchases up to this point
                             const totalPurchasesUpToThis = transactionsUpToThis.reduce(
@@ -1874,8 +1881,8 @@ export default function VendorDetailPage() {
                         }`}>
                           {(() => {
                             // Calculate running balance up to this transaction
-                            const currentIndex = vendor.purchase_entries.findIndex(p => p.id === purchase.id);
-                            const transactionsUpToThis = vendor.purchase_entries.slice(currentIndex);
+                            const currentIndex = vendor.purchase_entries?.findIndex(p => p.id === purchase.id) || 0;
+                            const transactionsUpToThis = vendor.purchase_entries?.slice(currentIndex) || [];
                             
                             // Calculate total purchases up to this point
                             const totalPurchasesUpToThis = transactionsUpToThis.reduce(
@@ -2025,7 +2032,7 @@ export default function VendorDetailPage() {
           )}
 
           {/* Items List */}
-          {vendor.inventories.length === 0 ? (
+          {(!vendor.inventories || vendor.inventories.length === 0) ? (
             <Card>
               <CardContent className="py-12 text-center">
                 <h3 className="text-lg font-medium text-gray-900 mb-2">
@@ -2042,7 +2049,7 @@ export default function VendorDetailPage() {
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {vendor.inventories.map((item) => (
+              {vendor.inventories?.map((item) => (
                 <Card key={item.id} className="hover:shadow-md transition-shadow">
                   <CardContent className="p-4">
                     <div className="flex justify-between items-start mb-2">
@@ -2294,7 +2301,7 @@ export default function VendorDetailPage() {
                                 #{index + 1}
                               </div>
                               <div className="text-xs text-gray-500">
-                                {new Date(payment.createdAt).toLocaleTimeString()}
+                                {payment.createdAt ? new Date(payment.createdAt).toLocaleTimeString() : 'N/A'}
                               </div>
                             </div>
                           </div>
@@ -2321,7 +2328,7 @@ export default function VendorDetailPage() {
           isOpen={showPaymentModal}
           onClose={() => setShowPaymentModal(false)}
           vendorId={vendorId}
-          vendorName={vendor.companyName}
+          vendorName={vendor.companyName || vendor.name || 'Unknown Vendor'}
           outstandingBalance={vendor.financialSummary.outstandingBalance}
           onPaymentSuccess={handlePaymentSuccess}
         />
@@ -2498,7 +2505,7 @@ export default function VendorDetailPage() {
         <VendorExportModal
           isOpen={showExportModal}
           onClose={() => setShowExportModal(false)}
-          vendorName={vendor.companyName}
+          vendorName={vendor.companyName || vendor.name || 'Unknown Vendor'}
           vendorId={vendorId}
           purchaseEntries={vendor.purchase_entries || []}
           paymentHistory={directPayments}
