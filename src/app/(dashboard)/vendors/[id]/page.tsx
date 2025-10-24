@@ -99,6 +99,25 @@ interface DirectPayment {
   status: string;
 }
 
+// Utility function to normalize category names for case sensitivity
+const normalizeCategoryName = (category: string): string => {
+  const normalized = category.toLowerCase().trim();
+  
+  // Handle common variations
+  if (normalized === 'stove' || normalized === 'stoves') {
+    return 'Stoves';
+  } else if (normalized === 'regulator' || normalized === 'regulators') {
+    return 'Regulators';
+  } else if (normalized === 'valve' || normalized === 'valves') {
+    return 'Valves';
+  } else if (normalized === 'pipe' || normalized === 'pipes' || normalized === 'gas pipe' || normalized === 'gas pipes') {
+    return 'Gas Pipes';
+  } else {
+    // Capitalize first letter for other categories
+    return category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
+  }
+};
+
 export default function VendorDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -634,6 +653,11 @@ export default function VendorDetailPage() {
     const newItems = [...purchaseItems];
     
     // Note: Quantity validation for gas purchases is handled after fetchEmptyCylinders()
+    
+    // Normalize category name for case sensitivity
+    if (field === 'category') {
+      value = normalizeCategoryName(value);
+    }
     
     newItems[index] = {
       ...newItems[index],
@@ -1222,7 +1246,7 @@ export default function VendorDetailPage() {
                                       className="w-full border-0 focus:ring-1 bg-transparent text-sm font-medium text-gray-900"
                                     >
                                       <option value="">Select Category</option>
-                                      {[...new Set(vendorItems.map(item => item.category))].map((category) => (
+                                      {[...new Set(vendorItems.map(item => normalizeCategoryName(item.category)))].map((category) => (
                                         <option key={category} value={category}>
                                           {category}
                                         </option>
@@ -1238,7 +1262,7 @@ export default function VendorDetailPage() {
                                     >
                                       <option value="">Select Item Type</option>
                                       {vendorItems
-                                        .filter(vi => vi.category === item.category)
+                                        .filter(vi => normalizeCategoryName(vi.category) === item.category)
                                         .map((vendorItem) => (
                                           <option key={vendorItem.id} value={vendorItem.name}>
                                             {vendorItem.name}
