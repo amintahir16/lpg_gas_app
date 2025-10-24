@@ -261,10 +261,17 @@ export class InventoryIntegrationService {
 
     console.log(`🔧 Processing custom item purchase: ${itemName} in ${category} (${quantity} units at ${unitPrice} each)`);
 
-    // Check if item already exists in CustomItem table
+    // Normalize category name to handle case sensitivity
+    const normalizedCategory = this.normalizeCategoryName(category);
+    console.log(`📝 Normalized category: ${category} → ${normalizedCategory}`);
+
+    // Check if item already exists in CustomItem table (case-insensitive search)
     const existingItem = await prisma.customItem.findFirst({
       where: {
-        name: category,
+        name: {
+          equals: normalizedCategory,
+          mode: 'insensitive'
+        },
         type: itemName,
         isActive: true
       }
@@ -284,12 +291,12 @@ export class InventoryIntegrationService {
         }
       });
 
-      console.log(`✅ Updated existing custom item: ${itemName} in ${category} (${existingItem.quantity} → ${newQuantity} units)`);
+      console.log(`✅ Updated existing custom item: ${itemName} in ${normalizedCategory} (${existingItem.quantity} → ${newQuantity} units)`);
     } else {
-      // Create new item
+      // Create new item with normalized category name
       await prisma.customItem.create({
         data: {
-          name: category,
+          name: normalizedCategory,
           type: itemName,
           quantity: quantity,
           costPerPiece: unitPrice,
@@ -297,7 +304,28 @@ export class InventoryIntegrationService {
         }
       });
 
-      console.log(`✅ Created new custom item: ${itemName} in ${category} (${quantity} units)`);
+      console.log(`✅ Created new custom item: ${itemName} in ${normalizedCategory} (${quantity} units)`);
+    }
+  }
+
+  /**
+   * Normalize category name to handle case sensitivity and variations
+   */
+  private static normalizeCategoryName(category: string): string {
+    const normalized = category.toLowerCase().trim();
+    
+    // Handle common variations
+    if (normalized === 'stove' || normalized === 'stoves') {
+      return 'Stoves';
+    } else if (normalized === 'regulator' || normalized === 'regulators') {
+      return 'Regulators';
+    } else if (normalized === 'valve' || normalized === 'valves') {
+      return 'Valves';
+    } else if (normalized === 'pipe' || normalized === 'pipes' || normalized === 'gas pipe' || normalized === 'gas pipes') {
+      return 'Gas Pipes';
+    } else {
+      // Capitalize first letter for other categories
+      return category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
     }
   }
 
@@ -308,16 +336,16 @@ export class InventoryIntegrationService {
     const name = itemName.toLowerCase();
     
     if (name.includes('valve')) {
-      return 'valves';
+      return 'Valves';
     } else if (name.includes('regulator')) {
-      return 'regulators';
+      return 'Regulators';
     } else if (name.includes('stove') || name.includes('burner')) {
-      return 'stoves';
+      return 'Stoves';
     } else if (name.includes('pipe') || name.includes('hose')) {
-      return 'gasPipes';
+      return 'Gas Pipes';
     } else {
       // Default category for other accessories
-      return 'accessories';
+      return 'Accessories';
     }
   }
 
