@@ -231,27 +231,40 @@ export default function VendorDetailPage() {
   ];
 
   const [purchaseItems, setPurchaseItems] = useState<any[]>([]);
+  const [vendorItems, setVendorItems] = useState<Array<{id: string, name: string, category: string, description?: string}>>([]);
   const [purchaseFormData, setPurchaseFormData] = useState({
     invoiceNumber: '',
     notes: '',
     paidAmount: 0
   });
   const [usedCodes, setUsedCodes] = useState<Set<string>>(new Set());
-  const [vendorItems, setVendorItems] = useState<Array<{id: string, name: string, description?: string}>>([]);
 
   // Auto-populate purchase items when vendor items are loaded
   useEffect(() => {
     if (vendorItems.length > 0 && purchaseItems.length === 0) {
-      const autoItems = vendorItems.map(item => ({
-        itemName: item.name,
-        quantity: 0,
-        unitPrice: 0,
-        totalPrice: 0,
-        cylinderCodes: ''
-      }));
-      setPurchaseItems(autoItems);
+      // Start with just one empty row for accessories purchase
+      if (vendor?.category?.slug === 'accessories_purchase') {
+        setPurchaseItems([{
+          itemName: '',
+          category: '',
+          quantity: 0,
+          unitPrice: 0,
+          totalPrice: 0,
+          cylinderCodes: ''
+        }]);
+      } else {
+        const autoItems = vendorItems.map(item => ({
+          itemName: '',
+          category: '',
+          quantity: 0,
+          unitPrice: 0,
+          totalPrice: 0,
+          cylinderCodes: ''
+        }));
+        setPurchaseItems(autoItems);
+      }
     }
-  }, [vendorItems, purchaseItems.length]);
+  }, [vendorItems, purchaseItems.length, vendor?.category?.slug]);
 
   // Item form state
   const [showItemForm, setShowItemForm] = useState(false);
@@ -600,7 +613,7 @@ export default function VendorDetailPage() {
         !['cylinder_purchase', 'gas_purchase', 'vaporizer_purchase'].includes(vendor?.category?.slug || '')) {
       setPurchaseItems([
         ...purchaseItems,
-        { itemName: '', quantity: 1, unitPrice: 0, totalPrice: 0, cylinderCodes: '' }
+        { itemName: '', category: '', quantity: 1, unitPrice: 0, totalPrice: 0, cylinderCodes: '' }
       ]);
     }
   };
@@ -626,6 +639,11 @@ export default function VendorDetailPage() {
       ...newItems[index],
       [field]: value
     };
+    
+    // Reset itemName when category changes
+    if (field === 'category') {
+      newItems[index].itemName = '';
+    }
     
     // Auto-calculate total price
     if (field === 'quantity' || field === 'unitPrice') {
@@ -1152,25 +1170,142 @@ export default function VendorDetailPage() {
                   </div>
 
                   <div>
-                    {['cylinder_purchase', 'gas_purchase', 'vaporizer_purchase', 'accessories_purchase'].includes(vendor?.category?.slug || '') ? (
-                      // Category-specific table format
+                    {vendor?.category?.slug === 'accessories_purchase' ? (
+                      // Professional accessories purchase form
                       <div>
                         <div className="flex justify-between items-center mb-4">
                           <label className="text-lg font-semibold text-gray-900">
                             {vendor.category.name}
                           </label>
-                          {/* Show Add Item button only for accessories */}
-                          {vendor?.category?.slug === 'accessories_purchase' && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={handleAddPurchaseItem}
-                            >
-                              <PlusIcon className="w-4 h-4 mr-1" />
-                              Add Custom Item
-                            </Button>
-                          )}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleAddPurchaseItem}
+                          >
+                            <PlusIcon className="w-4 h-4 mr-1" />
+                            Add Item
+                          </Button>
+                        </div>
+                        
+                        <div className="overflow-x-auto">
+                          <table className="w-full border-collapse border border-gray-300">
+                            <thead>
+                              <tr className="bg-gray-50">
+                                <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-700">
+                                  Category
+                                </th>
+                                <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-700">
+                                  Item Type
+                                </th>
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                  Quantity
+                                </th>
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                  Unit Price
+                                </th>
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                  Total Price
+                                </th>
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                  Actions
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {purchaseItems.map((item, index) => (
+                                <tr key={index}>
+                                  <td className="border border-gray-300 px-4 py-2">
+                                    <select
+                                      value={item.category || ''}
+                                      onChange={(e) => handlePurchaseItemChange(index, 'category', e.target.value)}
+                                      className="w-full border-0 focus:ring-1 bg-transparent text-sm font-medium text-gray-900"
+                                    >
+                                      <option value="">Select Category</option>
+                                      {[...new Set(vendorItems.map(item => item.category))].map((category) => (
+                                        <option key={category} value={category}>
+                                          {category}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                  <td className="border border-gray-300 px-4 py-2">
+                                    <select
+                                      value={item.itemName}
+                                      onChange={(e) => handlePurchaseItemChange(index, 'itemName', e.target.value)}
+                                      className="w-full border-0 focus:ring-1 bg-transparent text-sm font-medium text-gray-900"
+                                      disabled={!item.category}
+                                    >
+                                      <option value="">Select Item Type</option>
+                                      {vendorItems
+                                        .filter(vi => vi.category === item.category)
+                                        .map((vendorItem) => (
+                                          <option key={vendorItem.id} value={vendorItem.name}>
+                                            {vendorItem.name}
+                                          </option>
+                                        ))}
+                                    </select>
+                                  </td>
+                                  <td className="border border-gray-300 px-4 py-2">
+                                    <Input
+                                      type="number"
+                                      value={item.quantity}
+                                      onChange={(e) => handlePurchaseItemChange(index, 'quantity', e.target.value)}
+                                      placeholder="0"
+                                      min="0"
+                                      step="1"
+                                      className="text-center border-0 focus:ring-1 bg-transparent"
+                                    />
+                                  </td>
+                                  <td className="border border-gray-300 px-4 py-2">
+                                    <Input
+                                      type="number"
+                                      value={item.unitPrice}
+                                      onChange={(e) => handlePurchaseItemChange(index, 'unitPrice', e.target.value)}
+                                      placeholder="0"
+                                      min="0"
+                                      step="0.01"
+                                      className="text-center border-0 focus:ring-1 bg-transparent"
+                                    />
+                                  </td>
+                                  <td className="border border-gray-300 px-4 py-2 text-center font-medium text-gray-900">
+                                    PKR {item.totalPrice || 0}
+                                  </td>
+                                  <td className="border border-gray-300 px-4 py-2 text-center">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleRemovePurchaseItem(index)}
+                                      className="text-red-600 hover:text-red-700"
+                                    >
+                                      Remove
+                                    </Button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="bg-gray-50">
+                                <td colSpan={4} className="border border-gray-300 px-4 py-2 text-right font-semibold text-gray-700">
+                                  Grand Total:
+                                </td>
+                                <td className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-900">
+                                  PKR {purchaseItems.reduce((sum, item) => sum + (item.totalPrice || 0), 0)}
+                                </td>
+                                <td className="border border-gray-300 px-4 py-2"></td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </div>
+                    ) : ['cylinder_purchase', 'gas_purchase', 'vaporizer_purchase'].includes(vendor?.category?.slug || '') ? (
+                      // Category-specific table format for other categories
+                      <div>
+                        <div className="flex justify-between items-center mb-4">
+                          <label className="text-lg font-semibold text-gray-900">
+                            {vendor.category.name}
+                          </label>
                         </div>
                         
                         <div className="overflow-x-auto">

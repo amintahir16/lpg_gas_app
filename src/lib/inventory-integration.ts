@@ -8,6 +8,8 @@ export interface VendorPurchaseItem {
   cylinderCodes?: string;
   status?: string;
   selectedCylinderIds?: string[];
+  category?: string;
+  description?: string;
 }
 
 /**
@@ -53,6 +55,13 @@ export class InventoryIntegrationService {
       return;
     }
 
+    // Check if this is an accessories purchase vendor
+    if (this.isAccessoriesPurchaseVendor(vendorCategory)) {
+      console.log(`🔧 Processing as accessories purchase (vendor category: ${vendorCategory})`);
+      await this.processAccessoriesPurchase(item);
+      return;
+    }
+
     // For non-gas vendors, use item name detection
     console.log(`🔍 Is cylinder item: ${this.isCylinderItem(itemName)}`);
     console.log(`🔍 Is gas item: ${this.isGasItem(itemName)}`);
@@ -60,15 +69,6 @@ export class InventoryIntegrationService {
     if (this.isCylinderItem(itemName)) {
       console.log(`📦 Processing as cylinder purchase`);
       await this.processCylinderPurchase(item);
-    } else if (this.isRegulatorItem(itemName)) {
-      console.log(`🔧 Processing as regulator purchase`);
-      await this.processRegulatorPurchase(item);
-    } else if (this.isStoveItem(itemName)) {
-      console.log(`🔥 Processing as stove purchase`);
-      await this.processStovePurchase(item);
-    } else if (this.isGasPipeItem(itemName)) {
-      console.log(`🔗 Processing as gas pipe purchase`);
-      await this.processGasPipePurchase(item);
     } else {
       console.log(`📦 Processing as generic product`);
       // Generic product - add to Product table
@@ -94,6 +94,23 @@ export class InventoryIntegrationService {
   }
 
   /**
+   * Check if vendor is an accessories purchase vendor
+   */
+  private static isAccessoriesPurchaseVendor(categorySlug?: string): boolean {
+    if (!categorySlug) return false;
+    
+    const normalizedSlug = categorySlug.toLowerCase().replace(/[_-]/g, '');
+    const accessoriesPatterns = [
+      'accessoriespurchase',
+      'accessories_purchase',
+      'accessorypurchase',
+      'accessory_purchase'
+    ];
+    
+    return accessoriesPatterns.some(pattern => normalizedSlug.includes(pattern));
+  }
+
+  /**
    * Check if item is a cylinder
    */
   private static isCylinderItem(itemName: string): boolean {
@@ -110,39 +127,6 @@ export class InventoryIntegrationService {
     
     return cylinderKeywords.some(keyword => itemName.includes(keyword)) ||
            cylinderPatterns.some(pattern => itemName.includes(pattern));
-  }
-
-  /**
-   * Check if item is a regulator
-   */
-  private static isRegulatorItem(itemName: string): boolean {
-    const regulatorKeywords = [
-      'regulator', 'adjustable', 'pressure', 'high pressure', 
-      'low pressure', 'star', 'ideal', '5 star', '3 star'
-    ];
-    return regulatorKeywords.some(keyword => itemName.includes(keyword));
-  }
-
-  /**
-   * Check if item is a stove
-   */
-  private static isStoveItem(itemName: string): boolean {
-    const stoveKeywords = [
-      'stove', 'burner', 'gas stove', 'cooking', 'premium', 
-      'standard', 'economy', 'commercial'
-    ];
-    return stoveKeywords.some(keyword => itemName.includes(keyword));
-  }
-
-  /**
-   * Check if item is a gas pipe
-   */
-  private static isGasPipeItem(itemName: string): boolean {
-    const pipeKeywords = [
-      'pipe', 'hose', 'rubber', 'steel pipe', 'gas pipe', 
-      'mm', 'inch', 'connection'
-    ];
-    return pipeKeywords.some(keyword => itemName.includes(keyword));
   }
 
   /**
@@ -245,6 +229,99 @@ export class InventoryIntegrationService {
   }
 
   /**
+   * Process accessories purchase - add to CustomItem table
+   */
+  private static async processAccessoriesPurchase(item: VendorPurchaseItem): Promise<void> {
+    const itemName = item.itemName; // This becomes the "type" in inventory
+    const quantity = Number(item.quantity); // Ensure it's a number
+    const unitPrice = Number(item.unitPrice); // Ensure it's a number
+    const totalCost = quantity * unitPrice;
+
+    console.log(`🔧 Processing accessories purchase: ${itemName} (${quantity} units at ${unitPrice} each)`);
+
+    // Get the category from the vendor item - this is the key part!
+    // The category should come from the vendor item, not determined by name
+    const category = item.category || this.determineAccessoryCategory(itemName);
+    
+    console.log(`📂 Using category: ${category} for item: ${itemName}`);
+    
+    // Use CustomItem table for all accessories
+    await this.processCustomItemPurchase(item, category);
+  }
+
+
+  /**
+   * Process custom item purchase - add to CustomItem table for other categories
+   */
+  private static async processCustomItemPurchase(item: VendorPurchaseItem, category: string): Promise<void> {
+    const itemName = item.itemName;
+    const quantity = Number(item.quantity);
+    const unitPrice = Number(item.unitPrice);
+    const totalCost = quantity * unitPrice;
+
+    console.log(`🔧 Processing custom item purchase: ${itemName} in ${category} (${quantity} units at ${unitPrice} each)`);
+
+    // Check if item already exists in CustomItem table
+    const existingItem = await prisma.customItem.findFirst({
+      where: {
+        name: category,
+        type: itemName,
+        isActive: true
+      }
+    });
+
+    if (existingItem) {
+      // Update existing item
+      const newQuantity = existingItem.quantity + quantity;
+      const newTotalCost = newQuantity * unitPrice;
+      
+      await prisma.customItem.update({
+        where: { id: existingItem.id },
+        data: {
+          quantity: newQuantity,
+          costPerPiece: unitPrice,
+          totalCost: newTotalCost
+        }
+      });
+
+      console.log(`✅ Updated existing custom item: ${itemName} in ${category} (${existingItem.quantity} → ${newQuantity} units)`);
+    } else {
+      // Create new item
+      await prisma.customItem.create({
+        data: {
+          name: category,
+          type: itemName,
+          quantity: quantity,
+          costPerPiece: unitPrice,
+          totalCost: totalCost
+        }
+      });
+
+      console.log(`✅ Created new custom item: ${itemName} in ${category} (${quantity} units)`);
+    }
+  }
+
+  /**
+   * Determine accessory category based on item name
+   */
+  private static determineAccessoryCategory(itemName: string): string {
+    const name = itemName.toLowerCase();
+    
+    if (name.includes('valve')) {
+      return 'valves';
+    } else if (name.includes('regulator')) {
+      return 'regulators';
+    } else if (name.includes('stove') || name.includes('burner')) {
+      return 'stoves';
+    } else if (name.includes('pipe') || name.includes('hose')) {
+      return 'gasPipes';
+    } else {
+      // Default category for other accessories
+      return 'accessories';
+    }
+  }
+
+  /**
    * Process cylinder purchases - create individual cylinder records
    */
   private static async processCylinderPurchase(item: VendorPurchaseItem): Promise<void> {
@@ -280,137 +357,6 @@ export class InventoryIntegrationService {
     }
     
     console.log(`📦 Created ${quantity} ${cylinderType} cylinders with status: ${cylinderStatus}`);
-  }
-
-  /**
-   * Process regulator purchases - update existing or create new regulator
-   */
-  private static async processRegulatorPurchase(item: VendorPurchaseItem): Promise<void> {
-    const { itemName, quantity: rawQuantity, unitPrice: rawUnitPrice } = item;
-    const quantity = Number(rawQuantity);
-    const unitPrice = Number(rawUnitPrice);
-    
-    // Find existing regulator or create new one
-    const existingRegulator = await prisma.regulator.findFirst({
-      where: {
-        type: {
-          contains: this.extractRegulatorType(itemName),
-          mode: 'insensitive'
-        }
-      }
-    });
-    
-    const totalCost = quantity * unitPrice;
-    
-    if (existingRegulator) {
-      // Update existing regulator
-      await prisma.regulator.update({
-        where: { id: existingRegulator.id },
-        data: {
-          quantity: { increment: quantity },
-          totalCost: { increment: totalCost }
-        }
-      });
-      console.log(`🔧 Updated regulator: ${existingRegulator.type} (+${quantity} units)`);
-    } else {
-      // Create new regulator
-      await prisma.regulator.create({
-        data: {
-          type: this.extractRegulatorType(itemName),
-          quantity,
-          costPerPiece: unitPrice,
-          totalCost
-        }
-      });
-      console.log(`🔧 Created new regulator: ${this.extractRegulatorType(itemName)} (${quantity} units)`);
-    }
-  }
-
-  /**
-   * Process stove purchases - update existing or create new stove
-   */
-  private static async processStovePurchase(item: VendorPurchaseItem): Promise<void> {
-    const { itemName, quantity: rawQuantity, unitPrice: rawUnitPrice } = item;
-    const quantity = Number(rawQuantity);
-    const unitPrice = Number(rawUnitPrice);
-    
-    // Find existing stove or create new one
-    const existingStove = await prisma.stove.findFirst({
-      where: {
-        quality: {
-          contains: this.extractStoveQuality(itemName),
-          mode: 'insensitive'
-        }
-      }
-    });
-    
-    const totalCost = quantity * unitPrice;
-    
-    if (existingStove) {
-      // Update existing stove
-      await prisma.stove.update({
-        where: { id: existingStove.id },
-        data: {
-          quantity: { increment: quantity },
-          totalCost: { increment: totalCost }
-        }
-      });
-      console.log(`🔥 Updated stove: ${existingStove.quality} (+${quantity} units)`);
-    } else {
-      // Create new stove
-      await prisma.stove.create({
-        data: {
-          quality: this.extractStoveQuality(itemName),
-          quantity,
-          costPerPiece: unitPrice,
-          totalCost
-        }
-      });
-      console.log(`🔥 Created new stove: ${this.extractStoveQuality(itemName)} (${quantity} units)`);
-    }
-  }
-
-  /**
-   * Process gas pipe purchases - update existing or create new pipe
-   */
-  private static async processGasPipePurchase(item: VendorPurchaseItem): Promise<void> {
-    const { itemName, quantity: rawQuantity, unitPrice: rawUnitPrice } = item;
-    const quantity = Number(rawQuantity);
-    const unitPrice = Number(rawUnitPrice);
-    
-    // Find existing gas pipe or create new one
-    const existingPipe = await prisma.gasPipe.findFirst({
-      where: {
-        type: {
-          contains: this.extractGasPipeType(itemName),
-          mode: 'insensitive'
-        }
-      }
-    });
-    
-    const totalCost = quantity * unitPrice;
-    
-    if (existingPipe) {
-      // Update existing gas pipe
-      await prisma.gasPipe.update({
-        where: { id: existingPipe.id },
-        data: {
-          quantity: { increment: quantity },
-          totalCost: { increment: totalCost }
-        }
-      });
-      console.log(`🔗 Updated gas pipe: ${existingPipe.type} (+${quantity} meters)`);
-    } else {
-      // Create new gas pipe
-      await prisma.gasPipe.create({
-        data: {
-          type: this.extractGasPipeType(itemName),
-          quantity,
-          totalCost
-        }
-      });
-      console.log(`🔗 Created new gas pipe: ${this.extractGasPipeType(itemName)} (${quantity} meters)`);
-    }
   }
 
   /**
@@ -482,46 +428,5 @@ export class InventoryIntegrationService {
       default: return 15.0;
     }
   }
-
-  /**
-   * Extract regulator type from item name
-   */
-  private static extractRegulatorType(itemName: string): string {
-    // Extract the main regulator type
-    if (itemName.includes('adjustable')) return 'Adjustable';
-    if (itemName.includes('ideal')) return 'Ideal High Pressure';
-    if (itemName.includes('5 star')) return '5 Star High Pressure';
-    if (itemName.includes('3 star')) return '3 Star Low Pressure';
-    if (itemName.includes('high pressure')) return 'High Pressure';
-    if (itemName.includes('low pressure')) return 'Low Pressure';
-    return 'Standard Regulator';
-  }
-
-  /**
-   * Extract stove quality from item name
-   */
-  private static extractStoveQuality(itemName: string): string {
-    if (itemName.includes('premium')) return 'Premium 4-Burner';
-    if (itemName.includes('standard')) return 'Standard 2-Burner';
-    if (itemName.includes('economy')) return 'Economy 1-Burner';
-    if (itemName.includes('commercial')) return 'Commercial 6-Burner';
-    if (itemName.includes('4-burner')) return 'Premium 4-Burner';
-    if (itemName.includes('2-burner')) return 'Standard 2-Burner';
-    if (itemName.includes('1-burner')) return 'Economy 1-Burner';
-    if (itemName.includes('6-burner')) return 'Commercial 6-Burner';
-    return 'Standard 2-Burner';
-  }
-
-  /**
-   * Extract gas pipe type from item name
-   */
-  private static extractGasPipeType(itemName: string): string {
-    if (itemName.includes('rubber') && itemName.includes('6mm')) return 'Rubber Hose 6mm';
-    if (itemName.includes('rubber') && itemName.includes('8mm')) return 'Rubber Hose 8mm';
-    if (itemName.includes('steel') && itemName.includes('1/2')) return 'Steel Pipe 1/2 inch';
-    if (itemName.includes('steel') && itemName.includes('3/4')) return 'Steel Pipe 3/4 inch';
-    if (itemName.includes('rubber')) return 'Rubber Hose';
-    if (itemName.includes('steel')) return 'Steel Pipe';
-    return 'Gas Pipe';
-  }
 }
+

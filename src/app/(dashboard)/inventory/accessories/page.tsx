@@ -111,11 +111,11 @@ export default function AccessoriesInventoryPage() {
       
       if (response.ok) {
         const data = await response.json();
-        const items = data.customItems || [];
+        const items: CustomItem[] = data.customItems || [];
         setCustomItems(items);
         
         // Extract unique categories
-        const uniqueCategories = [...new Set(items.map(item => item.name))];
+        const uniqueCategories: string[] = [...new Set(items.map((item: CustomItem) => item.name))];
         setCategories(uniqueCategories);
         
         // Set active tab to first category if none selected
