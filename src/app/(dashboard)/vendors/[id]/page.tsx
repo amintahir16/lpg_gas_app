@@ -300,8 +300,10 @@ export default function VendorDetailPage() {
       if (!response.ok) throw new Error('Failed to fetch empty cylinders');
       const data = await response.json();
       setEmptyCylinders(data.cylinders);
+      return data.cylinders; // Return the data for validation
     } catch (error) {
       console.error('Error fetching empty cylinders:', error);
+      return null;
     }
   };
 
@@ -610,6 +612,9 @@ export default function VendorDetailPage() {
 
   const handlePurchaseItemChange = (index: number, field: string, value: any) => {
     const newItems = [...purchaseItems];
+    
+    // Note: Quantity validation for gas purchases is handled after fetchEmptyCylinders()
+    
     newItems[index] = {
       ...newItems[index],
       [field]: value
@@ -625,11 +630,48 @@ export default function VendorDetailPage() {
     if (field === 'quantity' && 
         isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && 
         value > 0) {
-      fetchEmptyCylinders();
+      // Fetch empty cylinders first, then validate
+      fetchEmptyCylinders().then((cylinders) => {
+        if (cylinders) {
+          // Re-validate after cylinders are fetched
+          const itemName = newItems[index].itemName;
+          let maxQuantity = 0;
+          
+          if (itemName.includes('Domestic')) {
+            maxQuantity = cylinders.domestic.length;
+          } else if (itemName.includes('Standard')) {
+            maxQuantity = cylinders.standard.length;
+          } else if (itemName.includes('Commercial')) {
+            maxQuantity = cylinders.commercial.length;
+          }
+          
+          console.log(`🔍 Validation: ${itemName}, Requested: ${value}, Available: ${maxQuantity}`);
+          
+          // No alert - just let the visual indicator handle it
+        }
+      });
     }
     
     setPurchaseItems(newItems);
   };
+
+  // Helper function to get max quantity for gas purchase items
+  const getMaxQuantity = (itemName: string) => {
+    if (!isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
+      return null;
+    }
+    
+    if (itemName.includes('Domestic')) {
+      return emptyCylinders.domestic.length;
+    } else if (itemName.includes('Standard')) {
+      return emptyCylinders.standard.length;
+    } else if (itemName.includes('Commercial')) {
+      return emptyCylinders.commercial.length;
+    }
+    
+    return null;
+  };
+
 
   const handleCylinderSelection = (cylinderType: string, cylinderId: string, isSelected: boolean) => {
     setSelectedCylinders(prev => {
@@ -1171,6 +1213,7 @@ export default function VendorDetailPage() {
                                     />
                                   </td>
                                   <td className="border border-gray-300 px-4 py-2">
+                                    <div className="space-y-1">
                                     <Input
                                       type="number"
                                       value={item.quantity}
@@ -1182,8 +1225,15 @@ export default function VendorDetailPage() {
                                       placeholder="Enter quantity"
                                       min="0"
                                       step="1"
+                                        max={getMaxQuantity(item.itemName) || undefined}
                                       className="text-center border-0 focus:ring-1 bg-transparent"
                                     />
+                                      {getMaxQuantity(item.itemName) !== null && (
+                                        <p className="text-xs text-gray-500 text-center">
+                                          Max: {getMaxQuantity(item.itemName)} available
+                                        </p>
+                                      )}
+                                    </div>
                                   </td>
                                   <td className="border border-gray-300 px-4 py-2">
                                     <Input
@@ -1414,6 +1464,7 @@ export default function VendorDetailPage() {
                                     {item.itemName}
                                   </td>
                                   <td className="border border-gray-300 px-4 py-2">
+                                    <div className="space-y-1">
                                     <Input
                                       type="number"
                                       value={item.quantity}
@@ -1425,8 +1476,15 @@ export default function VendorDetailPage() {
                                       placeholder="Enter quantity"
                                       min="0"
                                       step="1"
+                                        max={getMaxQuantity(item.itemName) || undefined}
                                       className="text-center border-0 focus:ring-1 bg-transparent"
                                     />
+                                      {getMaxQuantity(item.itemName) !== null && (
+                                        <p className="text-xs text-gray-500 text-center">
+                                          Max: {getMaxQuantity(item.itemName)} available
+                                        </p>
+                                      )}
+                                    </div>
                                   </td>
                                   <td className="border border-gray-300 px-4 py-2">
                                     <Input
