@@ -250,6 +250,48 @@ export default function VendorDetailPage() {
   ];
 
   const [purchaseItems, setPurchaseItems] = useState<any[]>([]);
+  
+
+  // Helper function to get items for display
+  const getDisplayItems = () => {
+    // Use purchaseItems if it has items (FIRST PRIORITY)
+    if (purchaseItems.length > 0) {
+      return purchaseItems;
+    }
+    
+    // For accessories purchase, use empty items (don't use vendor inventory)
+    if (vendor?.category?.slug === 'accessories_purchase') {
+      return [{ itemName: '', category: '', quantity: 0, unitPrice: 0, totalPrice: 0, cylinderCodes: '' }];
+    }
+    
+    // For other categories, use actual vendor items from database if available
+    if (vendor && vendorItems.length > 0) {
+      return vendorItems.map(item => ({
+        itemName: item.name,
+        quantity: 0,
+        unitPrice: 0,
+        totalPrice: 0,
+        status: 'EMPTY',
+        category: item.category || '',
+        cylinderCodes: ''
+      }));
+    }
+    
+    // Only use hardcoded fallback if no vendor items are available
+    if (vendor) {
+      if (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
+        return defaultCylinderItems;
+      } else if (vendor?.category?.slug === 'gas_purchase') {
+        return defaultGasItems;
+      } else if (vendor?.category?.slug === 'vaporizer_purchase') {
+        return defaultVaporizerItems;
+      }
+    }
+    
+    // Final fallback
+    return [{ itemName: '', quantity: 1, unitPrice: 0, totalPrice: 0 }];
+  };
+  
   const [vendorItems, setVendorItems] = useState<Array<{id: string, name: string, category: string, description?: string}>>([]);
   const [purchaseFormData, setPurchaseFormData] = useState({
     invoiceNumber: '',
@@ -259,31 +301,6 @@ export default function VendorDetailPage() {
   const [usedCodes, setUsedCodes] = useState<Set<string>>(new Set());
 
   // Auto-populate purchase items when vendor items are loaded
-  useEffect(() => {
-    if (vendorItems.length > 0 && purchaseItems.length === 0) {
-      // Start with just one empty row for accessories purchase
-      if (vendor?.category?.slug === 'accessories_purchase') {
-        setPurchaseItems([{
-          itemName: '',
-          category: '',
-          quantity: 0,
-          unitPrice: 0,
-          totalPrice: 0,
-          cylinderCodes: ''
-        }]);
-      } else {
-        const autoItems = vendorItems.map(item => ({
-          itemName: '',
-          category: '',
-          quantity: 0,
-          unitPrice: 0,
-          totalPrice: 0,
-          cylinderCodes: ''
-        }));
-        setPurchaseItems(autoItems);
-      }
-    }
-  }, [vendorItems, purchaseItems.length, vendor?.category?.slug]);
 
   // Item form state
   const [showItemForm, setShowItemForm] = useState(false);
@@ -307,18 +324,53 @@ export default function VendorDetailPage() {
 
   // Initialize purchase items based on vendor category
   useEffect(() => {
+    // Only run if vendor is loaded
+    if (!vendor) {
+      return;
+    }
+    
+    // Use actual vendor items from database if available
+    if (vendorItems.length > 0) {
+      const mappedItems = vendorItems.map(item => ({
+        itemName: item.name,
+        quantity: 0,
+        unitPrice: 0,
+        totalPrice: 0,
+        status: 'EMPTY',
+        category: item.category || '',
+        cylinderCodes: ''
+      }));
+      setPurchaseItems(mappedItems);
+    } else {
+      // Fallback to hardcoded items if no vendor items
     if (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
-      setPurchaseItems(defaultCylinderItems);
+        setPurchaseItems([...defaultCylinderItems]);
     } else if (vendor?.category?.slug === 'gas_purchase') {
-      setPurchaseItems(defaultGasItems);
+        setPurchaseItems([...defaultGasItems]);
     } else if (vendor?.category?.slug === 'vaporizer_purchase') {
-      setPurchaseItems(defaultVaporizerItems);
+        setPurchaseItems([...defaultVaporizerItems]);
     } else if (vendor?.category?.slug === 'accessories_purchase') {
-      setPurchaseItems(defaultAccessoriesItems);
+        setPurchaseItems([...defaultAccessoriesItems]);
     } else {
       setPurchaseItems([{ itemName: '', quantity: 1, unitPrice: 0, totalPrice: 0 }]);
     }
-  }, [vendor?.category?.slug]);
+    }
+  }, [vendor, vendorItems]);
+
+  // Force re-render when vendor changes
+  useEffect(() => {
+    if (vendor && purchaseItems.length === 0) {
+      if (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
+        setPurchaseItems([...defaultCylinderItems]);
+      } else if (vendor?.category?.slug === 'gas_purchase') {
+        setPurchaseItems([...defaultGasItems]);
+      } else if (vendor?.category?.slug === 'vaporizer_purchase') {
+        setPurchaseItems([...defaultVaporizerItems]);
+      } else if (vendor?.category?.slug === 'accessories_purchase') {
+        setPurchaseItems([...defaultAccessoriesItems]);
+      }
+    }
+  }, [vendor, purchaseItems.length]);
 
   const fetchVendor = async () => {
     try {
@@ -627,22 +679,15 @@ export default function VendorDetailPage() {
   };
 
   const handleAddPurchaseItem = () => {
-    // Only allow adding custom items for accessories and generic categories
-    if (vendor?.category?.slug === 'accessories_purchase' || 
-        !['cylinder_purchase', 'gas_purchase', 'vaporizer_purchase'].includes(vendor?.category?.slug || '')) {
+    // Allow adding items to all vendor categories
       setPurchaseItems([
         ...purchaseItems,
-        { itemName: '', category: '', quantity: 1, unitPrice: 0, totalPrice: 0, cylinderCodes: '' }
+      { itemName: '', category: '', quantity: 1, unitPrice: 0, totalPrice: 0, cylinderCodes: '' }
       ]);
-    }
   };
 
   const handleRemovePurchaseItem = (index: number) => {
-    // Don't allow removing fixed items for specific categories
-    if (['cylinder_purchase', 'gas_purchase', 'vaporizer_purchase'].includes(vendor?.category?.slug || '')) {
-      return;
-    }
-    
+    // Allow removing items, but keep at least one item
     if (purchaseItems.length > 1) {
       setPurchaseItems(purchaseItems.filter((_, i) => i !== index));
     }
@@ -654,8 +699,8 @@ export default function VendorDetailPage() {
     
     // Note: Quantity validation for gas purchases is handled after fetchEmptyCylinders()
     
-    // Normalize category name for case sensitivity
-    if (field === 'category') {
+    // Normalize category name for case sensitivity (only for accessories purchase)
+    if (field === 'category' && vendor?.category?.slug === 'accessories_purchase') {
       value = normalizeCategoryName(value);
     }
     
@@ -1201,15 +1246,15 @@ export default function VendorDetailPage() {
                           <label className="text-lg font-semibold text-gray-900">
                             {vendor.category.name}
                           </label>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={handleAddPurchaseItem}
-                          >
-                            <PlusIcon className="w-4 h-4 mr-1" />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={handleAddPurchaseItem}
+                            >
+                              <PlusIcon className="w-4 h-4 mr-1" />
                             Add Item
-                          </Button>
+                            </Button>
                         </div>
                         
                         <div className="overflow-x-auto">
@@ -1237,7 +1282,7 @@ export default function VendorDetailPage() {
                               </tr>
                             </thead>
                             <tbody>
-                              {purchaseItems.map((item, index) => (
+                              {getDisplayItems().map((item, index) => (
                                 <tr key={index}>
                                   <td className="border border-gray-300 px-4 py-2">
                                     <select
@@ -1361,7 +1406,7 @@ export default function VendorDetailPage() {
                               </tr>
                             </thead>
                             <tbody>
-                              {purchaseItems.map((item, index) => (
+                              {getDisplayItems().map((item, index) => (
                                 <tr key={index}>
                                   <td className="border border-gray-300 px-4 py-2">
                                     {/* Use input field for all items to maintain consistent alignment */}
@@ -1374,8 +1419,12 @@ export default function VendorDetailPage() {
                                       )}
                                       placeholder="Enter item name"
                                       className="border-0 focus:ring-1 bg-transparent text-sm font-medium text-gray-900"
-                                      readOnly={vendor?.category?.slug === 'accessories_purchase' && 
-                                               index < defaultAccessoriesItems.length}
+                                      readOnly={
+                                        (vendor?.category?.slug === 'accessories_purchase' && index < defaultAccessoriesItems.length) ||
+                                        (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && index < defaultCylinderItems.length) ||
+                                        (vendor?.category?.slug === 'gas_purchase' && index < defaultGasItems.length) ||
+                                        (vendor?.category?.slug === 'vaporizer_purchase' && index < defaultVaporizerItems.length)
+                                      }
                                     />
                                   </td>
                                   <td className="border border-gray-300 px-4 py-2">
@@ -1624,7 +1673,7 @@ export default function VendorDetailPage() {
                               </tr>
                             </thead>
                             <tbody>
-                              {purchaseItems.map((item, index) => (
+                              {getDisplayItems().map((item, index) => (
                                 <tr key={index}>
                                   <td className="border border-gray-300 px-4 py-2 font-medium text-gray-900">
                                     {item.itemName}
