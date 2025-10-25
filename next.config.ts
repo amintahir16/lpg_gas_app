@@ -4,12 +4,29 @@ const nextConfig: NextConfig = {
   /* config options here */
   staticPageGenerationTimeout: 1000,
   experimental: {
-    // Other experimental options can go here
+    // Enable Turbopack for faster development
+    turbo: {
+      rules: {
+        '*.svg': {
+          loaders: ['@svgr/webpack'],
+          as: '*.js',
+        },
+      },
+    },
   },
-  // Disable caching for development
+  // Development optimizations for Railway
   onDemandEntries: {
     maxInactiveAge: 25 * 1000,
     pagesBufferLength: 2,
+  },
+  // Ensure proper hostname binding for Railway
+  env: {
+    HOSTNAME: '0.0.0.0',
+  },
+  // Development server configuration
+  devIndicators: {
+    buildActivity: true,
+    buildActivityPosition: 'bottom-right',
   },
 };
 
