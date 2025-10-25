@@ -78,7 +78,6 @@ interface PurchaseItem {
   totalPrice: number;
   cylinderCodes?: string;
   status?: string;
-  selectedCylinderIds?: string[];
 }
 
 interface Payment {
@@ -801,18 +800,6 @@ export default function VendorDetailPage() {
       return;
     }
 
-    // For gas purchases, add selected cylinder IDs to items
-    if (isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
-      validItems.forEach(item => {
-        if (item.itemName.includes('Domestic')) {
-          item.selectedCylinderIds = selectedCylinders.domestic;
-        } else if (item.itemName.includes('Standard')) {
-          item.selectedCylinderIds = selectedCylinders.standard;
-        } else if (item.itemName.includes('Commercial')) {
-          item.selectedCylinderIds = selectedCylinders.commercial;
-        }
-      });
-    }
 
     console.log('Submitting purchase with invoice number:', purchaseFormData.invoiceNumber);
     console.log('Purchase data:', {
@@ -1356,7 +1343,7 @@ export default function VendorDetailPage() {
                             </tbody>
                             <tfoot>
                               <tr className="bg-gray-50">
-                                <td colSpan={4} className="border border-gray-300 px-4 py-2 text-right font-semibold text-gray-700">
+                                <td colSpan={3} className="border border-gray-300 px-4 py-2 text-right font-semibold text-gray-700">
                                   Grand Total:
                                 </td>
                                 <td className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-900">
@@ -1390,16 +1377,6 @@ export default function VendorDetailPage() {
                                 <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700 w-1/5">
                                   Price per Unit
                                 </th>
-                                {isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && (
-                                  <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700 w-1/5">
-                                    Status
-                                  </th>
-                                )}
-                                {isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && (
-                                  <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700 w-1/5">
-                                    Select Cylinders
-                                  </th>
-                                )}
                                 <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700 w-1/5">
                                   Price per Item
                                 </th>
@@ -1465,147 +1442,6 @@ export default function VendorDetailPage() {
                                       className="text-center border-0 focus:ring-1 bg-transparent"
                                     />
                                   </td>
-                                  {isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && (
-                                    <td className="border border-gray-300 px-4 py-2">
-                                      <Select
-                                        value={item.status || 'EMPTY'}
-                                        onChange={(e) => handlePurchaseItemChange(
-                                          index,
-                                          'status',
-                                          e.target.value
-                                        )}
-                                      >
-                                        <option value="EMPTY">Empty</option>
-                                        <option value="FULL">Full</option>
-                                      </Select>
-                                    </td>
-                                  )}
-                                  {isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && (
-                                    <td className="border border-gray-300 px-4 py-2">
-                                      <div className="space-y-2">
-                                        {item.itemName.includes('Domestic') && item.quantity > 0 && (
-                                          <div>
-                                            <label className="text-xs text-gray-600 block mb-1">
-                                              Select {item.quantity} Domestic Cylinder{item.quantity > 1 ? 's' : ''}:
-                                            </label>
-                                            <div className="max-h-32 overflow-y-auto border border-gray-200 rounded p-2 bg-gray-50">
-                                              {emptyCylinders.domestic.map(cylinder => (
-                                                <label key={cylinder.id} className="flex items-center space-x-2 text-xs">
-                                                  <input
-                                                    type="checkbox"
-                                                    checked={selectedCylinders.domestic.includes(cylinder.id)}
-                                                    onChange={(e) => {
-                                                      if (e.target.checked && selectedCylinders.domestic.length < item.quantity) {
-                                                        setSelectedCylinders(prev => ({
-                                                          ...prev,
-                                                          domestic: [...prev.domestic, cylinder.id]
-                                                        }));
-                                                      } else if (!e.target.checked) {
-                                                        setSelectedCylinders(prev => ({
-                                                          ...prev,
-                                                          domestic: prev.domestic.filter(id => id !== cylinder.id)
-                                                        }));
-                                                      }
-                                                    }}
-                                                    disabled={!selectedCylinders.domestic.includes(cylinder.id) && selectedCylinders.domestic.length >= item.quantity}
-                                                    className="rounded"
-                                                  />
-                                                  <span className="text-gray-700">{cylinder.code}</span>
-                                                </label>
-                                              ))}
-                                              {emptyCylinders.domestic.length === 0 && (
-                                                <p className="text-xs text-gray-500">No empty domestic cylinders available</p>
-                                              )}
-                                            </div>
-                                            <p className="text-xs text-blue-600 mt-1">
-                                              Selected: {selectedCylinders.domestic.length}/{item.quantity}
-                                            </p>
-                                          </div>
-                                        )}
-                                        {item.itemName.includes('Standard') && item.quantity > 0 && (
-                                          <div>
-                                            <label className="text-xs text-gray-600 block mb-1">
-                                              Select {item.quantity} Standard Cylinder{item.quantity > 1 ? 's' : ''}:
-                                            </label>
-                                            <div className="max-h-32 overflow-y-auto border border-gray-200 rounded p-2 bg-gray-50">
-                                              {emptyCylinders.standard.map(cylinder => (
-                                                <label key={cylinder.id} className="flex items-center space-x-2 text-xs">
-                                                  <input
-                                                    type="checkbox"
-                                                    checked={selectedCylinders.standard.includes(cylinder.id)}
-                                                    onChange={(e) => {
-                                                      if (e.target.checked && selectedCylinders.standard.length < item.quantity) {
-                                                        setSelectedCylinders(prev => ({
-                                                          ...prev,
-                                                          standard: [...prev.standard, cylinder.id]
-                                                        }));
-                                                      } else if (!e.target.checked) {
-                                                        setSelectedCylinders(prev => ({
-                                                          ...prev,
-                                                          standard: prev.standard.filter(id => id !== cylinder.id)
-                                                        }));
-                                                      }
-                                                    }}
-                                                    disabled={!selectedCylinders.standard.includes(cylinder.id) && selectedCylinders.standard.length >= item.quantity}
-                                                    className="rounded"
-                                                  />
-                                                  <span className="text-gray-700">{cylinder.code}</span>
-                                                </label>
-                                              ))}
-                                              {emptyCylinders.standard.length === 0 && (
-                                                <p className="text-xs text-gray-500">No empty standard cylinders available</p>
-                                              )}
-                                            </div>
-                                            <p className="text-xs text-blue-600 mt-1">
-                                              Selected: {selectedCylinders.standard.length}/{item.quantity}
-                                            </p>
-                                          </div>
-                                        )}
-                                        {item.itemName.includes('Commercial') && item.quantity > 0 && (
-                                          <div>
-                                            <label className="text-xs text-gray-600 block mb-1">
-                                              Select {item.quantity} Commercial Cylinder{item.quantity > 1 ? 's' : ''}:
-                                            </label>
-                                            <div className="max-h-32 overflow-y-auto border border-gray-200 rounded p-2 bg-gray-50">
-                                              {emptyCylinders.commercial.map(cylinder => (
-                                                <label key={cylinder.id} className="flex items-center space-x-2 text-xs">
-                                                  <input
-                                                    type="checkbox"
-                                                    checked={selectedCylinders.commercial.includes(cylinder.id)}
-                                                    onChange={(e) => {
-                                                      if (e.target.checked && selectedCylinders.commercial.length < item.quantity) {
-                                                        setSelectedCylinders(prev => ({
-                                                          ...prev,
-                                                          commercial: [...prev.commercial, cylinder.id]
-                                                        }));
-                                                      } else if (!e.target.checked) {
-                                                        setSelectedCylinders(prev => ({
-                                                          ...prev,
-                                                          commercial: prev.commercial.filter(id => id !== cylinder.id)
-                                                        }));
-                                                      }
-                                                    }}
-                                                    disabled={!selectedCylinders.commercial.includes(cylinder.id) && selectedCylinders.commercial.length >= item.quantity}
-                                                    className="rounded"
-                                                  />
-                                                  <span className="text-gray-700">{cylinder.code}</span>
-                                                </label>
-                                              ))}
-                                              {emptyCylinders.commercial.length === 0 && (
-                                                <p className="text-xs text-gray-500">No empty commercial cylinders available</p>
-                                              )}
-                                            </div>
-                                            <p className="text-xs text-blue-600 mt-1">
-                                              Selected: {selectedCylinders.commercial.length}/{item.quantity}
-                                            </p>
-                                          </div>
-                                        )}
-                                        {item.quantity === 0 && (
-                                          <p className="text-xs text-gray-500">Enter quantity to select cylinders</p>
-                                        )}
-                                      </div>
-                                    </td>
-                                  )}
                                   <td className="border border-gray-300 px-4 py-2 text-center font-medium">
                                     {formatCurrency(item.totalPrice)}
                                   </td>
@@ -1613,8 +1449,8 @@ export default function VendorDetailPage() {
                               ))}
                               <tr className="bg-gray-50 font-bold">
                                 <td colSpan={
-                                  isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') ? 4 : 
-                                  isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') ? 4 : 3
+                                  isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') ? 3 : 
+                                  isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') ? 3 : 3
                                 } className="border border-gray-300 px-4 py-2 text-right">
                                   Total =
                                 </td>
@@ -1657,16 +1493,6 @@ export default function VendorDetailPage() {
                                 <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700 w-1/5">
                                   Price per Unit
                                 </th>
-                                {isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && (
-                                  <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700 w-1/5">
-                                    Status
-                                  </th>
-                                )}
-                                {isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && (
-                                  <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700 w-1/5">
-                                    Select Cylinders
-                                  </th>
-                                )}
                                 <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700 w-1/5">
                                   Price per Item
                                 </th>
@@ -1716,147 +1542,6 @@ export default function VendorDetailPage() {
                                       className="text-center border-0 focus:ring-1 bg-transparent"
                                     />
                                   </td>
-                                  {isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && (
-                                    <td className="border border-gray-300 px-4 py-2">
-                                      <Select
-                                        value={item.status || 'EMPTY'}
-                                        onChange={(e) => handlePurchaseItemChange(
-                                          index,
-                                          'status',
-                                          e.target.value
-                                        )}
-                                      >
-                                        <option value="EMPTY">Empty</option>
-                                        <option value="FULL">Full</option>
-                                      </Select>
-                                    </td>
-                                  )}
-                                  {isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && (
-                                    <td className="border border-gray-300 px-4 py-2">
-                                      <div className="space-y-2">
-                                        {item.itemName.includes('Domestic') && item.quantity > 0 && (
-                                          <div>
-                                            <label className="text-xs text-gray-600 block mb-1">
-                                              Select {item.quantity} Domestic Cylinder{item.quantity > 1 ? 's' : ''}:
-                                            </label>
-                                            <div className="max-h-32 overflow-y-auto border border-gray-200 rounded p-2 bg-gray-50">
-                                              {emptyCylinders.domestic.map(cylinder => (
-                                                <label key={cylinder.id} className="flex items-center space-x-2 text-xs">
-                                                  <input
-                                                    type="checkbox"
-                                                    checked={selectedCylinders.domestic.includes(cylinder.id)}
-                                                    onChange={(e) => {
-                                                      if (e.target.checked && selectedCylinders.domestic.length < item.quantity) {
-                                                        setSelectedCylinders(prev => ({
-                                                          ...prev,
-                                                          domestic: [...prev.domestic, cylinder.id]
-                                                        }));
-                                                      } else if (!e.target.checked) {
-                                                        setSelectedCylinders(prev => ({
-                                                          ...prev,
-                                                          domestic: prev.domestic.filter(id => id !== cylinder.id)
-                                                        }));
-                                                      }
-                                                    }}
-                                                    disabled={!selectedCylinders.domestic.includes(cylinder.id) && selectedCylinders.domestic.length >= item.quantity}
-                                                    className="rounded"
-                                                  />
-                                                  <span className="text-gray-700">{cylinder.code}</span>
-                                                </label>
-                                              ))}
-                                              {emptyCylinders.domestic.length === 0 && (
-                                                <p className="text-xs text-gray-500">No empty domestic cylinders available</p>
-                                              )}
-                                            </div>
-                                            <p className="text-xs text-blue-600 mt-1">
-                                              Selected: {selectedCylinders.domestic.length}/{item.quantity}
-                                            </p>
-                                          </div>
-                                        )}
-                                        {item.itemName.includes('Standard') && item.quantity > 0 && (
-                                          <div>
-                                            <label className="text-xs text-gray-600 block mb-1">
-                                              Select {item.quantity} Standard Cylinder{item.quantity > 1 ? 's' : ''}:
-                                            </label>
-                                            <div className="max-h-32 overflow-y-auto border border-gray-200 rounded p-2 bg-gray-50">
-                                              {emptyCylinders.standard.map(cylinder => (
-                                                <label key={cylinder.id} className="flex items-center space-x-2 text-xs">
-                                                  <input
-                                                    type="checkbox"
-                                                    checked={selectedCylinders.standard.includes(cylinder.id)}
-                                                    onChange={(e) => {
-                                                      if (e.target.checked && selectedCylinders.standard.length < item.quantity) {
-                                                        setSelectedCylinders(prev => ({
-                                                          ...prev,
-                                                          standard: [...prev.standard, cylinder.id]
-                                                        }));
-                                                      } else if (!e.target.checked) {
-                                                        setSelectedCylinders(prev => ({
-                                                          ...prev,
-                                                          standard: prev.standard.filter(id => id !== cylinder.id)
-                                                        }));
-                                                      }
-                                                    }}
-                                                    disabled={!selectedCylinders.standard.includes(cylinder.id) && selectedCylinders.standard.length >= item.quantity}
-                                                    className="rounded"
-                                                  />
-                                                  <span className="text-gray-700">{cylinder.code}</span>
-                                                </label>
-                                              ))}
-                                              {emptyCylinders.standard.length === 0 && (
-                                                <p className="text-xs text-gray-500">No empty standard cylinders available</p>
-                                              )}
-                                            </div>
-                                            <p className="text-xs text-blue-600 mt-1">
-                                              Selected: {selectedCylinders.standard.length}/{item.quantity}
-                                            </p>
-                                          </div>
-                                        )}
-                                        {item.itemName.includes('Commercial') && item.quantity > 0 && (
-                                          <div>
-                                            <label className="text-xs text-gray-600 block mb-1">
-                                              Select {item.quantity} Commercial Cylinder{item.quantity > 1 ? 's' : ''}:
-                                            </label>
-                                            <div className="max-h-32 overflow-y-auto border border-gray-200 rounded p-2 bg-gray-50">
-                                              {emptyCylinders.commercial.map(cylinder => (
-                                                <label key={cylinder.id} className="flex items-center space-x-2 text-xs">
-                                                  <input
-                                                    type="checkbox"
-                                                    checked={selectedCylinders.commercial.includes(cylinder.id)}
-                                                    onChange={(e) => {
-                                                      if (e.target.checked && selectedCylinders.commercial.length < item.quantity) {
-                                                        setSelectedCylinders(prev => ({
-                                                          ...prev,
-                                                          commercial: [...prev.commercial, cylinder.id]
-                                                        }));
-                                                      } else if (!e.target.checked) {
-                                                        setSelectedCylinders(prev => ({
-                                                          ...prev,
-                                                          commercial: prev.commercial.filter(id => id !== cylinder.id)
-                                                        }));
-                                                      }
-                                                    }}
-                                                    disabled={!selectedCylinders.commercial.includes(cylinder.id) && selectedCylinders.commercial.length >= item.quantity}
-                                                    className="rounded"
-                                                  />
-                                                  <span className="text-gray-700">{cylinder.code}</span>
-                                                </label>
-                                              ))}
-                                              {emptyCylinders.commercial.length === 0 && (
-                                                <p className="text-xs text-gray-500">No empty commercial cylinders available</p>
-                                              )}
-                                            </div>
-                                            <p className="text-xs text-blue-600 mt-1">
-                                              Selected: {selectedCylinders.commercial.length}/{item.quantity}
-                                            </p>
-                                          </div>
-                                        )}
-                                        {item.quantity === 0 && (
-                                          <p className="text-xs text-gray-500">Enter quantity to select cylinders</p>
-                                        )}
-                                      </div>
-                                    </td>
-                                  )}
                                   <td className="border border-gray-300 px-4 py-2 text-center font-medium">
                                     {formatCurrency(item.totalPrice)}
                                   </td>
@@ -1864,8 +1549,8 @@ export default function VendorDetailPage() {
                               ))}
                               <tr className="bg-gray-50 font-bold">
                                 <td colSpan={
-                                  isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') ? 4 : 
-                                  isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') ? 4 : 3
+                                  isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') ? 3 : 
+                                  isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') ? 3 : 3
                                 } className="border border-gray-300 px-4 py-2 text-right">
                                   Total =
                                 </td>

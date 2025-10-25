@@ -200,24 +200,57 @@ export class InventoryIntegrationService {
   }
 
   /**
-   * Process gas purchases - update selected cylinders to FULL status
+   * Process gas purchases - automatically find and update empty cylinders to FULL status
    */
   private static async processGasPurchase(item: VendorPurchaseItem): Promise<void> {
-    const { itemName, selectedCylinderIds } = item;
+    const { itemName, quantity: rawQuantity } = item;
+    const quantity = Number(rawQuantity);
     
-    console.log(`🔄 Processing gas purchase: ${itemName}`);
-    console.log(`📋 Selected cylinder IDs:`, selectedCylinderIds);
+    console.log(`🔄 Processing gas purchase: ${itemName} (${quantity} units)`);
     
-    if (!selectedCylinderIds || selectedCylinderIds.length === 0) {
-      console.log(`⚠️ No cylinders selected for gas purchase: ${itemName}`);
+    if (quantity <= 0) {
+      console.log(`⚠️ Invalid quantity for gas purchase: ${itemName}`);
       return;
     }
 
-    // Update selected cylinders to FULL status
+    // Determine cylinder type based on gas type
+    let cylinderType = '';
+    if (itemName.includes('Domestic')) {
+      cylinderType = 'DOMESTIC_11_8KG';
+    } else if (itemName.includes('Standard')) {
+      cylinderType = 'STANDARD_15KG';
+    } else if (itemName.includes('Commercial')) {
+      cylinderType = 'COMMERCIAL_45_4KG';
+    } else {
+      console.log(`⚠️ Unknown gas type: ${itemName}`);
+      return;
+    }
+
+    console.log(`🔍 Looking for ${quantity} empty ${cylinderType} cylinders`);
+
+    // Find empty cylinders of the matching type
+    const emptyCylinders = await prisma.cylinder.findMany({
+      where: {
+        cylinderType: cylinderType as any,
+        currentStatus: 'EMPTY'
+      },
+      take: quantity,
+      orderBy: {
+        createdAt: 'asc' // Take oldest empty cylinders first
+      }
+    });
+
+    if (emptyCylinders.length < quantity) {
+      console.log(`⚠️ Not enough empty ${cylinderType} cylinders available. Found: ${emptyCylinders.length}, Needed: ${quantity}`);
+      return;
+    }
+
+    // Update found cylinders to FULL status
+    const cylinderIds = emptyCylinders.map(cylinder => cylinder.id);
     const updateResult = await prisma.cylinder.updateMany({
       where: {
         id: {
-          in: selectedCylinderIds
+          in: cylinderIds
         }
       },
       data: {
@@ -225,7 +258,7 @@ export class InventoryIntegrationService {
       }
     });
 
-    console.log(`⛽ Updated ${updateResult.count} cylinders to FULL status for gas purchase: ${itemName}`);
+    console.log(`✅ Updated ${updateResult.count} ${cylinderType} cylinders to FULL status for gas purchase: ${itemName}`);
   }
 
   /**
