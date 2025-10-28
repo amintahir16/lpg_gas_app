@@ -352,7 +352,7 @@ export function ProfessionalAccessorySelector({
                     className="border-b hover:bg-gray-50 transition-colors"
                   >
                     {/* Category Dropdown */}
-                    <td className="py-3 px-4 min-h-[70px] align-top">
+                    <td className="py-3 px-4 min-h-[80px] align-top">
                       <div className="flex flex-col">
                         <select
                           value={item.category}
@@ -375,7 +375,7 @@ export function ProfessionalAccessorySelector({
                     </td>
 
                     {/* Item Type Dropdown */}
-                    <td className="py-3 px-4 min-h-[70px] align-top">
+                    <td className="py-3 px-4 min-h-[80px] align-top">
                       <div className="flex flex-col">
                         <select
                           value={item.itemType}
@@ -399,7 +399,7 @@ export function ProfessionalAccessorySelector({
                     </td>
 
                     {/* Quantity Input */}
-                    <td className="py-3 px-4 min-h-[70px] align-top">
+                    <td className="py-3 px-4 min-h-[80px] align-top">
                       <div className="flex flex-col">
                         <div className="flex items-center space-x-2">
                           <Input
@@ -430,9 +430,9 @@ export function ProfessionalAccessorySelector({
                     </td>
 
                     {/* Cost Price */}
-                    <td className="py-3 px-4 min-h-[70px] align-top">
+                    <td className="py-3 px-4 min-h-[80px] align-top">
                       <div className="flex flex-col">
-                        <div className={`flex items-center ${!item.isVaporizer ? 'pt-3' : ''}`}>
+                        <div className={`flex items-center ${!item.isVaporizer ? 'pt-3' : 'pt-1'}`}>
                           <CurrencyDollarIcon className="w-4 h-4 mr-1 text-gray-500" />
                           {item.isVaporizer ? (
                             <div className="flex flex-col">
@@ -440,9 +440,10 @@ export function ProfessionalAccessorySelector({
                                 type="number"
                                 value={item.usagePrice || 0}
                                 onChange={(e) => updateAccessoryItem(item.id, 'usagePrice', Number(e.target.value))}
-                                className="w-20 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+                                className="min-w-20 max-w-32 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                 placeholder="0"
                                 min="0"
+                                style={{ width: `${Math.max(80, Math.min(128, (item.usagePrice || 0).toString().length * 8 + 24))}px` }}
                               />
                               <span className="text-xs text-gray-500 mt-1">Usage Fee</span>
                             </div>
@@ -456,9 +457,9 @@ export function ProfessionalAccessorySelector({
                     </td>
 
                     {/* Selling Price */}
-                    <td className="py-3 px-4 min-h-[70px] align-top">
+                    <td className="py-3 px-4 min-h-[80px] align-top">
                       <div className="flex flex-col">
-                        <div className={`flex items-center ${!item.isVaporizer ? 'pt-3' : ''}`}>
+                        <div className={`flex items-center ${!item.isVaporizer ? 'pt-3' : 'pt-1'}`}>
                           <CurrencyDollarIcon className="w-4 h-4 mr-1 text-green-500" />
                           {item.isVaporizer ? (
                             <div className="flex flex-col">
@@ -466,9 +467,10 @@ export function ProfessionalAccessorySelector({
                                 type="number"
                                 value={item.sellingPrice || 0}
                                 onChange={(e) => updateAccessoryItem(item.id, 'sellingPrice', Number(e.target.value))}
-                                className="w-20 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 shadow-sm"
+                                className="min-w-20 max-w-32 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 shadow-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                 placeholder="0"
                                 min="0"
+                                style={{ width: `${Math.max(80, Math.min(128, (item.sellingPrice || 0).toString().length * 8 + 24))}px` }}
                               />
                               <span className="text-xs text-gray-500 mt-1">Selling Price</span>
                             </div>
@@ -487,7 +489,7 @@ export function ProfessionalAccessorySelector({
                     </td>
 
                     {/* Total Price */}
-                    <td className="py-3 px-4 min-h-[70px] align-top">
+                    <td className="py-3 px-4 min-h-[80px] align-top">
                       <div className="flex flex-col h-full justify-start">
                         <div className="flex items-center pt-3">
                           <CurrencyDollarIcon className="w-4 h-4 mr-1 text-blue-500" />
@@ -499,7 +501,7 @@ export function ProfessionalAccessorySelector({
                     </td>
 
                     {/* Actions */}
-                    <td className="py-3 px-4 min-h-[70px] align-top">
+                    <td className="py-3 px-4 min-h-[80px] align-top">
                       <div className="flex flex-col h-full justify-start">
                         <Button
                           type="button"
