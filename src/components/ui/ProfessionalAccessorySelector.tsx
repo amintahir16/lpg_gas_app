@@ -445,7 +445,6 @@ export function ProfessionalAccessorySelector({
                                 min="0"
                                 style={{ width: `${Math.max(80, Math.min(128, (item.usagePrice || 0).toString().length * 8 + 24))}px` }}
                               />
-                              <span className="text-xs text-gray-500 mt-1">Usage Fee</span>
                             </div>
                           ) : (
                             <span className="text-sm font-medium text-gray-700">
@@ -472,7 +471,6 @@ export function ProfessionalAccessorySelector({
                                 min="0"
                                 style={{ width: `${Math.max(80, Math.min(128, (item.sellingPrice || 0).toString().length * 8 + 24))}px` }}
                               />
-                              <span className="text-xs text-gray-500 mt-1">Selling Price</span>
                             </div>
                           ) : (
                             <>
