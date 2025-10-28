@@ -431,8 +431,8 @@ export function ProfessionalAccessorySelector({
 
                     {/* Cost Price */}
                     <td className="py-3 px-4 min-h-[70px] align-top">
-                      <div className="flex flex-col h-full justify-start">
-                        <div className="flex items-center pt-3">
+                      <div className="flex flex-col">
+                        <div className={`flex items-center ${!item.isVaporizer ? 'pt-3' : ''}`}>
                           <CurrencyDollarIcon className="w-4 h-4 mr-1 text-gray-500" />
                           {item.isVaporizer ? (
                             <div className="flex flex-col">
@@ -440,7 +440,7 @@ export function ProfessionalAccessorySelector({
                                 type="number"
                                 value={item.usagePrice || 0}
                                 onChange={(e) => updateAccessoryItem(item.id, 'usagePrice', Number(e.target.value))}
-                                className="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                className="w-20 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
                                 placeholder="0"
                                 min="0"
                               />
@@ -457,8 +457,8 @@ export function ProfessionalAccessorySelector({
 
                     {/* Selling Price */}
                     <td className="py-3 px-4 min-h-[70px] align-top">
-                      <div className="flex flex-col h-full justify-start">
-                        <div className="flex items-center pt-3">
+                      <div className="flex flex-col">
+                        <div className={`flex items-center ${!item.isVaporizer ? 'pt-3' : ''}`}>
                           <CurrencyDollarIcon className="w-4 h-4 mr-1 text-green-500" />
                           {item.isVaporizer ? (
                             <div className="flex flex-col">
@@ -466,7 +466,7 @@ export function ProfessionalAccessorySelector({
                                 type="number"
                                 value={item.sellingPrice || 0}
                                 onChange={(e) => updateAccessoryItem(item.id, 'sellingPrice', Number(e.target.value))}
-                                className="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                className="w-20 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 shadow-sm"
                                 placeholder="0"
                                 min="0"
                               />
