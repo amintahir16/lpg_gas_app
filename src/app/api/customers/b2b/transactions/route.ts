@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
               productName: productName,
               quantity: parseFloat(item.delivered || item.quantity || item.emptyReturned || 0),
               pricePerItem: parseFloat(item.pricePerItem || 0),
-              totalPrice: transactionType === 'BUYBACK' ? buybackTotal : parseFloat((item.delivered || item.quantity || 0) * (item.pricePerItem || 0)),
+              totalPrice: transactionType === 'BUYBACK' ? buybackTotal : parseFloat(String((item.delivered || item.quantity || 0) * (item.pricePerItem || 0))),
               cylinderType: item.cylinderType,
               returnedCondition: item.returnedCondition || (item.emptyReturned > 0 ? 'EMPTY' : null),
               remainingKg: item.remainingKg ? parseFloat(item.remainingKg) : null,
@@ -166,9 +166,10 @@ export async function POST(request: NextRequest) {
           console.log(`SALE transaction: adding ${totalAmount} to ledger balance`);
           newLedgerBalance += parseFloat(totalAmount);
           console.log(`New ledger balance after calculation: ${newLedgerBalance}`);
-          // Update cylinder due counts for sales
+          // Update cylinder due counts for sales - ONLY if delivered > 0
           gasItems.forEach((item: any) => {
             if (item.delivered > 0) {
+              console.log(`Processing cylinder sale: ${item.cylinderType} - ${item.delivered} delivered`);
               switch (item.cylinderType) {
                 case 'DOMESTIC_11_8KG':
                   newDomestic118kgDue += item.delivered;
@@ -180,6 +181,8 @@ export async function POST(request: NextRequest) {
                   newCommercial454kgDue += item.delivered;
                   break;
               }
+            } else {
+              console.log(`Skipping cylinder: ${item.cylinderType} - delivered: ${item.delivered} (not delivered)`);
             }
             if (item.emptyReturned > 0) {
               switch (item.cylinderType) {
@@ -258,7 +261,9 @@ export async function POST(request: NextRequest) {
 
       // Update cylinder inventory for sales (deduction) and returns (addition)
       if (transactionType === 'SALE' && gasItems.length > 0) {
+        console.log(`Processing ${gasItems.length} gas items for inventory update`);
         for (const gasItem of gasItems) {
+          console.log(`Gas item: ${gasItem.cylinderType}, delivered: ${gasItem.delivered}, emptyReturned: ${gasItem.emptyReturned}`);
           if (gasItem.delivered > 0) {
             // Find and update cylinders from inventory
             const cylinderType = gasItem.cylinderType;
@@ -306,16 +311,34 @@ export async function POST(request: NextRequest) {
         
         // Convert accessory items to the format expected by InventoryDeductionService
         const accessorySaleItems = accessoryItems
-          .filter(item => item.quantity > 0)
-          .map(item => ({
+          .filter((item: any) => item.quantity > 0)
+          .map((item: any) => ({
             category: item.productName.split(' - ')[0] || item.name || 'Unknown',
             itemType: item.productName.split(' - ')[1] || item.name || 'Unknown',
             quantity: item.quantity,
             pricePerItem: item.pricePerItem,
-            totalPrice: item.totalPrice
+            totalPrice: item.totalPrice,
+            // Vaporizer-specific fields
+            isVaporizer: item.isVaporizer || false,
+            usagePrice: item.usagePrice || 0,
+            sellingPrice: item.sellingPrice || 0,
+            costPerPiece: item.costPerPiece || 0
           }));
         
         if (accessorySaleItems.length > 0) {
+          // Log vaporizer pricing information
+          const vaporizerItems = accessorySaleItems.filter((item: any) => item.isVaporizer);
+          if (vaporizerItems.length > 0) {
+            console.log('🌫️ Processing vaporizer items:');
+            vaporizerItems.forEach((item: any) => {
+            console.log(`  - ${item.category} - ${item.itemType}: ${item.quantity} units`);
+            console.log(`    Usage Price: ${item.usagePrice}`);
+            console.log(`    Selling Price: ${item.sellingPrice}`);
+            console.log(`    Cost Per Piece: ${item.costPerPiece}`);
+            console.log(`    Total Price: ${item.totalPrice}`);
+            });
+          }
+          
           // Validate inventory availability first
           const validation = await InventoryDeductionService.validateInventoryAvailability(accessorySaleItems);
           if (!validation.isValid) {

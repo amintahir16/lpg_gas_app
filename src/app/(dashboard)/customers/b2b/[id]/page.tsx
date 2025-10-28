@@ -153,6 +153,10 @@ export default function B2BCustomerDetailPage() {
     pricePerItem: number;
     totalPrice: number;
     availableStock: number;
+    // Vaporizer-specific fields
+    isVaporizer: boolean;
+    usagePrice: number; // Cost Price - for charging usage (not deducted from inventory)
+    sellingPrice: number; // Selling Price - for selling vaporizer (deducted from inventory)
   }>>([]);
 
   useEffect(() => {
@@ -437,11 +441,11 @@ export default function B2BCustomerDetailPage() {
       const accessories = accessoryItems
         .filter(item => item.quantity > 0)
         .map(item => ({
-          itemName: item.name,
-          itemType: item.name === 'Stove' ? 'stove' : 
-                   item.name.includes('Regulator') ? 'regulator' :
-                   item.name.includes('Pipe') ? 'gasPipe' : 'product',
-          quality: item.quality || '',
+          itemName: item.category,
+          itemType: item.category === 'Stove' ? 'stove' : 
+                   item.category.includes('Regulator') ? 'regulator' :
+                   item.category.includes('Pipe') ? 'gasPipe' : 'product',
+          quality: item.itemType || '',
           requested: item.quantity
         }));
 
@@ -462,11 +466,11 @@ export default function B2BCustomerDetailPage() {
         const accessories = accessoryItems
           .filter(item => item.quantity > 0)
           .map(item => ({
-            itemName: item.name,
-            itemType: item.name === 'Stove' ? 'stove' : 
-                     item.name.includes('Regulator') ? 'regulator' :
-                     item.name.includes('Pipe') ? 'gasPipe' : 'product',
-            quality: item.quality || '',
+            itemName: item.category,
+            itemType: item.category === 'Stove' ? 'stove' : 
+                     item.category.includes('Regulator') ? 'regulator' :
+                     item.category.includes('Pipe') ? 'gasPipe' : 'product',
+            quality: item.itemType || '',
             requested: item.quantity
           }));
 
@@ -488,7 +492,7 @@ export default function B2BCustomerDetailPage() {
       return;
     }
 
-    let firstInvalidIndex = null;
+    let firstInvalidIndex: number | null = null;
     const hasErrors = gasItems.some((item, index) => {
       if (item.delivered > 0) {
         const stockInfo = getCylinderStock(item.cylinderType);
@@ -619,7 +623,7 @@ export default function B2BCustomerDetailPage() {
     e.preventDefault();
     
     try {
-      const formData = new FormData(e.currentTarget);
+      const formData = new FormData(e.currentTarget as HTMLFormElement);
       
       // Check for cylinder validation errors and scroll to first invalid item
       if (firstInvalidCylinderIndex !== null) {
@@ -632,13 +636,45 @@ export default function B2BCustomerDetailPage() {
         scrollToInvalidInventoryItem();
         return;
       }
+
+      // Validate gas items - ensure no empty delivered cylinders are sent
+      const validGasItems = gasItems.filter(item => {
+        if (item.delivered > 0 || item.emptyReturned > 0) {
+          return true;
+        }
+        // Log skipped items for debugging
+        console.log(`Skipping gas item: ${item.cylinderType} - delivered: ${item.delivered}, emptyReturned: ${item.emptyReturned}`);
+        return false;
+      });
+
+      console.log(`Processing ${validGasItems.length} valid gas items out of ${gasItems.length} total items`);
       
       // Validate that there are items with quantity > 0
       if (transactionType === 'SALE') {
         const hasGasItems = gasItems.some(item => item.delivered > 0);
         const hasAccessoryItems = accessoryItems.some(item => item.quantity > 0);
         
-        if (!hasGasItems && !hasAccessoryItems) {
+        // Check if there are any items with monetary value
+        const hasMonetaryGasItems = gasItems.some(item => item.delivered > 0);
+        const hasMonetaryAccessoryItems = accessoryItems.some(item => 
+          item.quantity > 0 && item.pricePerItem > 0
+        );
+        
+        // Check if there are free vaporizers (quantity > 0 but both prices = 0)
+        const hasFreeVaporizers = accessoryItems.some(item => 
+          item.quantity > 0 && 
+          item.isVaporizer && 
+          item.usagePrice === 0 && 
+          item.sellingPrice === 0
+        );
+        
+        // Allow transaction if:
+        // 1. There are gas items with monetary value, OR
+        // 2. There are accessories with monetary value, OR  
+        // 3. There are free vaporizers (special case)
+        const isValidTransaction = hasMonetaryGasItems || hasMonetaryAccessoryItems || hasFreeVaporizers;
+        
+        if (!isValidTransaction) {
           setError('Please add at least one item with quantity greater than 0 before creating a transaction.');
           return;
         }
@@ -684,13 +720,18 @@ export default function B2BCustomerDetailPage() {
         paymentAgainst: transactionType === 'PAYMENT' ? formData.get('paymentAgainst') : null,
         paymentDescription: transactionType === 'PAYMENT' ? formData.get('paymentDescription') : null,
         paymentQuantity: transactionType === 'PAYMENT' ? paymentQuantity : null,
-        gasItems: transactionType === 'PAYMENT' ? [] : gasItems.filter(item => item.delivered > 0 || item.emptyReturned > 0),
+        gasItems: transactionType === 'PAYMENT' ? [] : validGasItems,
         accessoryItems: transactionType === 'PAYMENT' ? (paymentItem ? [paymentItem] : []) : accessoryItems.filter(item => item.quantity > 0).map(item => ({
           productName: `${item.category} - ${item.itemType}`,
           quantity: item.quantity,
           pricePerItem: item.pricePerItem,
           totalPrice: item.totalPrice,
-          cylinderType: null
+          cylinderType: null,
+          // Vaporizer-specific fields
+          isVaporizer: item.isVaporizer,
+          usagePrice: item.usagePrice,
+          sellingPrice: item.sellingPrice,
+          costPerPiece: item.costPerPiece
         }))
       };
 

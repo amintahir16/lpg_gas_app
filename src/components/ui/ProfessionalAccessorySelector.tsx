@@ -22,6 +22,10 @@ interface AccessoryItem {
   pricePerItem: number;
   totalPrice: number;
   availableStock: number;
+  isVaporizer: boolean;
+  // Vaporizer-specific pricing
+  usagePrice: number; // Cost Price - for charging usage (not deducted from inventory)
+  sellingPrice: number; // Selling Price - for selling vaporizer (deducted from inventory)
 }
 
 interface ProfessionalAccessorySelectorProps {
@@ -49,6 +53,11 @@ export function ProfessionalAccessorySelector({
   const [inventoryCategories, setInventoryCategories] = useState<InventoryCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Vaporizer detection utility
+  const isVaporizer = (category: string) => {
+    return category.toLowerCase().includes('vaporizer');
+  };
 
   // Fetch inventory categories and items
   useEffect(() => {
@@ -85,7 +94,10 @@ export function ProfessionalAccessorySelector({
       costPerPiece: 0,
       pricePerItem: 0,
       totalPrice: 0,
-      availableStock: 0
+      availableStock: 0,
+      isVaporizer: false,
+      usagePrice: 0,
+      sellingPrice: 0
     };
     
     setAccessoryItems([...accessoryItems, newItem]);
@@ -102,14 +114,32 @@ export function ProfessionalAccessorySelector({
       if (item.id === id) {
         const updatedItem = { ...item, [field]: value };
         
-        // Auto-calculate price with 20% markup when quantity changes
-        if (field === 'quantity' || field === 'costPerPiece') {
+        // Auto-calculate price when quantity or pricing changes
+        if (field === 'quantity' || field === 'costPerPiece' || field === 'usagePrice' || field === 'sellingPrice') {
           const quantity = field === 'quantity' ? value : updatedItem.quantity;
           const costPerPiece = field === 'costPerPiece' ? value : updatedItem.costPerPiece;
-          const pricePerItem = costPerPiece * 1.2; // 20% markup
-          const totalPrice = quantity * pricePerItem;
+          const usagePrice = field === 'usagePrice' ? value : (updatedItem.usagePrice || 0);
+          const sellingPrice = field === 'sellingPrice' ? value : (updatedItem.sellingPrice || 0);
           
-          updatedItem.pricePerItem = pricePerItem;
+          let finalPricePerItem = 0;
+          let totalPrice = 0;
+          
+          // For vaporizers, handle usage vs selling pricing
+          if (updatedItem.isVaporizer) {
+            // Calculate total based on usage price + selling price
+            const usageTotal = quantity * usagePrice;
+            const sellingTotal = quantity * sellingPrice;
+            totalPrice = usageTotal + sellingTotal;
+            
+            // Set pricePerItem to the total per item for display
+            finalPricePerItem = usagePrice + sellingPrice;
+          } else {
+            // For regular accessories, use 20% markup
+            finalPricePerItem = costPerPiece * 1.2;
+            totalPrice = quantity * finalPricePerItem;
+          }
+          
+          updatedItem.pricePerItem = finalPricePerItem;
           updatedItem.totalPrice = totalPrice;
         }
         
@@ -130,6 +160,7 @@ export function ProfessionalAccessorySelector({
       // Update all fields in a single state update to avoid race conditions
       const updatedItems = accessoryItems.map(item => {
         if (item.id === id) {
+          const isVaporizerCategory = isVaporizer(category);
           return {
             ...item,
             category: category,
@@ -138,7 +169,10 @@ export function ProfessionalAccessorySelector({
             pricePerItem: 0,
             totalPrice: 0,
             availableStock: 0,
-            quantity: 0 // Reset quantity too
+            quantity: 0, // Reset quantity too
+            isVaporizer: isVaporizerCategory,
+            usagePrice: 0,
+            sellingPrice: 0
           };
         }
         return item;
@@ -163,14 +197,22 @@ export function ProfessionalAccessorySelector({
           // Update all fields in a single state update
           const updatedItems = accessoryItems.map(accessoryItem => {
             if (accessoryItem.id === id) {
-              const pricePerItem = selectedItem.costPerPiece * 1.2; // 20% markup
+              // For vaporizers, don't auto-calculate price - let user input manually
+              // For regular accessories, use 20% markup
+              let pricePerItem = 0;
+              if (!accessoryItem.isVaporizer) {
+                pricePerItem = selectedItem.costPerPiece * 1.2; // 20% markup for regular accessories
+              }
+              
               return {
                 ...accessoryItem,
                 itemType: itemType,
                 costPerPiece: selectedItem.costPerPiece,
                 availableStock: selectedItem.quantity,
                 pricePerItem: pricePerItem,
-                totalPrice: accessoryItem.quantity * pricePerItem
+                totalPrice: accessoryItem.quantity * pricePerItem,
+                usagePrice: accessoryItem.isVaporizer ? (accessoryItem.usagePrice || 0) : 0,
+                sellingPrice: accessoryItem.isVaporizer ? (accessoryItem.sellingPrice || 0) : 0
               };
             }
             return accessoryItem;
@@ -387,29 +429,59 @@ export function ProfessionalAccessorySelector({
                       </div>
                     </td>
 
-                    {/* Cost Price (Read-only) */}
+                    {/* Cost Price */}
                     <td className="py-3 px-4 min-h-[70px] align-top">
                       <div className="flex flex-col h-full justify-start">
                         <div className="flex items-center pt-3">
                           <CurrencyDollarIcon className="w-4 h-4 mr-1 text-gray-500" />
-                          <span className="text-sm font-medium text-gray-700">
-                            {formatCurrency(item.costPerPiece)}
-                          </span>
+                          {item.isVaporizer ? (
+                            <div className="flex flex-col">
+                              <input
+                                type="number"
+                                value={item.usagePrice || 0}
+                                onChange={(e) => updateAccessoryItem(item.id, 'usagePrice', Number(e.target.value))}
+                                className="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="0"
+                                min="0"
+                              />
+                              <span className="text-xs text-gray-500 mt-1">Usage Fee</span>
+                            </div>
+                          ) : (
+                            <span className="text-sm font-medium text-gray-700">
+                              {formatCurrency(item.costPerPiece)}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </td>
 
-                    {/* Selling Price (Auto-calculated with 20% markup) */}
+                    {/* Selling Price */}
                     <td className="py-3 px-4 min-h-[70px] align-top">
                       <div className="flex flex-col h-full justify-start">
                         <div className="flex items-center pt-3">
                           <CurrencyDollarIcon className="w-4 h-4 mr-1 text-green-500" />
-                          <span className="text-sm font-medium text-green-700">
-                            {formatCurrency(item.pricePerItem)}
-                          </span>
-                          <Badge variant="secondary" className="ml-2 text-xs">
-                            +20%
-                          </Badge>
+                          {item.isVaporizer ? (
+                            <div className="flex flex-col">
+                              <input
+                                type="number"
+                                value={item.sellingPrice || 0}
+                                onChange={(e) => updateAccessoryItem(item.id, 'sellingPrice', Number(e.target.value))}
+                                className="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                placeholder="0"
+                                min="0"
+                              />
+                              <span className="text-xs text-gray-500 mt-1">Selling Price</span>
+                            </div>
+                          ) : (
+                            <>
+                              <span className="text-sm font-medium text-green-700">
+                                {formatCurrency(item.pricePerItem)}
+                              </span>
+                              <Badge variant="secondary" className="ml-2 text-xs">
+                                +20%
+                              </Badge>
+                            </>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -445,6 +517,34 @@ export function ProfessionalAccessorySelector({
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Vaporizer Pricing Information */}
+      {accessoryItems.some(item => item.isVaporizer && item.category) && (
+        <div className="mt-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center space-x-2 mb-3">
+              <CubeIcon className="w-5 h-5 text-blue-600" />
+              <span className="text-sm font-semibold text-blue-800">
+                Vaporizer Pricing Guide
+              </span>
+            </div>
+            <div className="text-sm text-gray-700 space-y-2">
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
+                <span><strong>Usage Fee (Cost Price):</strong> Charge for using your vaporizer - NOT deducted from inventory</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                <span><strong>Selling Price:</strong> Charge for selling vaporizer - WILL be deducted from inventory</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                <span><strong>Both Empty:</strong> Customer uses vaporizer for free - NOT deducted, NOT charged</span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

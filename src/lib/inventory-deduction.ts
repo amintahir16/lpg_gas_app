@@ -6,6 +6,11 @@ interface AccessorySaleItem {
   quantity: number;
   pricePerItem: number;
   totalPrice: number;
+  // Vaporizer-specific fields
+  isVaporizer?: boolean;
+  usagePrice?: number; // Cost Price - for charging usage (not deducted from inventory)
+  sellingPrice?: number; // Selling Price - for selling vaporizer (deducted from inventory)
+  costPerPiece?: number;
 }
 
 export class InventoryDeductionService {
@@ -18,7 +23,23 @@ export class InventoryDeductionService {
     for (const item of items) {
       if (item.quantity <= 0) continue;
       
-      console.log(`📦 Deducting ${item.quantity} units of ${item.category} - ${item.itemType}`);
+      // Special handling for vaporizers
+      if (item.isVaporizer) {
+        console.log(`🌫️ Processing vaporizer: ${item.category} - ${item.itemType}`);
+        console.log(`   Usage Price: ${item.usagePrice || 0}`);
+        console.log(`   Selling Price: ${item.sellingPrice || 0}`);
+        console.log(`   Quantity: ${item.quantity}`);
+        
+        // Only deduct from inventory if selling price is set (customer is buying the vaporizer)
+        if (!item.sellingPrice || item.sellingPrice <= 0) {
+          console.log(`   ⚠️ No selling price set - vaporizer usage only, NOT deducting from inventory`);
+          continue;
+        }
+        
+        console.log(`   ✅ Selling price set - deducting vaporizer from inventory`);
+      } else {
+        console.log(`📦 Deducting ${item.quantity} units of ${item.category} - ${item.itemType}`);
+      }
       
       try {
         // Find the inventory item
@@ -56,7 +77,12 @@ export class InventoryDeductionService {
           }
         });
         
-        console.log(`✅ Successfully deducted ${item.quantity} units. New stock: ${newQuantity}`);
+        if (item.isVaporizer) {
+          console.log(`✅ Successfully deducted ${item.quantity} vaporizer units. New stock: ${newQuantity}`);
+          console.log(`   Business Impact: Customer bought vaporizer (selling price: ${item.sellingPrice})`);
+        } else {
+          console.log(`✅ Successfully deducted ${item.quantity} units. New stock: ${newQuantity}`);
+        }
         
       } catch (error) {
         console.error(`❌ Error deducting inventory for ${item.category} - ${item.itemType}:`, error);

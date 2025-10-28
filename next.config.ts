@@ -3,14 +3,12 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   /* config options here */
   staticPageGenerationTimeout: 1000,
-  experimental: {
-    // Enable Turbopack for faster development
-    turbo: {
-      rules: {
-        '*.svg': {
-          loaders: ['@svgr/webpack'],
-          as: '*.js',
-        },
+  // Turbopack configuration (moved from experimental.turbo)
+  turbopack: {
+    rules: {
+      '*.svg': {
+        loaders: ['@svgr/webpack'],
+        as: '*.js',
       },
     },
   },
@@ -23,10 +21,9 @@ const nextConfig: NextConfig = {
   env: {
     HOSTNAME: '0.0.0.0',
   },
-  // Development server configuration
+  // Development server configuration (updated for Next.js 15.5.2)
   devIndicators: {
-    buildActivity: true,
-    buildActivityPosition: 'bottom-right',
+    position: 'bottom-right',
   },
 };
 
