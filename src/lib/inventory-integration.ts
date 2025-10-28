@@ -62,6 +62,13 @@ export class InventoryIntegrationService {
       return;
     }
 
+    // Check if this is a vaporizer purchase vendor
+    if (this.isVaporizerPurchaseVendor(vendorCategory)) {
+      console.log(`⚙️ Processing as vaporizer purchase (vendor category: ${vendorCategory})`);
+      await this.processVaporizerPurchase(item);
+      return;
+    }
+
     // For non-gas vendors, use item name detection
     console.log(`🔍 Is cylinder item: ${this.isCylinderItem(itemName)}`);
     console.log(`🔍 Is gas item: ${this.isGasItem(itemName)}`);
@@ -108,6 +115,23 @@ export class InventoryIntegrationService {
     ];
     
     return accessoriesPatterns.some(pattern => normalizedSlug.includes(pattern));
+  }
+
+  /**
+   * Check if vendor is a vaporizer purchase vendor
+   */
+  private static isVaporizerPurchaseVendor(categorySlug?: string): boolean {
+    if (!categorySlug) return false;
+    
+    const normalizedSlug = categorySlug.toLowerCase().replace(/[_-]/g, '');
+    const vaporizerPatterns = [
+      'vaporizerpurchase',
+      'vaporizer_purchase',
+      'vaporiserpurchase',
+      'vaporiser_purchase'
+    ];
+    
+    return vaporizerPatterns.some(pattern => normalizedSlug.includes(pattern));
   }
 
   /**
@@ -282,6 +306,27 @@ export class InventoryIntegrationService {
     await this.processCustomItemPurchase(item, category);
   }
 
+  /**
+   * Process vaporizer purchase - add to CustomItem table (same as accessories)
+   */
+  private static async processVaporizerPurchase(item: VendorPurchaseItem): Promise<void> {
+    const itemName = item.itemName; // This becomes the "type" in inventory
+    const quantity = Number(item.quantity); // Ensure it's a number
+    const unitPrice = Number(item.unitPrice); // Ensure it's a number
+    const totalCost = quantity * unitPrice;
+
+    console.log(`⚙️ Processing vaporizer purchase: ${itemName} (${quantity} units at ${unitPrice} each)`);
+
+    // Get the category from the vendor item - this is the key part!
+    // The category should come from the vendor item, not determined by name
+    const category = item.category || this.determineVaporizerCategory(itemName);
+    
+    console.log(`📂 Using category: ${category} for item: ${itemName}`);
+    
+    // Use CustomItem table for all vaporizers (same as accessories)
+    await this.processCustomItemPurchase(item, category);
+  }
+
 
   /**
    * Process custom item purchase - add to CustomItem table for other categories
@@ -356,6 +401,8 @@ export class InventoryIntegrationService {
       return 'Valves';
     } else if (normalized === 'pipe' || normalized === 'pipes' || normalized === 'gas pipe' || normalized === 'gas pipes') {
       return 'Gas Pipes';
+    } else if (normalized === 'vaporizer' || normalized === 'vaporizers' || normalized === 'vaporiser' || normalized === 'vaporisers') {
+      return 'Vaporizers';
     } else {
       // Capitalize first letter for other categories
       return category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
@@ -379,6 +426,26 @@ export class InventoryIntegrationService {
     } else {
       // Default category for other accessories
       return 'Accessories';
+    }
+  }
+
+  /**
+   * Determine vaporizer category based on item name
+   */
+  private static determineVaporizerCategory(itemName: string): string {
+    const name = itemName.toLowerCase();
+    
+    if (name.includes('vaporizer') || name.includes('vaporiser')) {
+      return 'Vaporizers';
+    } else if (name.includes('20kg')) {
+      return 'Vaporizers';
+    } else if (name.includes('30kg')) {
+      return 'Vaporizers';
+    } else if (name.includes('40kg')) {
+      return 'Vaporizers';
+    } else {
+      // Default category for other vaporizer equipment
+      return 'Vaporizers';
     }
   }
 
