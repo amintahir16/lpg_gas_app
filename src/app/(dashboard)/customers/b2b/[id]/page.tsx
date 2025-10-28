@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { useInventoryValidation } from '@/hooks/useInventoryValidation';
 import { useCylinderStock } from '@/hooks/useCylinderStock';
-import { CategoryAccessorySelector } from '@/components/ui/CategoryAccessorySelector';
+import { ProfessionalAccessorySelector } from '@/components/ui/ProfessionalAccessorySelector';
 import { 
   ArrowLeftIcon,
   DocumentTextIcon,
@@ -143,12 +143,16 @@ export default function B2BCustomerDetailPage() {
   const [updatingCategory, setUpdatingCategory] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
 
-  // Accessories transaction form data - now dynamically populated
+  // Accessories transaction form data - now with professional structure
   const [accessoryItems, setAccessoryItems] = useState<Array<{
-    name: string;
+    id: string;
+    category: string;
+    itemType: string;
     quantity: number;
+    costPerPiece: number;
     pricePerItem: number;
-    quality?: string;
+    totalPrice: number;
+    availableStock: number;
   }>>([]);
 
   useEffect(() => {
@@ -651,7 +655,7 @@ export default function B2BCustomerDetailPage() {
       let totalAmount = 0;
       if (transactionType === 'SALE') {
         totalAmount = gasItems.reduce((sum, item) => sum + (item.delivered * item.pricePerItem), 0) +
-                     accessoryItems.reduce((sum, item) => sum + (item.quantity * item.pricePerItem), 0);
+                     accessoryItems.reduce((sum, item) => sum + item.totalPrice, 0);
       } else if (transactionType === 'BUYBACK') {
         totalAmount = gasItems.reduce((sum, item) => sum + item.buybackTotal, 0);
       } else if (transactionType === 'PAYMENT') {
@@ -681,7 +685,13 @@ export default function B2BCustomerDetailPage() {
         paymentDescription: transactionType === 'PAYMENT' ? formData.get('paymentDescription') : null,
         paymentQuantity: transactionType === 'PAYMENT' ? paymentQuantity : null,
         gasItems: transactionType === 'PAYMENT' ? [] : gasItems.filter(item => item.delivered > 0 || item.emptyReturned > 0),
-        accessoryItems: transactionType === 'PAYMENT' ? (paymentItem ? [paymentItem] : []) : accessoryItems.filter(item => item.quantity > 0)
+        accessoryItems: transactionType === 'PAYMENT' ? (paymentItem ? [paymentItem] : []) : accessoryItems.filter(item => item.quantity > 0).map(item => ({
+          productName: `${item.category} - ${item.itemType}`,
+          quantity: item.quantity,
+          pricePerItem: item.pricePerItem,
+          totalPrice: item.totalPrice,
+          cylinderType: null
+        }))
       };
 
       const response = await fetch('/api/customers/b2b/transactions', {
@@ -703,7 +713,7 @@ export default function B2BCustomerDetailPage() {
       // Reset form and refresh data
       setShowTransactionForm(false);
       setGasItems(gasItems.map(item => ({ ...item, delivered: 0, emptyReturned: 0 })));
-      setAccessoryItems(accessoryItems.map(item => ({ ...item, quantity: 0, quality: '' })));
+      setAccessoryItems([]);
       
       // Reset payment form states
       setPaymentAgainst('');
@@ -1234,7 +1244,7 @@ export default function B2BCustomerDetailPage() {
                       <CardTitle className="text-lg font-semibold text-gray-900">Accessories</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <CategoryAccessorySelector
+                      <ProfessionalAccessorySelector
                         accessoryItems={accessoryItems}
                         setAccessoryItems={setAccessoryItems}
                         onValidationChange={setHasAccessoryErrors}
@@ -1342,7 +1352,7 @@ export default function B2BCustomerDetailPage() {
                     <p className="text-lg font-semibold text-gray-900">
                       Total Sale Amount: {formatCurrency(
                         gasItems.reduce((sum, item) => sum + (item.delivered * item.pricePerItem), 0) +
-                        accessoryItems.reduce((sum, item) => sum + (item.quantity * item.pricePerItem), 0)
+                        accessoryItems.reduce((sum, item) => sum + item.totalPrice, 0)
                       )}
                     </p>
                   )}

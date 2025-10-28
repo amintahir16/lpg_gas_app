@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { InventoryDeductionService } from '@/lib/inventory-deduction';
+import { prisma } from '@/lib/db';
 import { CylinderType, CylinderStatus } from '@prisma/client';
 
 export async function POST(request: NextRequest) {
@@ -299,49 +300,31 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Update inventory for accessories (only deduction on sales)
+      // Update inventory for accessories using professional deduction service
       if (transactionType === 'SALE' && accessoryItems.length > 0) {
-        for (const accessory of accessoryItems) {
-          if (accessory.quantity > 0) {
-            if (accessory.name === 'Stove' && accessory.quality) {
-              // Handle stove inventory with quality
-              const stove = await tx.stove.findFirst({
-                where: { quality: accessory.quality }
-              });
-              
-              if (stove) {
-                await tx.stove.update({
-                  where: { id: stove.id },
-                  data: {
-                    quantity: {
-                      decrement: accessory.quantity
-                    },
-                    totalCost: {
-                      decrement: accessory.quantity * stove.costPerPiece
-                    }
-                  }
-                });
-                console.log(`Deducted ${accessory.quantity} ${accessory.quality} stoves from inventory`);
-              }
-            } else {
-              // Handle other accessories (regulators, gas pipes, etc.)
-              const product = await tx.product.findFirst({
-                where: { name: accessory.name }
-              });
-              
-              if (product) {
-                await tx.product.update({
-                  where: { id: product.id },
-                  data: {
-                    stockQuantity: {
-                      decrement: accessory.quantity
-                    }
-                  }
-                });
-                console.log(`Deducted ${accessory.quantity} ${accessory.name} from inventory`);
-              }
-            }
+        console.log('🔄 Processing accessories inventory deduction...');
+        
+        // Convert accessory items to the format expected by InventoryDeductionService
+        const accessorySaleItems = accessoryItems
+          .filter(item => item.quantity > 0)
+          .map(item => ({
+            category: item.productName.split(' - ')[0] || item.name || 'Unknown',
+            itemType: item.productName.split(' - ')[1] || item.name || 'Unknown',
+            quantity: item.quantity,
+            pricePerItem: item.pricePerItem,
+            totalPrice: item.totalPrice
+          }));
+        
+        if (accessorySaleItems.length > 0) {
+          // Validate inventory availability first
+          const validation = await InventoryDeductionService.validateInventoryAvailability(accessorySaleItems);
+          if (!validation.isValid) {
+            throw new Error(`Inventory validation failed: ${validation.errors.join(', ')}`);
           }
+          
+          // Deduct from inventory
+          await InventoryDeductionService.deductAccessoriesFromInventory(accessorySaleItems);
+          console.log('✅ Accessories inventory deduction completed successfully');
         }
       }
 
