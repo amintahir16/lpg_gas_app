@@ -103,6 +103,12 @@ model B2CTransaction {
   date           DateTime
   time           DateTime
   totalAmount    Decimal                       @db.Decimal(10, 2)
+  deliveryCharges Decimal                      @default(0) @db.Decimal(10, 2)
+  finalAmount    Decimal                       @default(0) @db.Decimal(10, 2)
+  totalCost      Decimal                       @default(0) @db.Decimal(10, 2)
+  deliveryCost   Decimal                       @default(0) @db.Decimal(10, 2)
+  actualProfit   Decimal                       @default(0) @db.Decimal(10, 2)
+  paymentMethod  String                        @default("CASH")
   notes          String?
   createdBy      String
   createdAt      DateTime                      @default(now())
@@ -125,6 +131,9 @@ model B2CTransactionGasItem {
   quantity      Int
   pricePerItem  Decimal        @db.Decimal(10, 2)
   totalPrice    Decimal        @db.Decimal(10, 2)
+  costPrice     Decimal        @default(0) @db.Decimal(10, 2)
+  totalCost     Decimal        @default(0) @db.Decimal(10, 2)
+  profitMargin  Decimal        @default(0) @db.Decimal(10, 2)
   transaction   B2CTransaction @relation(fields: [transactionId], references: [id])
 
   @@map("b2c_transaction_gas_items")
@@ -150,6 +159,9 @@ model B2CTransactionAccessoryItem {
   quantity      Int
   pricePerItem  Decimal        @db.Decimal(10, 2)
   totalPrice    Decimal        @db.Decimal(10, 2)
+  costPrice     Decimal        @default(0) @db.Decimal(10, 2)
+  totalCost     Decimal        @default(0) @db.Decimal(10, 2)
+  profitMargin  Decimal        @default(0) @db.Decimal(10, 2)
   transaction   B2CTransaction @relation(fields: [transactionId], references: [id])
 
   @@map("b2c_transaction_accessory_items")

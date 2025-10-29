@@ -9,7 +9,7 @@ import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeftIcon, PlusIcon, TrashIcon, CalculatorIcon } from '@heroicons/react/24/outline';
 import { useInventoryValidation } from '@/hooks/useInventoryValidation';
-import { CategoryAccessorySelector } from '@/components/ui/CategoryAccessorySelector';
+import { ProfessionalAccessorySelector } from '@/components/ui/ProfessionalAccessorySelector';
 
 interface B2CCustomer {
   id: string;
@@ -47,10 +47,18 @@ interface SecurityItem {
 }
 
 interface AccessoryItem {
-  name: string;
+  id: string;
+  category: string;
+  itemType: string;
   quantity: number;
+  costPerPiece: number;
   pricePerItem: number;
-  quality?: string;
+  totalPrice: number;
+  availableStock: number;
+  // Vaporizer-specific fields
+  isVaporizer: boolean;
+  usagePrice: number; // Cost Price - for charging usage (not deducted from inventory)
+  sellingPrice: number; // Selling Price - for selling vaporizer (deducted from inventory)
 }
 
 const CYLINDER_TYPES = [
@@ -59,15 +67,7 @@ const CYLINDER_TYPES = [
   { value: 'COMMERCIAL_45_4KG', label: 'Commercial (45.4kg)', securityPrice: 90000 }
 ];
 
-const ACCESSORY_OPTIONS = [
-  'Gas Pipe (ft)',
-  'Stove',
-  'Regulator Adjustable',
-  'Regulator Ideal High Pressure',
-  'Regulator 5 Star High Pressure',
-  'Regulator 3 Star Low Pressure Q1',
-  'Regulator 3 Star Low Pressure Q2'
-];
+// Note: ACCESSORY_OPTIONS removed - accessories are now loaded dynamically from inventory via ProfessionalAccessorySelector
 
 export default function B2CTransactionPage() {
   const router = useRouter();
@@ -90,7 +90,7 @@ export default function B2CTransactionPage() {
   // Transaction items
   const [gasItems, setGasItems] = useState<GasItem[]>([]);
   const [securityItems, setSecurityItems] = useState<SecurityItem[]>([]);
-  // Accessories transaction form data - now dynamically populated
+  // Accessories transaction form data - now with professional structure matching B2B
   const [accessoryItems, setAccessoryItems] = useState<AccessoryItem[]>([]);
   
   // Pricing information
@@ -121,7 +121,7 @@ export default function B2CTransactionPage() {
     checkSecurityReturnErrors();
   }, [securityItems, customer?.cylinderHoldings]);
 
-  // Handle inventory validation changes from CategoryAccessorySelector
+  // Handle inventory validation changes from ProfessionalAccessorySelector
   const handleInventoryValidationChange = (hasErrors: boolean, firstInvalidItem?: {category: string, index: number}) => {
     setHasInventoryErrors(hasErrors);
     setFirstInvalidInventoryItem(firstInvalidItem || null);
@@ -211,7 +211,8 @@ export default function B2CTransactionPage() {
     
     setGasItems(updated);
 
-    // Validate inventory when quantity changes
+    // Validate inventory when gas quantity changes
+    // Note: Accessories inventory validation is handled internally by ProfessionalAccessorySelector
     if (field === 'quantity') {
       const cylinders = updated
         .filter(item => item.quantity > 0)
@@ -220,18 +221,8 @@ export default function B2CTransactionPage() {
           requested: item.quantity
         }));
       
-      const accessories = accessoryItems
-        .filter(item => item.quantity > 0)
-        .map(item => ({
-          itemName: item.name,
-          itemType: item.name === 'Stove' ? 'stove' : 
-                   item.name.includes('Regulator') ? 'regulator' :
-                   item.name.includes('Pipe') ? 'gasPipe' : 'product',
-          quality: item.quality || '',
-          requested: item.quantity
-        }));
-
-      validateInventory(cylinders, accessories);
+      // Only validate cylinders - accessories are validated by ProfessionalAccessorySelector
+      validateInventory(cylinders, []);
     }
     
     // Check if we need to clear validation errors for reduced quantities
@@ -245,18 +236,8 @@ export default function B2CTransactionPage() {
             requested: item.quantity
           }));
         
-        const accessories = accessoryItems
-          .filter(item => item.quantity > 0)
-          .map(item => ({
-            itemName: item.name,
-            itemType: item.name === 'Stove' ? 'stove' : 
-                     item.name.includes('Regulator') ? 'regulator' :
-                     item.name.includes('Pipe') ? 'gasPipe' : 'product',
-            quality: item.quality || '',
-            requested: item.quantity
-          }));
-
-        validateInventory(cylinders, accessories);
+        // Only validate cylinders - accessories are validated by ProfessionalAccessorySelector
+        validateInventory(cylinders, []);
       }, 100);
     }
   };
@@ -460,19 +441,7 @@ export default function B2CTransactionPage() {
     }, 0);
   };
 
-  const addAccessoryItem = () => {
-    setAccessoryItems([...accessoryItems, { itemName: '', quantity: 1, pricePerItem: 0, costPrice: 0 }]);
-  };
-
-  const removeAccessoryItem = (index: number) => {
-    setAccessoryItems(accessoryItems.filter((_, i) => i !== index));
-  };
-
-  const updateAccessoryItem = (index: number, field: keyof AccessoryItem, value: any) => {
-    const updated = [...accessoryItems];
-    updated[index] = { ...updated[index], [field]: value };
-    setAccessoryItems(updated);
-  };
+  // Note: addAccessoryItem, removeAccessoryItem, and updateAccessoryItem are now handled internally by ProfessionalAccessorySelector
 
   const calculateTotal = (items: any[], priceField: string, quantityField: string) => {
     return items.reduce((sum, item) => {
@@ -483,13 +452,15 @@ export default function B2CTransactionPage() {
   // Calculate revenue totals
   const gasTotal = calculateTotal(gasItems, 'pricePerItem', 'quantity');
   const securityTotal = calculateTotal(securityItems, 'pricePerItem', 'quantity');
-  const accessoryTotal = calculateTotal(accessoryItems, 'pricePerItem', 'quantity');
+  // Accessories: use totalPrice which is already calculated (includes vaporizer logic)
+  const accessoryTotal = accessoryItems.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
   const subtotal = gasTotal + securityTotal + accessoryTotal;
   const finalTotal = subtotal + Number(deliveryCharges);
 
   // Calculate cost totals
   const gasCost = calculateTotal(gasItems, 'costPrice', 'quantity');
-  const accessoryCost = calculateTotal(accessoryItems, 'costPrice', 'quantity');
+  // Accessories: use costPerPiece * quantity
+  const accessoryCost = accessoryItems.reduce((sum, item) => sum + (item.costPerPiece * item.quantity), 0);
   
   // Calculate security return profit (25% deduction on returns)
   const securityReturnProfit = securityItems.reduce((sum, item) => {
@@ -602,7 +573,19 @@ export default function B2CTransactionPage() {
         notes: notes || null,
         gasItems: gasItems.filter(item => item.cylinderType && item.quantity > 0),
         securityItems: securityItems.filter(item => item.cylinderType && item.quantity > 0),
-        accessoryItems: accessoryItems.filter(item => item.itemName && item.quantity > 0)
+        accessoryItems: accessoryItems.filter(item => item.quantity > 0).map(item => ({
+          itemName: `${item.category} - ${item.itemType}`,
+          itemType: item.itemType,
+          quality: '', // Not used in new structure but kept for compatibility
+          quantity: item.quantity,
+          pricePerItem: item.pricePerItem,
+          totalPrice: item.totalPrice,
+          costPrice: item.costPerPiece,
+          // Vaporizer-specific fields
+          isVaporizer: item.isVaporizer,
+          usagePrice: item.usagePrice,
+          sellingPrice: item.sellingPrice
+        }))
       };
 
       const response = await fetch('/api/customers/b2c/transactions', {
@@ -998,7 +981,7 @@ export default function B2CTransactionPage() {
             <CardTitle className="text-lg font-semibold text-gray-900">Accessories</CardTitle>
           </CardHeader>
           <CardContent>
-            <CategoryAccessorySelector
+            <ProfessionalAccessorySelector
               accessoryItems={accessoryItems}
               setAccessoryItems={setAccessoryItems}
               onValidationChange={setHasAccessoryErrors}

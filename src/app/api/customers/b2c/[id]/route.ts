@@ -47,7 +47,10 @@ export async function GET(
             securityItems: true,
             accessoryItems: true
           },
-          orderBy: { date: 'desc' }
+          orderBy: [
+            { date: 'desc' },
+            { time: 'desc' }
+          ]
         }
       }
     });
