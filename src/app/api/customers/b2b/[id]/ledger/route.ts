@@ -26,25 +26,73 @@ export async function GET(
       );
     }
 
-    // Get transactions with pagination
-    const [transactions, total] = await Promise.all([
-      prisma.b2BTransaction.findMany({
-        where: { customerId },
-        include: {
-          items: true,
-        },
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.b2BTransaction.count({ where: { customerId } }),
-    ]);
+    // Get ALL transactions first to calculate running balance correctly
+    const allTransactions = await prisma.b2BTransaction.findMany({
+      where: { customerId },
+      include: {
+        items: true,
+      },
+      orderBy: { createdAt: 'asc' }, // Order by creation time ascending for proper running balance calculation
+    });
 
+    // Calculate running balance for each transaction (chronological order)
+    let runningBalance = 0;
+    const transactionsWithRunningBalance = allTransactions.map((transaction) => {
+      // Convert Decimal to number properly
+      const totalAmount = parseFloat(transaction.totalAmount.toString());
+      
+      // Calculate the balance impact of this transaction
+      let balanceImpact = 0;
+      switch (transaction.transactionType) {
+        case 'SALE':
+          balanceImpact = totalAmount;
+          break;
+        case 'PAYMENT':
+        case 'BUYBACK':
+        case 'ADJUSTMENT':
+        case 'CREDIT_NOTE':
+          balanceImpact = -totalAmount;
+          break;
+        default:
+          balanceImpact = 0;
+      }
+      
+      // Update running balance
+      runningBalance += balanceImpact;
+      
+      return {
+        ...transaction,
+        runningBalance: runningBalance,
+        balanceImpact: balanceImpact
+      };
+    });
+
+    // For display, we want newest first, so we need to recalculate running balance
+    // working backwards from the final balance
+    const reversedTransactions = transactionsWithRunningBalance.reverse();
+    let displayBalance = runningBalance; // Start with the final balance
+    
+    const displayTransactions = reversedTransactions.map((transaction) => {
+      // Move to the balance before this transaction first
+      displayBalance -= transaction.balanceImpact;
+      
+      // The running balance for this transaction is the balance AFTER it
+      const result = {
+        ...transaction,
+        runningBalance: displayBalance + transaction.balanceImpact
+      };
+      
+      return result;
+    });
+
+    // Apply pagination
+    const paginatedTransactions = displayTransactions.slice(skip, skip + limit);
+    const total = allTransactions.length;
     const pages = Math.ceil(total / limit);
 
     return NextResponse.json({
       customer,
-      transactions,
+      transactions: paginatedTransactions,
       pagination: {
         page,
         limit,

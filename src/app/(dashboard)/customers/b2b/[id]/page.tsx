@@ -58,6 +58,8 @@ interface B2BTransaction {
   notes: string | null;
   voided: boolean;
   items: B2BTransactionItem[];
+  runningBalance?: number;
+  balanceImpact?: number;
 }
 
 interface B2BTransactionItem {
@@ -1532,7 +1534,7 @@ export default function B2BCustomerDetailPage() {
                         ? formatCurrency(transaction.totalAmount) : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                      {formatCurrency(customer.ledgerBalance)}
+                      {formatCurrency(transaction.runningBalance || 0)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                       <Button

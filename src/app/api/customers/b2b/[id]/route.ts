@@ -118,3 +118,72 @@ export async function PUT(
     );
   }
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user || (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id: customerId } = await params;
+
+    // Check if customer has any transactions
+    const transactionCount = await prisma.b2BTransaction.count({
+      where: { customerId }
+    });
+
+    if (transactionCount > 0) {
+      return NextResponse.json(
+        { error: 'Cannot delete customer with existing transactions. Please void transactions first.' },
+        { status: 400 }
+      );
+    }
+
+    // Check if customer has any cylinder holdings
+    const cylinderCount = await prisma.cylinder.count({
+      where: { 
+        currentStatus: 'WITH_CUSTOMER',
+        location: {
+          contains: customerId
+        }
+      }
+    });
+
+    if (cylinderCount > 0) {
+      return NextResponse.json(
+        { error: 'Cannot delete customer with active cylinder holdings. Please return cylinders first.' },
+        { status: 400 }
+      );
+    }
+
+    // Soft delete by setting isActive to false
+    const customer = await prisma.customer.update({
+      where: { id: customerId },
+      data: {
+        isActive: false,
+        updatedAt: new Date()
+      }
+    });
+
+    return NextResponse.json({ 
+      message: 'Customer deleted successfully',
+      customer: {
+        id: customer.id,
+        name: customer.name,
+        isActive: customer.isActive
+      }
+    });
+
+  } catch (error) {
+    console.error('Error deleting B2B customer:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete customer' },
+      { status: 500 }
+    );
+  }
+}

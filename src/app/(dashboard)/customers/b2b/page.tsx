@@ -15,7 +15,9 @@ import {
   CurrencyDollarIcon,
   CubeIcon,
   ArrowLeftIcon,
-  DocumentTextIcon
+  DocumentTextIcon,
+  PencilIcon,
+  TrashIcon
 } from '@heroicons/react/24/outline';
 
 interface B2BCustomer {
@@ -34,6 +36,7 @@ interface B2BCustomer {
   notes: string | null;
   isActive: boolean;
   createdAt: string;
+  marginCategoryId: string | null;
 }
 
 interface B2BCustomersResponse {
@@ -62,6 +65,10 @@ export default function B2BCustomersPage() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<B2BCustomer | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Margin categories for B2B customers
   const [marginCategories, setMarginCategories] = useState<any[]>([]);
@@ -199,6 +206,79 @@ export default function B2BCustomersPage() {
     } catch (err) {
       console.error('Error creating customer:', err);
       setError(err instanceof Error ? err.message : 'Failed to create customer');
+    }
+  };
+
+  const handleEditCustomer = (customer: B2BCustomer) => {
+    setEditingCustomer(customer);
+    setShowEditForm(true);
+  };
+
+  const handleUpdateCustomer = async (formData: any) => {
+    if (!editingCustomer) return;
+    
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const response = await fetch(`/api/customers/b2b/${editingCustomer.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update customer');
+      }
+
+      const updatedCustomer = await response.json();
+      console.log('Customer updated successfully:', updatedCustomer);
+
+      // Close the form
+      setShowEditForm(false);
+      setEditingCustomer(null);
+      
+      // Refresh the customers list
+      await fetchB2BCustomers();
+      
+    } catch (err) {
+      console.error('Error updating customer:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update customer');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteCustomer = async (customerId: string) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const response = await fetch(`/api/customers/b2b/${customerId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete customer');
+      }
+
+      console.log('Customer deleted successfully');
+      
+      // Close the confirmation dialog
+      setDeleteConfirm(null);
+      
+      // Refresh the customers list
+      await fetchB2BCustomers();
+      
+    } catch (err) {
+      console.error('Error deleting customer:', err);
+      setError(err instanceof Error ? err.message : 'Failed to delete customer');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -442,17 +522,41 @@ export default function B2BCustomersPage() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        router.push(`/customers/b2b/${customer.id}`);
-                      }}
-                      className="font-medium"
-                    >
-                      View Details
-                    </Button>
+                    <div className="flex space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/customers/b2b/${customer.id}`);
+                        }}
+                        className="font-medium"
+                      >
+                        View Details
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditCustomer(customer);
+                        }}
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        <PencilIcon className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteConfirm(customer.id);
+                        }}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
                 ))}
@@ -595,6 +699,148 @@ export default function B2BCustomersPage() {
           </div>
         </div>
       )}
+
+      {/* Edit B2B Customer Modal */}
+      {showEditForm && editingCustomer && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit B2B Customer</h3>
+              <form className="space-y-4" onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                handleUpdateCustomer({
+                  name: formData.get('name'),
+                  contactPerson: formData.get('contactPerson'),
+                  email: formData.get('email'),
+                  phone: formData.get('phone'),
+                  address: formData.get('address'),
+                  creditLimit: formData.get('creditLimit'),
+                  paymentTermsDays: formData.get('paymentTermsDays'),
+                  notes: formData.get('notes'),
+                  isActive: formData.get('isActive') === 'true',
+                  marginCategoryId: formData.get('marginCategoryId')
+                });
+              }}>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Company Name</label>
+                  <Input name="name" type="text" defaultValue={editingCustomer.name} required />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Margin Category *
+                  </label>
+                  <Select
+                    name="marginCategoryId"
+                    required
+                    disabled={loadingCategories}
+                    defaultValue={editingCustomer.marginCategoryId || ''}
+                  >
+                    <option value="">{loadingCategories ? "Loading categories..." : "Select margin category"}</option>
+                    {marginCategories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name} - Rs {category.marginPerKg}/kg
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Contact Person</label>
+                  <Input name="contactPerson" type="text" defaultValue={editingCustomer.contactPerson} required />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
+                  <Input name="email" type="email" defaultValue={editingCustomer.email || ''} />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Phone</label>
+                  <Input name="phone" type="tel" defaultValue={editingCustomer.phone} required />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Address</label>
+                  <Input name="address" type="text" defaultValue={editingCustomer.address || ''} />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Credit Limit</label>
+                  <Input name="creditLimit" type="number" defaultValue={editingCustomer.creditLimit || 0} step="0.01" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Terms (Days)</label>
+                  <Input name="paymentTermsDays" type="number" defaultValue={editingCustomer.paymentTermsDays} />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Notes</label>
+                  <Input name="notes" type="text" defaultValue={editingCustomer.notes || ''} />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
+                  <select 
+                    name="isActive" 
+                    defaultValue={editingCustomer.isActive ? 'true' : 'false'}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="true">Active</option>
+                    <option value="false">Inactive</option>
+                  </select>
+                </div>
+                <div className="flex justify-end space-x-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setShowEditForm(false);
+                      setEditingCustomer(null);
+                    }}
+                    className="font-medium"
+                    disabled={isLoading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" className="font-medium" disabled={isLoading}>
+                    {isLoading ? 'Updating...' : 'Update Customer'}
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Delete Customer</h3>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to delete this customer? This action cannot be undone.
+                The customer will be marked as inactive instead of being permanently deleted.
+              </p>
+              <div className="flex justify-end space-x-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setDeleteConfirm(null)}
+                  className="font-medium"
+                  disabled={isLoading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => handleDeleteCustomer(deleteConfirm)}
+                  className="font-medium"
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Deleting...' : 'Delete Customer'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
