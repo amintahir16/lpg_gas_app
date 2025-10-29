@@ -53,7 +53,7 @@ interface B2CTransaction {
     deductionRate: number;
   }[];
   accessoryItems: {
-    itemName: string;
+    productName: string;
     quantity: number;
     pricePerItem: number;
     totalPrice: number;
@@ -258,17 +258,17 @@ export default function B2CTransactionDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Gas Section */}
-      {transaction.gasItems.length > 0 && (
+      {/* Items Section - Combined Gas and Accessories */}
+      {(transaction.gasItems.length > 0 || transaction.accessoryItems.length > 0) && (
         <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
           <CardHeader>
-            <CardTitle className="text-lg font-semibold text-gray-900">Gas</CardTitle>
+            <CardTitle className="text-lg font-semibold text-gray-900">Items</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="font-semibold text-gray-700">Gas Cylinder</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Item</TableHead>
                   <TableHead className="font-semibold text-gray-700">Quantity</TableHead>
                   <TableHead className="font-semibold text-gray-700">Selling Price</TableHead>
                   <TableHead className="font-semibold text-gray-700">Cost Price</TableHead>
@@ -278,11 +278,26 @@ export default function B2CTransactionDetailPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
+                {/* Gas Items */}
                 {transaction.gasItems.map((item, index) => (
-                  <TableRow key={index}>
+                  <TableRow key={`gas-${index}`}>
                     <TableCell className="font-semibold text-gray-900">
                       {getCylinderTypeDisplay(item.cylinderType)}
                     </TableCell>
+                    <TableCell>{item.quantity}</TableCell>
+                    <TableCell>Rs {Number(item.pricePerItem).toFixed(2)}</TableCell>
+                    <TableCell>Rs {Number(item.costPrice).toFixed(2)}</TableCell>
+                    <TableCell className="font-semibold">Rs {Number(item.totalPrice).toFixed(2)}</TableCell>
+                    <TableCell>Rs {Number(item.totalCost).toFixed(2)}</TableCell>
+                    <TableCell className="font-semibold text-green-600">
+                      Rs {Number(item.profitMargin).toFixed(2)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {/* Accessory Items */}
+                {transaction.accessoryItems.map((item, index) => (
+                  <TableRow key={`accessory-${index}`}>
+                    <TableCell className="font-semibold text-gray-900">{item.productName}</TableCell>
                     <TableCell>{item.quantity}</TableCell>
                     <TableCell>Rs {Number(item.pricePerItem).toFixed(2)}</TableCell>
                     <TableCell>Rs {Number(item.costPrice).toFixed(2)}</TableCell>
@@ -298,13 +313,19 @@ export default function B2CTransactionDetailPage() {
                     Total =
                   </TableCell>
                   <TableCell className="font-bold text-gray-900">
-                    Rs {Number(gasTotal).toFixed(2)}
+                    Rs {(gasTotal + accessoryTotal).toFixed(2)}
                   </TableCell>
                   <TableCell className="font-bold text-gray-900">
-                    Rs {transaction.gasItems.reduce((sum, item) => sum + Number(item.totalCost), 0).toFixed(2)}
+                    Rs {(
+                      transaction.gasItems.reduce((sum, item) => sum + Number(item.totalCost), 0) +
+                      transaction.accessoryItems.reduce((sum, item) => sum + Number(item.totalCost), 0)
+                    ).toFixed(2)}
                   </TableCell>
                   <TableCell className="font-bold text-green-600">
-                    Rs {transaction.gasItems.reduce((sum, item) => sum + Number(item.profitMargin), 0).toFixed(2)}
+                    Rs {(
+                      transaction.gasItems.reduce((sum, item) => sum + Number(item.profitMargin), 0) +
+                      transaction.accessoryItems.reduce((sum, item) => sum + Number(item.profitMargin), 0)
+                    ).toFixed(2)}
                   </TableCell>
                 </TableRow>
               </TableBody>
@@ -357,59 +378,6 @@ export default function B2CTransactionDetailPage() {
                     Rs {Number(securityTotal).toFixed(2)}
                   </TableCell>
                   <TableCell></TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Accessories Section */}
-      {transaction.accessoryItems.length > 0 && (
-        <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold text-gray-900">Accessories</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="font-semibold text-gray-700">Item Name</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Quantity</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Selling Price</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Cost Price</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Total Revenue</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Total Cost</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Profit</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {transaction.accessoryItems.map((item, index) => (
-                  <TableRow key={index}>
-                    <TableCell className="font-semibold text-gray-900">{item.itemName}</TableCell>
-                    <TableCell>{item.quantity}</TableCell>
-                    <TableCell>Rs {Number(item.pricePerItem).toFixed(2)}</TableCell>
-                    <TableCell>Rs {Number(item.costPrice).toFixed(2)}</TableCell>
-                    <TableCell className="font-semibold">Rs {Number(item.totalPrice).toFixed(2)}</TableCell>
-                    <TableCell>Rs {Number(item.totalCost).toFixed(2)}</TableCell>
-                    <TableCell className="font-semibold text-green-600">
-                      Rs {Number(item.profitMargin).toFixed(2)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                <TableRow className="border-t-2">
-                  <TableCell colSpan={4} className="font-bold text-gray-900 text-right">
-                    Total =
-                  </TableCell>
-                  <TableCell className="font-bold text-gray-900">
-                    Rs {Number(accessoryTotal).toFixed(2)}
-                  </TableCell>
-                  <TableCell className="font-bold text-gray-900">
-                    Rs {transaction.accessoryItems.reduce((sum, item) => sum + Number(item.totalCost), 0).toFixed(2)}
-                  </TableCell>
-                  <TableCell className="font-bold text-green-600">
-                    Rs {transaction.accessoryItems.reduce((sum, item) => sum + Number(item.profitMargin), 0).toFixed(2)}
-                  </TableCell>
                 </TableRow>
               </TableBody>
             </Table>
