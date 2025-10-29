@@ -70,7 +70,7 @@ export default function PricingManagementPage() {
     try {
       setLoading(true);
       const [categoriesRes, pricesRes] = await Promise.all([
-        fetch('/api/admin/margin-categories'),
+        fetch('/api/admin/margin-categories?activeOnly=true'),
         fetch('/api/admin/plant-prices?limit=10')
       ]);
       
@@ -198,8 +198,8 @@ export default function PricingManagementPage() {
     setTimeout(() => setMessage(null), 5000);
   };
 
-  const b2cCategories = categories.filter(c => c.customerType === 'B2C');
-  const b2bCategories = categories.filter(c => c.customerType === 'B2B');
+  const b2cCategories = categories.filter(c => c.customerType === 'B2C' && c.isActive);
+  const b2bCategories = categories.filter(c => c.customerType === 'B2B' && c.isActive);
 
   if (loading) {
     return (

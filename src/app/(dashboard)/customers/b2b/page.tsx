@@ -108,7 +108,7 @@ export default function B2BCustomersPage() {
   useEffect(() => {
     const fetchMarginCategories = async () => {
       try {
-        const response = await fetch('/api/admin/margin-categories?customerType=B2B');
+        const response = await fetch('/api/admin/margin-categories?customerType=B2B&activeOnly=true');
         if (response.ok) {
           const data = await response.json();
           setMarginCategories(data);

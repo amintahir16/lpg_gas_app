@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { HomeIcon, ArrowLeftIcon, MapPinIcon, PhoneIcon, EnvelopeIcon, PlusIcon, CalendarIcon, EyeIcon } from '@heroicons/react/24/outline';
+import { HomeIcon, ArrowLeftIcon, MapPinIcon, PhoneIcon, EnvelopeIcon, PlusIcon, CalendarIcon, EyeIcon, FunnelIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { Input } from '@/components/ui/input';
 
 interface B2CCustomer {
   id: string;
@@ -74,17 +75,51 @@ export default function B2CCustomerDetailPage() {
   const [customer, setCustomer] = useState<B2CCustomer | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Date filter states
+  const [dateFilter, setDateFilter] = useState({
+    startDate: '',
+    endDate: ''
+  });
+  const [showDateFilter, setShowDateFilter] = useState(false);
 
   useEffect(() => {
     if (customerId) {
       fetchCustomerDetails();
     }
-  }, [customerId, searchParams]);
+  }, [customerId, searchParams, dateFilter.startDate, dateFilter.endDate]);
+
+  // Close date filter when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (showDateFilter && !target.closest('.date-filter-container')) {
+        setShowDateFilter(false);
+      }
+    };
+
+    if (showDateFilter) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showDateFilter]);
 
   const fetchCustomerDetails = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/customers/b2c/${customerId}`, {
+      
+      const params = new URLSearchParams();
+      if (dateFilter.startDate) {
+        params.append('startDate', dateFilter.startDate);
+      }
+      if (dateFilter.endDate) {
+        params.append('endDate', dateFilter.endDate);
+      }
+      
+      const queryString = params.toString();
+      const url = `/api/customers/b2c/${customerId}${queryString ? `?${queryString}` : ''}`;
+      
+      const response = await fetch(url, {
         cache: 'no-store' // Always fetch fresh data
       });
       
@@ -353,10 +388,122 @@ export default function B2CCustomerDetailPage() {
       {/* Transaction History */}
       <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
         <CardHeader>
-          <CardTitle className="text-lg font-semibold text-gray-900">Transaction History</CardTitle>
-          <CardDescription className="text-gray-600 font-medium">
-            Complete transaction history for this customer
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg font-semibold text-gray-900">Transaction History</CardTitle>
+              <CardDescription className="text-gray-600 font-medium">
+                Complete transaction history for this customer
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-3">
+              {/* Date Filter Button */}
+              <div className="relative date-filter-container">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowDateFilter(!showDateFilter)}
+                  className="flex items-center gap-2 bg-white hover:bg-gray-50 border-gray-300"
+                >
+                  <FunnelIcon className="w-4 h-4" />
+                  <span className="hidden sm:inline">Filter</span>
+                  {(dateFilter.startDate || dateFilter.endDate) && (
+                    <span className="ml-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">
+                      {(dateFilter.startDate && dateFilter.endDate) ? '2' : '1'}
+                    </span>
+                  )}
+                </Button>
+                
+                {/* Date Filter Dropdown */}
+                {showDateFilter && (
+                  <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4 date-filter-container">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                        <CalendarIcon className="w-4 h-4" />
+                        Filter by Date Range
+                      </h3>
+                      <button
+                        onClick={() => setShowDateFilter(false)}
+                        className="text-gray-400 hover:text-gray-600"
+                      >
+                        <XMarkIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                          Start Date
+                        </label>
+                        <Input
+                          type="date"
+                          value={dateFilter.startDate}
+                          onChange={(e) => setDateFilter({ ...dateFilter, startDate: e.target.value })}
+                          className="w-full text-sm"
+                          max={dateFilter.endDate || new Date().toISOString().split('T')[0]}
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                          End Date
+                        </label>
+                        <Input
+                          type="date"
+                          value={dateFilter.endDate}
+                          onChange={(e) => setDateFilter({ ...dateFilter, endDate: e.target.value })}
+                          className="w-full text-sm"
+                          min={dateFilter.startDate || undefined}
+                          max={new Date().toISOString().split('T')[0]}
+                        />
+                      </div>
+                      
+                      <div className="flex gap-2 pt-2 border-t border-gray-200">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setDateFilter({ startDate: '', endDate: '' });
+                          }}
+                          className="flex-1 text-xs"
+                        >
+                          Clear
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setShowDateFilter(false);
+                          }}
+                          className="flex-1 text-xs"
+                        >
+                          Apply Filter
+                        </Button>
+                      </div>
+                      
+                      {(dateFilter.startDate || dateFilter.endDate) && (
+                        <div className="pt-2 border-t border-gray-200">
+                          <p className="text-xs text-gray-600">
+                            {(dateFilter.startDate && dateFilter.endDate) ? (
+                              <>
+                                Showing transactions from <strong>{new Date(dateFilter.startDate).toLocaleDateString()}</strong> to <strong>{new Date(dateFilter.endDate).toLocaleDateString()}</strong>
+                              </>
+                            ) : dateFilter.startDate ? (
+                              <>
+                                Showing transactions from <strong>{new Date(dateFilter.startDate).toLocaleDateString()}</strong> onwards
+                              </>
+                            ) : (
+                              <>
+                                Showing transactions up to <strong>{new Date(dateFilter.endDate).toLocaleDateString()}</strong>
+                              </>
+                            )}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {customer.transactions.length > 0 ? (

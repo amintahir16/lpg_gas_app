@@ -15,6 +15,24 @@ export async function GET(
     }
 
     const { id: customerId } = await params;
+    const { searchParams } = new URL(request.url);
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
+
+    // Build date filter for transactions
+    const transactionWhere: any = {};
+    if (startDate || endDate) {
+      transactionWhere.date = {};
+      if (startDate) {
+        transactionWhere.date.gte = new Date(startDate);
+      }
+      if (endDate) {
+        // Include the entire end date (up to 23:59:59.999)
+        const endDateObj = new Date(endDate);
+        endDateObj.setHours(23, 59, 59, 999);
+        transactionWhere.date.lte = endDateObj;
+      }
+    }
 
     const customer = await prisma.b2CCustomer.findUnique({
       where: { id: customerId },
@@ -23,6 +41,7 @@ export async function GET(
           orderBy: { issueDate: 'desc' }
         },
         transactions: {
+          where: Object.keys(transactionWhere).length > 0 ? transactionWhere : undefined,
           include: {
             gasItems: true,
             securityItems: true,
