@@ -57,6 +57,10 @@ interface B2BTransaction {
   date: string;
   time: string;
   totalAmount: number;
+  paidAmount?: number | null;
+  unpaidAmount?: number | null;
+  paymentMethod?: string | null;
+  paymentStatus?: 'UNPAID' | 'PARTIAL' | 'FULLY_PAID' | null;
   paymentReference: string | null;
   notes: string | null;
   voided: boolean;
@@ -139,9 +143,14 @@ export default function B2BCustomerDetailPage() {
   const [transactionDate, setTransactionDate] = useState(new Date().toISOString().split('T')[0]);
   const [transactionTime, setTransactionTime] = useState(new Date().toTimeString().slice(0, 5));
   
-  // Payment form states
+  // Payment form states (for separate PAYMENT transactions)
   const [paymentAgainst, setPaymentAgainst] = useState('');
   const [paymentQuantity, setPaymentQuantity] = useState(0);
+  
+  // Payment states for SALE form (payment on sale)
+  const [salePaymentAmount, setSalePaymentAmount] = useState(0);
+  const [salePaymentMethod, setSalePaymentMethod] = useState('CASH');
+  const [salePaymentReference, setSalePaymentReference] = useState('');
 
   // Gas transaction form data
   const [gasItems, setGasItems] = useState([
@@ -810,6 +819,10 @@ export default function B2BCustomerDetailPage() {
       } else if (transactionType === 'PAYMENT') {
         totalAmount = parseFloat(formData.get('paymentAmount') as string) || 0;
       }
+      
+      // Check if this is a fully paid sale (payment amount equals sale amount)
+      const isFullyPaidSale = transactionType === 'SALE' && salePaymentAmount > 0 && 
+                              Math.abs(salePaymentAmount - totalAmount) < 0.01; // Allow 0.01 tolerance for floating point
 
       // Create payment item for PAYMENT transactions
       const paymentItem = transactionType === 'PAYMENT' && paymentAgainst ? {
@@ -828,8 +841,15 @@ export default function B2BCustomerDetailPage() {
         date: transactionDate,
         time: transactionTime,
         totalAmount,
-        paymentReference: formData.get('paymentReference'),
-        notes: formData.get('notes'),
+        // For SALE transactions, include payment info if provided
+        paidAmount: transactionType === 'SALE' && salePaymentAmount > 0 ? salePaymentAmount : undefined,
+        paymentMethod: transactionType === 'SALE' && salePaymentAmount > 0 ? salePaymentMethod : undefined,
+        paymentReference: transactionType === 'PAYMENT' ? formData.get('paymentReference') : (transactionType === 'SALE' && salePaymentAmount > 0 ? (salePaymentReference || `Payment on Sale`) : null),
+        notes: transactionType === 'SALE' && salePaymentAmount > 0 
+          ? (isFullyPaidSale 
+              ? `Fully paid sale - Payment of ${formatCurrency(salePaymentAmount)} received via ${salePaymentMethod}` 
+              : `Partial payment of ${formatCurrency(salePaymentAmount)} received via ${salePaymentMethod}. Remaining: ${formatCurrency(totalAmount - salePaymentAmount)}`)
+          : (transactionType === 'PAYMENT' ? formData.get('notes') : null),
         paymentAgainst: transactionType === 'PAYMENT' ? formData.get('paymentAgainst') : null,
         paymentDescription: transactionType === 'PAYMENT' ? formData.get('paymentDescription') : null,
         paymentQuantity: transactionType === 'PAYMENT' ? paymentQuantity : null,
@@ -863,7 +883,7 @@ export default function B2BCustomerDetailPage() {
 
       const result = await response.json();
       console.log('Transaction created successfully:', result);
-
+      
       // Reset form and refresh data
       setShowTransactionForm(false);
       setGasItems(gasItems.map(item => ({ ...item, delivered: 0, emptyReturned: 0 })));
@@ -872,6 +892,9 @@ export default function B2BCustomerDetailPage() {
       // Reset payment form states
       setPaymentAgainst('');
       setPaymentQuantity(0);
+      setSalePaymentAmount(0);
+      setSalePaymentMethod('CASH');
+      setSalePaymentReference('');
       
       // Refresh customer data multiple times to ensure it's updated
       await fetchCustomerLedger();
@@ -1112,6 +1135,10 @@ export default function B2BCustomerDetailPage() {
                   setError(null); // Clear any previous errors
                   setHasAccessoryErrors(false); // Clear accessory validation errors
                   clearAllValidationErrors(); // Clear cylinder validation errors
+                  // Reset sale payment states
+                  setSalePaymentAmount(0);
+                  setSalePaymentMethod('CASH');
+                  setSalePaymentReference('');
                 }}
                 className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
               >
@@ -1523,27 +1550,88 @@ export default function B2BCustomerDetailPage() {
                 )}
 
 
-                {/* Additional Fields */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Reference</label>
-                    <Input name="paymentReference" placeholder="Payment Reference" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Notes</label>
-                    <Input name="notes" placeholder="Notes" />
-                  </div>
-                </div>
+                {/* Payment Section for SALE */}
+                {transactionType === 'SALE' && (
+                  <Card className="border-2 border-blue-200 bg-blue-50/30">
+                    <CardHeader>
+                      <CardTitle className="text-lg font-semibold text-gray-900">
+                        Payment on Sale (Optional)
+                      </CardTitle>
+                      <CardDescription className="text-sm text-gray-600">
+                        Accept payment immediately with this sale transaction
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Payment Amount (PKR)
+                          </label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={salePaymentAmount || ''}
+                            onChange={(e) => setSalePaymentAmount(parseFloat(e.target.value) || 0)}
+                            placeholder="0.00"
+                            className="text-lg"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Payment Method
+                          </label>
+                          <select
+                            value={salePaymentMethod}
+                            onChange={(e) => setSalePaymentMethod(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          >
+                            <option value="CASH">Cash</option>
+                            <option value="BANK_TRANSFER">Bank Transfer</option>
+                            <option value="CHECK">Check</option>
+                            <option value="CREDIT_CARD">Credit Card</option>
+                            <option value="DEBIT_CARD">Debit Card</option>
+                          </select>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Total Amount */}
                 <div className="text-right space-y-2">
                   {transactionType === 'SALE' && (
-                    <p className="text-lg font-semibold text-gray-900">
-                      Total Sale Amount: {formatCurrency(
-                        gasItems.reduce((sum, item) => sum + (item.delivered * item.pricePerItem), 0) +
-                        accessoryItems.reduce((sum, item) => sum + item.totalPrice, 0)
-                      )}
-                    </p>
+                    <>
+                      <div className="space-y-1">
+                        <p className="text-lg font-semibold text-gray-900">
+                          Total Sale Amount: {formatCurrency(
+                            gasItems.reduce((sum, item) => sum + (item.delivered * item.pricePerItem), 0) +
+                            accessoryItems.reduce((sum, item) => sum + item.totalPrice, 0)
+                          )}
+                        </p>
+                        {salePaymentAmount > 0 && (
+                          <>
+                            <p className="text-md font-medium text-green-600">
+                              Payment Received: {formatCurrency(salePaymentAmount)}
+                            </p>
+                            <p className={`text-lg font-semibold ${
+                              (gasItems.reduce((sum, item) => sum + (item.delivered * item.pricePerItem), 0) +
+                               accessoryItems.reduce((sum, item) => sum + item.totalPrice, 0)) - salePaymentAmount > 0
+                                ? 'text-red-600' 
+                                : (gasItems.reduce((sum, item) => sum + (item.delivered * item.pricePerItem), 0) +
+                                   accessoryItems.reduce((sum, item) => sum + item.totalPrice, 0)) - salePaymentAmount < 0
+                                ? 'text-green-600'
+                                : 'text-gray-900'
+                            }`}>
+                              Remaining Balance: {formatCurrency(
+                                (gasItems.reduce((sum, item) => sum + (item.delivered * item.pricePerItem), 0) +
+                                 accessoryItems.reduce((sum, item) => sum + item.totalPrice, 0)) - salePaymentAmount
+                              )}
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    </>
                   )}
                   {transactionType === 'BUYBACK' && (
                     <div>
@@ -1879,14 +1967,35 @@ export default function B2BCustomerDetailPage() {
                       {transaction.billSno}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <Badge variant={
-                        transaction.transactionType === 'SALE' ? 'success' :
-                        transaction.transactionType === 'PAYMENT' ? 'info' :
-                        transaction.transactionType === 'BUYBACK' ? 'warning' : 'secondary'
-                      }>
-                        {transaction.transactionType}
-                        {transaction.voided && ' (VOIDED)'}
-                      </Badge>
+                      <div className="flex flex-col gap-1">
+                        <Badge variant={
+                          transaction.transactionType === 'SALE' ? 'success' :
+                          transaction.transactionType === 'PAYMENT' ? 'info' :
+                          transaction.transactionType === 'BUYBACK' ? 'warning' : 'secondary'
+                        }>
+                          {transaction.transactionType}
+                          {transaction.voided && ' (VOIDED)'}
+                        </Badge>
+                        {transaction.transactionType === 'SALE' && transaction.paymentStatus && (
+                          <Badge 
+                            variant={
+                              transaction.paymentStatus === 'FULLY_PAID' ? 'success' :
+                              transaction.paymentStatus === 'PARTIAL' ? 'warning' :
+                              'destructive'
+                            }
+                            className="text-xs"
+                          >
+                            {transaction.paymentStatus === 'FULLY_PAID' ? 'Paid' :
+                             transaction.paymentStatus === 'PARTIAL' ? 'Partial' :
+                             'Unpaid'}
+                            {transaction.paidAmount && (
+                              <span className="ml-1">
+                                ({formatCurrency(Number(transaction.paidAmount))})
+                              </span>
+                            )}
+                          </Badge>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-700">
                       <div className="max-w-xs">
@@ -1899,7 +2008,15 @@ export default function B2BCustomerDetailPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-medium">
-                      {transaction.transactionType === 'SALE' ? formatCurrency(transaction.totalAmount) : '-'}
+                      {transaction.transactionType === 'SALE' 
+                        ? (() => {
+                            // For SALE transactions, show unpaid amount (not total)
+                            const unpaidAmount = transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined
+                              ? Number(transaction.unpaidAmount)
+                              : (transaction.paymentStatus === 'FULLY_PAID' ? 0 : transaction.totalAmount);
+                            return unpaidAmount > 0 ? formatCurrency(unpaidAmount) : '-';
+                          })()
+                        : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">
                       {['PAYMENT', 'BUYBACK', 'ADJUSTMENT', 'CREDIT_NOTE'].includes(transaction.transactionType) 

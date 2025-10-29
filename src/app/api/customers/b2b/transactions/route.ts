@@ -20,6 +20,8 @@ export async function POST(request: NextRequest) {
       date,
       time,
       totalAmount,
+      paidAmount,              // Amount paid at sale time (for SALE transactions)
+      paymentMethod,           // Payment method if paid at sale
       paymentReference,
       notes,
       gasItems = [],
@@ -82,6 +84,28 @@ export async function POST(request: NextRequest) {
 
     const billSno = `B2B${today.replace(/-/g, '')}${String(billSequence.sequence).padStart(4, '0')}`;
 
+    // Calculate payment status and unpaid amount for SALE transactions
+    let paidAmountValue: number | null = null;
+    let unpaidAmountValue: number | null = null;
+    let paymentStatus: string | null = null;
+    
+    if (transactionType === 'SALE' && paidAmount !== undefined) {
+      const total = parseFloat(totalAmount);
+      const paid = parseFloat(paidAmount) || 0;
+      
+      paidAmountValue = paid;
+      unpaidAmountValue = Math.max(0, total - paid);
+      
+      // Determine payment status
+      if (paid <= 0) {
+        paymentStatus = 'UNPAID';
+      } else if (paid >= total - 0.01) { // Allow small floating point tolerance
+        paymentStatus = 'FULLY_PAID';
+      } else {
+        paymentStatus = 'PARTIAL';
+      }
+    }
+
     // Start a transaction to ensure data consistency
     const result = await prisma.$transaction(async (tx) => {
       // Create the transaction
@@ -93,8 +117,12 @@ export async function POST(request: NextRequest) {
           date: transactionDate,
           time: transactionTime,
           totalAmount: parseFloat(totalAmount),
-          paymentReference,
-          notes,
+          ...(paidAmountValue !== null && { paidAmount: paidAmountValue }),
+          ...(unpaidAmountValue !== null && { unpaidAmount: unpaidAmountValue }),
+          ...(transactionType === 'SALE' && paymentMethod && { paymentMethod: paymentMethod as any }),
+          ...(transactionType === 'SALE' && paymentStatus && { paymentStatus: paymentStatus as any }),
+          paymentReference: paymentReference || null,
+          notes: notes || null,
           createdBy: session.user.id,
         },
       });
@@ -163,8 +191,13 @@ export async function POST(request: NextRequest) {
       console.log(`Current ledger balance: ${newLedgerBalance}, Type: ${typeof newLedgerBalance}`);
       switch (transactionType) {
         case 'SALE':
-          console.log(`SALE transaction: adding ${totalAmount} to ledger balance`);
-          newLedgerBalance += parseFloat(totalAmount);
+          // For SALE transactions, only unpaid amount affects balance
+          const saleAmount = parseFloat(totalAmount);
+          const unpaid = unpaidAmountValue !== null ? unpaidAmountValue : saleAmount;
+          
+          console.log(`SALE transaction: total=${saleAmount}, paid=${paidAmountValue || 0}, unpaid=${unpaid}`);
+          console.log(`SALE transaction: adding unpaid amount ${unpaid} to ledger balance`);
+          newLedgerBalance += unpaid;
           console.log(`New ledger balance after calculation: ${newLedgerBalance}`);
           // Update cylinder due counts for sales - ONLY if delivered > 0
           gasItems.forEach((item: any) => {
@@ -200,6 +233,7 @@ export async function POST(request: NextRequest) {
           });
           break;
         case 'PAYMENT':
+          // PAYMENT transactions decrease what customer owes
           newLedgerBalance -= parseFloat(totalAmount);
           break;
         case 'BUYBACK':

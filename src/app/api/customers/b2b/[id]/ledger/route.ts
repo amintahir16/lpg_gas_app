@@ -69,15 +69,28 @@ export async function GET(
     // We need to calculate balance based on ALL transactions, but only display filtered ones
     // Net Balance = Total Out - Total In (negative when customer owes)
     let runningBalance = 0;
+    
     const allTransactionsWithBalance = allTransactions.map((transaction) => {
       // Convert Decimal to number properly
       const totalAmount = parseFloat(transaction.totalAmount.toString());
       
       // Calculate the balance impact of this transaction
       let balanceImpact = 0;
+      
       switch (transaction.transactionType) {
         case 'SALE':
-          balanceImpact = totalAmount; // Increases what customer owes (negative balance)
+          // For SALE transactions, only unpaid amount affects balance
+          // Check if paymentStatus is FULLY_PAID first (new format)
+          if (transaction.paymentStatus === 'FULLY_PAID') {
+            // Fully paid sale - zero balance impact
+            balanceImpact = 0;
+          } else if (transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined) {
+            // New format with unpaidAmount field
+            balanceImpact = parseFloat(transaction.unpaidAmount.toString());
+          } else {
+            // Old transaction format - no payment info, assume fully unpaid
+            balanceImpact = totalAmount;
+          }
           break;
         case 'PAYMENT':
         case 'BUYBACK':
@@ -103,30 +116,15 @@ export async function GET(
     // We need to find the starting balance before the first filtered transaction
     let startingBalance = 0;
     if (filteredTransactions.length > 0 && (startDate || endDate)) {
-      // Find all transactions before the first filtered transaction
-      const firstFilteredDate = new Date(filteredTransactions[0].date);
-      const transactionsBeforeFilter = allTransactions.filter(t => {
-        const tDate = new Date(t.date);
-        return tDate < firstFilteredDate;
-      });
+      // Use balance impacts already calculated in allTransactionsWithBalance
+      // They already use the correct unpaidAmount logic
+      const firstFilteredCreatedAt = filteredTransactions[0].createdAt;
+      const transactionsBeforeFilterWithBalance = allTransactionsWithBalance.filter(t => 
+        t.createdAt < firstFilteredCreatedAt
+      );
       
-      // Calculate balance up to the first filtered transaction
-      transactionsBeforeFilter.forEach(transaction => {
-        const totalAmount = parseFloat(transaction.totalAmount.toString());
-        let balanceImpact = 0;
-        switch (transaction.transactionType) {
-          case 'SALE':
-            balanceImpact = totalAmount;
-            break;
-          case 'PAYMENT':
-          case 'BUYBACK':
-          case 'ADJUSTMENT':
-          case 'CREDIT_NOTE':
-            balanceImpact = -totalAmount;
-            break;
-        }
-        startingBalance += balanceImpact;
-      });
+      // Sum up the balance impacts (already calculated correctly with unpaidAmount logic)
+      startingBalance = transactionsBeforeFilterWithBalance.reduce((sum, t) => sum + (t.balanceImpact || 0), 0);
     }
 
     // Calculate running balances for filtered transactions
@@ -135,9 +133,17 @@ export async function GET(
     const filteredTransactionsWithBalance = filteredTransactions.map((transaction) => {
       const totalAmount = parseFloat(transaction.totalAmount.toString());
       let balanceImpact = 0;
+      
       switch (transaction.transactionType) {
         case 'SALE':
-          balanceImpact = totalAmount; // Increases what customer owes
+          // For SALE transactions, only unpaid amount affects balance
+          if (transaction.paymentStatus === 'FULLY_PAID') {
+            balanceImpact = 0; // Fully paid sale - zero impact
+          } else if (transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined) {
+            balanceImpact = parseFloat(transaction.unpaidAmount.toString());
+          } else {
+            balanceImpact = totalAmount; // Old format - assume fully unpaid
+          }
           break;
         case 'PAYMENT':
         case 'BUYBACK':

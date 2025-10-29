@@ -97,29 +97,29 @@ model B2CCylinderHolding {
 }
 
 model B2CTransaction {
-  id             String                        @id @default(cuid())
-  billSno        String                        @unique
-  customerId     String
-  date           DateTime
-  time           DateTime
-  totalAmount    Decimal                       @db.Decimal(10, 2)
-  deliveryCharges Decimal                      @default(0) @db.Decimal(10, 2)
-  finalAmount    Decimal                       @default(0) @db.Decimal(10, 2)
-  totalCost      Decimal                       @default(0) @db.Decimal(10, 2)
-  deliveryCost   Decimal                       @default(0) @db.Decimal(10, 2)
-  actualProfit   Decimal                       @default(0) @db.Decimal(10, 2)
-  paymentMethod  String                        @default("CASH")
-  notes          String?
-  createdBy      String
-  createdAt      DateTime                      @default(now())
-  voided         Boolean                       @default(false)
-  voidedBy       String?
-  voidedAt       DateTime?
-  voidReason     String?
-  accessoryItems B2CTransactionAccessoryItem[]
-  gasItems       B2CTransactionGasItem[]
-  securityItems  B2CTransactionSecurityItem[]
-  customer       B2CCustomer                   @relation(fields: [customerId], references: [id])
+  id              String                        @id @default(cuid())
+  billSno         String                        @unique
+  customerId      String
+  date            DateTime
+  time            DateTime
+  totalAmount     Decimal                       @db.Decimal(10, 2)
+  deliveryCharges Decimal                       @default(0) @db.Decimal(10, 2)
+  finalAmount     Decimal                       @default(0) @db.Decimal(10, 2)
+  totalCost       Decimal                       @default(0) @db.Decimal(10, 2)
+  deliveryCost    Decimal                       @default(0) @db.Decimal(10, 2)
+  actualProfit    Decimal                       @default(0) @db.Decimal(10, 2)
+  paymentMethod   String                        @default("CASH")
+  notes           String?
+  createdBy       String
+  createdAt       DateTime                      @default(now())
+  voided          Boolean                       @default(false)
+  voidedBy        String?
+  voidedAt        DateTime?
+  voidReason      String?
+  accessoryItems  B2CTransactionAccessoryItem[]
+  gasItems        B2CTransactionGasItem[]
+  securityItems   B2CTransactionSecurityItem[]
+  customer        B2CCustomer                   @relation(fields: [customerId], references: [id])
 
   @@map("b2c_transactions")
 }
@@ -548,6 +548,10 @@ model B2BTransaction {
   date             DateTime
   time             DateTime
   totalAmount      Decimal              @db.Decimal(10, 2)
+  paidAmount       Decimal?             @db.Decimal(10, 2) // Amount paid at sale time
+  unpaidAmount     Decimal?             @db.Decimal(10, 2) // Remaining amount to be paid
+  paymentMethod    PaymentMethod? // Payment method if paid at sale
+  paymentStatus    SalePaymentStatus? // Payment status for sale transactions
   paymentReference String?
   notes            String?
   createdBy        String
@@ -675,6 +679,12 @@ enum PaymentStatus {
   COMPLETED
   FAILED
   CANCELLED
+}
+
+enum SalePaymentStatus {
+  UNPAID
+  PARTIAL
+  FULLY_PAID
 }
 
 enum SupportPriority {
