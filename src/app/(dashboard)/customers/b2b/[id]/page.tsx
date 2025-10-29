@@ -824,17 +824,6 @@ export default function B2BCustomerDetailPage() {
       const isFullyPaidSale = transactionType === 'SALE' && salePaymentAmount > 0 && 
                               Math.abs(salePaymentAmount - totalAmount) < 0.01; // Allow 0.01 tolerance for floating point
 
-      // Create payment item for PAYMENT transactions
-      const paymentItem = transactionType === 'PAYMENT' && paymentAgainst ? {
-        productName: paymentQuantity > 0 
-          ? `${paymentAgainst.replace(/_/g, ' ').replace(/\./g, '.').replace(/KG/g, 'kg')} x${paymentQuantity}`
-          : paymentAgainst.replace(/_/g, ' ').replace(/\./g, '.').replace(/KG/g, 'kg'),
-        quantity: paymentQuantity > 0 ? paymentQuantity : 1,
-        pricePerItem: paymentQuantity > 0 ? totalAmount / paymentQuantity : totalAmount,
-        totalPrice: totalAmount,
-        cylinderType: paymentAgainst.includes('KG') ? paymentAgainst : null
-      } : null;
-
       const transactionData = {
         transactionType,
         customerId,
@@ -850,11 +839,8 @@ export default function B2BCustomerDetailPage() {
               ? `Fully paid sale - Payment of ${formatCurrency(salePaymentAmount)} received via ${salePaymentMethod}` 
               : `Partial payment of ${formatCurrency(salePaymentAmount)} received via ${salePaymentMethod}. Remaining: ${formatCurrency(totalAmount - salePaymentAmount)}`)
           : (transactionType === 'PAYMENT' ? formData.get('notes') : null),
-        paymentAgainst: transactionType === 'PAYMENT' ? formData.get('paymentAgainst') : null,
-        paymentDescription: transactionType === 'PAYMENT' ? formData.get('paymentDescription') : null,
-        paymentQuantity: transactionType === 'PAYMENT' ? paymentQuantity : null,
         gasItems: transactionType === 'PAYMENT' ? [] : validGasItems,
-        accessoryItems: transactionType === 'PAYMENT' ? (paymentItem ? [paymentItem] : []) : accessoryItems.filter(item => item.quantity > 0).map(item => ({
+        accessoryItems: transactionType === 'PAYMENT' ? [] : accessoryItems.filter(item => item.quantity > 0).map(item => ({
           productName: `${item.category} - ${item.itemType}`,
           quantity: item.quantity,
           pricePerItem: item.pricePerItem,
@@ -1152,8 +1138,7 @@ export default function B2BCustomerDetailPage() {
                   setShowTransactionForm(true);
                   setError(null); // Clear any previous errors
                 }}
-                variant="outline"
-                className="w-full"
+                className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
               >
                 <CreditCardIcon className="w-4 h-4 mr-2" />
                 New Payment
@@ -1474,67 +1459,6 @@ export default function B2BCustomerDetailPage() {
                 {transactionType === 'PAYMENT' && (
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Against</label>
-                      <select 
-                        name="paymentAgainst" 
-                        value={paymentAgainst}
-                        onChange={(e) => {
-                          setPaymentAgainst(e.target.value);
-                          setPaymentQuantity(0);
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        required
-                      >
-                        <option value="">Select what this payment is for</option>
-                        <optgroup label="Gas Cylinders">
-                          <option value="DOMESTIC_11.8KG">Domestic (11.8kg)</option>
-                          <option value="STANDARD_15KG">Standard (15kg)</option>
-                          <option value="COMMERCIAL_45.4KG">Commercial (45.4kg)</option>
-                        </optgroup>
-                        <optgroup label="Accessories">
-                          <option value="GAS_PIPE_FT">Gas Pipe (ft)</option>
-                          <option value="STOVE">Stove</option>
-                          <option value="REGULATOR_ADJUSTABLE">Regulator Adjustable</option>
-                          <option value="REGULATOR_IDEAL_HIGH_PRESSURE">Regulator Ideal High Pressure</option>
-                          <option value="REGULATOR_5_STAR_HIGH_PRESSURE">Regulator 5 Star High Pressure</option>
-                          <option value="REGULATOR_3_STAR_LOW_PRESSURE_Q1">Regulator 3 Star Low Pressure Q1</option>
-                          <option value="REGULATOR_3_STAR_LOW_PRESSURE_Q2">Regulator 3 Star Low Pressure Q2</option>
-                        </optgroup>
-                        <optgroup label="Other">
-                          <option value="ACCOUNT_RECEIVABLES">Account Receivables (General Payment)</option>
-                          <option value="SPECIFIC_SALE">Specific Sale/Invoice</option>
-                          <option value="CYLINDER_DEPOSIT">Cylinder Deposit</option>
-                          <option value="ADVANCE_PAYMENT">Advance Payment</option>
-                        </optgroup>
-                      </select>
-                    </div>
-
-                    {/* Quantity Field - Only show for specific products */}
-                    {(paymentAgainst && !['ACCOUNT_RECEIVABLES', 'SPECIFIC_SALE', 'CYLINDER_DEPOSIT', 'ADVANCE_PAYMENT'].includes(paymentAgainst)) && (
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity</label>
-                        <Input
-                          type="number"
-                          value={paymentQuantity}
-                          onChange={(e) => setPaymentQuantity(parseInt(e.target.value) || 0)}
-                          placeholder="Enter quantity"
-                          min="1"
-                          step="1"
-                          className="w-32"
-                        />
-                      </div>
-                    )}
-                    
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Description</label>
-                      <Input 
-                        name="paymentDescription" 
-                        placeholder="e.g., Payment for Sale B2B202509220041 - STANDARD_15KG Cylinder x1"
-                        className="text-sm"
-                      />
-                    </div>
-                    
-                    <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Amount (PKR)</label>
                       <Input 
                         name="paymentAmount" 
@@ -1543,7 +1467,41 @@ export default function B2BCustomerDetailPage() {
                         step="0.01"
                         min="0.01"
                         required
-                        className="text-lg"
+                        className="text-lg [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                        onWheel={(e) => e.currentTarget.blur()}
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Method</label>
+                      <select
+                        name="paymentMethod"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      >
+                        <option value="CASH">Cash</option>
+                        <option value="BANK_TRANSFER">Bank Transfer</option>
+                        <option value="CHECK">Check</option>
+                        <option value="CREDIT_CARD">Credit Card</option>
+                        <option value="DEBIT_CARD">Debit Card</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Reference (Optional)</label>
+                      <Input 
+                        name="paymentReference" 
+                        placeholder="e.g., Check #1234, Transaction ID, etc."
+                        className="text-sm"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Notes (Optional)</label>
+                      <Input 
+                        name="notes" 
+                        placeholder="Additional notes about this payment"
+                        className="text-sm"
                       />
                     </div>
                   </div>
@@ -1574,7 +1532,8 @@ export default function B2BCustomerDetailPage() {
                             value={salePaymentAmount || ''}
                             onChange={(e) => setSalePaymentAmount(parseFloat(e.target.value) || 0)}
                             placeholder="0.00"
-                            className="text-lg"
+                            className="text-lg [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                            onWheel={(e) => e.currentTarget.blur()}
                           />
                         </div>
                         <div>
@@ -1646,13 +1605,9 @@ export default function B2BCustomerDetailPage() {
                     </div>
                   )}
                   {transactionType === 'PAYMENT' && (
-                    <div className="text-right space-y-1">
-                      <p className="text-lg font-semibold text-blue-600">
-                        Payment Amount: Rs 0
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        Payment Against: {paymentAgainst || '[Select from dropdown above]'}
-                        {paymentQuantity > 0 && ` (Qty: ${paymentQuantity})`}
+                    <div className="text-right">
+                      <p className="text-lg font-semibold text-green-600">
+                        Payment Amount: Enter amount in form above
                       </p>
                     </div>
                   )}
