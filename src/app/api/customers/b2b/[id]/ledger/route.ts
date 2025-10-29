@@ -67,6 +67,7 @@ export async function GET(
 
     // Calculate running balance for each transaction (chronological order)
     // We need to calculate balance based on ALL transactions, but only display filtered ones
+    // Net Balance = Total Out - Total In (negative when customer owes)
     let runningBalance = 0;
     const allTransactionsWithBalance = allTransactions.map((transaction) => {
       // Convert Decimal to number properly
@@ -76,24 +77,24 @@ export async function GET(
       let balanceImpact = 0;
       switch (transaction.transactionType) {
         case 'SALE':
-          balanceImpact = totalAmount;
+          balanceImpact = totalAmount; // Increases what customer owes (negative balance)
           break;
         case 'PAYMENT':
         case 'BUYBACK':
         case 'ADJUSTMENT':
         case 'CREDIT_NOTE':
-          balanceImpact = -totalAmount;
+          balanceImpact = -totalAmount; // Decreases what customer owes (less negative)
           break;
         default:
           balanceImpact = 0;
       }
       
-      // Update running balance
+      // Update running balance (negative when customer owes)
       runningBalance += balanceImpact;
       
       return {
         ...transaction,
-        runningBalance: runningBalance,
+        runningBalance: runningBalance, // This is positive (Sales - Payments), we'll negate for display
         balanceImpact: balanceImpact
       };
     });
@@ -129,19 +130,20 @@ export async function GET(
     }
 
     // Calculate running balances for filtered transactions
+    // currentBalance is positive (Sales - Payments), we negate for display
     let currentBalance = startingBalance;
     const filteredTransactionsWithBalance = filteredTransactions.map((transaction) => {
       const totalAmount = parseFloat(transaction.totalAmount.toString());
       let balanceImpact = 0;
       switch (transaction.transactionType) {
         case 'SALE':
-          balanceImpact = totalAmount;
+          balanceImpact = totalAmount; // Increases what customer owes
           break;
         case 'PAYMENT':
         case 'BUYBACK':
         case 'ADJUSTMENT':
         case 'CREDIT_NOTE':
-          balanceImpact = -totalAmount;
+          balanceImpact = -totalAmount; // Decreases what customer owes
           break;
       }
       
@@ -149,7 +151,7 @@ export async function GET(
       
       return {
         ...transaction,
-        runningBalance: currentBalance,
+        runningBalance: currentBalance, // Positive (Sales - Payments), frontend will negate
         balanceImpact: balanceImpact
       };
     });
@@ -171,6 +173,29 @@ export async function GET(
       return result;
     });
 
+    // Calculate Total In and Total Out for ALL transactions (not just filtered)
+    let totalIn = 0; // Payments received (reduces what customer owes)
+    let totalOut = 0; // Sales made (increases what customer owes)
+    
+    allTransactions.forEach(transaction => {
+      const totalAmount = parseFloat(transaction.totalAmount.toString());
+      switch (transaction.transactionType) {
+        case 'SALE':
+          totalOut += totalAmount;
+          break;
+        case 'PAYMENT':
+        case 'BUYBACK':
+        case 'ADJUSTMENT':
+        case 'CREDIT_NOTE':
+          totalIn += totalAmount;
+          break;
+      }
+    });
+
+    // Net Balance = Total Out - Total In (negative when customer owes)
+    // Current ledgerBalance = Sales - Payments, so we need to negate it for display
+    const netBalance = -(customer.ledgerBalance.toNumber());
+
     // Apply pagination
     const paginatedTransactions = displayTransactions.slice(skip, skip + limit);
     const total = filteredTransactions.length;
@@ -179,6 +204,12 @@ export async function GET(
     return NextResponse.json({
       customer,
       transactions: paginatedTransactions,
+      summary: {
+        netBalance, // Negative when customer owes, positive when customer has credit
+        totalIn, // Payments received
+        totalOut, // Sales made
+        ledgerBalance: customer.ledgerBalance.toNumber() // Keep original for internal calculations
+      },
       pagination: {
         page,
         limit,

@@ -189,7 +189,9 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
     const itemsText = items.join(', ') || '-';
     const totalAmount = Number(transaction.totalAmount);
     
-    // Calculate debit and credit
+    // Calculate debit (Out) and credit (In)
+    // Out = Sales (increases what customer owes) - shown in red
+    // In = Payments (decreases what customer owes) - shown in green
     let debit = '';
     let credit = '';
     if (transaction.transactionType === 'SALE') {
@@ -197,6 +199,10 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
     } else if (['PAYMENT', 'BUYBACK', 'ADJUSTMENT', 'CREDIT_NOTE'].includes(transaction.transactionType)) {
       credit = formatCurrency(totalAmount);
     }
+    
+    // Net Balance = negative when customer owes, positive when customer has credit
+    // runningBalance from ledger API is positive (Sales - Payments), so we negate it
+    const netBalance = -(transaction.runningBalance || 0);
     
     return [
       index + 1,
@@ -207,15 +213,15 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
       itemsText,
       debit,
       credit,
-      formatCurrency(transaction.runningBalance || 0)
+      formatCurrency(netBalance)
     ];
   });
   
   // Add total row
-  const totalDebit = sortedTransactions
+  const totalOut = sortedTransactions
     .filter(t => t.transactionType === 'SALE')
     .reduce((sum, t) => sum + Number(t.totalAmount), 0);
-  const totalCredit = sortedTransactions
+  const totalIn = sortedTransactions
     .filter(t => ['PAYMENT', 'BUYBACK', 'ADJUSTMENT', 'CREDIT_NOTE'].includes(t.transactionType))
     .reduce((sum, t) => sum + Number(t.totalAmount), 0);
   
@@ -226,14 +232,14 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
     '',
     'TOTAL:',
     '',
-    formatCurrency(totalDebit),
-    formatCurrency(totalCredit),
+    formatCurrency(totalOut),
+    formatCurrency(totalIn),
     ''
   ]);
   
   // Add table - use autoTable as a function, not a method
   autoTable(doc, {
-    head: [['#', 'Date', 'Time', 'Bill No.', 'Type', 'Items', 'Debit (Rs)', 'Credit (Rs)', 'Balance After (Rs)']],
+    head: [['#', 'Date', 'Time', 'Bill No.', 'Type', 'Items', 'Out (-) (Rs)', 'In (+) (Rs)', 'Net Balance (Rs)']],
     body: tableData,
     startY: yPosition,
     styles: { 
@@ -310,33 +316,38 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
   doc.setFont('helvetica', 'normal');
   doc.text(`${transactions.length}`, pageWidth - 50, yPosition + 22, { align: 'right' });
   
-  // Total Debit (Sales)
+  // Total Out (Sales)
   doc.setFont('helvetica', 'bold');
-  doc.text('Total Sales (Debit):', 25, yPosition + 32);
+  doc.text('Total Out (-):', 25, yPosition + 32);
   doc.setFont('helvetica', 'normal');
-  doc.text(formatCurrency(totalDebit), pageWidth - 50, yPosition + 32, { align: 'right' });
+  doc.setTextColor(231, 76, 60); // Red color
+  doc.text(formatCurrency(totalOut), pageWidth - 50, yPosition + 32, { align: 'right' });
   
-  // Total Credit (Payments)
+  // Total In (Payments)
   doc.setFont('helvetica', 'bold');
-  doc.text('Total Payments (Credit):', 25, yPosition + 42);
+  doc.setTextColor(0, 0, 0); // Reset to black
+  doc.text('Total In (+):', 25, yPosition + 42);
   doc.setFont('helvetica', 'normal');
-  doc.text(formatCurrency(totalCredit), pageWidth - 50, yPosition + 42, { align: 'right' });
+  doc.setTextColor(39, 174, 96); // Green color
+  doc.text(formatCurrency(totalIn), pageWidth - 50, yPosition + 42, { align: 'right' });
   
-  // Net Balance
-  const netBalance = totalDebit - totalCredit;
+  // Net Balance = Total Out - Total In (negative when customer owes)
+  const netBalance = totalOut - totalIn;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
   doc.text('Net Balance:', 25, yPosition + 55);
-  doc.setTextColor(netBalance >= 0 ? 231 : 39, netBalance >= 0 ? 76 : 174, netBalance >= 0 ? 60 : 96);
+  doc.setTextColor(netBalance < 0 ? 231 : 39, netBalance < 0 ? 76 : 174, netBalance < 0 ? 60 : 96);
   doc.text(formatCurrency(netBalance), pageWidth - 50, yPosition + 55, { align: 'right' });
   
   // Balance Interpretation
   doc.setTextColor(100, 100, 100);
   doc.setFontSize(8);
   doc.setFont('helvetica', 'italic');
-  const balanceText = netBalance >= 0 
+  const balanceText = netBalance < 0 
     ? 'Customer owes this amount'
-    : 'You owe this amount to customer';
+    : netBalance > 0
+    ? 'Customer has credit'
+    : 'Balance settled';
   doc.text(balanceText, 25, yPosition + 62);
   
   // Footer
@@ -439,7 +450,7 @@ export async function GET(
       };
     });
 
-    // Calculate starting balance before filtered range
+    // Calculate starting balance before filtered range (same logic as ledger API)
     let startingBalance = 0;
     if (filteredTransactions.length > 0 && (startDate || endDate)) {
       const firstFilteredDate = new Date(filteredTransactions[0].date);
@@ -467,6 +478,7 @@ export async function GET(
     }
 
     // Calculate running balances for filtered transactions
+    // runningBalance is positive (Sales - Payments), we'll negate for display
     let currentBalance = startingBalance;
     const transactionsWithBalance = filteredTransactions.map((transaction) => {
       const totalAmount = parseFloat(transaction.totalAmount.toString());
@@ -486,7 +498,7 @@ export async function GET(
       
       return {
         ...transaction,
-        runningBalance: currentBalance
+        runningBalance: currentBalance // Positive, will be negated for display
       };
     });
 

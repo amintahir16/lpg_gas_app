@@ -83,6 +83,12 @@ interface B2BTransactionItem {
 interface CustomerLedgerResponse {
   customer: B2BCustomer;
   transactions: B2BTransaction[];
+  summary?: {
+    netBalance: number; // Negative when customer owes, positive when customer has credit
+    totalIn: number; // Payments received
+    totalOut: number; // Sales made
+    ledgerBalance: number; // Original for internal calculations
+  };
   pagination: {
     page: number;
     limit: number;
@@ -100,6 +106,11 @@ export default function B2BCustomerDetailPage() {
   const [transactions, setTransactions] = useState<B2BTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<{
+    netBalance: number;
+    totalIn: number;
+    totalOut: number;
+  } | null>(null);
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 20,
@@ -324,6 +335,19 @@ export default function B2BCustomerDetailPage() {
       setCustomer(data.customer);
       setTransactions(data.transactions);
       setPagination(data.pagination);
+      
+      // Set summary if available, otherwise calculate from customer balance
+      if (data.summary) {
+        setSummary(data.summary);
+      } else {
+        // Fallback: calculate from customer balance (negative when customer owes)
+        const netBalance = -(data.customer.ledgerBalance);
+        setSummary({
+          netBalance,
+          totalIn: 0,
+          totalOut: 0
+        });
+      }
       
       // Fetch calculated prices for this customer
       await fetchCalculatedPrices();
@@ -915,7 +939,7 @@ export default function B2BCustomerDetailPage() {
             {customer.name}
           </h1>
           <p className="mt-2 text-gray-600 font-medium">
-            Account Receivables & Transaction History
+            Net Balance & Transaction History
           </p>
         </div>
       </div>
@@ -1006,17 +1030,52 @@ export default function B2BCustomerDetailPage() {
             <CardTitle className="text-lg font-semibold text-gray-900">Account Summary</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Ledger Balance */}
+            {/* Net Balance */}
             <div className="text-center">
-              <p className="text-sm font-medium text-gray-500">Account Receivables</p>
-              <p className={`text-3xl font-bold flex items-center justify-center ${
-                customer.ledgerBalance > 0 ? 'text-red-600' : 
-                customer.ledgerBalance < 0 ? 'text-green-600' : 'text-gray-600'
-              }`}>
+              <p className="text-sm font-medium text-gray-500">Net Balance</p>
+              {customer && (
+                <>
+                  {(() => {
+                    // Calculate net balance: negative when customer owes
+                    const netBalance = summary ? summary.netBalance : -(customer.ledgerBalance || 0);
+                    return (
+                      <>
+               <p className={`text-3xl font-bold flex items-center justify-center ${
+                           netBalance < 0 ? 'text-red-600' : 
+                           netBalance > 0 ? 'text-green-600' : 'text-gray-900'
+               }`}>
                 <CurrencyDollarIcon className="w-6 h-6 mr-2" />
-                {formatCurrency(customer.ledgerBalance)}
-              </p>
+                          {formatCurrency(netBalance)}
+                        </p>
+                         <p className="text-xs text-gray-500 mt-1">
+                           {netBalance < 0 ? 'Customer owes you' : 
+                            netBalance > 0 ? 'Customer has credit' : 
+                            'Balance settled'}
+                         </p>
+                      </>
+                    );
+                  })()}
+                </>
+              )}
             </div>
+
+            {/* Total In & Total Out */}
+            {summary && summary.totalIn !== undefined && summary.totalOut !== undefined && (
+              <div className="space-y-3 pt-2 border-t border-gray-200">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-gray-600">Total In (+)</span>
+                  <span className="text-sm font-semibold text-green-600">
+                    {formatCurrency(summary.totalIn)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-gray-600">Total Out (-)</span>
+                  <span className="text-sm font-semibold text-red-600">
+                    {formatCurrency(summary.totalOut)}
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Cylinders Due */}
             <div>
@@ -1544,10 +1603,10 @@ export default function B2BCustomerDetailPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-lg font-semibold text-gray-900">Transaction Ledger</CardTitle>
-              <CardDescription className="text-gray-600 font-medium">
-                Complete transaction history with running balance
-              </CardDescription>
+          <CardTitle className="text-lg font-semibold text-gray-900">Transaction Ledger</CardTitle>
+          <CardDescription className="text-gray-600 font-medium">
+            Complete transaction history with running balance
+          </CardDescription>
             </div>
             <div className="flex items-center gap-3">
               {/* Date Filter Button */}
@@ -1839,15 +1898,24 @@ export default function B2BCustomerDetailPage() {
                         ))}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-medium">
                       {transaction.transactionType === 'SALE' ? formatCurrency(transaction.totalAmount) : '-'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">
                       {['PAYMENT', 'BUYBACK', 'ADJUSTMENT', 'CREDIT_NOTE'].includes(transaction.transactionType) 
                         ? formatCurrency(transaction.totalAmount) : '-'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                      {formatCurrency(transaction.runningBalance || 0)}
+                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${
+                      (() => {
+                        // runningBalance from API is positive when customer owes (Sales - Payments)
+                        // We negate it for display, so negative = customer owes (red)
+                        const netBalance = -(transaction.runningBalance || 0);
+                        if (netBalance < 0) return 'text-red-600'; // Customer owes you
+                        if (netBalance > 0) return 'text-green-600'; // Customer has credit
+                        return 'text-gray-900'; // Balance settled (black)
+                      })()
+                    }`}>
+                      {formatCurrency(-(transaction.runningBalance || 0))}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                       <Button
