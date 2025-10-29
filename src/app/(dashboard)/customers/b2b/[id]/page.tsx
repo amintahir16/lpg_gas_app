@@ -114,6 +114,14 @@ export default function B2BCustomerDetailPage() {
   });
   const [showDateFilter, setShowDateFilter] = useState(false);
 
+  // Report states
+  const [reportDateFilter, setReportDateFilter] = useState({
+    startDate: '',
+    endDate: ''
+  });
+  const [showReportDateFilter, setShowReportDateFilter] = useState(false);
+  const [downloadingReport, setDownloadingReport] = useState(false);
+
   // Transaction form states
   const [showTransactionForm, setShowTransactionForm] = useState(false);
   const [transactionType, setTransactionType] = useState<'SALE' | 'PAYMENT' | 'BUYBACK' | 'RETURN_EMPTY'>('SALE');
@@ -184,13 +192,16 @@ export default function B2BCustomerDetailPage() {
       if (showDateFilter && !target.closest('.date-filter-container')) {
         setShowDateFilter(false);
       }
+      if (showReportDateFilter && !target.closest('.report-date-filter-container')) {
+        setShowReportDateFilter(false);
+      }
     };
 
-    if (showDateFilter) {
+    if (showDateFilter || showReportDateFilter) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [showDateFilter]);
+  }, [showDateFilter, showReportDateFilter]);
 
   // Fetch margin categories for B2B customers
   useEffect(() => {
@@ -334,6 +345,44 @@ export default function B2BCustomerDetailPage() {
       }
     } catch (error) {
       console.error('Error fetching calculated prices:', error);
+    }
+  };
+
+  const handleDownloadReport = async () => {
+    if (!customer) return;
+    
+    setDownloadingReport(true);
+    try {
+      const params = new URLSearchParams();
+      if (reportDateFilter.startDate) {
+        params.append('startDate', reportDateFilter.startDate);
+      }
+      if (reportDateFilter.endDate) {
+        params.append('endDate', reportDateFilter.endDate);
+      }
+
+      const response = await fetch(`/api/customers/b2b/${customerId}/report?${params.toString()}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate report');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `B2B-Transaction-Report-${customer.name}-${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      setShowReportDateFilter(false);
+    } catch (error) {
+      console.error('Error downloading report:', error);
+      alert('Failed to download transaction report. Please try again.');
+    } finally {
+      setDownloadingReport(false);
     }
   };
 
@@ -1600,6 +1649,118 @@ export default function B2BCustomerDetailPage() {
                             ) : (
                               <>
                                 Showing transactions up to <strong>{new Date(dateFilter.endDate).toLocaleDateString()}</strong>
+                              </>
+                            )}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Trans Report Button */}
+              <div className="relative report-date-filter-container">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowReportDateFilter(!showReportDateFilter)}
+                  disabled={downloadingReport}
+                  className="flex items-center gap-2 bg-white hover:bg-gray-50 border-gray-300"
+                >
+                  <DocumentArrowDownIcon className="w-4 h-4" />
+                  <span className="hidden sm:inline">Trans Report</span>
+                  {downloadingReport && (
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600 ml-1"></div>
+                  )}
+                </Button>
+                
+                {/* Report Date Filter Dropdown */}
+                {showReportDateFilter && (
+                  <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4 report-date-filter-container">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                        <CalendarIcon className="w-4 h-4" />
+                        Select Date Range for Report
+                      </h3>
+                      <button
+                        onClick={() => setShowReportDateFilter(false)}
+                        className="text-gray-400 hover:text-gray-600"
+                      >
+                        <XMarkIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                          Start Date
+                        </label>
+                        <Input
+                          type="date"
+                          value={reportDateFilter.startDate}
+                          onChange={(e) => setReportDateFilter({ ...reportDateFilter, startDate: e.target.value })}
+                          className="w-full text-sm"
+                          max={reportDateFilter.endDate || new Date().toISOString().split('T')[0]}
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                          End Date
+                        </label>
+                        <Input
+                          type="date"
+                          value={reportDateFilter.endDate}
+                          onChange={(e) => setReportDateFilter({ ...reportDateFilter, endDate: e.target.value })}
+                          className="w-full text-sm"
+                          min={reportDateFilter.startDate || undefined}
+                          max={new Date().toISOString().split('T')[0]}
+                        />
+                      </div>
+                      
+                      <div className="flex gap-2 pt-2 border-t border-gray-200">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setReportDateFilter({ startDate: '', endDate: '' });
+                          }}
+                          className="flex-1 text-xs"
+                        >
+                          Clear
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={handleDownloadReport}
+                          disabled={downloadingReport}
+                          className="flex-1 text-xs"
+                        >
+                          {downloadingReport ? (
+                            <div className="flex items-center justify-center">
+                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
+                              Generating...
+                            </div>
+                          ) : (
+                            'Download Report'
+                          )}
+                        </Button>
+                      </div>
+                      
+                      {(reportDateFilter.startDate || reportDateFilter.endDate) && (
+                        <div className="pt-2 border-t border-gray-200">
+                          <p className="text-xs text-gray-600">
+                            {(reportDateFilter.startDate && reportDateFilter.endDate) ? (
+                              <>
+                                Report will include transactions from <strong>{new Date(reportDateFilter.startDate).toLocaleDateString()}</strong> to <strong>{new Date(reportDateFilter.endDate).toLocaleDateString()}</strong>
+                              </>
+                            ) : reportDateFilter.startDate ? (
+                              <>
+                                Report will include transactions from <strong>{new Date(reportDateFilter.startDate).toLocaleDateString()}</strong> onwards
+                              </>
+                            ) : (
+                              <>
+                                Report will include transactions up to <strong>{new Date(reportDateFilter.endDate).toLocaleDateString()}</strong>
                               </>
                             )}
                           </p>
