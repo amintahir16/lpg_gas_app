@@ -64,9 +64,13 @@ interface B2BTransaction {
   paymentReference: string | null;
   notes: string | null;
   voided: boolean;
+  voidedBy?: string | null;
+  voidedAt?: string | null;
+  voidReason?: string | null;
   items: B2BTransactionItem[];
   runningBalance?: number;
   balanceImpact?: number;
+  createdAt?: string;
 }
 
 interface B2BTransactionItem {
@@ -142,6 +146,12 @@ export default function B2BCustomerDetailPage() {
   const [transactionType, setTransactionType] = useState<'SALE' | 'PAYMENT' | 'BUYBACK' | 'RETURN_EMPTY'>('SALE');
   const [transactionDate, setTransactionDate] = useState(new Date().toISOString().split('T')[0]);
   const [transactionTime, setTransactionTime] = useState(new Date().toTimeString().slice(0, 5));
+  
+  // Transaction detail modal states
+  const [selectedTransaction, setSelectedTransaction] = useState<B2BTransaction | null>(null);
+  const [showTransactionDetail, setShowTransactionDetail] = useState(false);
+  const [loadingTransaction, setLoadingTransaction] = useState(false);
+  const [undoingTransaction, setUndoingTransaction] = useState(false);
   
   // Payment form states (for separate PAYMENT transactions)
   const [paymentAgainst, setPaymentAgainst] = useState('');
@@ -484,6 +494,20 @@ export default function B2BCustomerDetailPage() {
       hour: '2-digit', 
       minute: '2-digit' 
     });
+  };
+
+  const getCylinderTypeDisplay = (type: string | null) => {
+    if (!type) return 'N/A';
+    switch (type) {
+      case 'DOMESTIC_11_8KG':
+        return 'Domestic (11.8kg)';
+      case 'STANDARD_15KG':
+        return 'Standard (15kg)';
+      case 'COMMERCIAL_45_4KG':
+        return 'Commercial (45.4kg)';
+      default:
+        return type.replace(/_/g, ' ');
+    }
   };
 
   const calculateBuybackAmount = (originalPrice: number, remainingKg: number, totalKg: number) => {
@@ -1993,7 +2017,23 @@ export default function B2BCustomerDetailPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => {/* Open transaction details modal */}}
+                        onClick={async () => {
+                          setSelectedTransaction(transaction);
+                          setShowTransactionDetail(true);
+                          // Fetch full transaction details with items
+                          try {
+                            setLoadingTransaction(true);
+                            const response = await fetch(`/api/customers/b2b/transactions/${transaction.id}`);
+                            if (response.ok) {
+                              const data = await response.json();
+                              setSelectedTransaction(data);
+                            }
+                          } catch (err) {
+                            console.error('Error fetching transaction details:', err);
+                          } finally {
+                            setLoadingTransaction(false);
+                          }
+                        }}
                       >
                         <EyeIcon className="w-4 h-4" />
                       </Button>
@@ -2102,6 +2142,260 @@ export default function B2BCustomerDetailPage() {
                   {updatingCategory ? 'Updating...' : 'Update Category'}
                 </Button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transaction Detail Modal */}
+      {showTransactionDetail && selectedTransaction && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-10 mx-auto p-5 border w-11/12 max-w-5xl shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              {/* Header with buttons */}
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Transaction Details - {selectedTransaction.billSno}
+                </h3>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        const response = await fetch(`/api/customers/b2b/transactions/${selectedTransaction.id}/report`);
+                        if (response.ok) {
+                          const blob = await response.blob();
+                          const url = window.URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `Transaction-${selectedTransaction.billSno}.pdf`;
+                          document.body.appendChild(a);
+                          a.click();
+                          window.URL.revokeObjectURL(url);
+                          document.body.removeChild(a);
+                        } else {
+                          alert('Failed to download transaction report');
+                        }
+                      } catch (err) {
+                        console.error('Error downloading report:', err);
+                        alert('Failed to download transaction report');
+                      }
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    <DocumentArrowDownIcon className="w-4 h-4" />
+                    Download Transaction
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      const confirmed = window.confirm(
+                        `Are you sure you want to undo this transaction?\n\n` +
+                        `This will:\n` +
+                        `- Reverse all balance changes\n` +
+                        `- Return inventory items\n` +
+                        `- Update cylinder counts\n\n` +
+                        `Transaction: ${selectedTransaction.billSno}\n` +
+                        `Type: ${selectedTransaction.transactionType}\n` +
+                        `Amount: ${formatCurrency(selectedTransaction.totalAmount)}\n\n` +
+                        `This action cannot be undone.`
+                      );
+                      
+                      if (!confirmed) return;
+                      
+                      const reason = prompt('Please provide a reason for undoing this transaction (optional):') || undefined;
+                      
+                      try {
+                        setUndoingTransaction(true);
+                        const response = await fetch(`/api/customers/b2b/transactions/${selectedTransaction.id}/undo`, {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                          },
+                          body: JSON.stringify({ reason })
+                        });
+                        
+                        if (response.ok) {
+                          alert('Transaction successfully undone. All changes have been reversed.');
+                          setShowTransactionDetail(false);
+                          setSelectedTransaction(null);
+                          // Refresh customer ledger
+                          await fetchCustomerLedger();
+                        } else {
+                          const errorData = await response.json();
+                          alert(`Failed to undo transaction: ${errorData.error || 'Unknown error'}`);
+                        }
+                      } catch (err) {
+                        console.error('Error undoing transaction:', err);
+                        alert('Failed to undo transaction. Please try again.');
+                      } finally {
+                        setUndoingTransaction(false);
+                      }
+                    }}
+                    disabled={selectedTransaction.voided || undoingTransaction}
+                    className={`flex items-center gap-2 ${
+                      selectedTransaction.voided ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-50 hover:border-red-300 hover:text-red-600'
+                    }`}
+                  >
+                    <ArrowPathIcon className="w-4 h-4" />
+                    {undoingTransaction ? 'Undoing...' : 'Undo Transaction'}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setShowTransactionDetail(false);
+                      setSelectedTransaction(null);
+                    }}
+                  >
+                    <XMarkIcon className="w-5 h-5" />
+                  </Button>
+                </div>
+              </div>
+
+              {loadingTransaction ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="mt-2 text-gray-600">Loading transaction details...</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Transaction Info */}
+                  <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
+                    <CardHeader>
+                      <CardTitle className="text-lg font-semibold text-gray-900">Transaction Information</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-600">Bill Number</p>
+                        <p className="font-semibold text-gray-900">{selectedTransaction.billSno}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Transaction Type</p>
+                        <Badge variant={
+                          selectedTransaction.transactionType === 'SALE' ? 'success' :
+                          selectedTransaction.transactionType === 'PAYMENT' ? 'info' :
+                          selectedTransaction.transactionType === 'BUYBACK' ? 'warning' : 'secondary'
+                        }>
+                          {selectedTransaction.transactionType}
+                          {selectedTransaction.voided && ' (VOIDED)'}
+                        </Badge>
+                        {selectedTransaction.transactionType === 'SALE' && selectedTransaction.paymentStatus && (
+                          <Badge 
+                            variant={
+                              (selectedTransaction.paymentStatus === 'FULLY_PAID' ? 'success' :
+                              selectedTransaction.paymentStatus === 'PARTIAL' ? 'warning' :
+                              'destructive') as 'success' | 'warning' | 'destructive'
+                            }
+                            className="ml-2 text-xs"
+                          >
+                            {selectedTransaction.paymentStatus === 'FULLY_PAID' ? 'Paid' :
+                             selectedTransaction.paymentStatus === 'PARTIAL' ? 'Partial' :
+                             'Unpaid'}
+                          </Badge>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Date</p>
+                        <p className="font-semibold text-gray-900" suppressHydrationWarning>
+                          {formatDate(selectedTransaction.date)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Time</p>
+                        <p className="font-semibold text-gray-900" suppressHydrationWarning>
+                          {formatTime(selectedTransaction.time)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Total Amount</p>
+                        <p className="font-semibold text-gray-900">{formatCurrency(selectedTransaction.totalAmount)}</p>
+                      </div>
+                      {selectedTransaction.transactionType === 'SALE' && selectedTransaction.paidAmount && (
+                        <>
+                          <div>
+                            <p className="text-sm text-gray-600">Paid Amount</p>
+                            <p className="font-semibold text-green-600">{formatCurrency(Number(selectedTransaction.paidAmount))}</p>
+                          </div>
+                          {selectedTransaction.unpaidAmount && Number(selectedTransaction.unpaidAmount) > 0 && (
+                            <div>
+                              <p className="text-sm text-gray-600">Unpaid Amount</p>
+                              <p className="font-semibold text-red-600">{formatCurrency(Number(selectedTransaction.unpaidAmount))}</p>
+                            </div>
+                          )}
+                          {selectedTransaction.paymentMethod && (
+                            <div>
+                              <p className="text-sm text-gray-600">Payment Method</p>
+                              <p className="font-semibold text-gray-900">{selectedTransaction.paymentMethod.replace(/_/g, ' ')}</p>
+                            </div>
+                          )}
+                        </>
+                      )}
+                      {selectedTransaction.paymentReference && (
+                        <div>
+                          <p className="text-sm text-gray-600">Payment Reference</p>
+                          <p className="font-semibold text-gray-900">{selectedTransaction.paymentReference}</p>
+                        </div>
+                      )}
+                      {selectedTransaction.notes && (
+                        <div className="col-span-2">
+                          <p className="text-sm text-gray-600">Notes</p>
+                          <p className="font-semibold text-gray-900">{selectedTransaction.notes}</p>
+                        </div>
+                      )}
+                      {selectedTransaction.voided && selectedTransaction.voidReason && (
+                        <div className="col-span-2">
+                          <p className="text-sm text-red-600">Void Reason</p>
+                          <p className="font-semibold text-red-600">{selectedTransaction.voidReason}</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Items Table */}
+                  <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
+                    <CardHeader>
+                      <CardTitle className="text-lg font-semibold text-gray-900">Transaction Items</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {selectedTransaction.items && selectedTransaction.items.length > 0 ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full border-collapse">
+                            <thead>
+                              <tr className="bg-gray-50">
+                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-b">Item</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-b">Quantity</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-b">Price Per Item</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-b">Total Price</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {selectedTransaction.items.map((item: any, index: number) => (
+                                <tr key={index} className="border-b hover:bg-gray-50">
+                                  <td className="px-4 py-3 text-sm text-gray-900">
+                                    {item.cylinderType ? getCylinderTypeDisplay(item.cylinderType) : item.productName}
+                                  </td>
+                                  <td className="px-4 py-3 text-sm text-gray-700">{Number(item.quantity)}</td>
+                                  <td className="px-4 py-3 text-sm text-gray-700">{formatCurrency(Number(item.pricePerItem))}</td>
+                                  <td className="px-4 py-3 text-sm font-semibold text-gray-900">{formatCurrency(Number(item.totalPrice))}</td>
+                                </tr>
+                              ))}
+                              <tr className="bg-gray-50 font-semibold">
+                                <td colSpan={3} className="px-4 py-3 text-right text-sm text-gray-900">Total:</td>
+                                <td className="px-4 py-3 text-sm text-gray-900">{formatCurrency(selectedTransaction.totalAmount)}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p className="text-gray-500 text-center py-4">No items in this transaction</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
             </div>
           </div>
         </div>
