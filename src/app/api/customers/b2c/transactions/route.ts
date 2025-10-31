@@ -358,12 +358,12 @@ export async function POST(request: NextRequest) {
                 continue;
             }
 
-            // Find cylinders that are with B2C customers
+            // Find cylinders that are with THIS specific B2C customer
             const cylindersWithCustomer = await tx.cylinder.findMany({
               where: {
                 cylinderType: mappedCylinderType,
                 currentStatus: 'WITH_CUSTOMER',
-                location: { contains: 'B2C Customer' }
+                location: { contains: `B2C Customer: ${customer.name}` }
               },
               take: securityItem.quantity
             });

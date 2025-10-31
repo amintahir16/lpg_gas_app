@@ -69,13 +69,12 @@ export default function CylindersInventoryPage() {
   useEffect(() => {
     // Reset to page 1 when filters change
     setPagination(prev => ({ ...prev, page: 1 }));
-    fetchCylinders();
     fetchCylinderTypeStats();
   }, [searchTerm, statusFilter, typeFilter, locationFilter]);
 
   useEffect(() => {
     fetchCylinders();
-  }, [pagination.page]);
+  }, [pagination.page, searchTerm, statusFilter, typeFilter, locationFilter]);
 
   const fetchCylinders = async () => {
     try {
@@ -335,7 +334,6 @@ export default function CylindersInventoryPage() {
               <option value="ALL">All Status</option>
               <option value="FULL">Full</option>
               <option value="EMPTY">Empty</option>
-              <option value="WITH_CUSTOMER">With Customer</option>
               <option value="RETIRED">Retired</option>
             </select>
             <select 
@@ -356,7 +354,6 @@ export default function CylindersInventoryPage() {
               <option value="ALL">All Locations</option>
               <option value="STORE">In Store</option>
               <option value="VEHICLE">In Vehicle</option>
-              <option value="CUSTOMER">With Customer</option>
             </select>
           </div>
         </CardContent>
@@ -718,7 +715,6 @@ export default function CylindersInventoryPage() {
                   >
                     <option value="FULL">Full</option>
                     <option value="EMPTY">Empty</option>
-                    <option value="WITH_CUSTOMER">With Customer</option>
                     <option value="RETIRED">Retired</option>
                   </select>
                 </div>

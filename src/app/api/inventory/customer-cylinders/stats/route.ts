@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
     // Process the stats
     const stats = cylindersWithCustomers.map(stat => ({
-      type: stat.cylinderType.replace('_', ' '),
+      type: stat.cylinderType,
       count: stat._count.id,
       totalValue: stat._sum.purchasePrice || 0
     }));

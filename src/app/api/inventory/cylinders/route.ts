@@ -12,17 +12,37 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '100');
 
     // Build where clause
+    // Exclude WITH_CUSTOMER cylinders from main inventory - they are tracked on separate page
     const where: any = {};
 
-    if (search) {
-      where.OR = [
-        { code: { contains: search, mode: 'insensitive' } },
-        { location: { contains: search, mode: 'insensitive' } }
-      ];
+    // Build status condition
+    let statusCondition: any;
+    if (status) {
+      // If status filter is selected, use it (but never allow WITH_CUSTOMER)
+      if (status === 'WITH_CUSTOMER') {
+        // Don't allow filtering by WITH_CUSTOMER on this page - return empty results
+        statusCondition = 'INVALID_STATUS_THAT_DOES_NOT_EXIST';
+      } else {
+        statusCondition = status;
+      }
+    } else {
+      // No status filter - exclude WITH_CUSTOMER cylinders
+      statusCondition = { not: 'WITH_CUSTOMER' };
     }
 
-    if (status) {
-      where.currentStatus = status;
+    // Build search condition
+    if (search) {
+      where.AND = [
+        {
+          OR: [
+            { code: { contains: search, mode: 'insensitive' } },
+            { location: { contains: search, mode: 'insensitive' } }
+          ]
+        },
+        { currentStatus: statusCondition }
+      ];
+    } else {
+      where.currentStatus = statusCondition;
     }
 
     if (type) {
@@ -34,9 +54,8 @@ export async function GET(request: NextRequest) {
         where.storeId = { not: null };
       } else if (location === 'VEHICLE') {
         where.vehicleId = { not: null };
-      } else if (location === 'CUSTOMER') {
-        where.currentStatus = 'WITH_CUSTOMER';
       }
+      // Note: CUSTOMER location filter is ignored here as WITH_CUSTOMER cylinders are excluded
     }
 
     // Get cylinders with pagination

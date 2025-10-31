@@ -3,12 +3,19 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
   try {
-    // Get total cylinders count
-    const totalCylinders = await prisma.cylinder.count();
+    // Get total cylinders count (excluding WITH_CUSTOMER - they are tracked separately)
+    const totalCylinders = await prisma.cylinder.count({
+      where: {
+        currentStatus: { not: 'WITH_CUSTOMER' }
+      }
+    });
 
-    // Get cylinders by type
+    // Get cylinders by type (excluding WITH_CUSTOMER)
     const cylindersByType = await prisma.cylinder.groupBy({
       by: ['cylinderType'],
+      where: {
+        currentStatus: { not: 'WITH_CUSTOMER' }
+      },
       _count: {
         id: true
       }
