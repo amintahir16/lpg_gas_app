@@ -94,7 +94,6 @@ export async function PUT(
       phase,
       area,
       city,
-      googleMapLocation,
       isActive,
       marginCategoryId
     } = body;
@@ -135,7 +134,6 @@ export async function PUT(
         phase: phase || null,
         area: area || null,
         city: city || 'Hayatabad',
-        googleMapLocation: googleMapLocation || null,
         isActive: isActive !== undefined ? isActive : true,
         marginCategoryId: marginCategoryId || null
       }

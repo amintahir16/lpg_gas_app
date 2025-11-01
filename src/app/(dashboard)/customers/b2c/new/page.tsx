@@ -25,7 +25,6 @@ export default function NewB2CCustomerPage() {
     phase: '',
     area: '',
     city: 'Hayatabad',
-    googleMapLocation: '',
     marginCategoryId: ''
   });
 
@@ -290,20 +289,6 @@ export default function NewB2CCustomerPage() {
                   placeholder="City name"
                 />
               </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Google Maps Location
-              </label>
-              <Input
-                type="url"
-                value={formData.googleMapLocation}
-                onChange={(e) => handleInputChange('googleMapLocation', e.target.value)}
-                placeholder="https://maps.google.com/..."
-              />
-              <p className="text-sm text-gray-500 mt-1">
-                Optional: Add Google Maps link for easy navigation
-              </p>
             </div>
           </CardContent>
         </Card>

@@ -7,7 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { MagnifyingGlassIcon, HomeIcon, PlusIcon, EyeIcon, MapPinIcon } from '@heroicons/react/24/outline';
+import { Select } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { MagnifyingGlassIcon, HomeIcon, PlusIcon, EyeIcon, MapPinIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 
 interface B2CCustomer {
@@ -25,6 +27,7 @@ interface B2CCustomer {
   totalProfit: number;
   isActive: boolean;
   createdAt: string;
+  marginCategoryId: string | null;
   cylinderHoldings: {
     cylinderType: string;
     quantity: number;
@@ -74,6 +77,12 @@ export default function B2CCustomersPage() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<B2CCustomer | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [marginCategories, setMarginCategories] = useState<any[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(true);
 
   // Debounce search term
   useEffect(() => {
@@ -92,6 +101,25 @@ export default function B2CCustomersPage() {
   useEffect(() => {
     fetchCustomers();
   }, [debouncedSearchTerm, pagination.page]);
+
+  // Fetch margin categories
+  useEffect(() => {
+    const fetchMarginCategories = async () => {
+      try {
+        const response = await fetch('/api/admin/margin-categories?customerType=B2C&activeOnly=true');
+        if (response.ok) {
+          const data = await response.json();
+          setMarginCategories(data);
+        }
+      } catch (error) {
+        console.error('Error fetching margin categories:', error);
+      } finally {
+        setLoadingCategories(false);
+      }
+    };
+
+    fetchMarginCategories();
+  }, []);
 
   const fetchCustomers = async () => {
     try {
@@ -153,6 +181,72 @@ export default function B2CCustomersPage() {
     if (customer.phase) parts.push(`Ph: ${customer.phase}`);
     if (customer.area) parts.push(customer.area);
     return parts.join(', ') || customer.address;
+  };
+
+  const handleEditCustomer = (customer: B2CCustomer) => {
+    setEditingCustomer(customer);
+    setShowEditForm(true);
+  };
+
+  const handleUpdateCustomer = async (formData: any) => {
+    if (!editingCustomer) return;
+    
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const response = await fetch(`/api/customers/b2c/${editingCustomer.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update customer');
+      }
+
+      const updatedCustomer = await response.json();
+      console.log('Customer updated successfully:', updatedCustomer);
+
+      setShowEditForm(false);
+      setEditingCustomer(null);
+      await fetchCustomers();
+      
+    } catch (err) {
+      console.error('Error updating customer:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update customer');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteCustomer = async (customerId: string) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const response = await fetch(`/api/customers/b2c/${customerId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete customer');
+      }
+
+      console.log('Customer deleted successfully');
+      setDeleteConfirm(null);
+      await fetchCustomers();
+      
+    } catch (err) {
+      console.error('Error deleting customer:', err);
+      setError(err instanceof Error ? err.message : 'Failed to delete customer');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -402,18 +496,35 @@ export default function B2CCustomersPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => router.push(`/customers/b2c/${customer.id}`)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/customers/b2c/${customer.id}`);
+                        }}
+                        className="font-medium"
                       >
-                        <EyeIcon className="w-4 h-4 mr-1" />
-                        View
+                        View Details
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => router.push(`/customers/b2c/${customer.id}/transaction`)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditCustomer(customer);
+                        }}
+                        className="text-blue-600 hover:text-blue-800"
                       >
-                        <PlusIcon className="w-4 h-4 mr-1" />
-                        Transaction
+                        <PencilIcon className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteConfirm(customer.id);
+                        }}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        <TrashIcon className="w-4 h-4" />
                       </Button>
                     </div>
                   </TableCell>
@@ -452,6 +563,161 @@ export default function B2CCustomersPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Edit B2C Customer Modal */}
+      {showEditForm && editingCustomer && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit B2C Customer</h3>
+              <form className="space-y-4" onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                handleUpdateCustomer({
+                  name: formData.get('name'),
+                  phone: formData.get('phone'),
+                  email: formData.get('email'),
+                  address: formData.get('address'),
+                  houseNumber: formData.get('houseNumber'),
+                  sector: formData.get('sector'),
+                  street: formData.get('street'),
+                  phase: formData.get('phase'),
+                  area: formData.get('area'),
+                  city: formData.get('city'),
+                  isActive: formData.get('isActive') === 'true',
+                  marginCategoryId: formData.get('marginCategoryId')
+                });
+              }}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Customer Name</label>
+                    <Input name="name" type="text" defaultValue={editingCustomer.name} required />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Phone</label>
+                    <Input name="phone" type="tel" defaultValue={editingCustomer.phone} required />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
+                  <Input name="email" type="email" defaultValue={editingCustomer.email || ''} />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Margin Category *
+                  </label>
+                  <Select
+                    name="marginCategoryId"
+                    required
+                    disabled={loadingCategories}
+                    defaultValue={editingCustomer.marginCategoryId || ''}
+                  >
+                    <option value="">{loadingCategories ? "Loading categories..." : "Select margin category"}</option>
+                    {marginCategories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name} - Rs {category.marginPerKg}/kg
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Address</label>
+                  <Textarea name="address" rows={3} defaultValue={editingCustomer.address} required />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">House Number</label>
+                    <Input name="houseNumber" type="text" defaultValue={editingCustomer.houseNumber || ''} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Sector</label>
+                    <Input name="sector" type="text" defaultValue={editingCustomer.sector || ''} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Street</label>
+                    <Input name="street" type="text" defaultValue={editingCustomer.street || ''} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Phase</label>
+                    <Input name="phase" type="text" defaultValue={editingCustomer.phase || ''} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Area</label>
+                    <Input name="area" type="text" defaultValue={editingCustomer.area || ''} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">City</label>
+                    <Input name="city" type="text" defaultValue={editingCustomer.city} required />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
+                  <Select name="isActive" defaultValue={editingCustomer.isActive ? 'true' : 'false'}>
+                    <option value="true">Active</option>
+                    <option value="false">Inactive</option>
+                  </Select>
+                </div>
+                <div className="flex justify-end space-x-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setShowEditForm(false);
+                      setEditingCustomer(null);
+                    }}
+                    className="font-medium"
+                    disabled={isLoading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" className="font-medium" disabled={isLoading}>
+                    {isLoading ? 'Updating...' : 'Update Customer'}
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Delete Customer</h3>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to delete this customer? This action cannot be undone.
+                The customer will be marked as inactive instead of being permanently deleted.
+              </p>
+              <div className="flex justify-end space-x-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setDeleteConfirm(null)}
+                  className="font-medium"
+                  disabled={isLoading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => handleDeleteCustomer(deleteConfirm)}
+                  className="font-medium"
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Deleting...' : 'Delete Customer'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

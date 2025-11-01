@@ -140,7 +140,6 @@ export async function POST(request: NextRequest) {
       phase,
       area,
       city = 'Hayatabad',
-      googleMapLocation,
       marginCategoryId
     } = body;
 
@@ -176,7 +175,6 @@ export async function POST(request: NextRequest) {
         phase: phase || null,
         area: area || null,
         city,
-        googleMapLocation: googleMapLocation || null,
         marginCategoryId: marginCategoryId || null,
         totalProfit: 0
       }
