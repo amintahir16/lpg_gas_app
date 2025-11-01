@@ -1,0 +1,9 @@
+[phases.setup]
+nixPkgs = ["nodejs-20_x", "postgresql_15"]
+
+[phases.build]
+cmds = ["echo 'Skipping build - running in dev mode with Turbopack'"]
+
+[start]
+cmd = "npm run dev"
+
