@@ -12,7 +12,7 @@ import {
   CheckCircleIcon,
   FunnelIcon,
   TrashIcon,
-  RefreshIcon
+  ArrowPathIcon
 } from '@heroicons/react/24/outline';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { cn } from '@/lib/utils';
@@ -182,7 +182,7 @@ export function EnhancedNotificationDashboard({ isOpen, onClose }: EnhancedNotif
               className="text-gray-500 hover:text-gray-700"
               title="Refresh"
             >
-              <RefreshIcon className="w-4 h-4" />
+              <ArrowPathIcon className="w-4 h-4" />
             </Button>
             <Button
               variant="ghost"

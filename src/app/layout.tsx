@@ -16,6 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'https://lpgcompany.com'),
   title: "LPG Gas Company - Your Trusted Energy Partner",
   description: "Leading LPG provider in Pakistan since 2005. Quality gas cylinders, refill services, bulk deliveries, and 24/7 support. Safe, reliable, and affordable energy solutions.",
   keywords: "LPG, gas cylinders, Pakistan, Karachi, energy, cooking gas, bulk delivery, refill service",

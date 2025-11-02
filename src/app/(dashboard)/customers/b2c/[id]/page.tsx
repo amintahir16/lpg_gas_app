@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useParams, useSearchParams } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -68,7 +68,6 @@ interface B2CCustomer {
 export default function B2CCustomerDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const searchParams = useSearchParams();
   const customerId = params.id as string;
 
   const [customer, setCustomer] = useState<B2CCustomer | null>(null);
@@ -100,7 +99,7 @@ export default function B2CCustomerDetailPage() {
     if (customerId) {
       fetchCustomerDetails();
     }
-  }, [customerId, searchParams, dateFilter.startDate, dateFilter.endDate]);
+  }, [customerId, dateFilter.startDate, dateFilter.endDate]);
 
   // Close date filter when clicking outside
   useEffect(() => {

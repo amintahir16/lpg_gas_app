@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useNotifications } from '@/contexts/NotificationContext';
-import { BellIcon, CogIcon, TrashIcon, RefreshIcon } from '@heroicons/react/24/outline';
+import { BellIcon, CogIcon, TrashIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 
 interface NotificationPreferences {
   email: boolean;
@@ -38,7 +38,7 @@ interface NotificationPreferences {
 }
 
 export default function NotificationSettingsPage() {
-  const { state, markAllAsRead, removeNotification, refresh } = useNotifications();
+  const { state, markAsRead, markAllAsRead, removeNotification, refresh } = useNotifications();
   const { notifications, stats } = state;
   
   const [preferences, setPreferences] = useState<NotificationPreferences>({
@@ -146,7 +146,7 @@ export default function NotificationSettingsPage() {
             {stats.unread} unread
           </Badge>
           <Button onClick={handleRefresh} variant="outline" size="sm">
-            <RefreshIcon className="w-4 h-4 mr-2" />
+            <ArrowPathIcon className="w-4 h-4 mr-2" />
             Refresh
           </Button>
         </div>
