@@ -172,7 +172,6 @@ export default function B2CLedgerPage() {
                 <TableHead className="font-semibold text-gray-700">Customer Name</TableHead>
                 <TableHead className="font-semibold text-gray-700">Home Address</TableHead>
                 <TableHead className="font-semibold text-gray-700">Contact</TableHead>
-                <TableHead className="font-semibold text-gray-700">Google Map</TableHead>
                 <TableHead className="font-semibold text-gray-700">Profit</TableHead>
                 <TableHead className="font-semibold text-gray-700">Actions</TableHead>
               </TableRow>
@@ -193,9 +192,6 @@ export default function B2CLedgerPage() {
                     </div>
                   </TableCell>
                   <TableCell className="text-gray-700">{customer.phone}</TableCell>
-                  <TableCell>
-                    <span className="text-gray-500 text-sm">-</span>
-                  </TableCell>
                   <TableCell className="font-semibold text-gray-900">
                     Rs {Number(customer.totalProfit).toFixed(2)}
                   </TableCell>

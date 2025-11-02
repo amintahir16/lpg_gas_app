@@ -1043,7 +1043,7 @@ export default function B2CTransactionPage() {
               </div>
 
               {/* Profit Column */}
-              <div className="space-y-2 bg-green-50 p-3 rounded-lg">
+              <div className="space-y-2">
                 <h4 className="font-semibold text-green-900 mb-3">Profit Margin</h4>
                 <div className="flex justify-between">
                   <span className="text-green-700">Gas Profit:</span>
