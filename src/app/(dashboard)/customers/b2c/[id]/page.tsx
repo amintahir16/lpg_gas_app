@@ -24,7 +24,6 @@ interface B2CCustomer {
   totalProfit: number;
   isActive: boolean;
   createdAt: string;
-  googleMapLocation: string | null;
   cylinderHoldings: {
     id: string;
     cylinderType: string;
@@ -407,16 +406,6 @@ export default function B2CCustomerDetailPage() {
               <div>
                 <p className="text-gray-700">{formatAddress(customer)}</p>
                 <p className="text-gray-700">{customer.city}</p>
-                {customer.googleMapLocation && (
-                  <a 
-                    href={customer.googleMapLocation}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-800 text-sm underline mt-1 inline-block"
-                  >
-                    View on Google Maps
-                  </a>
-                )}
               </div>
             </div>
             <div className="pt-2">

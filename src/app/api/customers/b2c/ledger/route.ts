@@ -25,8 +25,7 @@ export async function GET(request: NextRequest) {
           phase: true,
           area: true,
           city: true,
-          totalProfit: true,
-          googleMapLocation: true
+          totalProfit: true
         },
         orderBy: { totalProfit: 'desc' }
       }),

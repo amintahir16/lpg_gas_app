@@ -19,7 +19,6 @@ interface B2CCustomer {
   area: string | null;
   city: string;
   totalProfit: number;
-  googleMapLocation: string | null;
 }
 
 interface B2CLedgerResponse {
@@ -195,18 +194,7 @@ export default function B2CLedgerPage() {
                   </TableCell>
                   <TableCell className="text-gray-700">{customer.phone}</TableCell>
                   <TableCell>
-                    {customer.googleMapLocation ? (
-                      <a 
-                        href={customer.googleMapLocation}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800 text-sm underline"
-                      >
-                        View Location
-                      </a>
-                    ) : (
-                      <span className="text-gray-500 text-sm">Not set</span>
-                    )}
+                    <span className="text-gray-500 text-sm">-</span>
                   </TableCell>
                   <TableCell className="font-semibold text-gray-900">
                     Rs {Number(customer.totalProfit).toFixed(2)}
