@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { ensureDefaultCategoriesExist } from '@/lib/margin-categories';
 
 // GET /api/admin/margin-categories - Get all margin categories
 export async function GET(request: NextRequest) {
@@ -16,8 +17,12 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const customerType = searchParams.get('customerType'); // B2C or B2B
+    const customerType = searchParams.get('customerType') as 'B2C' | 'B2B' | null;
     const activeOnly = searchParams.get('activeOnly') === 'true';
+
+    // Auto-initialize categories if they don't exist (safety net)
+    // This ensures categories are always available, even in new deployments
+    await ensureDefaultCategoriesExist(customerType || undefined);
 
     const where: any = {};
     if (customerType) where.customerType = customerType;

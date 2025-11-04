@@ -61,6 +61,8 @@ export default function PricingManagementPage() {
     notes: ''
   });
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [initializingB2C, setInitializingB2C] = useState(false);
+  const [initializingB2B, setInitializingB2B] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -198,6 +200,34 @@ export default function PricingManagementPage() {
     setTimeout(() => setMessage(null), 5000);
   };
 
+  const handleInitializeCategories = async (customerType: 'B2C' | 'B2B') => {
+    const setLoading = customerType === 'B2C' ? setInitializingB2C : setInitializingB2B;
+    
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/admin/margin-categories/initialize?customerType=${customerType}`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to initialize categories');
+      }
+
+      const result = await response.json();
+      showMessage('success', result.message || `Default ${customerType} categories initialized successfully`);
+      
+      // Refresh data to show newly created categories
+      fetchData();
+    } catch (error) {
+      console.error(`Error initializing ${customerType} categories:`, error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to initialize categories';
+      showMessage('error', errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const b2cCategories = categories.filter(c => c.customerType === 'B2C' && c.isActive);
   const b2bCategories = categories.filter(c => c.customerType === 'B2B' && c.isActive);
 
@@ -281,14 +311,77 @@ export default function PricingManagementPage() {
       {/* B2C Categories */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CurrencyDollarIcon className="w-6 h-6" />
-            B2C (Home Customers) Pricing
-          </CardTitle>
-          <CardDescription>Pricing categories for residential customers</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <CurrencyDollarIcon className="w-6 h-6" />
+                B2C (Home Customers) Pricing
+              </CardTitle>
+              <CardDescription>Pricing categories for residential customers</CardDescription>
+            </div>
+            {b2cCategories.length === 0 && (
+              <Button
+                onClick={() => handleInitializeCategories('B2C')}
+                disabled={initializingB2C}
+                className="flex items-center gap-2"
+              >
+                {initializingB2C ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Initializing...
+                  </>
+                ) : (
+                  <>
+                    <PlusIcon className="w-4 h-4" />
+                    Initialize Default B2C Categories
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          {b2cCategories.length === 0 ? (
+            <div className="py-8 text-center">
+              <div className="max-w-md mx-auto">
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+                  <div className="flex items-center justify-center mb-4">
+                    <CurrencyDollarIcon className="w-12 h-12 text-yellow-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    No B2C Categories Found
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Initialize default categories to get started. This will create the standard pricing categories for residential customers.
+                  </p>
+                  <div className="bg-white rounded-md p-3 mb-4 text-left">
+                    <p className="text-xs font-medium text-gray-700 mb-2">Will create:</p>
+                    <ul className="text-xs text-gray-600 space-y-1">
+                      <li>• All Homes (Rs 65/kg)</li>
+                    </ul>
+                  </div>
+                  <Button
+                    onClick={() => handleInitializeCategories('B2C')}
+                    disabled={initializingB2C}
+                    className="w-full"
+                  >
+                    {initializingB2C ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                        Initializing...
+                      </>
+                    ) : (
+                      <>
+                        <PlusIcon className="w-4 h-4 mr-2" />
+                        Initialize Default B2C Categories
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b">
@@ -400,20 +493,88 @@ export default function PricingManagementPage() {
               </tbody>
             </table>
           </div>
+          )}
         </CardContent>
       </Card>
 
       {/* B2B Categories */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CurrencyDollarIcon className="w-6 h-6" />
-            B2B (Industries & Restaurants) Pricing
-          </CardTitle>
-          <CardDescription>Pricing categories for commercial customers</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <CurrencyDollarIcon className="w-6 h-6" />
+                B2B (Industries & Restaurants) Pricing
+              </CardTitle>
+              <CardDescription>Pricing categories for commercial customers</CardDescription>
+            </div>
+            {b2bCategories.length === 0 && (
+              <Button
+                onClick={() => handleInitializeCategories('B2B')}
+                disabled={initializingB2B}
+                className="flex items-center gap-2"
+              >
+                {initializingB2B ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Initializing...
+                  </>
+                ) : (
+                  <>
+                    <PlusIcon className="w-4 h-4" />
+                    Initialize Default B2B Categories
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          {b2bCategories.length === 0 ? (
+            <div className="py-8 text-center">
+              <div className="max-w-md mx-auto">
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+                  <div className="flex items-center justify-center mb-4">
+                    <CurrencyDollarIcon className="w-12 h-12 text-yellow-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    No B2B Categories Found
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Initialize default categories to get started. This will create the standard pricing categories for commercial customers.
+                  </p>
+                  <div className="bg-white rounded-md p-3 mb-4 text-left">
+                    <p className="text-xs font-medium text-gray-700 mb-2">Will create:</p>
+                    <ul className="text-xs text-gray-600 space-y-1">
+                      <li>• 1 & 2C Demand Weekly (Rs 32/kg)</li>
+                      <li>• 3C Demand Weekly (Rs 28/kg)</li>
+                      <li>• 4C & above demand weekly (Rs 23/kg)</li>
+                      <li>• Majority 15kg Customers (Rs 45/kg)</li>
+                      <li>• Special 15kg (Rs 35/kg)</li>
+                    </ul>
+                  </div>
+                  <Button
+                    onClick={() => handleInitializeCategories('B2B')}
+                    disabled={initializingB2B}
+                    className="w-full"
+                  >
+                    {initializingB2B ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                        Initializing...
+                      </>
+                    ) : (
+                      <>
+                        <PlusIcon className="w-4 h-4 mr-2" />
+                        Initialize Default B2B Categories
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b">
@@ -525,6 +686,7 @@ export default function PricingManagementPage() {
               </tbody>
             </table>
           </div>
+          )}
         </CardContent>
       </Card>
 
