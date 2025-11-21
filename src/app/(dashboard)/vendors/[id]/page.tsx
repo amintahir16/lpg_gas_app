@@ -138,6 +138,7 @@ export default function VendorDetailPage() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [directPayments, setDirectPayments] = useState<DirectPayment[]>([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmationName, setDeleteConfirmationName] = useState('');
   
   // Edit vendor state
   const [showEditModal, setShowEditModal] = useState(false);
@@ -547,6 +548,15 @@ export default function VendorDetailPage() {
   };
 
   const handleDeleteVendor = async () => {
+    // Get the vendor name to match
+    const vendorName = vendor?.name || vendor?.companyName || '';
+    
+    // Validate that the confirmation name matches
+    if (deleteConfirmationName.trim() !== vendorName.trim()) {
+      alert('Vendor name does not match. Please type the exact vendor name to confirm deletion.');
+      return;
+    }
+
     try {
       const response = await fetch(`/api/vendors?id=${vendorId}`, {
         method: 'DELETE'
@@ -557,6 +567,10 @@ export default function VendorDetailPage() {
         alert(error.error || 'Failed to delete vendor');
         return;
       }
+
+      // Reset confirmation state
+      setDeleteConfirmationName('');
+      setShowDeleteConfirm(false);
 
       // Redirect back to the category page
       router.push(`/vendors/category/${vendor?.category.id}`);
@@ -966,7 +980,10 @@ export default function VendorDetailPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setShowDeleteConfirm(true)}
+              onClick={() => {
+                setDeleteConfirmationName('');
+                setShowDeleteConfirm(true);
+              }}
               className="text-red-600 hover:text-red-700 hover:bg-red-50"
             >
               <TrashIcon className="w-4 h-4 mr-1" />
@@ -2406,9 +2423,9 @@ export default function VendorDetailPage() {
       )}
 
       {/* Delete Confirmation Dialog */}
-      {showDeleteConfirm && (
+      {showDeleteConfirm && vendor && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+          <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
             <div className="mt-3">
               <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
                 <TrashIcon className="h-6 w-6 text-red-600" />
@@ -2418,18 +2435,44 @@ export default function VendorDetailPage() {
                   Delete Vendor
                 </h3>
                 <p className="text-sm text-gray-500 mb-4">
-                  Are you sure you want to delete this vendor? This action cannot be undone.
+                  This action cannot be undone. This will permanently delete the vendor and all associated data.
                 </p>
+                <div className="mb-4 text-left">
+                  <p className="text-sm font-medium text-gray-700 mb-2">
+                    To confirm, please type <span className="font-bold text-gray-900">"{vendor.name || vendor.companyName || 'Unnamed Vendor'}"</span> to proceed:
+                  </p>
+                  <Input
+                    type="text"
+                    value={deleteConfirmationName}
+                    onChange={(e) => setDeleteConfirmationName(e.target.value)}
+                    placeholder="Enter vendor name"
+                    className="w-full"
+                    autoFocus
+                  />
+                  {deleteConfirmationName.trim() !== '' && 
+                   deleteConfirmationName.trim() !== (vendor.name || vendor.companyName || '').trim() && (
+                    <p className="mt-2 text-sm text-red-600">
+                      The name does not match. Please type the exact vendor name.
+                    </p>
+                  )}
+                </div>
                 <div className="flex justify-center space-x-3">
                   <Button
                     variant="outline"
-                    onClick={() => setShowDeleteConfirm(false)}
+                    onClick={() => {
+                      setShowDeleteConfirm(false);
+                      setDeleteConfirmationName('');
+                    }}
                   >
                     Cancel
                   </Button>
                   <Button
                     variant="destructive"
                     onClick={handleDeleteVendor}
+                    disabled={
+                      deleteConfirmationName.trim() !== (vendor.name || vendor.companyName || '').trim()
+                    }
+                    className="disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Delete Vendor
                   </Button>
