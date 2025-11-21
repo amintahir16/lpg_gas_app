@@ -264,6 +264,11 @@ export default function VendorDetailPage() {
       return [{ itemName: '', category: '', quantity: 0, unitPrice: 0, totalPrice: 0, cylinderCodes: '' }];
     }
     
+    // For gas purchase, always start with one empty item row
+    if (vendor?.category?.slug === 'gas_purchase') {
+      return [{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '' }];
+    }
+    
     // For other categories, use actual vendor items from database if available
     if (vendor && vendorItems.length > 0) {
       return vendorItems.map(item => ({
@@ -281,8 +286,6 @@ export default function VendorDetailPage() {
     if (vendor) {
       if (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
         return defaultCylinderItems;
-      } else if (vendor?.category?.slug === 'gas_purchase') {
-        return defaultGasItems;
       } else if (vendor?.category?.slug === 'vaporizer_purchase') {
         return defaultVaporizerItems;
       }
@@ -329,8 +332,16 @@ export default function VendorDetailPage() {
       return;
     }
     
-    // Use actual vendor items from database if available
-    if (vendorItems.length > 0) {
+    // For gas purchase, always start with one empty row
+    // This allows users to select from vendor items dynamically
+    if (vendor?.category?.slug === 'gas_purchase') {
+      // Always start with one empty item row
+      setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '' }]);
+    } else if (vendor?.category?.slug === 'accessories_purchase') {
+      // For accessories, start with empty item
+      setPurchaseItems([{ itemName: '', category: '', quantity: 0, unitPrice: 0, totalPrice: 0, cylinderCodes: '' }]);
+    } else if (vendorItems.length > 0) {
+      // For other categories, use vendor items if available
       const mappedItems = vendorItems.map(item => ({
         itemName: item.name,
         quantity: 0,
@@ -343,17 +354,13 @@ export default function VendorDetailPage() {
       setPurchaseItems(mappedItems);
     } else {
       // Fallback to hardcoded items if no vendor items
-    if (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
+      if (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
         setPurchaseItems([...defaultCylinderItems]);
-    } else if (vendor?.category?.slug === 'gas_purchase') {
-        setPurchaseItems([...defaultGasItems]);
-    } else if (vendor?.category?.slug === 'vaporizer_purchase') {
+      } else if (vendor?.category?.slug === 'vaporizer_purchase') {
         setPurchaseItems([...defaultVaporizerItems]);
-    } else if (vendor?.category?.slug === 'accessories_purchase') {
-        setPurchaseItems([...defaultAccessoriesItems]);
-    } else {
-      setPurchaseItems([{ itemName: '', quantity: 1, unitPrice: 0, totalPrice: 0 }]);
-    }
+      } else {
+        setPurchaseItems([{ itemName: '', quantity: 1, unitPrice: 0, totalPrice: 0 }]);
+      }
     }
   }, [vendor, vendorItems]);
 
@@ -685,18 +692,32 @@ export default function VendorDetailPage() {
     });
     setUsedCodes(new Set()); // Reset used codes for new form
     
-    // Reset purchase items to trigger auto-population
-    setPurchaseItems([]);
+    // Initialize with one empty item for gas purchase, or reset to trigger auto-population for others
+    if (vendor?.category?.slug === 'gas_purchase') {
+      setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '' }]);
+    } else if (vendor?.category?.slug === 'accessories_purchase') {
+      setPurchaseItems([{ itemName: '', category: '', quantity: 0, unitPrice: 0, totalPrice: 0, cylinderCodes: '' }]);
+    } else {
+      // Reset purchase items to trigger auto-population
+      setPurchaseItems([]);
+    }
     
     setShowPurchaseForm(true);
   };
 
   const handleAddPurchaseItem = () => {
     // Allow adding items to all vendor categories
+    if (vendor?.category?.slug === 'gas_purchase') {
       setPurchaseItems([
         ...purchaseItems,
-      { itemName: '', category: '', quantity: 1, unitPrice: 0, totalPrice: 0, cylinderCodes: '' }
+        { itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '' }
       ]);
+    } else {
+      setPurchaseItems([
+        ...purchaseItems,
+        { itemName: '', category: '', quantity: 1, unitPrice: 0, totalPrice: 0, cylinderCodes: '' }
+      ]);
+    }
   };
 
   const handleRemovePurchaseItem = (index: number) => {
@@ -848,15 +869,17 @@ export default function VendorDetailPage() {
       // Reset form
       setShowPurchaseForm(false);
       
-      // Reset to default items based on category
-      if (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
+      // Reset to initial state based on category
+      if (vendor?.category?.slug === 'gas_purchase') {
+        // Start with one empty item for gas purchase
+        setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '' }]);
+      } else if (vendor?.category?.slug === 'accessories_purchase') {
+        // Start with one empty item for accessories
+        setPurchaseItems([{ itemName: '', category: '', quantity: 0, unitPrice: 0, totalPrice: 0, cylinderCodes: '' }]);
+      } else if (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
         setPurchaseItems(defaultCylinderItems);
-      } else if (vendor?.category?.slug === 'gas_purchase') {
-        setPurchaseItems(defaultGasItems);
       } else if (vendor?.category?.slug === 'vaporizer_purchase') {
         setPurchaseItems(defaultVaporizerItems);
-      } else if (vendor?.category?.slug === 'accessories_purchase') {
-        setPurchaseItems(defaultAccessoriesItems);
       } else {
         setPurchaseItems([{ itemName: '', quantity: 1, unitPrice: 0, totalPrice: 0 }]);
       }
@@ -1350,7 +1373,8 @@ export default function VendorDetailPage() {
                                       variant="outline"
                                       size="sm"
                                       onClick={() => handleRemovePurchaseItem(index)}
-                                      className="text-red-600 hover:text-red-700"
+                                      disabled={getDisplayItems().length <= 1}
+                                      className="text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                       Remove
                                     </Button>
@@ -1372,8 +1396,153 @@ export default function VendorDetailPage() {
                           </table>
                         </div>
                       </div>
-                    ) : ['cylinder_purchase', 'gas_purchase', 'vaporizer_purchase'].includes(vendor?.category?.slug || '') ? (
-                      // Category-specific table format for other categories
+                    ) : vendor?.category?.slug === 'gas_purchase' ? (
+                      // Gas purchase form with dropdown for vendor items
+                      <div>
+                        <div className="flex justify-between items-center mb-4">
+                          <label className="text-lg font-semibold text-gray-900">
+                            {vendor.category.name}
+                          </label>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleAddPurchaseItem}
+                          >
+                            <PlusIcon className="w-4 h-4 mr-1" />
+                            Add Item
+                          </Button>
+                        </div>
+                        
+                        <div className="overflow-x-auto">
+                          <table className="w-full border-collapse border border-gray-300" style={{ tableLayout: 'fixed' }}>
+                            <colgroup>
+                              <col style={{ width: '30%' }} />
+                              <col style={{ width: '15%' }} />
+                              <col style={{ width: '20%' }} />
+                              <col style={{ width: '20%' }} />
+                              <col style={{ width: '15%' }} />
+                            </colgroup>
+                            <thead>
+                              <tr className="bg-gray-50">
+                                <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-700">
+                                  Item
+                                </th>
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                  Quantity
+                                </th>
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                  Price per Unit
+                                </th>
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                  Price per Item
+                                </th>
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                  Actions
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {getDisplayItems().map((item, index) => (
+                                <tr key={index}>
+                                  <td className="border border-gray-300 px-4 py-2">
+                                    <select
+                                      value={item.itemName}
+                                      onChange={(e) => handlePurchaseItemChange(
+                                        index,
+                                        'itemName',
+                                        e.target.value
+                                      )}
+                                      className="w-full border-0 focus:ring-1 bg-transparent text-sm font-medium text-gray-900"
+                                    >
+                                      <option value="">Select Item</option>
+                                      {vendorItems.length > 0 ? (
+                                        vendorItems.map((vendorItem) => (
+                                          <option key={vendorItem.id} value={vendorItem.name}>
+                                            {vendorItem.name}
+                                          </option>
+                                        ))
+                                      ) : (
+                                        defaultGasItems.map((defaultItem, idx) => (
+                                          <option key={idx} value={defaultItem.itemName}>
+                                            {defaultItem.itemName}
+                                          </option>
+                                        ))
+                                      )}
+                                    </select>
+                                  </td>
+                                  <td className="border border-gray-300 px-4 py-2">
+                                    <div className="space-y-1">
+                                    <Input
+                                      type="number"
+                                      value={item.quantity}
+                                      onChange={(e) => handlePurchaseItemChange(
+                                        index,
+                                        'quantity',
+                                        e.target.value
+                                      )}
+                                      placeholder="Enter quantity"
+                                      min="0"
+                                      step="1"
+                                        max={getMaxQuantity(item.itemName) || undefined}
+                                      className="text-center border-0 focus:ring-1 bg-transparent"
+                                    />
+                                      {getMaxQuantity(item.itemName) !== null && (
+                                        <p className="text-xs text-gray-500 text-center">
+                                          Max: {getMaxQuantity(item.itemName)} available
+                                        </p>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="border border-gray-300 px-4 py-2">
+                                    <Input
+                                      type="number"
+                                      value={item.unitPrice}
+                                      onChange={(e) => handlePurchaseItemChange(
+                                        index,
+                                        'unitPrice',
+                                        e.target.value
+                                      )}
+                                      placeholder="Enter price per unit"
+                                      min="0"
+                                      step="1"
+                                      className="text-center border-0 focus:ring-1 bg-transparent"
+                                    />
+                                  </td>
+                                  <td className="border border-gray-300 px-4 py-2 text-center font-medium">
+                                    {formatCurrency(item.totalPrice)}
+                                  </td>
+                                  <td className="border border-gray-300 px-4 py-2 text-center">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleRemovePurchaseItem(index)}
+                                      disabled={getDisplayItems().length <= 1}
+                                      className="text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      Remove
+                                    </Button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="bg-gray-50">
+                                <td colSpan={3} className="border border-gray-300 px-4 py-2 text-right font-semibold text-gray-700">
+                                  Grand Total:
+                                </td>
+                                <td className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-900">
+                                  {formatCurrency(calculatePurchaseTotal())}
+                                </td>
+                                <td className="border border-gray-300 px-4 py-2"></td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </div>
+                    ) : ['cylinder_purchase', 'vaporizer_purchase'].includes(vendor?.category?.slug || '') ? (
+                      // Category-specific table format for cylinder and vaporizer
                       <div>
                         <div className="flex justify-between items-center mb-4">
                           <label className="text-lg font-semibold text-gray-900">
@@ -1414,9 +1583,7 @@ export default function VendorDetailPage() {
                                       placeholder="Enter item name"
                                       className="border-0 focus:ring-1 bg-transparent text-sm font-medium text-gray-900"
                                       readOnly={
-                                        (vendor?.category?.slug === 'accessories_purchase' && index < defaultAccessoriesItems.length) ||
                                         (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && index < defaultCylinderItems.length) ||
-                                        (vendor?.category?.slug === 'gas_purchase' && index < defaultGasItems.length) ||
                                         (vendor?.category?.slug === 'vaporizer_purchase' && index < defaultVaporizerItems.length)
                                       }
                                     />
