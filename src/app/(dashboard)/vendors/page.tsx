@@ -364,70 +364,81 @@ export default function VendorsPage() {
             const colorClass = getCategoryColor(category.slug);
 
             return (
-              <Card key={category.id} className="hover:shadow-lg transition-shadow h-full">
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className={`p-3 rounded-lg bg-gray-50 border border-gray-200`}>
-                      <IconComponent className={`w-8 h-8 ${colorClass.replace('bg-', 'text-')}`} />
-                    </div>
-                    <div className="text-right">
-                      <div className="text-2xl font-bold text-gray-900">
-                        {category.vendorCount}
+              <Link
+                key={category.id}
+                href={`/vendors/category/${category.id}`}
+                className="block h-full"
+              >
+                <Card className="hover:shadow-lg transition-all duration-200 h-full cursor-pointer group hover:border-blue-300 border-2 border-transparent">
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className={`p-3 rounded-lg bg-gray-50 border border-gray-200 group-hover:bg-gray-100 transition-colors`}>
+                        <IconComponent className={`w-8 h-8 ${colorClass.replace('bg-', 'text-')}`} />
                       </div>
-                      <div className="text-sm text-gray-500">
-                        {category.vendorCount === 1 ? 'Vendor' : 'Vendors'}
+                      <div className="text-right">
+                        <div className="text-2xl font-bold text-gray-900">
+                          {category.vendorCount}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {category.vendorCount === 1 ? 'Vendor' : 'Vendors'}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    {category.name}
-                  </h3>
-                  {category.description && (
-                    <p className="text-sm text-gray-600 line-clamp-2">
-                      {category.description}
-                    </p>
-                  )}
-                  
-                  <div className="mt-4 pt-4 border-t border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <Link
-                        href={`/vendors/category/${category.id}`}
-                        className="text-sm text-blue-600 font-medium hover:text-blue-700"
-                      >
-                        View Vendors →
-                      </Link>
-                      
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
+                    
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
+                      {category.name}
+                    </h3>
+                    {category.description && (
+                      <p className="text-sm text-gray-600 line-clamp-2">
+                        {category.description}
+                      </p>
+                    )}
+                    
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-blue-600 font-medium group-hover:text-blue-700 transition-colors">
+                          View Vendors →
+                        </span>
+                        
+                        <div 
+                          className="flex gap-2"
                           onClick={(e) => {
                             e.preventDefault();
-                            handleEditCategory(category);
+                            e.stopPropagation();
                           }}
-                          className="h-8 w-8 p-0"
-                          title="Edit Category"
                         >
-                          <PencilIcon className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            handleDeleteCategory(category);
-                          }}
-                          className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                          title="Delete Category"
-                        >
-                          <TrashIcon className="w-4 h-4" />
-                        </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleEditCategory(category);
+                            }}
+                            className="h-8 w-8 p-0"
+                            title="Edit Category"
+                          >
+                            <PencilIcon className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleDeleteCategory(category);
+                            }}
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            title="Delete Category"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </Link>
             );
           })}
         </div>
