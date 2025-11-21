@@ -237,14 +237,16 @@ export class InventoryIntegrationService {
       return;
     }
 
-    // Determine cylinder type based on gas type
+    // Determine cylinder type based on gas type (case-insensitive, handles various formats)
+    const name = itemName.toLowerCase();
     let cylinderType = '';
-    if (itemName.includes('Domestic')) {
+    
+    if (name.includes('domestic') || name.includes('11.8') || name.includes('11.8kg')) {
       cylinderType = 'DOMESTIC_11_8KG';
-    } else if (itemName.includes('Standard')) {
-      cylinderType = 'STANDARD_15KG';
-    } else if (itemName.includes('Commercial')) {
+    } else if (name.includes('commercial') || name.includes('45.4') || name.includes('45.4kg')) {
       cylinderType = 'COMMERCIAL_45_4KG';
+    } else if (name.includes('standard') || name.includes('15kg') || name.includes('15 kg')) {
+      cylinderType = 'STANDARD_15KG';
     } else {
       console.log(`⚠️ Unknown gas type: ${itemName}`);
       return;
@@ -265,8 +267,9 @@ export class InventoryIntegrationService {
     });
 
     if (emptyCylinders.length < quantity) {
-      console.log(`⚠️ Not enough empty ${cylinderType} cylinders available. Found: ${emptyCylinders.length}, Needed: ${quantity}`);
-      return;
+      const errorMessage = `Not enough empty ${cylinderType} cylinders available. Found: ${emptyCylinders.length}, Needed: ${quantity}`;
+      console.error(`❌ ${errorMessage}`);
+      throw new Error(errorMessage);
     }
 
     // Update found cylinders to FULL status

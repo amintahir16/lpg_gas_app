@@ -695,6 +695,8 @@ export default function VendorDetailPage() {
     // Initialize with one empty item for gas purchase, or reset to trigger auto-population for others
     if (vendor?.category?.slug === 'gas_purchase') {
       setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '' }]);
+      // Fetch empty cylinders when opening gas purchase form
+      fetchEmptyCylinders();
     } else if (vendor?.category?.slug === 'accessories_purchase') {
       setPurchaseItems([{ itemName: '', category: '', quantity: 0, unitPrice: 0, totalPrice: 0, cylinderCodes: '' }]);
     } else {
@@ -754,50 +756,94 @@ export default function VendorDetailPage() {
         Number(newItems[index].quantity) * Number(newItems[index].unitPrice);
     }
 
-    // For gas purchase, fetch empty cylinders when quantity changes
-    if (field === 'quantity' && 
-        isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && 
-        value > 0) {
-      // Fetch empty cylinders first, then validate
-      fetchEmptyCylinders().then((cylinders) => {
-        if (cylinders) {
-          // Re-validate after cylinders are fetched
-          const itemName = newItems[index].itemName;
-          let maxQuantity = 0;
-          
-          if (itemName.includes('Domestic')) {
-            maxQuantity = cylinders.domestic.length;
-          } else if (itemName.includes('Standard')) {
-            maxQuantity = cylinders.standard.length;
-          } else if (itemName.includes('Commercial')) {
-            maxQuantity = cylinders.commercial.length;
+    // For gas purchase, fetch empty cylinders when item is selected or quantity changes
+    if (isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
+      if (field === 'itemName' && value) {
+        // Fetch empty cylinders when item is selected
+        fetchEmptyCylinders();
+      } else if (field === 'quantity' && value > 0 && newItems[index].itemName) {
+        // Fetch empty cylinders first, then validate quantity
+        fetchEmptyCylinders().then((cylinders) => {
+          if (cylinders) {
+            const itemName = newItems[index].itemName;
+            const cylinderType = getCylinderTypeFromItemName(itemName);
+            let maxQuantity = 0;
+            
+            if (cylinderType === 'domestic') {
+              maxQuantity = cylinders.domestic.length;
+            } else if (cylinderType === 'standard') {
+              maxQuantity = cylinders.standard.length;
+            } else if (cylinderType === 'commercial') {
+              maxQuantity = cylinders.commercial.length;
+            }
+            
+            console.log(`🔍 Validation: ${itemName}, Requested: ${value}, Available: ${maxQuantity}`);
+            
+            // If quantity exceeds available, show alert and reset
+            if (maxQuantity > 0 && Number(value) > maxQuantity) {
+              alert(`Only ${maxQuantity} empty ${itemName} cylinders available. Quantity adjusted.`);
+              newItems[index].quantity = maxQuantity;
+              newItems[index].totalPrice = maxQuantity * Number(newItems[index].unitPrice);
+              setPurchaseItems([...newItems]);
+            }
           }
-          
-          console.log(`🔍 Validation: ${itemName}, Requested: ${value}, Available: ${maxQuantity}`);
-          
-          // No alert - just let the visual indicator handle it
-        }
-      });
+        });
+      }
     }
     
     setPurchaseItems(newItems);
   };
 
   // Helper function to get max quantity for gas purchase items
+  // Helper function to map gas purchase item name to cylinder type
+  const getCylinderTypeFromItemName = (itemName: string): 'domestic' | 'standard' | 'commercial' | null => {
+    if (!itemName) return null;
+    
+    const name = itemName.toLowerCase();
+    
+    // Check for domestic/11.8kg patterns
+    if (name.includes('domestic') || name.includes('11.8') || name.includes('11.8kg')) {
+      return 'domestic';
+    }
+    
+    // Check for commercial/45.4kg patterns
+    if (name.includes('commercial') || name.includes('45.4') || name.includes('45.4kg')) {
+      return 'commercial';
+    }
+    
+    // Check for standard/15kg patterns
+    if (name.includes('standard') || name.includes('15kg') || name.includes('15 kg')) {
+      return 'standard';
+    }
+    
+    return null;
+  };
+
   const getMaxQuantity = (itemName: string) => {
     if (!isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
       return null;
     }
     
-    if (itemName.includes('Domestic')) {
-      return emptyCylinders.domestic.length;
-    } else if (itemName.includes('Standard')) {
-      return emptyCylinders.standard.length;
-    } else if (itemName.includes('Commercial')) {
-      return emptyCylinders.commercial.length;
+    if (!itemName || !itemName.trim()) {
+      return null;
     }
     
-    return null;
+    const cylinderType = getCylinderTypeFromItemName(itemName);
+    
+    if (!cylinderType) {
+      return null;
+    }
+    
+    switch (cylinderType) {
+      case 'domestic':
+        return emptyCylinders.domestic.length;
+      case 'standard':
+        return emptyCylinders.standard.length;
+      case 'commercial':
+        return emptyCylinders.commercial.length;
+      default:
+        return null;
+    }
   };
 
 
