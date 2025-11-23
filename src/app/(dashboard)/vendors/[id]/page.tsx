@@ -163,15 +163,8 @@ export default function VendorDetailPage() {
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
   
   // Gas purchase state
-  const [emptyCylinders, setEmptyCylinders] = useState<{
-    domestic: Array<{id: string, code: string}>;
-    standard: Array<{id: string, code: string}>;
-    commercial: Array<{id: string, code: string}>;
-  }>({
-    domestic: [],
-    standard: [],
-    commercial: []
-  });
+  // Dynamic cylinder types - handles any cylinder type from the database
+  const [emptyCylinders, setEmptyCylinders] = useState<Record<string, Array<{id: string, code: string, cylinderType: string}>>>({});
   const [selectedCylinders, setSelectedCylinders] = useState<{
     domestic: string[];
     standard: string[];
@@ -769,19 +762,15 @@ export default function VendorDetailPage() {
             const cylinderType = getCylinderTypeFromItemName(itemName);
             let maxQuantity = 0;
             
-            if (cylinderType === 'domestic') {
-              maxQuantity = cylinders.domestic.length;
-            } else if (cylinderType === 'standard') {
-              maxQuantity = cylinders.standard.length;
-            } else if (cylinderType === 'commercial') {
-              maxQuantity = cylinders.commercial.length;
+            // Dynamically get count for any cylinder type
+            if (cylinderType && cylinders[cylinderType]) {
+              maxQuantity = cylinders[cylinderType].length;
             }
             
-            console.log(`🔍 Validation: ${itemName}, Requested: ${value}, Available: ${maxQuantity}`);
+            console.log(`🔍 Validation: ${itemName}, Cylinder Type: ${cylinderType}, Requested: ${value}, Available: ${maxQuantity}`);
             
-            // If quantity exceeds available, show alert and reset
+            // If quantity exceeds available, automatically clamp to max (no alert, just enforce)
             if (maxQuantity > 0 && Number(value) > maxQuantity) {
-              alert(`Only ${maxQuantity} empty ${itemName} cylinders available. Quantity adjusted.`);
               newItems[index].quantity = maxQuantity;
               newItems[index].totalPrice = maxQuantity * Number(newItems[index].unitPrice);
               setPurchaseItems([...newItems]);
@@ -795,25 +784,61 @@ export default function VendorDetailPage() {
   };
 
   // Helper function to get max quantity for gas purchase items
-  // Helper function to map gas purchase item name to cylinder type
-  const getCylinderTypeFromItemName = (itemName: string): 'domestic' | 'standard' | 'commercial' | null => {
+  // Helper function to extract cylinder type enum from item name
+  // Dynamically matches any weight pattern (6kg, 11.8kg, 15kg, 30kg, 45.4kg, etc.)
+  // Also tries to match by checking available cylinder types in emptyCylinders
+  const getCylinderTypeFromItemName = (itemName: string): string | null => {
     if (!itemName) return null;
     
     const name = itemName.toLowerCase();
     
-    // Check for domestic/11.8kg patterns
-    if (name.includes('domestic') || name.includes('11.8') || name.includes('11.8kg')) {
-      return 'domestic';
+    // Extract weight from item name (handles patterns like "6kg", "11.8kg", "15kg", "30kg", "45.4kg")
+    const weightMatch = name.match(/(\d+\.?\d*)\s*kg/i);
+    
+    if (weightMatch) {
+      const weight = parseFloat(weightMatch[1]);
+      
+      // Map common weights to cylinder types (includes new types: 6kg, 30kg)
+      if (Math.abs(weight - 6) < 0.1) {
+        return 'CYLINDER_6KG';
+      } else if (Math.abs(weight - 11.8) < 0.1 || name.includes('domestic')) {
+        return 'DOMESTIC_11_8KG';
+      } else if (Math.abs(weight - 15) < 0.1 || name.includes('standard')) {
+        return 'STANDARD_15KG';
+      } else if (Math.abs(weight - 30) < 0.1) {
+        return 'CYLINDER_30KG';
+      } else if (Math.abs(weight - 45.4) < 0.1 || name.includes('commercial')) {
+        return 'COMMERCIAL_45_4KG';
+      } else {
+        // For new cylinder types, try to find matching type in available cylinders
+        // Check if any cylinder type in emptyCylinders matches the weight pattern
+        const availableTypes = Object.keys(emptyCylinders);
+        for (const type of availableTypes) {
+          // Extract weight from cylinder type enum (e.g., "DOMESTIC_11_8KG" -> 11.8)
+          const typeWeightMatch = type.match(/(\d+\.?\d*)/);
+          if (typeWeightMatch) {
+            const typeWeight = parseFloat(typeWeightMatch[1]);
+            if (Math.abs(typeWeight - weight) < 0.1) {
+              return type;
+            }
+          }
+        }
+        // If no match found, return null (system will still work, just won't show max quantity)
+        return null;
+      }
     }
     
-    // Check for commercial/45.4kg patterns
-    if (name.includes('commercial') || name.includes('45.4') || name.includes('45.4kg')) {
-      return 'commercial';
-    }
-    
-    // Check for standard/15kg patterns
-    if (name.includes('standard') || name.includes('15kg') || name.includes('15 kg')) {
-      return 'standard';
+    // Fallback to keyword matching
+    if (name.includes('domestic') || name.includes('11.8')) {
+      return 'DOMESTIC_11_8KG';
+    } else if (name.includes('commercial') || name.includes('45.4')) {
+      return 'COMMERCIAL_45_4KG';
+    } else if (name.includes('standard') || name.includes('15kg') || name.includes('15 kg')) {
+      return 'STANDARD_15KG';
+    } else if (name.includes('6kg') || name.includes('6 kg')) {
+      return 'CYLINDER_6KG';
+    } else if (name.includes('30kg') || name.includes('30 kg')) {
+      return 'CYLINDER_30KG';
     }
     
     return null;
@@ -834,16 +859,9 @@ export default function VendorDetailPage() {
       return null;
     }
     
-    switch (cylinderType) {
-      case 'domestic':
-        return emptyCylinders.domestic.length;
-      case 'standard':
-        return emptyCylinders.standard.length;
-      case 'commercial':
-        return emptyCylinders.commercial.length;
-      default:
-        return null;
-    }
+    // Dynamically get count for any cylinder type
+    const cylinders = emptyCylinders[cylinderType];
+    return cylinders ? cylinders.length : 0;
   };
 
 
@@ -870,6 +888,26 @@ export default function VendorDetailPage() {
 
   const handleSubmitPurchase = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // For gas purchase, validate quantity doesn't exceed available cylinders
+    if (isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
+      for (const item of purchaseItems) {
+        if (item.itemName.trim() && item.quantity > 0) {
+          const maxQty = getMaxQuantity(item.itemName);
+          if (maxQty !== null && maxQty !== undefined && item.quantity > maxQty) {
+            alert(`Quantity for "${item.itemName}" exceeds available empty cylinders. Maximum available: ${maxQty}`);
+            return;
+          }
+          
+          // Check if cylinder type exists in inventory
+          const cylinderType = getCylinderTypeFromItemName(item.itemName);
+          if (cylinderType && (!emptyCylinders[cylinderType] || emptyCylinders[cylinderType].length === 0)) {
+            alert(`No empty cylinders available for "${item.itemName}". Please ensure cylinders of this type exist in inventory.`);
+            return;
+          }
+        }
+      }
+    }
 
     // Filter items that have quantity > 0
     const validItems = purchaseItems.filter(item => 
@@ -1522,20 +1560,45 @@ export default function VendorDetailPage() {
                                     <Input
                                       type="number"
                                       value={item.quantity}
-                                      onChange={(e) => handlePurchaseItemChange(
-                                        index,
-                                        'quantity',
-                                        e.target.value
-                                      )}
+                                      onChange={(e) => {
+                                        const maxQty = getMaxQuantity(item.itemName);
+                                        let inputValue = e.target.value === '' ? '' : parseInt(e.target.value) || 0;
+                                        
+                                        // Enforce max quantity if available (prevent exceeding max)
+                                        if (maxQty !== null && maxQty !== undefined && maxQty > 0 && inputValue > maxQty) {
+                                          inputValue = maxQty;
+                                        }
+                                        
+                                        // Don't allow negative values
+                                        if (inputValue < 0) {
+                                          inputValue = 0;
+                                        }
+                                        
+                                        handlePurchaseItemChange(index, 'quantity', inputValue);
+                                      }}
+                                      onBlur={(e) => {
+                                        const maxQty = getMaxQuantity(item.itemName);
+                                        const currentValue = parseInt(e.target.value) || 0;
+                                        
+                                        // Clamp to max on blur if exceeded
+                                        if (maxQty !== null && maxQty !== undefined && maxQty > 0 && currentValue > maxQty) {
+                                          handlePurchaseItemChange(index, 'quantity', maxQty);
+                                        }
+                                      }}
                                       placeholder="Enter quantity"
                                       min="0"
                                       step="1"
-                                        max={getMaxQuantity(item.itemName) || undefined}
+                                      max={getMaxQuantity(item.itemName) || undefined}
                                       className="text-center border-0 focus:ring-1 bg-transparent"
                                     />
-                                      {getMaxQuantity(item.itemName) !== null && (
+                                      {getMaxQuantity(item.itemName) !== null && getMaxQuantity(item.itemName) !== undefined && getMaxQuantity(item.itemName) > 0 && (
                                         <p className="text-xs text-gray-500 text-center">
                                           Max: {getMaxQuantity(item.itemName)} available
+                                        </p>
+                                      )}
+                                      {getMaxQuantity(item.itemName) === 0 && item.itemName && (
+                                        <p className="text-xs text-red-500 text-center">
+                                          No empty cylinders available
                                         </p>
                                       )}
                                     </div>

@@ -238,18 +238,60 @@ export class InventoryIntegrationService {
     }
 
     // Determine cylinder type based on gas type (case-insensitive, handles various formats)
+    // Dynamically extracts weight from item name to match any cylinder type
     const name = itemName.toLowerCase();
     let cylinderType = '';
     
-    if (name.includes('domestic') || name.includes('11.8') || name.includes('11.8kg')) {
-      cylinderType = 'DOMESTIC_11_8KG';
-    } else if (name.includes('commercial') || name.includes('45.4') || name.includes('45.4kg')) {
-      cylinderType = 'COMMERCIAL_45_4KG';
-    } else if (name.includes('standard') || name.includes('15kg') || name.includes('15 kg')) {
-      cylinderType = 'STANDARD_15KG';
+    // Extract weight from item name (handles patterns like "6kg", "11.8kg", "15kg", "30kg", "45.4kg")
+    const weightMatch = name.match(/(\d+\.?\d*)\s*kg/i);
+    
+    if (weightMatch) {
+      const weight = parseFloat(weightMatch[1]);
+      
+      // Map common weights to cylinder types (includes new types: 6kg, 30kg)
+      if (Math.abs(weight - 6) < 0.1) {
+        cylinderType = 'CYLINDER_6KG';
+      } else if (Math.abs(weight - 11.8) < 0.1 || name.includes('domestic')) {
+        cylinderType = 'DOMESTIC_11_8KG';
+      } else if (Math.abs(weight - 15) < 0.1 || name.includes('standard')) {
+        cylinderType = 'STANDARD_15KG';
+      } else if (Math.abs(weight - 30) < 0.1) {
+        cylinderType = 'CYLINDER_30KG';
+      } else if (Math.abs(weight - 45.4) < 0.1 || name.includes('commercial')) {
+        cylinderType = 'COMMERCIAL_45_4KG';
+      } else {
+        // For unknown weights, try keyword matching as fallback
+        if (name.includes('domestic') || name.includes('11.8')) {
+          cylinderType = 'DOMESTIC_11_8KG';
+        } else if (name.includes('commercial') || name.includes('45.4')) {
+          cylinderType = 'COMMERCIAL_45_4KG';
+        } else if (name.includes('standard') || name.includes('15kg') || name.includes('15 kg')) {
+          cylinderType = 'STANDARD_15KG';
+        } else if (name.includes('6kg') || name.includes('6 kg')) {
+          cylinderType = 'CYLINDER_6KG';
+        } else if (name.includes('30kg') || name.includes('30 kg')) {
+          cylinderType = 'CYLINDER_30KG';
+        } else {
+          console.log(`⚠️ Unknown gas type: ${itemName} (weight: ${weight}kg)`);
+          return;
+        }
+      }
     } else {
-      console.log(`⚠️ Unknown gas type: ${itemName}`);
-      return;
+      // Fallback to keyword matching if no weight pattern found
+      if (name.includes('domestic') || name.includes('11.8')) {
+        cylinderType = 'DOMESTIC_11_8KG';
+      } else if (name.includes('commercial') || name.includes('45.4')) {
+        cylinderType = 'COMMERCIAL_45_4KG';
+      } else if (name.includes('standard') || name.includes('15kg') || name.includes('15 kg')) {
+        cylinderType = 'STANDARD_15KG';
+      } else if (name.includes('6kg') || name.includes('6 kg')) {
+        cylinderType = 'CYLINDER_6KG';
+      } else if (name.includes('30kg') || name.includes('30 kg')) {
+        cylinderType = 'CYLINDER_30KG';
+      } else {
+        console.log(`⚠️ Unknown gas type: ${itemName}`);
+        return;
+      }
     }
 
     console.log(`🔍 Looking for ${quantity} empty ${cylinderType} cylinders`);
@@ -536,27 +578,66 @@ export class InventoryIntegrationService {
   }
 
   /**
-   * Extract cylinder type from item name
+   * Extract cylinder type from item name (dynamic - handles any cylinder type)
    */
-  private static extractCylinderType(itemName: string): 'DOMESTIC_11_8KG' | 'STANDARD_15KG' | 'COMMERCIAL_45_4KG' {
-    if (itemName.includes('11.8') || itemName.includes('domestic')) {
-      return 'DOMESTIC_11_8KG';
-    } else if (itemName.includes('45.4') || itemName.includes('commercial')) {
-      return 'COMMERCIAL_45_4KG';
-    } else {
-      return 'STANDARD_15KG'; // Default to 15kg
+  private static extractCylinderType(itemName: string): string {
+    const name = itemName.toLowerCase();
+    
+    // Extract weight from item name (handles patterns like "6kg", "11.8kg", "15kg", "30kg", "45.4kg")
+    const weightMatch = name.match(/(\d+\.?\d*)\s*kg/i);
+    
+    if (weightMatch) {
+      const weight = parseFloat(weightMatch[1]);
+      
+      // Map weights to cylinder types (can be extended for new types)
+      if (Math.abs(weight - 6) < 0.1) {
+        return 'CYLINDER_6KG';
+      } else if (Math.abs(weight - 11.8) < 0.1 || name.includes('domestic')) {
+        return 'DOMESTIC_11_8KG';
+      } else if (Math.abs(weight - 15) < 0.1 || name.includes('standard')) {
+        return 'STANDARD_15KG';
+      } else if (Math.abs(weight - 30) < 0.1) {
+        return 'CYLINDER_30KG';
+      } else if (Math.abs(weight - 45.4) < 0.1 || name.includes('commercial')) {
+        return 'COMMERCIAL_45_4KG';
+      }
     }
+    
+    // Fallback to keyword matching
+    if (name.includes('domestic') || name.includes('11.8')) {
+      return 'DOMESTIC_11_8KG';
+    } else if (name.includes('commercial') || name.includes('45.4')) {
+      return 'COMMERCIAL_45_4KG';
+    } else if (name.includes('standard') || name.includes('15kg') || name.includes('15 kg')) {
+      return 'STANDARD_15KG';
+    } else if (name.includes('6kg') || name.includes('6 kg')) {
+      return 'CYLINDER_6KG';
+    } else if (name.includes('30kg') || name.includes('30 kg')) {
+      return 'CYLINDER_30KG';
+    }
+    
+    // Default to 15kg if no match found
+    return 'STANDARD_15KG';
   }
 
   /**
-   * Get cylinder capacity based on type
+   * Get cylinder capacity based on type (dynamic - extracts weight from enum name)
    */
   private static getCylinderCapacity(type: string): number {
+    // Extract weight from cylinder type enum name (e.g., "CYLINDER_6KG" -> 6, "DOMESTIC_11_8KG" -> 11.8)
+    const weightMatch = type.match(/(\d+\.?\d*)/);
+    if (weightMatch) {
+      return parseFloat(weightMatch[1]);
+    }
+    
+    // Fallback for known types (backward compatibility)
     switch (type) {
       case 'DOMESTIC_11_8KG': return 11.8;
       case 'STANDARD_15KG': return 15.0;
       case 'COMMERCIAL_45_4KG': return 45.4;
-      default: return 15.0;
+      case 'CYLINDER_6KG': return 6.0;
+      case 'CYLINDER_30KG': return 30.0;
+      default: return 15.0; // Default fallback
     }
   }
 }

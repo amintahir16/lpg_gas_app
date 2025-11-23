@@ -133,16 +133,31 @@ export default function CylindersInventoryPage() {
   };
 
   const getTypeDisplayName = (type: string) => {
-    switch (type) {
-      case 'DOMESTIC_11_8KG':
+    // Extract weight from enum name for dynamic display
+    const weightMatch = type.match(/(\d+\.?\d*)/);
+    
+    if (weightMatch) {
+      const weight = weightMatch[1];
+      
+      // Handle known types with friendly names
+      if (type === 'DOMESTIC_11_8KG') {
         return 'Domestic (11.8kg)';
-      case 'STANDARD_15KG':
+      } else if (type === 'STANDARD_15KG') {
         return 'Standard (15kg)';
-      case 'COMMERCIAL_45_4KG':
+      } else if (type === 'COMMERCIAL_45_4KG') {
         return 'Commercial (45.4kg)';
-      default:
-        return type;
+      } else if (type === 'CYLINDER_6KG') {
+        return 'Cylinder (6kg)';
+      } else if (type === 'CYLINDER_30KG') {
+        return 'Cylinder (30kg)';
+      } else {
+        // For any other type, format dynamically
+        return `Cylinder (${weight}kg)`;
+      }
     }
+    
+    // Fallback: return type as-is
+    return type;
   };
 
   const getLocationDisplay = (cylinder: Cylinder) => {

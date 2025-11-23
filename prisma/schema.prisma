@@ -718,8 +718,10 @@ enum CustomerType {
 }
 
 enum CylinderType {
+  CYLINDER_6KG
   DOMESTIC_11_8KG
   STANDARD_15KG
+  CYLINDER_30KG
   COMMERCIAL_45_4KG
 }
 

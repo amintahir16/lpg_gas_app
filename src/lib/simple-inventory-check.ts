@@ -14,20 +14,18 @@ export interface InventoryCheck {
 export async function checkCylinderInventory(cylinderType: string, requested: number): Promise<InventoryCheck> {
   // Always check inventory, even when requested is 0 (for stock information)
 
-  // Map string cylinder type to enum
+  // Map string cylinder type to enum (dynamic - handles any cylinder type)
   let mappedCylinderType: CylinderType;
-  switch (cylinderType) {
-    case 'DOMESTIC_11_8KG':
-      mappedCylinderType = CylinderType.DOMESTIC_11_8KG;
-      break;
-    case 'STANDARD_15KG':
-      mappedCylinderType = CylinderType.STANDARD_15KG;
-      break;
-    case 'COMMERCIAL_45_4KG':
-      mappedCylinderType = CylinderType.COMMERCIAL_45_4KG;
-      break;
-    default:
+  try {
+    // Try to map the string to the enum value dynamically
+    mappedCylinderType = cylinderType as CylinderType;
+    
+    // Validate that it's a valid enum value by checking if it exists in the enum
+    if (!Object.values(CylinderType).includes(mappedCylinderType)) {
       return { cylinderType, requested, available: 0, isValid: false };
+    }
+  } catch (error) {
+    return { cylinderType, requested, available: 0, isValid: false };
   }
 
   try {

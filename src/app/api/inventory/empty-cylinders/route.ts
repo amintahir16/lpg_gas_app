@@ -18,12 +18,16 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Group by cylinder type
-    const groupedCylinders = {
-      domestic: emptyCylinders.filter(cylinder => cylinder.cylinderType === 'DOMESTIC_11_8KG'),
-      standard: emptyCylinders.filter(cylinder => cylinder.cylinderType === 'STANDARD_15KG'),
-      commercial: emptyCylinders.filter(cylinder => cylinder.cylinderType === 'COMMERCIAL_45_4KG')
-    };
+    // Group by cylinder type dynamically (handles any cylinder type)
+    const groupedCylinders: Record<string, typeof emptyCylinders> = {};
+    
+    emptyCylinders.forEach(cylinder => {
+      const type = cylinder.cylinderType;
+      if (!groupedCylinders[type]) {
+        groupedCylinders[type] = [];
+      }
+      groupedCylinders[type].push(cylinder);
+    });
 
     return NextResponse.json({
       success: true,
