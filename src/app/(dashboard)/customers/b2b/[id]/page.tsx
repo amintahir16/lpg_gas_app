@@ -10,6 +10,7 @@ import { Select } from '@/components/ui/select';
 import { useInventoryValidation } from '@/hooks/useInventoryValidation';
 import { useCylinderStock } from '@/hooks/useCylinderStock';
 import { ProfessionalAccessorySelector } from '@/components/ui/ProfessionalAccessorySelector';
+import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
 import { 
   ArrowLeftIcon,
   DocumentTextIcon,
@@ -498,16 +499,7 @@ export default function B2BCustomerDetailPage() {
 
   const getCylinderTypeDisplay = (type: string | null) => {
     if (!type) return 'N/A';
-    switch (type) {
-      case 'DOMESTIC_11_8KG':
-        return 'Domestic (11.8kg)';
-      case 'STANDARD_15KG':
-        return 'Standard (15kg)';
-      case 'COMMERCIAL_45_4KG':
-        return 'Commercial (45.4kg)';
-      default:
-        return type.replace(/_/g, ' ');
-    }
+    return getCylinderTypeDisplayName(type);
   };
 
   const calculateBuybackAmount = (originalPrice: number, remainingKg: number, totalKg: number) => {

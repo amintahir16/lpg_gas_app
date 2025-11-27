@@ -10,6 +10,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeftIcon, PlusIcon, TrashIcon, CalculatorIcon } from '@heroicons/react/24/outline';
 import { useInventoryValidation } from '@/hooks/useInventoryValidation';
 import { ProfessionalAccessorySelector } from '@/components/ui/ProfessionalAccessorySelector';
+import { getCylinderTypeOptionsWithSecurity } from '@/lib/cylinder-types';
+import { getCylinderWeight } from '@/lib/cylinder-utils';
 
 interface B2CCustomer {
   id: string;
@@ -61,11 +63,7 @@ interface AccessoryItem {
   sellingPrice: number; // Selling Price - for selling vaporizer (deducted from inventory)
 }
 
-const CYLINDER_TYPES = [
-  { value: 'DOMESTIC_11_8KG', label: 'Domestic (11.8kg)', securityPrice: 30000 },
-  { value: 'STANDARD_15KG', label: 'Standard (15kg)', securityPrice: 50000 },
-  { value: 'COMMERCIAL_45_4KG', label: 'Commercial (45.4kg)', securityPrice: 90000 }
-];
+const CYLINDER_TYPES = getCylinderTypeOptionsWithSecurity();
 
 // Note: ACCESSORY_OPTIONS removed - accessories are now loaded dynamically from inventory via ProfessionalAccessorySelector
 
@@ -180,20 +178,29 @@ export default function B2CTransactionPage() {
       // derive cost/kg from plant price (11.8kg basis)
       const plantPrice118 = Number(pricingInfo?.plantPrice?.price118kg) || 0;
       const costPerKg = plantPrice118 > 0 ? (plantPrice118 / 11.8) : 0;
-      let cylinderWeightForCost = 0;
       
+      // Get cylinder weight dynamically
+      const cylinderWeightForCost = getCylinderWeight(cylinderType) || 0;
+      
+      // Get calculated price based on cylinder type
+      // Note: Pricing API may need updates for new cylinder types
       switch (cylinderType) {
         case 'DOMESTIC_11_8KG':
           calculatedPrice = pricingInfo.finalPrices.domestic118kg;
-          cylinderWeightForCost = 11.8;
           break;
         case 'STANDARD_15KG':
           calculatedPrice = pricingInfo.finalPrices.standard15kg;
-          cylinderWeightForCost = 15.0;
           break;
         case 'COMMERCIAL_45_4KG':
           calculatedPrice = pricingInfo.finalPrices.commercial454kg;
-          cylinderWeightForCost = 45.4;
+          break;
+        case 'CYLINDER_6KG':
+        case 'CYLINDER_30KG':
+          // For new types, calculate price based on weight ratio
+          // Fallback: use cost-based calculation if pricing not available
+          if (pricingInfo.finalPrices.standard15kg && cylinderWeightForCost > 0) {
+            calculatedPrice = (pricingInfo.finalPrices.standard15kg / 15.0) * cylinderWeightForCost;
+          }
           break;
       }
       
@@ -250,20 +257,24 @@ export default function B2CTransactionPage() {
 
     const updatedItems = gasItems.map(item => {
       let calculatedPrice = 0;
-      let cylinderWeightForCost = 0;
+      const cylinderWeightForCost = getCylinderWeight(item.cylinderType) || 0;
       
       switch (item.cylinderType) {
         case 'DOMESTIC_11_8KG':
           calculatedPrice = pricingInfo.finalPrices.domestic118kg;
-          cylinderWeightForCost = 11.8;
           break;
         case 'STANDARD_15KG':
           calculatedPrice = pricingInfo.finalPrices.standard15kg;
-          cylinderWeightForCost = 15.0;
           break;
         case 'COMMERCIAL_45_4KG':
           calculatedPrice = pricingInfo.finalPrices.commercial454kg;
-          cylinderWeightForCost = 45.4;
+          break;
+        case 'CYLINDER_6KG':
+        case 'CYLINDER_30KG':
+          // For new types, calculate price based on weight ratio
+          if (pricingInfo.finalPrices.standard15kg && cylinderWeightForCost > 0) {
+            calculatedPrice = (pricingInfo.finalPrices.standard15kg / 15.0) * cylinderWeightForCost;
+          }
           break;
       }
       
@@ -481,19 +492,9 @@ export default function B2CTransactionPage() {
     return gasItems.reduce((total, item) => {
       if (!item.cylinderType) return total;
       
-      // Get cylinder weight based on type
-      let cylinderWeight = 0;
-      switch (item.cylinderType) {
-        case 'DOMESTIC_11_8KG':
-          cylinderWeight = 11.8;
-          break;
-        case 'STANDARD_15KG':
-          cylinderWeight = 15.0;
-          break;
-        case 'COMMERCIAL_45_4KG':
-          cylinderWeight = 45.4;
-          break;
-        default:
+      // Get cylinder weight dynamically
+      const cylinderWeight = getCylinderWeight(item.cylinderType) || 0;
+      if (cylinderWeight === 0) {
           cylinderWeight = 15.0;
       }
       
@@ -823,21 +824,8 @@ export default function B2CTransactionPage() {
                     value={(() => {
                       if (!pricingInfo || !item.cylinderType) return '0.00';
                       
-                      // Get cylinder weight based on type
-                      let cylinderWeight = 0;
-                      switch (item.cylinderType) {
-                        case 'DOMESTIC_11_8KG':
-                          cylinderWeight = 11.8;
-                          break;
-                        case 'STANDARD_15KG':
-                          cylinderWeight = 15.0;
-                          break;
-                        case 'COMMERCIAL_45_4KG':
-                          cylinderWeight = 45.4;
-                          break;
-                        default:
-                          cylinderWeight = 15.0;
-                      }
+                      // Get cylinder weight dynamically
+                      const cylinderWeight = getCylinderWeight(item.cylinderType) || 0;
                       
                       // Calculate profit based on margin per kg: marginPerKg × cylinderWeight × quantity
                       const marginPerKg = pricingInfo.category.marginPerKg;

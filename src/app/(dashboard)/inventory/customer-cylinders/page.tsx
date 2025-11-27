@@ -14,6 +14,8 @@ import {
   MapPinIcon,
   CalendarIcon
 } from '@heroicons/react/24/outline';
+import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
+import { getCylinderTypeOptions } from '@/lib/cylinder-types';
 
 interface CustomerCylinder {
   id: string;
@@ -122,17 +124,10 @@ export default function CustomerCylindersPage() {
     }
   };
 
+  const cylinderTypeOptions = getCylinderTypeOptions();
+  
   const getTypeDisplayName = (type: string) => {
-    switch (type) {
-      case 'DOMESTIC_11_8KG':
-        return 'Domestic (11.8kg)';
-      case 'STANDARD_15KG':
-        return 'Standard (15kg)';
-      case 'COMMERCIAL_45_4KG':
-        return 'Commercial (45.4kg)';
-      default:
-        return type;
-    }
+    return getCylinderTypeDisplayName(type);
   };
 
   const isOverdue = (expectedReturnDate: string) => {
@@ -239,9 +234,11 @@ Address: ${customer.address || 'N/A'}
             </div>
             <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
               <option value="ALL">All Cylinder Types</option>
-              <option value="DOMESTIC_11_8KG">Domestic (11.8kg)</option>
-              <option value="STANDARD_15KG">Standard (15kg)</option>
-              <option value="COMMERCIAL_45_4KG">Commercial (45.4kg)</option>
+              {cylinderTypeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </Select>
             <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="ALL">All Rental Status</option>

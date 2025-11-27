@@ -215,9 +215,10 @@ model Cylinder {
   id                  String            @id @default(cuid())
   code                String            @unique
   cylinderType        CylinderType
+  typeName            String?           // Store original type name (e.g., "Special", "Domestic", "Custom")
   capacity            Decimal           @db.Decimal(5, 2)
   purchaseDate        DateTime?
-  purchasePrice       Decimal?          @db.Decimal(10, 2)
+  purchasePrice        Decimal?          @db.Decimal(10, 2)
   currentStatus       CylinderStatus    @default(FULL)
   location            String?
   lastMaintenanceDate DateTime?

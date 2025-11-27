@@ -13,11 +13,14 @@ import {
   ChartBarIcon,
   CubeIcon
 } from '@heroicons/react/24/outline';
+import { getCylinderTypeDisplayName, getCylinderWeight, generateCylinderTypeFromCapacity, isValidCylinderCapacity } from '@/lib/cylinder-utils';
+import { getCylinderTypeOptions } from '@/lib/cylinder-types';
 
 interface Cylinder {
   id: string;
   code: string;
   cylinderType: string;
+  typeName?: string | null; // Original type name entered by user
   capacity: number;
   currentStatus: string;
   location: string;
@@ -59,12 +62,20 @@ export default function CylindersInventoryPage() {
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedCylinder, setSelectedCylinder] = useState<Cylinder | null>(null);
   const [isAddingCylinder, setIsAddingCylinder] = useState(false);
+  const [cylinderTypeAndCapacity, setCylinderTypeAndCapacity] = useState('');
+  const [quantity, setQuantity] = useState<number>(1);
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 100,
     total: 0,
     pages: 0
   });
+
+  useEffect(() => {
+    // Initial load - fetch stats and cylinders
+    fetchCylinderTypeStats();
+    fetchCylinders();
+  }, []);
 
   useEffect(() => {
     // Reset to page 1 when filters change
@@ -110,7 +121,12 @@ export default function CylindersInventoryPage() {
       });
       if (response.ok) {
         const data = await response.json();
-        setCylinderTypeStats(data.stats);
+        console.log('Cylinder type stats received:', data);
+        setCylinderTypeStats(data.stats || []);
+      } else {
+        console.error('Failed to fetch stats, status:', response.status);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Error data:', errorData);
       }
     } catch (error) {
       console.error('Failed to fetch cylinder type stats:', error);
@@ -132,32 +148,62 @@ export default function CylindersInventoryPage() {
     }
   };
 
-  const getTypeDisplayName = (type: string) => {
-    // Extract weight from enum name for dynamic display
-    const weightMatch = type.match(/(\d+\.?\d*)/);
+  // Get cylinder type options for dropdowns
+  const cylinderTypeOptions = getCylinderTypeOptions();
+  
+  const getTypeDisplayName = (type: string, capacity?: number, typeName?: string | null) => {
+    // Priority 1: If typeName is provided (original name entered by user), use it with capacity
+    // This takes absolute precedence - if user entered a custom name, use it
+    // Check for typeName first, even if it's a single word like "Special"
+    const trimmedTypeName = typeName ? String(typeName).trim() : '';
+    if (trimmedTypeName && trimmedTypeName !== '' && trimmedTypeName !== 'Cylinder') {
+      return `${trimmedTypeName} (${capacity || 'N/A'}kg)`;
+    }
     
-    if (weightMatch) {
-      const weight = weightMatch[1];
-      
-      // Handle known types with friendly names
+    // Priority 2: Check if this is a standard enum type that should display with a friendly name
+    // Only use enum-based names if typeName is missing or empty (for existing cylinders without typeName)
+    // If typeName exists but is "Cylinder", we still check the enum type
+    if (!trimmedTypeName || trimmedTypeName === '' || trimmedTypeName === 'Cylinder') {
       if (type === 'DOMESTIC_11_8KG') {
-        return 'Domestic (11.8kg)';
+        return `Domestic (${capacity !== undefined && capacity !== null ? capacity : 11.8}kg)`;
       } else if (type === 'STANDARD_15KG') {
-        return 'Standard (15kg)';
+        // Only show "Standard" if capacity matches 15kg AND no typeName was provided
+        // If capacity is different (e.g., 10kg), it's a custom type stored with STANDARD_15KG fallback
+        // In this case, we should have already handled it in Priority 1 if typeName exists
+        const numCapacity = capacity !== undefined && capacity !== null ? Number(capacity) : null;
+        if (numCapacity !== null && Math.abs(numCapacity - 15.0) > 0.1) {
+          // Custom capacity - use actual capacity (no typeName, so use generic "Cylinder")
+          return `Cylinder (${numCapacity}kg)`;
+        }
+        return `Standard (${numCapacity !== null ? numCapacity : 15}kg)`;
       } else if (type === 'COMMERCIAL_45_4KG') {
-        return 'Commercial (45.4kg)';
+        return `Commercial (${capacity !== undefined && capacity !== null ? capacity : 45.4}kg)`;
       } else if (type === 'CYLINDER_6KG') {
-        return 'Cylinder (6kg)';
+        return `Cylinder (${capacity !== undefined && capacity !== null ? capacity : 6}kg)`;
       } else if (type === 'CYLINDER_30KG') {
-        return 'Cylinder (30kg)';
-      } else {
-        // For any other type, format dynamically
-        return `Cylinder (${weight}kg)`;
+        return `Cylinder (${capacity !== undefined && capacity !== null ? capacity : 30}kg)`;
       }
     }
     
-    // Fallback: return type as-is
-    return type;
+    // Priority 3: If capacity is provided, check if it matches the expected capacity for this enum type
+    // This handles custom cylinders that are stored with fallback enum but have different capacity
+    // This is especially important for cylinders stored with STANDARD_15KG fallback but different capacity
+    if (capacity !== undefined && capacity !== null) {
+      const typeCapacity = getCylinderWeight(type);
+      
+      // If the capacity doesn't match the type's expected capacity, it's a custom type
+      // Use the actual capacity for display instead of the enum-based name
+      if (typeCapacity !== null && Math.abs(typeCapacity - capacity) > 0.1) {
+        // Custom capacity - display based on actual capacity
+        // If we have a typeName, it should have been handled in Priority 1
+        // If no typeName, use generic "Cylinder" with actual capacity
+        return `Cylinder (${capacity}kg)`;
+      }
+    }
+    
+    // Priority 4: Use the standard display name from utility function
+    const standardDisplayName = getCylinderTypeDisplayName(type);
+    return standardDisplayName;
   };
 
   const getLocationDisplay = (cylinder: Cylinder) => {
@@ -180,33 +226,57 @@ export default function CylindersInventoryPage() {
     setShowViewModal(true);
   };
 
-  const handleAddCylinder = async (formData: any) => {
+  const handleAddCylinder = async (formData: any, qty: number = 1) => {
     if (isAddingCylinder) return; // Prevent multiple submissions
     
     setIsAddingCylinder(true);
     try {
-      console.log('Submitting cylinder data:', formData);
+      const cylindersToCreate = [];
+      let successCount = 0;
+      let errorCount = 0;
       
-      const response = await fetch('/api/inventory/cylinders', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-
-      console.log('Response status:', response.status);
-      console.log('Response ok:', response.ok);
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Error response:', errorData);
-        throw new Error(errorData.error || 'Failed to create cylinder');
+      // Create multiple cylinders - all codes will be auto-generated by API
+      for (let i = 0; i < qty; i++) {
+        const cylinderData = { ...formData };
+        // No code field - API will auto-generate unique codes for each cylinder
+        cylindersToCreate.push(cylinderData);
       }
+      
+      // Create cylinders sequentially to ensure codes are generated in order
+      const results = [];
+      for (let i = 0; i < cylindersToCreate.length; i++) {
+        const cylinderData = cylindersToCreate[i];
+        try {
+          console.log(`Submitting cylinder ${i + 1} of ${qty}:`, cylinderData);
+          
+          const response = await fetch('/api/inventory/cylinders', {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(cylinderData),
+          });
 
-      const result = await response.json();
-      console.log('Cylinder created successfully:', result);
+          if (!response.ok) {
+            const errorData = await response.json();
+            console.error('Error response:', errorData);
+            throw new Error(errorData.error || 'Failed to create cylinder');
+          }
+
+          const result = await response.json();
+          results.push(result);
+          successCount++;
+          
+          // Small delay to ensure sequential code generation
+          if (i < cylindersToCreate.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        } catch (error) {
+          console.error(`Failed to add cylinder ${i + 1}:`, error);
+          errorCount++;
+        }
+      }
       
       // Refresh both cylinders list and statistics
       await Promise.all([
@@ -215,10 +285,20 @@ export default function CylindersInventoryPage() {
       ]);
       
       setShowAddForm(false);
-      alert('Cylinder added successfully!');
+      
+      // Show appropriate success message
+      if (qty === 1) {
+        alert('Cylinder added successfully!');
+      } else {
+        if (errorCount === 0) {
+          alert(`Successfully added ${successCount} cylinders!`);
+        } else {
+          alert(`Added ${successCount} cylinders successfully. ${errorCount} failed.`);
+        }
+      }
     } catch (error) {
-      console.error('Failed to add cylinder:', error);
-      alert(`Error: ${error instanceof Error ? error.message : 'Failed to add cylinder'}`);
+      console.error('Failed to add cylinders:', error);
+      alert(`Error: ${error instanceof Error ? error.message : 'Failed to add cylinders'}`);
     } finally {
       setIsAddingCylinder(false);
     }
@@ -287,8 +367,9 @@ export default function CylindersInventoryPage() {
       </div>
 
       {/* Type Statistics */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-        {cylinderTypeStats.map((stat, index) => (
+      {cylinderTypeStats.length > 0 ? (
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+          {cylinderTypeStats.map((stat, index) => (
           <Card key={index} className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-semibold text-gray-600">
@@ -325,8 +406,15 @@ export default function CylindersInventoryPage() {
               </div>
             </CardContent>
           </Card>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
+          <CardContent className="p-6 text-center">
+            <p className="text-gray-500">No cylinder statistics available. Add cylinders to see statistics.</p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filters */}
       <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
@@ -357,9 +445,11 @@ export default function CylindersInventoryPage() {
               className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="ALL">All Types</option>
-              <option value="DOMESTIC_11_8KG">Domestic (11.8kg)</option>
-              <option value="STANDARD_15KG">Standard (15kg)</option>
-              <option value="COMMERCIAL_45_4KG">Commercial (45.4kg)</option>
+              {cylinderTypeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
             <select 
               value={locationFilter} 
@@ -430,7 +520,7 @@ export default function CylindersInventoryPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <Badge variant="secondary" className="font-semibold">
-                          {getTypeDisplayName(cylinder.cylinderType)}
+                          {getTypeDisplayName(cylinder.cylinderType, cylinder.capacity, cylinder.typeName)}
                         </Badge>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -534,16 +624,14 @@ export default function CylindersInventoryPage() {
                   console.log('Form element:', form);
                   
                   // Get form values
-                  const cylinderCode = form.cylinderCode?.value;
-                  const cylinderType = form.cylinderType?.value;
                   const currentStatus = form.currentStatus?.value;
                   const location = form.location?.value;
                   const purchaseDate = form.purchaseDate?.value;
                   const purchasePrice = form.purchasePrice?.value;
                   
                   console.log('Raw form values:', {
-                    cylinderCode,
-                    cylinderType,
+                    cylinderTypeAndCapacity,
+                    quantity,
                     currentStatus,
                     location,
                     purchaseDate,
@@ -551,16 +639,6 @@ export default function CylindersInventoryPage() {
                   });
                   
                   // Validate required fields
-                  if (!cylinderCode) {
-                    alert('Please enter a cylinder code');
-                    return;
-                  }
-                  
-                  if (!cylinderType) {
-                    alert('Please select a cylinder type');
-                    return;
-                  }
-                  
                   if (!currentStatus) {
                     alert('Please select a status');
                     return;
@@ -571,25 +649,76 @@ export default function CylindersInventoryPage() {
                     return;
                   }
                   
-                  // Calculate capacity based on cylinder type
-                  let capacity = 0;
-                  switch (cylinderType) {
-                    case 'DOMESTIC_11_8KG':
-                      capacity = 11.8;
-                      break;
-                    case 'STANDARD_15KG':
-                      capacity = 15.0;
-                      break;
-                    case 'COMMERCIAL_45_4KG':
-                      capacity = 45.4;
-                      break;
-                    default:
-                      capacity = 15.0; // default
+                  // Handle combined type and capacity input
+                  const inputValue = cylinderTypeAndCapacity.trim();
+                  
+                  // Validate input
+                  if (!inputValue) {
+                    alert('Please enter cylinder type and capacity (e.g., "Domestic 11.8", "Standard 15", "12kg", or "Custom 12.5").');
+                    return;
                   }
                   
+                  // Extract capacity from input (look for numbers, including decimals)
+                  // Examples: "Domestic 11.8" -> 11.8, "Standard 15" -> 15, "12kg" -> 12, "Custom 12.5kg" -> 12.5
+                  const capacityMatch = inputValue.match(/(\d+\.?\d*)/);
+                  
+                  if (!capacityMatch) {
+                    alert('Please include a capacity value in your input (e.g., "Domestic 11.8", "Standard 15", "12kg").');
+                    return;
+                  }
+                  
+                  const capacityValue = parseFloat(capacityMatch[1]);
+                  
+                  // Validate capacity
+                  if (isNaN(capacityValue) || capacityValue <= 0) {
+                    alert('Please enter a valid capacity (greater than 0).');
+                    return;
+                  }
+                  
+                  if (!isValidCylinderCapacity(capacityValue)) {
+                    alert('Capacity must be between 0.1 and 100 kg. Please enter a valid capacity.');
+                    return;
+                  }
+                  
+                  // Extract type name from input (remove numbers and "kg")
+                  // Examples: "Domestic 11.8" -> "Domestic", "Standard 15" -> "Standard", "Custom 12kg" -> "Custom"
+                  const typeNameMatch = inputValue.match(/^([A-Za-z]+(?:\s+[A-Za-z]+)*)/);
+                  const typeName = typeNameMatch ? typeNameMatch[1].trim() : 'Cylinder';
+                  
+                  // Map known type names to their correct enum values
+                  // This ensures proper enum mapping for standard types
+                  let finalCylinderType: string;
+                  const typeNameLower = typeName.toLowerCase();
+                  
+                  if (typeNameLower.includes('domestic') && Math.abs(capacityValue - 11.8) < 0.1) {
+                    finalCylinderType = 'DOMESTIC_11_8KG';
+                  } else if (typeNameLower.includes('standard') && Math.abs(capacityValue - 15.0) < 0.1) {
+                    finalCylinderType = 'STANDARD_15KG';
+                  } else if (typeNameLower.includes('commercial') && Math.abs(capacityValue - 45.4) < 0.1) {
+                    finalCylinderType = 'COMMERCIAL_45_4KG';
+                  } else if (Math.abs(capacityValue - 6.0) < 0.1) {
+                    finalCylinderType = 'CYLINDER_6KG';
+                  } else if (Math.abs(capacityValue - 30.0) < 0.1) {
+                    finalCylinderType = 'CYLINDER_30KG';
+                  } else {
+                    // For custom types, generate enum name from capacity
+                    finalCylinderType = generateCylinderTypeFromCapacity(capacityValue);
+                  }
+                  
+                  const capacity = capacityValue;
+                  
+                  // Validate quantity
+                  const qty = quantity || 1;
+                  if (qty < 1 || qty > 1000) {
+                    alert('Quantity must be between 1 and 1000.');
+                    return;
+                  }
+                  
+                  // Codes will be auto-generated by the API based on type name
                   const formData = {
-                    code: cylinderCode,
-                    cylinderType,
+                    // No code field - API will auto-generate unique codes based on typeName
+                    typeName: typeName, // Pass type name for code generation
+                    cylinderType: finalCylinderType,
                     capacity,
                     currentStatus,
                     location,
@@ -597,35 +726,49 @@ export default function CylindersInventoryPage() {
                     purchasePrice: purchasePrice ? parseFloat(purchasePrice) : null
                   };
                   
-                  console.log('Form data to submit:', formData);
-                  handleAddCylinder(formData);
+                  console.log('Form data to submit:', formData, 'Quantity:', qty);
+                  handleAddCylinder(formData, qty);
                 } catch (error) {
                   console.error('Form submission error:', error);
                   alert('Error processing form. Please check the console for details.');
                 }
               }}>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Cylinder Code</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Cylinder Type & Capacity <span className="text-red-500">*</span>
+                  </label>
                   <Input 
-                    name="cylinderCode" 
+                    name="cylinderTypeAndCapacity" 
                     type="text" 
-                    placeholder="e.g., CYL-001, ABC-123" 
-                    required 
+                    placeholder="e.g., Domestic 11.8, Standard 15, Commercial 45.4, Custom 12, or 12kg"
+                    value={cylinderTypeAndCapacity}
+                    onChange={(e) => setCylinderTypeAndCapacity(e.target.value)}
+                    required
                     className="w-full"
                   />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Enter cylinder type name and capacity together (e.g., "Domestic 11.8", "Standard 15", "12kg", "Custom 12.5kg")
+                  </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Cylinder Type</label>
-                  <select 
-                    name="cylinderType" 
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity <span className="text-red-500">*</span></label>
+                  <Input 
+                    name="quantity" 
+                    type="number" 
+                    placeholder="1"
+                    min="1"
+                    max="1000"
+                    value={quantity}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value) || 1;
+                      setQuantity(Math.max(1, Math.min(1000, value)));
+                    }}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">Select Cylinder Type</option>
-                    <option value="DOMESTIC_11_8KG">Domestic (11.8kg)</option>
-                    <option value="STANDARD_15KG">Standard (15kg)</option>
-                    <option value="COMMERCIAL_45_4KG">Commercial (45.4kg)</option>
-                  </select>
+                    className="w-full"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Number of cylinders to add (1-1000). All will have the same type, capacity, status, and location.
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
@@ -655,7 +798,11 @@ export default function CylindersInventoryPage() {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setShowAddForm(false)}
+                    onClick={() => {
+                      setShowAddForm(false);
+                      setCylinderTypeAndCapacity('');
+                      setQuantity(1);
+                    }}
                     disabled={isAddingCylinder}
                   >
                     Cancel
@@ -711,9 +858,11 @@ export default function CylindersInventoryPage() {
                     required
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
-                    <option value="DOMESTIC_11_8KG">Domestic (11.8kg)</option>
-                    <option value="STANDARD_15KG">Standard (15kg)</option>
-                    <option value="COMMERCIAL_45_4KG">Commercial (45.4kg)</option>
+                    {cylinderTypeOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -806,7 +955,7 @@ export default function CylindersInventoryPage() {
                 <div>
                   <label className="block text-sm font-semibold text-gray-700">Type</label>
                   <Badge variant="secondary" className="font-semibold">
-                    {getTypeDisplayName(selectedCylinder.cylinderType)}
+                    {getTypeDisplayName(selectedCylinder.cylinderType, selectedCylinder.capacity, selectedCylinder.typeName)}
                   </Badge>
                 </div>
                 <div>

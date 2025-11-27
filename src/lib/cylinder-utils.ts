@@ -57,3 +57,26 @@ export function isValidCylinderType(type: string): boolean {
   return /^[A-Z_]+(\d+\.?\d*)[A-Z_]*$/.test(type);
 }
 
+/**
+ * Generate a standardized cylinder type enum name from capacity
+ * Example: 12 -> "CYLINDER_12KG", 12.5 -> "CYLINDER_12_5KG"
+ */
+export function generateCylinderTypeFromCapacity(capacity: number): string {
+  // Round to 1 decimal place for consistency
+  const roundedCapacity = Math.round(capacity * 10) / 10;
+  
+  // Convert to string and replace decimal point with underscore for enum format
+  const capacityStr = roundedCapacity.toString().replace('.', '_');
+  
+  // Generate enum name: CYLINDER_12KG or CYLINDER_12_5KG
+  return `CYLINDER_${capacityStr}KG`;
+}
+
+/**
+ * Validate if a capacity value is reasonable for a cylinder
+ */
+export function isValidCylinderCapacity(capacity: number): boolean {
+  // Typical cylinder capacities range from 1kg to 100kg
+  return capacity > 0 && capacity <= 100;
+}
+

@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
 
 export async function GET(request: NextRequest) {
   try {
     // Get cylinder type stats
+    // Exclude WITH_CUSTOMER cylinders from inventory stats
+    // Group by typeName, capacity, and cylinderType to distinguish custom types
     const cylinderTypeStats = await prisma.cylinder.groupBy({
-      by: ['cylinderType', 'currentStatus'],
+      by: ['cylinderType', 'currentStatus', 'typeName', 'capacity'],
+      where: {
+        currentStatus: {
+          not: 'WITH_CUSTOMER'
+        }
+      },
       _count: {
         id: true
       }
@@ -13,32 +21,62 @@ export async function GET(request: NextRequest) {
 
     // Process cylinder type stats dynamically (handles any cylinder type)
     // Note: Exclude WITH_CUSTOMER from inventory totals as they are tracked separately
-    // Get all unique cylinder types from the stats
-    const uniqueTypes = [...new Set(cylinderTypeStats.map(stat => stat.cylinderType))];
+    // Create unique combinations of typeName + capacity + cylinderType
+    const uniqueCombinations = [...new Set(
+      cylinderTypeStats.map(stat => 
+        `${stat.cylinderType}-${stat.capacity?.toString() || 'null'}-${stat.typeName || 'null'}`
+      )
+    )];
     
-    const processedStats = uniqueTypes.map(type => {
-      const typeStats = cylinderTypeStats.filter(stat => stat.cylinderType === type);
-      const full = typeStats.find(stat => stat.currentStatus === 'FULL')?._count.id || 0;
-      const empty = typeStats.find(stat => stat.currentStatus === 'EMPTY')?._count.id || 0;
-      const withCustomer = typeStats.find(stat => stat.currentStatus === 'WITH_CUSTOMER')?._count.id || 0;
-      const retired = typeStats.find(stat => stat.currentStatus === 'RETIRED')?._count.id || 0;
+    const processedStats = uniqueCombinations.map(combination => {
+      const [type, capacityStr, typeName] = combination.split('-');
+      const capacity = capacityStr !== 'null' ? parseFloat(capacityStr) : null;
+      const actualTypeName = typeName !== 'null' ? typeName : null;
+
+      // Find all stats for this combination
+      const statsForCombination = cylinderTypeStats.filter(stat =>
+        stat.cylinderType === type &&
+        stat.capacity?.toString() === capacityStr &&
+        (stat.typeName || null) === actualTypeName
+      );
+
+      const full = statsForCombination.find(stat => stat.currentStatus === 'FULL')?._count.id || 0;
+      const empty = statsForCombination.find(stat => stat.currentStatus === 'EMPTY')?._count.id || 0;
+      const withCustomer = statsForCombination.find(stat => stat.currentStatus === 'WITH_CUSTOMER')?._count.id || 0;
+      const retired = statsForCombination.find(stat => stat.currentStatus === 'RETIRED')?._count.id || 0;
+      const maintenance = statsForCombination.find(stat => stat.currentStatus === 'MAINTENANCE')?._count.id || 0;
       
-      // Format type name for display (extract weight if available)
-      let displayType = type;
-      const weightMatch = type.match(/(\d+\.?\d*)/);
-      if (weightMatch) {
-        const weight = weightMatch[1];
-        if (type === 'DOMESTIC_11_8KG') {
-          displayType = 'Domestic (11.8kg)';
-        } else if (type === 'STANDARD_15KG') {
-          displayType = 'Standard (15kg)';
-        } else if (type === 'COMMERCIAL_45_4KG') {
-          displayType = 'Commercial (45.4kg)';
+      // Use the same display logic as the frontend
+      // Priority 1: If typeName exists, use it with capacity
+      let displayType: string;
+      const trimmedTypeName = actualTypeName ? String(actualTypeName).trim() : '';
+      if (trimmedTypeName && trimmedTypeName !== '' && trimmedTypeName !== 'Cylinder') {
+        displayType = `${trimmedTypeName} (${capacity !== null ? capacity : 'N/A'}kg)`;
+      } else if (type === 'DOMESTIC_11_8KG') {
+        displayType = `Domestic (${capacity !== null ? capacity : 11.8}kg)`;
+      } else if (type === 'STANDARD_15KG') {
+        // If capacity doesn't match 15kg, it's a custom type
+        if (capacity !== null && Math.abs(capacity - 15.0) > 0.1) {
+          displayType = `Cylinder (${capacity}kg)`;
         } else {
-          displayType = `Cylinder (${weight}kg)`;
+          displayType = `Standard (${capacity !== null ? capacity : 15}kg)`;
         }
+      } else if (type === 'COMMERCIAL_45_4KG') {
+        displayType = `Commercial (${capacity !== null ? capacity : 45.4}kg)`;
+      } else if (type === 'CYLINDER_6KG') {
+        displayType = `Cylinder (${capacity !== null ? capacity : 6}kg)`;
+      } else if (type === 'CYLINDER_30KG') {
+        displayType = `Cylinder (${capacity !== null ? capacity : 30}kg)`;
       } else {
-        displayType = type.replace(/_/g, ' ');
+        // Fallback to utility function
+        displayType = getCylinderTypeDisplayName(type);
+        if (capacity !== null) {
+          // Override with actual capacity if available
+          const weightMatch = displayType.match(/(\d+\.?\d*)kg/);
+          if (!weightMatch || weightMatch[1] !== capacity.toString()) {
+            displayType = `Cylinder (${capacity}kg)`;
+          }
+        }
       }
       
       return {
@@ -48,8 +86,9 @@ export async function GET(request: NextRequest) {
         empty,
         withCustomer,
         retired,
+        maintenance,
         // Total only includes cylinders in inventory (excluding WITH_CUSTOMER)
-        total: full + empty + retired
+        total: full + empty + retired + maintenance
       };
     });
 

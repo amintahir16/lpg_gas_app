@@ -14,6 +14,7 @@ import {
   MagnifyingGlassIcon,
   UserIcon
 } from '@heroicons/react/24/outline';
+import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
 
 interface Store {
   id: string;
@@ -141,16 +142,7 @@ export default function StoreVehiclesInventoryPage() {
   };
 
   const getTypeDisplayName = (type: string) => {
-    switch (type) {
-      case 'DOMESTIC_11_8KG':
-        return 'Domestic (11.8kg)';
-      case 'STANDARD_15KG':
-        return 'Standard (15kg)';
-      case 'COMMERCIAL_45_4KG':
-        return 'Commercial (45.4kg)';
-      default:
-        return type;
-    }
+    return getCylinderTypeDisplayName(type);
   };
 
   const filteredStores = stores.filter(store =>

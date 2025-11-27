@@ -11,6 +11,7 @@ import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { MagnifyingGlassIcon, HomeIcon, PlusIcon, EyeIcon, MapPinIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
 
 interface B2CCustomer {
   id: string;
@@ -161,16 +162,7 @@ export default function B2CCustomersPage() {
   };
 
   const getCylinderTypeDisplay = (type: string) => {
-    switch (type) {
-      case 'DOMESTIC_11_8KG':
-        return 'Domestic (11.8kg)';
-      case 'STANDARD_15KG':
-        return 'Standard (15kg)';
-      case 'COMMERCIAL_45_4KG':
-        return 'Commercial (45.4kg)';
-      default:
-        return type;
-    }
+    return getCylinderTypeDisplayName(type);
   };
 
   const formatAddress = (customer: B2CCustomer) => {
