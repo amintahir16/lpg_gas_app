@@ -11,7 +11,8 @@ import {
   MagnifyingGlassIcon, 
   ArrowLeftIcon,
   ChartBarIcon,
-  CubeIcon
+  CubeIcon,
+  TrashIcon
 } from '@heroicons/react/24/outline';
 import { getCylinderTypeDisplayName, getCylinderWeight, generateCylinderTypeFromCapacity, isValidCylinderCapacity } from '@/lib/cylinder-utils';
 import { getCylinderTypeOptions } from '@/lib/cylinder-types';
@@ -63,6 +64,7 @@ export default function CylindersInventoryPage() {
   const [selectedCylinder, setSelectedCylinder] = useState<Cylinder | null>(null);
   const [isAddingCylinder, setIsAddingCylinder] = useState(false);
   const [cylinderTypeAndCapacity, setCylinderTypeAndCapacity] = useState('');
+  const [editTypeAndCapacity, setEditTypeAndCapacity] = useState('');
   const [quantity, setQuantity] = useState<number>(1);
   const [pagination, setPagination] = useState({
     page: 1,
@@ -218,12 +220,59 @@ export default function CylindersInventoryPage() {
 
   const handleEditCylinder = (cylinder: Cylinder) => {
     setSelectedCylinder(cylinder);
+    // Pre-populate the edit form with current typeName and capacity
+    const displayName = getTypeDisplayName(cylinder.cylinderType, cylinder.capacity, cylinder.typeName);
+    // Extract type name and capacity from display name (e.g., "Special (10kg)" -> "Special 10kg")
+    const typeName = cylinder.typeName || '';
+    const capacity = cylinder.capacity || 0;
+    const initialValue = typeName ? `${typeName} ${capacity}kg` : `${capacity}kg`;
+    setEditTypeAndCapacity(initialValue);
     setShowEditForm(true);
   };
 
   const handleViewCylinder = (cylinder: Cylinder) => {
     setSelectedCylinder(cylinder);
     setShowViewModal(true);
+  };
+
+  const handleDeleteCylinder = async (cylinder: Cylinder) => {
+    // Only allow deletion of empty cylinders
+    if (cylinder.currentStatus !== 'EMPTY') {
+      alert('Only empty cylinders can be deleted. Please change the status to Empty first.');
+      return;
+    }
+
+    // Confirm deletion
+    const confirmed = window.confirm(
+      `Are you sure you want to delete cylinder ${cylinder.code}? This action cannot be undone.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/inventory/cylinders/${cylinder.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete cylinder');
+      }
+
+      // Refresh both cylinders list and statistics
+      await Promise.all([
+        fetchCylinders(),
+        fetchCylinderTypeStats()
+      ]);
+
+      alert('Cylinder deleted successfully!');
+    } catch (error) {
+      console.error('Failed to delete cylinder:', error);
+      alert(`Error: ${error instanceof Error ? error.message : 'Failed to delete cylinder'}`);
+    }
   };
 
   const handleAddCylinder = async (formData: any, qty: number = 1) => {
@@ -308,13 +357,77 @@ export default function CylindersInventoryPage() {
     if (!selectedCylinder) return;
     
     try {
+      // Parse the type and capacity input (same logic as add form)
+      const inputValue = editTypeAndCapacity.trim();
+      
+      if (!inputValue) {
+        alert('Please enter cylinder type and capacity (e.g., "Domestic 11.8", "Standard 15", "12kg").');
+        return;
+      }
+      
+      // Extract capacity from input
+      const capacityMatch = inputValue.match(/(\d+\.?\d*)/);
+      
+      if (!capacityMatch) {
+        alert('Please include a capacity value in your input (e.g., "Domestic 11.8", "Standard 15", "12kg").');
+        return;
+      }
+      
+      const capacityValue = parseFloat(capacityMatch[1]);
+      
+      // Validate capacity
+      if (isNaN(capacityValue) || capacityValue <= 0) {
+        alert('Please enter a valid capacity (greater than 0).');
+        return;
+      }
+      
+      if (!isValidCylinderCapacity(capacityValue)) {
+        alert('Capacity must be between 0.1 and 100 kg. Please enter a valid capacity.');
+        return;
+      }
+      
+      // Extract type name from input
+      const typeNameMatch = inputValue.match(/^([A-Za-z]+(?:\s+[A-Za-z]+)*)/);
+      const typeName = typeNameMatch ? typeNameMatch[1].trim() : 'Cylinder';
+      
+      // Map known type names to their correct enum values
+      let finalCylinderType: string;
+      const typeNameLower = typeName.toLowerCase();
+      
+      if (typeNameLower.includes('domestic') && Math.abs(capacityValue - 11.8) < 0.1) {
+        finalCylinderType = 'DOMESTIC_11_8KG';
+      } else if (typeNameLower.includes('standard') && Math.abs(capacityValue - 15.0) < 0.1) {
+        finalCylinderType = 'STANDARD_15KG';
+      } else if (typeNameLower.includes('commercial') && Math.abs(capacityValue - 45.4) < 0.1) {
+        finalCylinderType = 'COMMERCIAL_45_4KG';
+      } else if (Math.abs(capacityValue - 6.0) < 0.1) {
+        finalCylinderType = 'CYLINDER_6KG';
+      } else if (Math.abs(capacityValue - 30.0) < 0.1) {
+        finalCylinderType = 'CYLINDER_30KG';
+      } else {
+        // For custom types, generate enum name from capacity
+        finalCylinderType = generateCylinderTypeFromCapacity(capacityValue);
+      }
+      
+      const updateData = {
+        typeName: typeName,
+        cylinderType: finalCylinderType,
+        capacity: capacityValue,
+        currentStatus: formData.currentStatus,
+        location: formData.location,
+        purchaseDate: formData.purchaseDate || null,
+        purchasePrice: formData.purchasePrice ? parseFloat(formData.purchasePrice) : null,
+        lastMaintenanceDate: formData.lastMaintenanceDate || null,
+        nextMaintenanceDate: formData.nextMaintenanceDate || null
+      };
+      
       const response = await fetch(`/api/inventory/cylinders/${selectedCylinder.id}`, {
         method: 'PUT',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(updateData),
       });
 
       if (!response.ok) {
@@ -329,8 +442,11 @@ export default function CylindersInventoryPage() {
       
       setShowEditForm(false);
       setSelectedCylinder(null);
+      setEditTypeAndCapacity('');
+      alert('Cylinder updated successfully!');
     } catch (error) {
       console.error('Failed to update cylinder:', error);
+      alert(`Error: ${error instanceof Error ? error.message : 'Failed to update cylinder'}`);
     }
   };
 
@@ -553,6 +669,17 @@ export default function CylindersInventoryPage() {
                           >
                             View
                           </Button>
+                          {cylinder.currentStatus === 'EMPTY' && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => handleDeleteCylinder(cylinder)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <TrashIcon className="w-4 h-4 mr-1" />
+                              Delete
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -840,8 +967,6 @@ export default function CylindersInventoryPage() {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
                 handleUpdateCylinder({
-                  cylinderType: formData.get('cylinderType'),
-                  capacity: formData.get('capacity'),
                   currentStatus: formData.get('currentStatus'),
                   location: formData.get('location'),
                   purchaseDate: formData.get('purchaseDate'),
@@ -851,23 +976,19 @@ export default function CylindersInventoryPage() {
                 });
               }}>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Cylinder Type</label>
-                  <select 
-                    name="cylinderType" 
-                    defaultValue={selectedCylinder.cylinderType}
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Cylinder Type & Capacity
+                    <span className="text-xs text-gray-500 ml-2">(e.g., "Domestic 11.8", "Standard 15", "Special 10kg")</span>
+                  </label>
+                  <Input
+                    name="cylinderTypeAndCapacity"
+                    type="text"
+                    placeholder="e.g., Domestic 11.8kg, Standard 15, Special 10kg"
+                    value={editTypeAndCapacity}
+                    onChange={(e) => setEditTypeAndCapacity(e.target.value)}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    {cylinderTypeOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Capacity (KG)</label>
-                  <Input name="capacity" type="number" defaultValue={selectedCylinder.capacity} required />
+                    className="w-full"
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
@@ -879,7 +1000,6 @@ export default function CylindersInventoryPage() {
                   >
                     <option value="FULL">Full</option>
                     <option value="EMPTY">Empty</option>
-                    <option value="RETIRED">Retired</option>
                   </select>
                 </div>
                 <div>
@@ -927,6 +1047,7 @@ export default function CylindersInventoryPage() {
                     onClick={() => {
                       setShowEditForm(false);
                       setSelectedCylinder(null);
+                      setEditTypeAndCapacity('');
                     }}
                   >
                     Cancel
