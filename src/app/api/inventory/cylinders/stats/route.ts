@@ -22,23 +22,28 @@ export async function GET(request: NextRequest) {
     // Process cylinder type stats dynamically (handles any cylinder type)
     // Note: Exclude WITH_CUSTOMER from inventory totals as they are tracked separately
     // Create unique combinations of typeName + capacity + cylinderType
+    // Use a delimiter that won't conflict with data (|||)
     const uniqueCombinations = [...new Set(
       cylinderTypeStats.map(stat => 
-        `${stat.cylinderType}-${stat.capacity?.toString() || 'null'}-${stat.typeName || 'null'}`
+        `${stat.cylinderType}|||${stat.capacity?.toString() || 'null'}|||${stat.typeName || 'null'}`
       )
     )];
     
     const processedStats = uniqueCombinations.map(combination => {
-      const [type, capacityStr, typeName] = combination.split('-');
+      const [type, capacityStr, typeName] = combination.split('|||');
       const capacity = capacityStr !== 'null' ? parseFloat(capacityStr) : null;
       const actualTypeName = typeName !== 'null' ? typeName : null;
 
       // Find all stats for this combination
-      const statsForCombination = cylinderTypeStats.filter(stat =>
-        stat.cylinderType === type &&
-        stat.capacity?.toString() === capacityStr &&
-        (stat.typeName || null) === actualTypeName
-      );
+      const statsForCombination = cylinderTypeStats.filter(stat => {
+        const statCapacityStr = stat.capacity?.toString() || 'null';
+        const statTypeName = stat.typeName || null;
+        return (
+          stat.cylinderType === type &&
+          statCapacityStr === capacityStr &&
+          statTypeName === actualTypeName
+        );
+      });
 
       const full = statsForCombination.find(stat => stat.currentStatus === 'FULL')?._count.id || 0;
       const empty = statsForCombination.find(stat => stat.currentStatus === 'EMPTY')?._count.id || 0;

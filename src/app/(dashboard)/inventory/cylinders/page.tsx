@@ -373,7 +373,7 @@ export default function CylindersInventoryPage() {
           <Card key={index} className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-semibold text-gray-600">
-                {getTypeDisplayName(stat.type)}
+                {stat.type}
               </CardTitle>
               <CubeIcon className="w-5 h-5 text-gray-400" />
             </CardHeader>
