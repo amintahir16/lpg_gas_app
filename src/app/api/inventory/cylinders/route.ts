@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { generateUniqueCylinderCode } from '@/lib/cylinder-code-generator';
 
 export async function GET(request: NextRequest) {
   try {
@@ -37,47 +38,22 @@ export async function GET(request: NextRequest) {
       // Check if type is a display name (e.g., "Special (10kg)", "Standard (15kg)") or type string (e.g., "STANDARD_15KG")
       // If it contains parentheses, it's a display name - extract typeName and capacity
       if (type.includes('(') && type.includes('kg)')) {
-        // Extract typeName and capacity from display name (e.g., "Special (10kg)" -> typeName: "Special", capacity: 10)
-        const nameMatch = type.match(/^([^(]+)\s*\((\d+\.?\d*)kg\)/);
-        if (nameMatch) {
-          const extractedTypeName = nameMatch[1].trim();
-          const capacity = parseFloat(nameMatch[2]);
-          
-          // Map standard display names to their enum values for filtering
-          let mappedCylinderType: string | null = null;
-          const typeNameLower = extractedTypeName.toLowerCase();
-          
-          if (typeNameLower.includes('domestic') && Math.abs(capacity - 11.8) < 0.1) {
-            mappedCylinderType = 'DOMESTIC_11_8KG';
-          } else if (typeNameLower.includes('standard') && Math.abs(capacity - 15.0) < 0.1) {
-            mappedCylinderType = 'STANDARD_15KG';
-          } else if (typeNameLower.includes('commercial') && Math.abs(capacity - 45.4) < 0.1) {
-            mappedCylinderType = 'COMMERCIAL_45_4KG';
-          } else if (Math.abs(capacity - 6.0) < 0.1) {
-            mappedCylinderType = 'CYLINDER_6KG';
-          } else if (Math.abs(capacity - 30.0) < 0.1) {
-            mappedCylinderType = 'CYLINDER_30KG';
-          }
-          
-          // For standard types, match by cylinderType + capacity (typeName might be null or different)
-          // For custom types, match by typeName + capacity
-          if (mappedCylinderType) {
-            // Standard type - match by cylinderType and capacity (works for both typeName=null and typeName=extractedTypeName)
-            typeFilterCondition = {
-              cylinderType: mappedCylinderType,
-              capacity: capacity
-            };
-          } else {
-            // Custom type - filter by typeName and capacity
+          // Extract typeName and capacity from display name (e.g., "Special (10kg)" -> typeName: "Special", capacity: 10)
+          const nameMatch = type.match(/^([^(]+)\s*\((\d+\.?\d*)kg\)/);
+          if (nameMatch) {
+            const extractedTypeName = nameMatch[1].trim();
+            const capacity = parseFloat(nameMatch[2]);
+            
+            // Filter by typeName + capacity combination - fully dynamic approach
+            // This works for any type name and capacity, not just hardcoded ones
             typeFilterCondition = {
               typeName: extractedTypeName,
               capacity: capacity
             };
+          } else {
+            // Fallback: filter by cylinderType string
+            typeFilterCondition = { cylinderType: type };
           }
-        } else {
-          // Fallback: filter by cylinderType string
-          typeFilterCondition = { cylinderType: type };
-        }
       } else {
         // It's a type string (e.g., "STANDARD_15KG", "CYLINDER_10KG"), filter by cylinderType
         typeFilterCondition = { cylinderType: type };
@@ -177,80 +153,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/**
- * Generate prefix from cylinder type name
- * Domestic -> DM, Standard -> ST, Custom names -> First two letters
- */
-function getCylinderCodePrefix(typeName: string): string {
-  const name = typeName.trim().toLowerCase();
-  
-  // Handle known types
-  if (name.includes('domestic')) {
-    return 'DM';
-  } else if (name.includes('standard')) {
-    return 'ST';
-  } else if (name.includes('commercial')) {
-    return 'CM';
-  } else {
-    // For custom names, use first two letters (uppercase)
-    const firstTwo = typeName.trim().substring(0, 2).toUpperCase();
-    // If only one character, pad with X
-    return firstTwo.length === 1 ? `${firstTwo}X` : firstTwo;
-  }
-}
-
-/**
- * Generate unique cylinder code based on type name prefix
- */
-async function generateUniqueCylinderCode(typeName: string): Promise<string> {
-  const prefix = getCylinderCodePrefix(typeName);
-  
-  // Find all existing cylinders with this prefix
-  const existingCylinders = await prisma.cylinder.findMany({
-    where: {
-      code: {
-        startsWith: prefix
-      }
-    },
-    select: {
-      code: true
-    },
-    orderBy: {
-      code: 'desc'
-    }
-  });
-  
-  // Extract numbers from existing codes and find the highest
-  let maxNumber = 0;
-  existingCylinders.forEach(cylinder => {
-    // Match patterns like DM-0001, ST-0001, DM0001, ST0001
-    // Handle both with and without dashes
-    const match = cylinder.code.match(new RegExp(`^${prefix}[-]?(\\d+)(?:-\\d+)?$`));
-    if (match) {
-      const number = parseInt(match[1], 10);
-      if (number > maxNumber) {
-        maxNumber = number;
-      }
-    }
-  });
-  
-  // Generate the next sequential number
-  const nextNumber = maxNumber + 1;
-  const cylinderCode = `${prefix}-${nextNumber.toString().padStart(4, '0')}`;
-  
-  // Double-check that this code doesn't exist (safety check)
-  const existingCylinder = await prisma.cylinder.findUnique({
-    where: { code: cylinderCode }
-  });
-  
-  if (existingCylinder) {
-    // If somehow it exists, add a timestamp to make it unique
-    const timestamp = Date.now().toString().slice(-4);
-    return `${prefix}-${nextNumber.toString().padStart(4, '0')}-${timestamp}`;
-  }
-  
-  return cylinderCode;
-}
+// Code generation moved to shared utility: @/lib/cylinder-code-generator
 
 export async function POST(request: NextRequest) {
   try {
@@ -260,9 +163,9 @@ export async function POST(request: NextRequest) {
     // Use provided code or generate one based on type name
     let cylinderCode = code;
     if (!cylinderCode) {
-      // Generate code based on type name
+      // Generate code based on type name (isTypeName = true)
       const nameForCode = typeName || 'Cylinder';
-      cylinderCode = await generateUniqueCylinderCode(nameForCode);
+      cylinderCode = await generateUniqueCylinderCode(nameForCode, true);
     }
 
     // Check if code already exists

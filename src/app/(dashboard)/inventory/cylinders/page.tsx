@@ -441,24 +441,9 @@ export default function CylindersInventoryPage() {
       const typeNameMatch = inputValue.match(/^([A-Za-z]+(?:\s+[A-Za-z]+)*)/);
       const typeName = typeNameMatch ? typeNameMatch[1].trim() : 'Cylinder';
       
-      // Map known type names to their correct enum values
-      let finalCylinderType: string;
-      const typeNameLower = typeName.toLowerCase();
-      
-      if (typeNameLower.includes('domestic') && Math.abs(capacityValue - 11.8) < 0.1) {
-        finalCylinderType = 'DOMESTIC_11_8KG';
-      } else if (typeNameLower.includes('standard') && Math.abs(capacityValue - 15.0) < 0.1) {
-        finalCylinderType = 'STANDARD_15KG';
-      } else if (typeNameLower.includes('commercial') && Math.abs(capacityValue - 45.4) < 0.1) {
-        finalCylinderType = 'COMMERCIAL_45_4KG';
-      } else if (Math.abs(capacityValue - 6.0) < 0.1) {
-        finalCylinderType = 'CYLINDER_6KG';
-      } else if (Math.abs(capacityValue - 30.0) < 0.1) {
-        finalCylinderType = 'CYLINDER_30KG';
-      } else {
-        // For custom types, generate enum name from capacity
-        finalCylinderType = generateCylinderTypeFromCapacity(capacityValue);
-      }
+      // Generate enum type dynamically from capacity - fully flexible approach
+      // No hardcoded type mappings - works for any capacity
+      const finalCylinderType = generateCylinderTypeFromCapacity(capacityValue);
       
       const updateData = {
         typeName: typeName,
@@ -864,25 +849,9 @@ export default function CylindersInventoryPage() {
                   const typeNameMatch = inputValue.match(/^([A-Za-z]+(?:\s+[A-Za-z]+)*)/);
                   const typeName = typeNameMatch ? typeNameMatch[1].trim() : 'Cylinder';
                   
-                  // Map known type names to their correct enum values
-                  // This ensures proper enum mapping for standard types
-                  let finalCylinderType: string;
-                  const typeNameLower = typeName.toLowerCase();
-                  
-                  if (typeNameLower.includes('domestic') && Math.abs(capacityValue - 11.8) < 0.1) {
-                    finalCylinderType = 'DOMESTIC_11_8KG';
-                  } else if (typeNameLower.includes('standard') && Math.abs(capacityValue - 15.0) < 0.1) {
-                    finalCylinderType = 'STANDARD_15KG';
-                  } else if (typeNameLower.includes('commercial') && Math.abs(capacityValue - 45.4) < 0.1) {
-                    finalCylinderType = 'COMMERCIAL_45_4KG';
-                  } else if (Math.abs(capacityValue - 6.0) < 0.1) {
-                    finalCylinderType = 'CYLINDER_6KG';
-                  } else if (Math.abs(capacityValue - 30.0) < 0.1) {
-                    finalCylinderType = 'CYLINDER_30KG';
-                  } else {
-                    // For custom types, generate enum name from capacity
-                    finalCylinderType = generateCylinderTypeFromCapacity(capacityValue);
-                  }
+                  // Generate enum type dynamically from capacity - fully flexible approach
+                  // No hardcoded type mappings - works for any capacity
+                  const finalCylinderType = generateCylinderTypeFromCapacity(capacityValue);
                   
                   const capacity = capacityValue;
                   

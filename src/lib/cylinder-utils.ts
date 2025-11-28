@@ -5,33 +5,23 @@
 
 /**
  * Get display name for cylinder type
- * Dynamically formats any cylinder type enum value
+ * Fully dynamic - formats any cylinder type enum value
+ * Note: For better display with typeName, use the typeName + capacity from database
  */
 export function getCylinderTypeDisplayName(type: string | null): string {
   if (!type) return 'N/A';
   
-  // Extract weight from enum name (e.g., "CYLINDER_6KG" -> "6kg", "DOMESTIC_11_8KG" -> "11.8kg")
-  const weightMatch = type.match(/(\d+\.?\d*)/);
+  // Extract capacity from enum name (e.g., "CYLINDER_6KG" -> "6", "DOMESTIC_11_8KG" -> "11.8", "CYLINDER_12_5KG" -> "12.5")
+  const capacityMatch = type.match(/(\d+)(?:_(\d+))?/);
   
-  if (weightMatch) {
-    const weight = weightMatch[1];
+  if (capacityMatch) {
+    // Handle both integer and decimal capacities
+    const wholePart = capacityMatch[1];
+    const decimalPart = capacityMatch[2];
+    const capacity = decimalPart ? `${wholePart}.${decimalPart}` : wholePart;
     
-    // Handle special cases with friendly names
-    if (type === 'DOMESTIC_11_8KG') {
-      return 'Domestic (11.8kg)';
-    } else if (type === 'STANDARD_15KG') {
-      return 'Standard (15kg)';
-    } else if (type === 'COMMERCIAL_45_4KG') {
-      return 'Commercial (45.4kg)';
-    } else if (type === 'CYLINDER_6KG') {
-      return 'Cylinder (6kg)';
-    } else if (type === 'CYLINDER_30KG') {
-      return 'Cylinder (30kg)';
-    } else {
-      // For any other type, format dynamically
-      // Extract the weight and format nicely
-      return `Cylinder (${weight}kg)`;
-    }
+    // Format dynamically - works for any capacity
+    return `Cylinder (${capacity}kg)`;
   }
   
   // Fallback: format enum name by replacing underscores with spaces
@@ -82,18 +72,72 @@ export function isValidCylinderCapacity(capacity: number): boolean {
 
 /**
  * Get capacity from cylinder type string
- * Handles both standard types (DOMESTIC_11_8KG) and custom types (CYLINDER_10KG)
+ * Fully dynamic - extracts capacity from any enum value
+ * Handles formats like: DOMESTIC_11_8KG, CYLINDER_12KG, CYLINDER_12_5KG
  */
 export function getCapacityFromTypeString(type: string): number {
-  // Check for standard type names
-  if (type.includes('DOMESTIC') || type.includes('11_8')) return 11.8;
-  if (type.includes('STANDARD') || type.includes('15')) return 15.0;
-  if (type.includes('COMMERCIAL') || type.includes('45_4')) return 45.4;
-  if (type.includes('6') && !type.includes('11_8') && !type.includes('15') && !type.includes('30') && !type.includes('45_4')) return 6.0;
-  if (type.includes('30')) return 30.0;
+  // Extract capacity from enum - handles both integer and decimal formats
+  // Examples: "CYLINDER_12KG" -> 12, "CYLINDER_12_5KG" -> 12.5, "DOMESTIC_11_8KG" -> 11.8
+  const capacityMatch = type.match(/(\d+)(?:_(\d+))?/);
   
-  // Extract capacity from type string like "CYLINDER_10KG" -> 10
-  const match = type.match(/(\d+\.?\d*)/);
-  return match ? parseFloat(match[1]) : 15.0; // Default to 15 if can't determine
+  if (capacityMatch) {
+    const wholePart = capacityMatch[1];
+    const decimalPart = capacityMatch[2];
+    
+    if (decimalPart) {
+      // Decimal capacity (e.g., 11_8 -> 11.8, 12_5 -> 12.5)
+      return parseFloat(`${wholePart}.${decimalPart}`);
+    } else {
+      // Integer capacity (e.g., 12 -> 12, 6 -> 6)
+      return parseFloat(wholePart);
+    }
+  }
+  
+  // Fallback: try simple number extraction
+  const simpleMatch = type.match(/(\d+\.?\d*)/);
+  return simpleMatch ? parseFloat(simpleMatch[1]) : 15.0; // Default to 15 if can't determine
+}
+
+/**
+ * Get cylinder code prefix from type name or cylinder type
+ * Domestic -> DM, Standard -> ST, Commercial -> CM, Custom names -> First two letters
+ */
+export function getCylinderCodePrefix(input: string, isTypeName: boolean = true): string {
+  const normalized = input.trim().toLowerCase();
+  
+  if (isTypeName) {
+    // Input is a type name (e.g., "Domestic", "Standard", "Special")
+    if (normalized.includes('domestic')) {
+      return 'DM';
+    } else if (normalized.includes('standard')) {
+      return 'ST';
+    } else if (normalized.includes('commercial')) {
+      return 'CM';
+    } else {
+      // For custom names, use first two letters (uppercase)
+      const firstTwo = input.trim().substring(0, 2).toUpperCase();
+      return firstTwo.length === 1 ? `${firstTwo}X` : firstTwo;
+    }
+  } else {
+    // Input is a cylinder type enum (e.g., "DOMESTIC_11_8KG", "STANDARD_15KG")
+    if (normalized === 'domestic_11_8kg' || normalized.includes('domestic')) {
+      return 'DM';
+    } else if (normalized === 'standard_15kg' || normalized.includes('standard')) {
+      return 'ST';
+    } else if (normalized === 'commercial_45_4kg' || normalized.includes('commercial')) {
+      return 'CM';
+    } else if (normalized === 'cylinder_6kg' || (normalized.includes('6') && !normalized.includes('11') && !normalized.includes('15') && !normalized.includes('30') && !normalized.includes('45'))) {
+      return 'C6';
+    } else if (normalized === 'cylinder_30kg' || normalized.includes('30')) {
+      return 'C30';
+    } else {
+      // For custom types, extract prefix from type string or use CYL
+      const match = normalized.match(/cylinder_(\d+)/);
+      if (match) {
+        return `C${match[1]}`;
+      }
+      return 'CYL'; // Fallback for unknown types
+    }
+  }
 }
 

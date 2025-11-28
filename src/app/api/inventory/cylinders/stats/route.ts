@@ -51,37 +51,20 @@ export async function GET(request: NextRequest) {
       const retired = statsForCombination.find(stat => stat.currentStatus === 'RETIRED')?._count.id || 0;
       const maintenance = statsForCombination.find(stat => stat.currentStatus === 'MAINTENANCE')?._count.id || 0;
       
-      // Use the same display logic as the frontend
+      // Fully dynamic display logic - works for any cylinder type
       // Priority 1: If typeName exists, use it with capacity
       let displayType: string;
       const trimmedTypeName = actualTypeName ? String(actualTypeName).trim() : '';
+      
       if (trimmedTypeName && trimmedTypeName !== '' && trimmedTypeName !== 'Cylinder') {
+        // Use typeName with actual capacity from database
         displayType = `${trimmedTypeName} (${capacity !== null ? capacity : 'N/A'}kg)`;
-      } else if (type === 'DOMESTIC_11_8KG') {
-        displayType = `Domestic (${capacity !== null ? capacity : 11.8}kg)`;
-      } else if (type === 'STANDARD_15KG') {
-        // If capacity doesn't match 15kg, it's a custom type
-        if (capacity !== null && Math.abs(capacity - 15.0) > 0.1) {
-          displayType = `Cylinder (${capacity}kg)`;
-        } else {
-          displayType = `Standard (${capacity !== null ? capacity : 15}kg)`;
-        }
-      } else if (type === 'COMMERCIAL_45_4KG') {
-        displayType = `Commercial (${capacity !== null ? capacity : 45.4}kg)`;
-      } else if (type === 'CYLINDER_6KG') {
-        displayType = `Cylinder (${capacity !== null ? capacity : 6}kg)`;
-      } else if (type === 'CYLINDER_30KG') {
-        displayType = `Cylinder (${capacity !== null ? capacity : 30}kg)`;
+      } else if (capacity !== null) {
+        // No typeName but have capacity - use generic format with actual capacity
+        displayType = `Cylinder (${capacity}kg)`;
       } else {
-        // Fallback to utility function
+        // Fallback to utility function (extracts capacity from enum)
         displayType = getCylinderTypeDisplayName(type);
-        if (capacity !== null) {
-          // Override with actual capacity if available
-          const weightMatch = displayType.match(/(\d+\.?\d*)kg/);
-          if (!weightMatch || weightMatch[1] !== capacity.toString()) {
-            displayType = `Cylinder (${capacity}kg)`;
-          }
-        }
       }
       
       return {

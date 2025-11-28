@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+import { generateCylinderTypeFromCapacity } from './cylinder-utils';
 
 export interface VendorPurchaseItem {
   itemName: string;
@@ -168,59 +169,12 @@ export class InventoryIntegrationService {
   /**
    * Generate a unique cylinder code based on cylinder type
    */
+  // Code generation moved to shared utility: @/lib/cylinder-code-generator
+  // This method is kept for backward compatibility but now uses the shared function
   private static async generateUniqueCylinderCode(cylinderType: string): Promise<string> {
-    // Determine prefix based on cylinder type
-    let prefix: string;
-    if (cylinderType === 'DOMESTIC_11_8KG') {
-      prefix = 'DM';
-    } else if (cylinderType === 'STANDARD_15KG') {
-      prefix = 'ST';
-    } else if (cylinderType === 'COMMERCIAL_45_4KG') {
-      prefix = 'CM';
-    } else {
-      prefix = 'CYL'; // Fallback for unknown types
-    }
-    
-    // Find the highest existing number for this prefix
-    const existingCylinders = await prisma.cylinder.findMany({
-      where: {
-        code: {
-          startsWith: prefix
-        }
-      },
-      select: {
-        code: true
-      }
-    });
-    
-    // Extract numbers from existing codes and find the highest
-    let maxNumber = 0;
-    existingCylinders.forEach(cylinder => {
-      const match = cylinder.code.match(new RegExp(`^${prefix}(\\d+)$`));
-      if (match) {
-        const number = parseInt(match[1], 10);
-        if (number > maxNumber) {
-          maxNumber = number;
-        }
-      }
-    });
-    
-    // Generate the next sequential number
-    const nextNumber = maxNumber + 1;
-    const cylinderCode = `${prefix}${nextNumber.toString().padStart(3, '0')}`;
-    
-    // Double-check that this code doesn't exist (safety check)
-    const existingCylinder = await prisma.cylinder.findUnique({
-      where: { code: cylinderCode }
-    });
-    
-    if (existingCylinder) {
-      // If somehow it exists, add a timestamp to make it unique
-      const timestamp = Date.now().toString().slice(-6);
-      return `${prefix}${nextNumber.toString().padStart(3, '0')}-${timestamp}`;
-    }
-    
-    return cylinderCode;
+    const { generateUniqueCylinderCode: generateCode } = await import('@/lib/cylinder-code-generator');
+    // Pass cylinderType as enum (isTypeName = false)
+    return generateCode(cylinderType, false);
   }
 
   /**
@@ -237,62 +191,28 @@ export class InventoryIntegrationService {
       return;
     }
 
-    // Determine cylinder type based on gas type (case-insensitive, handles various formats)
-    // Dynamically extracts weight from item name to match any cylinder type
+    // Determine cylinder type based on gas type - fully dynamic approach
+    // Extract capacity from item name and generate enum dynamically
     const name = itemName.toLowerCase();
-    let cylinderType = '';
     
-    // Extract weight from item name (handles patterns like "6kg", "11.8kg", "15kg", "30kg", "45.4kg")
+    // Extract weight/capacity from item name (handles patterns like "6kg", "11.8kg", "15kg", "30kg", "45.4kg", etc.)
     const weightMatch = name.match(/(\d+\.?\d*)\s*kg/i);
     
-    if (weightMatch) {
-      const weight = parseFloat(weightMatch[1]);
-      
-      // Map common weights to cylinder types (includes new types: 6kg, 30kg)
-      if (Math.abs(weight - 6) < 0.1) {
-        cylinderType = 'CYLINDER_6KG';
-      } else if (Math.abs(weight - 11.8) < 0.1 || name.includes('domestic')) {
-        cylinderType = 'DOMESTIC_11_8KG';
-      } else if (Math.abs(weight - 15) < 0.1 || name.includes('standard')) {
-        cylinderType = 'STANDARD_15KG';
-      } else if (Math.abs(weight - 30) < 0.1) {
-        cylinderType = 'CYLINDER_30KG';
-      } else if (Math.abs(weight - 45.4) < 0.1 || name.includes('commercial')) {
-        cylinderType = 'COMMERCIAL_45_4KG';
-      } else {
-        // For unknown weights, try keyword matching as fallback
-        if (name.includes('domestic') || name.includes('11.8')) {
-          cylinderType = 'DOMESTIC_11_8KG';
-        } else if (name.includes('commercial') || name.includes('45.4')) {
-          cylinderType = 'COMMERCIAL_45_4KG';
-        } else if (name.includes('standard') || name.includes('15kg') || name.includes('15 kg')) {
-          cylinderType = 'STANDARD_15KG';
-        } else if (name.includes('6kg') || name.includes('6 kg')) {
-          cylinderType = 'CYLINDER_6KG';
-        } else if (name.includes('30kg') || name.includes('30 kg')) {
-          cylinderType = 'CYLINDER_30KG';
-        } else {
-          console.log(`⚠️ Unknown gas type: ${itemName} (weight: ${weight}kg)`);
-          return;
-        }
-      }
-    } else {
-      // Fallback to keyword matching if no weight pattern found
-      if (name.includes('domestic') || name.includes('11.8')) {
-        cylinderType = 'DOMESTIC_11_8KG';
-      } else if (name.includes('commercial') || name.includes('45.4')) {
-        cylinderType = 'COMMERCIAL_45_4KG';
-      } else if (name.includes('standard') || name.includes('15kg') || name.includes('15 kg')) {
-        cylinderType = 'STANDARD_15KG';
-      } else if (name.includes('6kg') || name.includes('6 kg')) {
-        cylinderType = 'CYLINDER_6KG';
-      } else if (name.includes('30kg') || name.includes('30 kg')) {
-        cylinderType = 'CYLINDER_30KG';
-      } else {
-        console.log(`⚠️ Unknown gas type: ${itemName}`);
-        return;
-      }
+    if (!weightMatch) {
+      console.log(`⚠️ Could not extract capacity from gas type: ${itemName}`);
+      return;
     }
+    
+    const capacity = parseFloat(weightMatch[1]);
+    
+    // Validate capacity
+    if (isNaN(capacity) || capacity <= 0) {
+      console.log(`⚠️ Invalid capacity extracted from gas type: ${itemName} (capacity: ${capacity})`);
+      return;
+    }
+    
+    // Generate enum type dynamically from capacity - fully flexible
+    const cylinderType = generateCylinderTypeFromCapacity(capacity);
 
     console.log(`🔍 Looking for ${quantity} empty ${cylinderType} cylinders`);
 
@@ -505,6 +425,18 @@ export class InventoryIntegrationService {
     // Extract cylinder type from item name
     const cylinderType = this.extractCylinderType(itemName);
     
+    // Extract typeName from item name (e.g., "Domestic 11.8kg" -> "Domestic")
+    // This ensures vendor-purchased cylinders group correctly with manually added ones in stats
+    const typeName = this.extractTypeNameFromItemName(itemName);
+    
+    // Extract capacity directly from item name (e.g., "Industrial 20kg" -> 20)
+    // This ensures new custom cylinder types get the correct capacity instead of defaulting to 15kg
+    // Priority: extracted capacity > getCylinderCapacity(cylinderType) > 15.0 (fallback)
+    const extractedCapacity = this.extractCapacityFromItemName(itemName);
+    const capacity = extractedCapacity !== null 
+      ? extractedCapacity 
+      : this.getCylinderCapacity(cylinderType);
+    
     // Use status from form, default to 'EMPTY' if not provided
     const cylinderStatus = status || 'EMPTY';
     
@@ -513,14 +445,26 @@ export class InventoryIntegrationService {
     
     // Create individual cylinder records
     for (let i = 0; i < quantity; i++) {
-      // Generate unique codes based on cylinder type
-      const cylinderCode = await this.generateUniqueCylinderCode(cylinderType);
+      // Use provided code if available, otherwise generate unique code based on cylinder type
+      let cylinderCode: string;
+      if (codes[i] && codes[i].trim()) {
+        // Use the provided code from the form
+        cylinderCode = codes[i].trim();
+      } else {
+        // Generate unique code using shared utility
+        // Use typeName if available, otherwise fall back to cylinderType
+        const codeInput = typeName || cylinderType;
+        const isTypeName = !!typeName;
+        const { generateUniqueCylinderCode } = await import('@/lib/cylinder-code-generator');
+        cylinderCode = await generateUniqueCylinderCode(codeInput, isTypeName);
+      }
       
       await prisma.cylinder.create({
         data: {
           code: cylinderCode,
           cylinderType,
-          capacity: this.getCylinderCapacity(cylinderType),
+          typeName: typeName || null, // Set typeName for proper grouping in stats
+          capacity: capacity, // Use extracted capacity (handles new custom types correctly)
           currentStatus: cylinderStatus as any, // Use status from form
           location: 'Store',
           purchaseDate: new Date(),
@@ -529,7 +473,7 @@ export class InventoryIntegrationService {
       });
     }
     
-    console.log(`📦 Created ${quantity} ${cylinderType} cylinders with status: ${cylinderStatus}`);
+    console.log(`📦 Created ${quantity} ${cylinderType} cylinders with typeName: ${typeName || 'null'}, capacity: ${capacity}kg, status: ${cylinderStatus}`);
   }
 
   /**
@@ -578,46 +522,111 @@ export class InventoryIntegrationService {
   }
 
   /**
-   * Extract cylinder type from item name (dynamic - handles any cylinder type)
+   * Extract cylinder type from item name (fully dynamic - handles any cylinder type)
    */
   private static extractCylinderType(itemName: string): string {
     const name = itemName.toLowerCase();
     
-    // Extract weight from item name (handles patterns like "6kg", "11.8kg", "15kg", "30kg", "45.4kg")
+    // Extract weight/capacity from item name (handles patterns like "6kg", "11.8kg", "15kg", "30kg", "45.4kg", etc.)
     const weightMatch = name.match(/(\d+\.?\d*)\s*kg/i);
     
     if (weightMatch) {
-      const weight = parseFloat(weightMatch[1]);
+      const capacity = parseFloat(weightMatch[1]);
       
-      // Map weights to cylinder types (can be extended for new types)
-      if (Math.abs(weight - 6) < 0.1) {
-        return 'CYLINDER_6KG';
-      } else if (Math.abs(weight - 11.8) < 0.1 || name.includes('domestic')) {
-        return 'DOMESTIC_11_8KG';
-      } else if (Math.abs(weight - 15) < 0.1 || name.includes('standard')) {
-        return 'STANDARD_15KG';
-      } else if (Math.abs(weight - 30) < 0.1) {
-        return 'CYLINDER_30KG';
-      } else if (Math.abs(weight - 45.4) < 0.1 || name.includes('commercial')) {
-        return 'COMMERCIAL_45_4KG';
+      // Validate capacity
+      if (!isNaN(capacity) && capacity > 0) {
+        // Generate enum type dynamically from capacity - fully flexible
+        return generateCylinderTypeFromCapacity(capacity);
       }
     }
     
-    // Fallback to keyword matching
-    if (name.includes('domestic') || name.includes('11.8')) {
-      return 'DOMESTIC_11_8KG';
-    } else if (name.includes('commercial') || name.includes('45.4')) {
-      return 'COMMERCIAL_45_4KG';
-    } else if (name.includes('standard') || name.includes('15kg') || name.includes('15 kg')) {
-      return 'STANDARD_15KG';
-    } else if (name.includes('6kg') || name.includes('6 kg')) {
-      return 'CYLINDER_6KG';
-    } else if (name.includes('30kg') || name.includes('30 kg')) {
-      return 'CYLINDER_30KG';
+    // If no capacity found, log warning and return a default (this should rarely happen)
+    console.log(`⚠️ Could not extract capacity from item name: ${itemName}, using default`);
+    return 'STANDARD_15KG';
+  }
+
+  /**
+   * Extract capacity from item name (e.g., "Domestic 11.8kg" -> 11.8, "Industrial (20kg)" -> 20)
+   * This ensures vendor-purchased cylinders store the correct capacity, especially for new custom types
+   * Handles multiple formats:
+   * - "Domestic 11.8kg" -> 11.8
+   * - "Domestic (11.8kg)" -> 11.8
+   * - "Industrial 20kg" -> 20
+   * - "Special (10kg)" -> 10
+   */
+  private static extractCapacityFromItemName(itemName: string): number | null {
+    if (!itemName) return null;
+    
+    const name = itemName.trim();
+    
+    // Extract capacity from item name
+    // Handles formats:
+    // - "Domestic 11.8kg" -> 11.8
+    // - "Domestic (11.8kg)" -> 11.8
+    // - "Industrial 20 kg" -> 20
+    // Pattern: optional parentheses, numbers (with optional decimal), optional space, and "kg"
+    const capacityMatch = name.match(/(?:\(?)(\d+\.?\d*)\s*kg\)?/i);
+    
+    if (capacityMatch && capacityMatch[1]) {
+      const capacity = parseFloat(capacityMatch[1]);
+      // Validate capacity is a reasonable number (between 0.1 and 1000 kg)
+      if (!isNaN(capacity) && capacity > 0.1 && capacity <= 1000) {
+        return capacity;
+      }
     }
     
-    // Default to 15kg if no match found
-    return 'STANDARD_15KG';
+    // If no match found, return null (will fall back to getCylinderCapacity)
+    return null;
+  }
+
+  /**
+   * Extract type name from item name (e.g., "Domestic 11.8kg" -> "Domestic", "Domestic (11.8kg)" -> "Domestic")
+   * This ensures vendor-purchased cylinders group correctly with manually added ones in stats
+   * Handles multiple formats:
+   * - "Domestic 11.8kg" -> "Domestic"
+   * - "Domestic (11.8kg)" -> "Domestic"
+   * - "Standard 15kg" -> "Standard"
+   * - "Special (10kg)" -> "Special"
+   */
+  private static extractTypeNameFromItemName(itemName: string): string | null {
+    if (!itemName) return null;
+    
+    const name = itemName.trim();
+    
+    // Extract the text part before the capacity
+    // Handles formats:
+    // - "Domestic 11.8kg" -> "Domestic"
+    // - "Domestic (11.8kg)" -> "Domestic"
+    // - "Standard 15 kg" -> "Standard"
+    // Pattern: text followed by optional space, optional parentheses, numbers (with optional decimal), and "kg"
+    const typeNameMatch = name.match(/^([A-Za-z]+(?:\s+[A-Za-z]+)*)\s*(?:\(?\d+\.?\d*\s*kg\)?)?/i);
+    
+    if (typeNameMatch && typeNameMatch[1]) {
+      const extractedName = typeNameMatch[1].trim();
+      
+      // Normalize common type names
+      const normalized = extractedName.toLowerCase();
+      
+      // Map to standard names for consistency
+      if (normalized.includes('domestic')) {
+        return 'Domestic';
+      } else if (normalized.includes('standard')) {
+        return 'Standard';
+      } else if (normalized.includes('commercial')) {
+        return 'Commercial';
+      } else if (normalized.includes('cylinder') && extractedName.length <= 10) {
+        // If it's just "Cylinder" or similar generic name, return null to use default display
+        return null;
+      } else {
+        // Return the extracted name (capitalize first letter of each word)
+        return extractedName.split(' ')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join(' ');
+      }
+    }
+    
+    // If no match found, return null (will use default display logic)
+    return null;
   }
 
   /**
