@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { B2BTransactionType } from '@prisma/client';
+import { generateCylinderTypeFromCapacity, getCapacityFromTypeString } from '@/lib/cylinder-utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -311,22 +312,29 @@ export async function POST(request: NextRequest) {
           const cylinderType = item.cylinderType;
           
           if (quantity > 0 && cylinderType) {
-            // Map display name to type string (e.g., "Domestic (11.8kg)" -> "DOMESTIC_11_8KG")
+            // Parse display name to extract typeName and capacity dynamically
+            // Handles formats like: "Domestic (11.8kg)", "Special (10kg)", "Standard (15kg)"
+            let typeName: string | null = null;
+            let capacity: number;
             let typeString: string;
-            if (cylinderType.includes('Domestic') || cylinderType.includes('11.8')) {
-              typeString = 'DOMESTIC_11_8KG';
-            } else if (cylinderType.includes('Standard') || cylinderType.includes('15')) {
-              typeString = 'STANDARD_15KG';
-            } else if (cylinderType.includes('Commercial') || cylinderType.includes('45.4')) {
-              typeString = 'COMMERCIAL_45_4KG';
+            
+            if (cylinderType.includes('(') && cylinderType.includes('kg)')) {
+              // Extract typeName and capacity from display name (e.g., "Special (10kg)" -> typeName: "Special", capacity: 10)
+              const nameMatch = cylinderType.match(/^([^(]+)\s*\((\d+\.?\d*)kg\)/);
+              if (nameMatch) {
+                typeName = nameMatch[1].trim();
+                capacity = parseFloat(nameMatch[2]);
+                // Generate enum dynamically from capacity
+                typeString = generateCylinderTypeFromCapacity(capacity);
+              } else {
+                console.log(`Could not parse cylinder type: ${cylinderType}`);
+                continue;
+              }
             } else {
-              console.log(`Unknown cylinder type: ${cylinderType}`);
-              continue;
+              // If it's already a type string (e.g., "STANDARD_15KG"), extract capacity from it
+              typeString = cylinderType;
+              capacity = getCapacityFromTypeString(cylinderType);
             }
-
-            // Get capacity from type string
-            const capacity = typeString === 'DOMESTIC_11_8KG' ? 11.8 :
-                           typeString === 'STANDARD_15KG' ? 15.0 : 45.4;
 
             // Create empty cylinders in inventory
             const initialCylinderCount = await tx.cylinder.count();
@@ -336,7 +344,8 @@ export async function POST(request: NextRequest) {
               await tx.cylinder.create({
                 data: {
                   code,
-                  cylinderType: typeString, // Use string type directly
+                  cylinderType: typeString,
+                  typeName: typeName, // Store type name for proper grouping
                   capacity: capacity,
                   currentStatus: 'EMPTY',
                   location: 'Returned from Customer',
@@ -344,7 +353,7 @@ export async function POST(request: NextRequest) {
               });
             }
             
-            console.log(`Added ${quantity} empty ${cylinderType} cylinders to inventory`);
+            console.log(`Added ${quantity} empty ${cylinderType} cylinders to inventory (typeString: ${typeString}, capacity: ${capacity}kg)`);
           }
         }
       }

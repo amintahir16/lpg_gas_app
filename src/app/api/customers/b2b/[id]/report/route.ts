@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
 
 // Helper function to format currency
 function formatCurrency(amount: number): string {
@@ -31,14 +32,10 @@ function formatTransactionType(type: string): string {
   return typeMap[type] || type;
 }
 
-// Helper function to get cylinder type display name
+// Helper function to get cylinder type display name - uses dynamic utility
 function getCylinderTypeDisplay(type: string): string {
-  const typeMap: { [key: string]: string } = {
-    'DOMESTIC_11_8KG': 'Domestic (11.8kg)',
-    'STANDARD_15KG': 'Standard (15kg)',
-    'COMMERCIAL_45_4KG': 'Commercial (45.4kg)'
-  };
-  return typeMap[type] || type;
+  // Use dynamic utility function - works for any cylinder type
+  return getCylinderTypeDisplayName(type);
 }
 
 // Dynamic import to ensure proper loading in Next.js API routes

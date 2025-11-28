@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -70,23 +71,8 @@ export async function GET(request: NextRequest) {
       const full = typeStats.find(stat => stat.currentStatus === 'FULL')?._count.id || 0;
       const empty = typeStats.find(stat => stat.currentStatus === 'EMPTY')?._count.id || 0;
       
-      // Format type name for display (extract weight if available)
-      let displayType = type;
-      const weightMatch = type.match(/(\d+\.?\d*)/);
-      if (weightMatch) {
-        const weight = weightMatch[1];
-        if (type === 'DOMESTIC_11_8KG') {
-          displayType = 'Domestic (11.8kg)';
-        } else if (type === 'STANDARD_15KG') {
-          displayType = 'Standard (15kg)';
-        } else if (type === 'COMMERCIAL_45_4KG') {
-          displayType = 'Commercial (45.4kg)';
-        } else {
-          displayType = `Cylinder (${weight}kg)`;
-        }
-      } else {
-        displayType = type.replace(/_/g, ' ');
-      }
+      // Format type name for display using dynamic utility - works for any cylinder type
+      const displayType = getCylinderTypeDisplayName(type);
       
       return {
         type: displayType,

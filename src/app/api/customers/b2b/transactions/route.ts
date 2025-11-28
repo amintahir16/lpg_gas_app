@@ -142,8 +142,8 @@ export async function POST(request: NextRequest) {
             let buybackAmount = 0;
             let buybackTotal = 0;
             if (transactionType === 'BUYBACK' && item.remainingKg > 0 && item.originalSoldPrice > 0) {
-              const totalKg = item.cylinderType === 'DOMESTIC_11_8KG' ? 11.8 :
-                             item.cylinderType === 'STANDARD_15KG' ? 15 : 45.4;
+              // Get capacity dynamically from cylinder type - fully flexible
+              const totalKg = getCapacityFromTypeString(item.cylinderType);
               const remainingPercentage = item.remainingKg / totalKg;
               buybackAmount = item.originalSoldPrice * remainingPercentage * 0.6; // 60% buyback rate
               buybackTotal = buybackAmount * (item.emptyReturned || 0);

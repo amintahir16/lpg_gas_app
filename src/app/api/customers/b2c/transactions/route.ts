@@ -107,21 +107,8 @@ export async function POST(request: NextRequest) {
       return gasItems.reduce((total: number, item: any) => {
         if (!item.cylinderType) return total;
         
-        // Get cylinder weight based on type
-        let cylinderWeight = 0;
-        switch (item.cylinderType) {
-          case 'DOMESTIC_11_8KG':
-            cylinderWeight = 11.8;
-            break;
-          case 'STANDARD_15KG':
-            cylinderWeight = 15.0;
-            break;
-          case 'COMMERCIAL_45_4KG':
-            cylinderWeight = 45.4;
-            break;
-          default:
-            cylinderWeight = 15.0;
-        }
+        // Get cylinder weight dynamically from type - fully flexible
+        const cylinderWeight = getCapacityFromTypeString(item.cylinderType);
         
         // Calculate profit based on margin per kg: marginPerKg × cylinderWeight × quantity
         const marginPerKg = customer.marginCategory.marginPerKg;
@@ -169,21 +156,8 @@ export async function POST(request: NextRequest) {
             // Calculate profit margin based on margin per kg if margin category is available
             let profitMargin = totalPrice - totalCost; // Default fallback
             if (customer.marginCategory && item.cylinderType) {
-              // Get cylinder weight based on type
-              let cylinderWeight = 0;
-              switch (item.cylinderType) {
-                case 'DOMESTIC_11_8KG':
-                  cylinderWeight = 11.8;
-                  break;
-                case 'STANDARD_15KG':
-                  cylinderWeight = 15.0;
-                  break;
-                case 'COMMERCIAL_45_4KG':
-                  cylinderWeight = 45.4;
-                  break;
-                default:
-                  cylinderWeight = 15.0;
-              }
+              // Get cylinder weight dynamically from type - fully flexible
+              const cylinderWeight = getCapacityFromTypeString(item.cylinderType);
               
               // Calculate profit based on margin per kg: marginPerKg × cylinderWeight × quantity
               const marginPerKg = customer.marginCategory.marginPerKg;
