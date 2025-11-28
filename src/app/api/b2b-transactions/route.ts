@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { B2BTransactionType, CylinderType } from '@prisma/client';
+import { B2BTransactionType } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
@@ -311,22 +311,22 @@ export async function POST(request: NextRequest) {
           const cylinderType = item.cylinderType;
           
           if (quantity > 0 && cylinderType) {
-            // Map cylinder type to CylinderType enum
-            let mappedCylinderType: CylinderType;
-            switch (cylinderType) {
-              case 'Domestic (11.8kg)':
-                mappedCylinderType = CylinderType.DOMESTIC_11_8KG;
-                break;
-              case 'Standard (15kg)':
-                mappedCylinderType = CylinderType.STANDARD_15KG;
-                break;
-              case 'Commercial (45.4kg)':
-                mappedCylinderType = CylinderType.COMMERCIAL_45_4KG;
-                break;
-              default:
-                console.log(`Unknown cylinder type: ${cylinderType}`);
-                continue;
+            // Map display name to type string (e.g., "Domestic (11.8kg)" -> "DOMESTIC_11_8KG")
+            let typeString: string;
+            if (cylinderType.includes('Domestic') || cylinderType.includes('11.8')) {
+              typeString = 'DOMESTIC_11_8KG';
+            } else if (cylinderType.includes('Standard') || cylinderType.includes('15')) {
+              typeString = 'STANDARD_15KG';
+            } else if (cylinderType.includes('Commercial') || cylinderType.includes('45.4')) {
+              typeString = 'COMMERCIAL_45_4KG';
+            } else {
+              console.log(`Unknown cylinder type: ${cylinderType}`);
+              continue;
             }
+
+            // Get capacity from type string
+            const capacity = typeString === 'DOMESTIC_11_8KG' ? 11.8 :
+                           typeString === 'STANDARD_15KG' ? 15.0 : 45.4;
 
             // Create empty cylinders in inventory
             const initialCylinderCount = await tx.cylinder.count();
@@ -336,9 +336,8 @@ export async function POST(request: NextRequest) {
               await tx.cylinder.create({
                 data: {
                   code,
-                  cylinderType: mappedCylinderType,
-                  capacity: cylinderType === 'Domestic (11.8kg)' ? 11.8 :
-                           cylinderType === 'Standard (15kg)' ? 15.0 : 45.4,
+                  cylinderType: typeString, // Use string type directly
+                  capacity: capacity,
                   currentStatus: 'EMPTY',
                   location: 'Returned from Customer',
                 },

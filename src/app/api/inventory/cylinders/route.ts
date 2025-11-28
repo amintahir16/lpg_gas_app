@@ -17,8 +17,8 @@ export async function GET(request: NextRequest) {
 
     // Build status condition
     let statusCondition: any;
-    if (status) {
-      // If status filter is selected, use it (but never allow WITH_CUSTOMER)
+    if (status && status !== 'ALL') {
+      // If status filter is selected (and not "ALL"), use it (but never allow WITH_CUSTOMER)
       if (status === 'WITH_CUSTOMER') {
         // Don't allow filtering by WITH_CUSTOMER on this page - return empty results
         statusCondition = 'INVALID_STATUS_THAT_DOES_NOT_EXIST';
@@ -26,36 +26,102 @@ export async function GET(request: NextRequest) {
         statusCondition = status;
       }
     } else {
-      // No status filter - exclude WITH_CUSTOMER cylinders
+      // No status filter or "ALL" selected - exclude WITH_CUSTOMER cylinders
       statusCondition = { not: 'WITH_CUSTOMER' };
     }
 
-    // Build search condition
+    // Build type filter condition first (before combining with other conditions)
+    let typeFilterCondition: any = null;
+    
+    if (type && type !== 'ALL') {
+      // Check if type is a display name (e.g., "Special (10kg)", "Standard (15kg)") or type string (e.g., "STANDARD_15KG")
+      // If it contains parentheses, it's a display name - extract typeName and capacity
+      if (type.includes('(') && type.includes('kg)')) {
+        // Extract typeName and capacity from display name (e.g., "Special (10kg)" -> typeName: "Special", capacity: 10)
+        const nameMatch = type.match(/^([^(]+)\s*\((\d+\.?\d*)kg\)/);
+        if (nameMatch) {
+          const extractedTypeName = nameMatch[1].trim();
+          const capacity = parseFloat(nameMatch[2]);
+          
+          // Map standard display names to their enum values for filtering
+          let mappedCylinderType: string | null = null;
+          const typeNameLower = extractedTypeName.toLowerCase();
+          
+          if (typeNameLower.includes('domestic') && Math.abs(capacity - 11.8) < 0.1) {
+            mappedCylinderType = 'DOMESTIC_11_8KG';
+          } else if (typeNameLower.includes('standard') && Math.abs(capacity - 15.0) < 0.1) {
+            mappedCylinderType = 'STANDARD_15KG';
+          } else if (typeNameLower.includes('commercial') && Math.abs(capacity - 45.4) < 0.1) {
+            mappedCylinderType = 'COMMERCIAL_45_4KG';
+          } else if (Math.abs(capacity - 6.0) < 0.1) {
+            mappedCylinderType = 'CYLINDER_6KG';
+          } else if (Math.abs(capacity - 30.0) < 0.1) {
+            mappedCylinderType = 'CYLINDER_30KG';
+          }
+          
+          // For standard types, match by cylinderType + capacity (typeName might be null or different)
+          // For custom types, match by typeName + capacity
+          if (mappedCylinderType) {
+            // Standard type - match by cylinderType and capacity (works for both typeName=null and typeName=extractedTypeName)
+            typeFilterCondition = {
+              cylinderType: mappedCylinderType,
+              capacity: capacity
+            };
+          } else {
+            // Custom type - filter by typeName and capacity
+            typeFilterCondition = {
+              typeName: extractedTypeName,
+              capacity: capacity
+            };
+          }
+        } else {
+          // Fallback: filter by cylinderType string
+          typeFilterCondition = { cylinderType: type };
+        }
+      } else {
+        // It's a type string (e.g., "STANDARD_15KG", "CYLINDER_10KG"), filter by cylinderType
+        typeFilterCondition = { cylinderType: type };
+      }
+    }
+    // If type is "ALL" or empty, don't add any type filter (show all types)
+
+    // Build combined where clause with all conditions
+    const allConditions: any[] = [];
+    
+    // Add status condition
+    allConditions.push({ currentStatus: statusCondition });
+    
+    // Add type filter condition if exists
+    if (typeFilterCondition) {
+      allConditions.push(typeFilterCondition);
+    }
+    
+    // Add search condition if exists
     if (search) {
-      where.AND = [
-        {
-          OR: [
-            { code: { contains: search, mode: 'insensitive' } },
-            { location: { contains: search, mode: 'insensitive' } }
-          ]
-        },
-        { currentStatus: statusCondition }
-      ];
-    } else {
-      where.currentStatus = statusCondition;
+      allConditions.push({
+        OR: [
+          { code: { contains: search, mode: 'insensitive' } },
+          { location: { contains: search, mode: 'insensitive' } }
+        ]
+      });
     }
-
-    if (type) {
-      where.cylinderType = type;
-    }
-
-    if (location) {
+    
+    // Add location filter condition if exists
+    if (location && location !== 'ALL') {
       if (location === 'STORE') {
-        where.storeId = { not: null };
+        allConditions.push({ storeId: { not: null } });
       } else if (location === 'VEHICLE') {
-        where.vehicleId = { not: null };
+        allConditions.push({ vehicleId: { not: null } });
       }
       // Note: CUSTOMER location filter is ignored here as WITH_CUSTOMER cylinders are excluded
+    }
+    
+    // Combine all conditions with AND
+    if (allConditions.length > 0) {
+      where.AND = allConditions;
+    } else {
+      // Fallback: at least add status condition
+      where.currentStatus = statusCondition;
     }
 
     // Get cylinders with pagination
@@ -211,25 +277,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Handle custom cylinder types that may not be in the enum
-    // If the type doesn't exist in enum, use STANDARD_15KG as fallback
-    // The actual capacity is stored separately, so the correct value is preserved
-    let finalCylinderType = cylinderType;
-    const validEnumTypes = ['CYLINDER_6KG', 'DOMESTIC_11_8KG', 'STANDARD_15KG', 'CYLINDER_30KG', 'COMMERCIAL_45_4KG'];
-    
-    // Check if the cylinder type is a valid enum value
-    // If it's a custom type (e.g., CYLINDER_12KG), use fallback but keep the capacity
-    if (!validEnumTypes.includes(cylinderType)) {
-      // Custom type - use STANDARD_15KG as fallback enum value
-      // The actual capacity is stored in the capacity field, so it's preserved
-      finalCylinderType = 'STANDARD_15KG';
-      console.log(`Custom cylinder type "${cylinderType}" mapped to STANDARD_15KG enum. Actual capacity: ${capacity}kg`);
-    }
-
+    // Store the cylinder type directly as a string (no enum validation needed)
+    // The type is generated from capacity or mapped from known types
     const cylinder = await prisma.cylinder.create({
       data: {
         code: cylinderCode,
-        cylinderType: finalCylinderType as any, // Type assertion needed for custom types
+        cylinderType: cylinderType, // Store as string directly
         typeName: typeName || null, // Store original type name for display
         capacity: parseFloat(capacity),
         currentStatus: currentStatus || 'FULL',

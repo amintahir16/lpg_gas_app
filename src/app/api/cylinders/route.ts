@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { Prisma, CylinderStatus, CylinderType } from '@prisma/client';
+import { Prisma, CylinderStatus } from '@prisma/client';
 import { createCylinderAddedNotification } from '@/lib/notifications';
 
 export async function GET(request: NextRequest) {
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
         { location: { contains: search, mode: 'insensitive' as Prisma.QueryMode } }
       ] : undefined,
       currentStatus: status ? (status as CylinderStatus) : undefined,
-      cylinderType: type ? (type as CylinderType) : undefined
+      cylinderType: type ? type : undefined // Use string directly
     };
 
     const [cylinders, total] = await Promise.all([

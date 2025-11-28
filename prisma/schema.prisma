@@ -84,7 +84,7 @@ model B2CCustomer {
 model B2CCylinderHolding {
   id              String       @id @default(cuid())
   customerId      String
-  cylinderType    CylinderType
+  cylinderType    String       // Changed from enum to String to support unlimited custom types
   quantity        Int          @default(1)
   securityAmount  Decimal      @db.Decimal(10, 2)
   issueDate       DateTime     @default(now())
@@ -127,7 +127,7 @@ model B2CTransaction {
 model B2CTransactionGasItem {
   id            String         @id @default(cuid())
   transactionId String
-  cylinderType  CylinderType
+  cylinderType  String         // Changed from enum to String to support unlimited custom types
   quantity      Int
   pricePerItem  Decimal        @db.Decimal(10, 2)
   totalPrice    Decimal        @db.Decimal(10, 2)
@@ -142,7 +142,7 @@ model B2CTransactionGasItem {
 model B2CTransactionSecurityItem {
   id            String         @id @default(cuid())
   transactionId String
-  cylinderType  CylinderType
+  cylinderType  String         // Changed from enum to String to support unlimited custom types
   quantity      Int
   pricePerItem  Decimal        @db.Decimal(10, 2)
   totalPrice    Decimal        @db.Decimal(10, 2)
@@ -214,7 +214,7 @@ model VendorCategoryConfig {
 model Cylinder {
   id                  String            @id @default(cuid())
   code                String            @unique
-  cylinderType        CylinderType
+  cylinderType        String            // Changed from enum to String to support unlimited custom types
   typeName            String?           // Store original type name (e.g., "Special", "Domestic", "Custom")
   capacity            Decimal           @db.Decimal(5, 2)
   purchaseDate        DateTime?

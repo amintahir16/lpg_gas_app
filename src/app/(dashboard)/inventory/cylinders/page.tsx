@@ -42,6 +42,7 @@ interface Cylinder {
 
 interface CylinderTypeStats {
   type: string;
+  typeEnum?: string;
   full: number;
   empty: number;
   maintenance: number;
@@ -94,8 +95,8 @@ export default function CylindersInventoryPage() {
       setLoading(true);
       const params = new URLSearchParams({
         search: searchTerm,
-        status: statusFilter === 'ALL' ? '' : statusFilter,
-        type: typeFilter === 'ALL' ? '' : typeFilter,
+        status: statusFilter === 'ALL' ? 'ALL' : statusFilter, // Send 'ALL' explicitly
+        type: typeFilter === 'ALL' ? 'ALL' : typeFilter, // Send 'ALL' explicitly
         location: locationFilter === 'ALL' ? '' : locationFilter,
         page: pagination.page.toString(),
         limit: pagination.limit.toString()
@@ -124,7 +125,24 @@ export default function CylindersInventoryPage() {
       if (response.ok) {
         const data = await response.json();
         console.log('Cylinder type stats received:', data);
-        setCylinderTypeStats(data.stats || []);
+        // Deduplicate stats on frontend as well to prevent duplicates
+        const statsMap = new Map<string, typeof data.stats[0]>();
+        (data.stats || []).forEach((stat: typeof data.stats[0]) => {
+          const key = `${stat.type}-${stat.typeEnum || 'unknown'}`;
+          if (!statsMap.has(key)) {
+            statsMap.set(key, stat);
+          } else {
+            // Merge counts if duplicate found
+            const existing = statsMap.get(key)!;
+            existing.full += stat.full;
+            existing.empty += stat.empty;
+            existing.withCustomer += stat.withCustomer;
+            existing.retired += stat.retired;
+            existing.maintenance += stat.maintenance;
+            existing.total = existing.full + existing.empty + existing.retired + existing.maintenance;
+          }
+        });
+        setCylinderTypeStats(Array.from(statsMap.values()));
       } else {
         console.error('Failed to fetch stats, status:', response.status);
         const errorData = await response.json().catch(() => ({}));
@@ -150,8 +168,26 @@ export default function CylindersInventoryPage() {
     }
   };
 
-  // Get cylinder type options for dropdowns
-  const cylinderTypeOptions = getCylinderTypeOptions();
+  // Get cylinder type options for dropdowns - use stats to get all actual types including custom ones
+  // Create a unique key for each type combination to enable proper filtering
+  const typeFilterOptions = cylinderTypeStats.length > 0 
+    ? cylinderTypeStats.map((stat, index) => {
+        // Use the display name (type) as the value so API can filter by typeName + capacity
+        // The display name includes typeName and capacity, making it unique
+        const uniqueKey = `type-${stat.type}-${index}`;
+        return {
+          value: stat.type, // Use display type (e.g., "Special (10kg)") for API filtering
+          label: stat.type, // Use the display name from stats (e.g., "Special (10kg)", "Domestic (11.8kg)")
+          typeEnum: stat.typeEnum, // Keep for reference
+          key: uniqueKey // Unique key for React
+        };
+      })
+    : getCylinderTypeOptions().map((opt, index) => ({
+        value: opt.value, // For static options, use enum value
+        label: opt.label,
+        typeEnum: opt.value,
+        key: `static-type-${opt.value}-${index}`
+      }));
   
   const getTypeDisplayName = (type: string, capacity?: number, typeName?: string | null) => {
     // Priority 1: If typeName is provided (original name entered by user), use it with capacity
@@ -221,12 +257,27 @@ export default function CylindersInventoryPage() {
   const handleEditCylinder = (cylinder: Cylinder) => {
     setSelectedCylinder(cylinder);
     // Pre-populate the edit form with current typeName and capacity
-    const displayName = getTypeDisplayName(cylinder.cylinderType, cylinder.capacity, cylinder.typeName);
-    // Extract type name and capacity from display name (e.g., "Special (10kg)" -> "Special 10kg")
-    const typeName = cylinder.typeName || '';
     const capacity = cylinder.capacity || 0;
-    const initialValue = typeName ? `${typeName} ${capacity}kg` : `${capacity}kg`;
-    setEditTypeAndCapacity(initialValue);
+    
+    // If typeName exists, use it directly
+    if (cylinder.typeName && cylinder.typeName.trim()) {
+      const initialValue = `${cylinder.typeName.trim()} ${capacity}kg`;
+      setEditTypeAndCapacity(initialValue);
+    } else {
+      // If no typeName, extract from display name or use standard type name
+      const displayName = getTypeDisplayName(cylinder.cylinderType, cylinder.capacity, cylinder.typeName);
+      // Extract type name from display name (e.g., "Domestic (11.8kg)" -> "Domestic 11.8kg")
+      // Remove parentheses and "kg" suffix, then reconstruct
+      const nameMatch = displayName.match(/^([^(]+)\s*\(/);
+      if (nameMatch) {
+        const extractedName = nameMatch[1].trim();
+        const initialValue = `${extractedName} ${capacity}kg`;
+        setEditTypeAndCapacity(initialValue);
+      } else {
+        // Fallback: just use capacity
+        setEditTypeAndCapacity(`${capacity}kg`);
+      }
+    }
     setShowEditForm(true);
   };
 
@@ -435,6 +486,8 @@ export default function CylindersInventoryPage() {
       }
 
       // Refresh both cylinders list and statistics
+      // Clear stats first to prevent showing stale data
+      setCylinderTypeStats([]);
       await Promise.all([
         fetchCylinders(),
         fetchCylinderTypeStats()
@@ -484,36 +537,36 @@ export default function CylindersInventoryPage() {
 
       {/* Type Statistics */}
       {cylinderTypeStats.length > 0 ? (
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {cylinderTypeStats.map((stat, index) => (
-          <Card key={index} className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-semibold text-gray-600">
+          <Card key={`stat-${stat.type}-${stat.typeEnum || 'unknown'}-${index}`} className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-3">
+              <CardTitle className="text-xs font-semibold text-gray-600 truncate pr-1">
                 {stat.type}
               </CardTitle>
-              <CubeIcon className="w-5 h-5 text-gray-400" />
+              <CubeIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900 mb-3">{stat.total}</div>
-              <div className="space-y-2 text-sm">
+            <CardContent className="px-3 pb-3">
+              <div className="text-lg font-bold text-gray-900 mb-2">{stat.total}</div>
+              <div className="space-y-1.5 text-xs">
                 <div className="flex justify-between items-center">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <div className="flex items-center space-x-1.5">
+                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
                     <span className="text-green-600 font-medium">Full</span>
                   </div>
                   <span className="font-semibold text-gray-700">{stat.full}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                  <div className="flex items-center space-x-1.5">
+                    <div className="w-1.5 h-1.5 bg-orange-500 rounded-full"></div>
                     <span className="text-orange-600 font-medium">Empty</span>
                   </div>
                   <span className="font-semibold text-gray-700">{stat.empty}</span>
                 </div>
                 {stat.retired > 0 && (
                   <div className="flex justify-between items-center">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
+                    <div className="flex items-center space-x-1.5">
+                      <div className="w-1.5 h-1.5 bg-gray-500 rounded-full"></div>
                       <span className="text-gray-600 font-medium">Retired</span>
                     </div>
                     <span className="font-semibold text-gray-700">{stat.retired}</span>
@@ -553,7 +606,6 @@ export default function CylindersInventoryPage() {
               <option value="ALL">All Status</option>
               <option value="FULL">Full</option>
               <option value="EMPTY">Empty</option>
-              <option value="RETIRED">Retired</option>
             </select>
             <select 
               value={typeFilter} 
@@ -561,8 +613,8 @@ export default function CylindersInventoryPage() {
               className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="ALL">All Types</option>
-              {cylinderTypeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
+              {typeFilterOptions.map((option) => (
+                <option key={option.key || option.value} value={option.value}>
                   {option.label}
                 </option>
               ))}

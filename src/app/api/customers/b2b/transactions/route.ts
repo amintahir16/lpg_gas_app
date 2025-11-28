@@ -3,7 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { InventoryDeductionService } from '@/lib/inventory-deduction';
 import { prisma } from '@/lib/db';
-import { CylinderType, CylinderStatus } from '@prisma/client';
+import { CylinderStatus } from '@prisma/client';
+import { getCapacityFromTypeString } from '@/lib/cylinder-utils';
 
 export async function POST(request: NextRequest) {
   try {
@@ -300,20 +301,12 @@ export async function POST(request: NextRequest) {
           console.log(`Gas item: ${gasItem.cylinderType}, delivered: ${gasItem.delivered}, emptyReturned: ${gasItem.emptyReturned}`);
           if (gasItem.delivered > 0) {
             // Find and update cylinders from inventory
-            const cylinderType = gasItem.cylinderType;
-            let mappedCylinderType: CylinderType;
-            
-            switch (cylinderType) {
-              case 'DOMESTIC_11_8KG': mappedCylinderType = CylinderType.DOMESTIC_11_8KG; break;
-              case 'STANDARD_15KG': mappedCylinderType = CylinderType.STANDARD_15KG; break;
-              case 'COMMERCIAL_45_4KG': mappedCylinderType = CylinderType.COMMERCIAL_45_4KG; break;
-              default: console.log(`Unknown cylinder type: ${cylinderType}`); continue;
-            }
+            const cylinderType = gasItem.cylinderType; // Use string directly
 
             // Find available cylinders of this type
             const availableCylinders = await tx.cylinder.findMany({
               where: {
-                cylinderType: mappedCylinderType,
+                cylinderType: cylinderType, // Filter by string type
                 currentStatus: CylinderStatus.FULL
               },
               take: gasItem.delivered
@@ -393,18 +386,10 @@ export async function POST(request: NextRequest) {
             const cylinderType = gasItem.cylinderType;
             
             if (quantity > 0 && cylinderType) {
-              let mappedCylinderType: CylinderType;
-              switch (cylinderType) {
-                case 'DOMESTIC_11_8KG': mappedCylinderType = CylinderType.DOMESTIC_11_8KG; break;
-                case 'STANDARD_15KG': mappedCylinderType = CylinderType.STANDARD_15KG; break;
-                case 'COMMERCIAL_45_4KG': mappedCylinderType = CylinderType.COMMERCIAL_45_4KG; break;
-                default: console.log(`Unknown cylinder type: ${cylinderType}`); continue;
-              }
-
               // Find cylinders that are currently with this customer
               const cylindersWithCustomer = await tx.cylinder.findMany({
                 where: {
-                  cylinderType: mappedCylinderType,
+                  cylinderType: cylinderType, // Filter by string type
                   currentStatus: CylinderStatus.WITH_CUSTOMER,
                   location: { contains: customer.name }
                 },
@@ -445,8 +430,8 @@ export async function POST(request: NextRequest) {
                   await tx.cylinder.create({
                     data: {
                       code,
-                      cylinderType: mappedCylinderType,
-                      capacity: cylinderType === 'DOMESTIC_11_8KG' ? 11.8 : cylinderType === 'STANDARD_15KG' ? 15.0 : 45.4,
+                      cylinderType: cylinderType, // Use string type directly
+                      capacity: getCapacityFromTypeString(cylinderType),
                       currentStatus: CylinderStatus.EMPTY,
                       location: 'Store - Ready for Refill',
                     },

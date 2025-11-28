@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { CylinderType, CylinderStatus } from '@prisma/client';
+import { CylinderStatus } from '@prisma/client';
 import { InventoryDeductionService } from '@/lib/inventory-deduction';
 
 export async function POST(
@@ -79,22 +79,14 @@ export async function POST(
             // - Return cylinders from WITH_CUSTOMER back to FULL
             // - Delete cylinder holding records
             
-            const cylinderType = item.cylinderType;
-            let mappedCylinderType: CylinderType;
-            switch (cylinderType) {
-              case 'DOMESTIC_11_8KG': mappedCylinderType = CylinderType.DOMESTIC_11_8KG; break;
-              case 'STANDARD_15KG': mappedCylinderType = CylinderType.STANDARD_15KG; break;
-              case 'COMMERCIAL_45_4KG': mappedCylinderType = CylinderType.COMMERCIAL_45_4KG; break;
-              default: continue;
-            }
-
+            const cylinderType = item.cylinderType; // Use string directly
             const quantity = Number(item.quantity);
 
             // Find cylinders that are WITH_CUSTOMER for this customer
             // Location format is "B2C Customer: {customer.name}"
             const cylindersWithCustomer = await tx.cylinder.findMany({
               where: {
-                cylinderType: mappedCylinderType,
+                cylinderType: cylinderType, // Filter by string type
                 currentStatus: CylinderStatus.WITH_CUSTOMER,
                 location: { contains: `B2C Customer: ${customer.name}` }
               },
@@ -134,15 +126,7 @@ export async function POST(
             // - Mark holdings as not returned
             // - Return cylinders from EMPTY back to WITH_CUSTOMER (or mark holdings as active)
             
-            const cylinderType = item.cylinderType;
-            let mappedCylinderType: CylinderType;
-            switch (cylinderType) {
-              case 'DOMESTIC_11_8KG': mappedCylinderType = CylinderType.DOMESTIC_11_8KG; break;
-              case 'STANDARD_15KG': mappedCylinderType = CylinderType.STANDARD_15KG; break;
-              case 'COMMERCIAL_45_4KG': mappedCylinderType = CylinderType.COMMERCIAL_45_4KG; break;
-              default: continue;
-            }
-
+            const cylinderType = item.cylinderType; // Use string directly
             const quantity = Number(item.quantity);
 
             // Find returned holdings and mark them as not returned
@@ -183,7 +167,7 @@ export async function POST(
             // prioritize most recently updated cylinders (likely from this transaction)
             const emptyCylinders = await tx.cylinder.findMany({
               where: {
-                cylinderType: mappedCylinderType,
+                cylinderType: cylinderType, // Filter by string type
                 currentStatus: CylinderStatus.EMPTY,
                 location: 'Store - Ready for Refill'
               },

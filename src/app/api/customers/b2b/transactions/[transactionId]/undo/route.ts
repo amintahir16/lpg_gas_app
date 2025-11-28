@@ -184,21 +184,13 @@ export async function POST(
         
         for (const item of gasItems) {
           const quantity = Number(item.quantity);
-          const cylinderType = item.cylinderType;
-          
-          let mappedCylinderType: CylinderType;
-          switch (cylinderType) {
-            case 'DOMESTIC_11_8KG': mappedCylinderType = CylinderType.DOMESTIC_11_8KG; break;
-            case 'STANDARD_15KG': mappedCylinderType = CylinderType.STANDARD_15KG; break;
-            case 'COMMERCIAL_45_4KG': mappedCylinderType = CylinderType.COMMERCIAL_45_4KG; break;
-            default: continue;
-          }
+          const cylinderType = item.cylinderType; // Use string directly
 
           // Find cylinders that are WITH_CUSTOMER for this customer
           // Order by most recent first (or by some consistent order) to match transaction order
           const cylindersWithCustomer = await tx.cylinder.findMany({
             where: {
-              cylinderType: mappedCylinderType,
+              cylinderType: cylinderType, // Filter by string type
               currentStatus: CylinderStatus.WITH_CUSTOMER,
               location: { contains: customer.name }
             },
@@ -233,20 +225,12 @@ export async function POST(
         
         for (const item of returnedCylinders) {
           const quantity = Number(item.quantity);
-          const cylinderType = item.cylinderType;
-          
-          let mappedCylinderType: CylinderType;
-          switch (cylinderType) {
-            case 'DOMESTIC_11_8KG': mappedCylinderType = CylinderType.DOMESTIC_11_8KG; break;
-            case 'STANDARD_15KG': mappedCylinderType = CylinderType.STANDARD_15KG; break;
-            case 'COMMERCIAL_45_4KG': mappedCylinderType = CylinderType.COMMERCIAL_45_4KG; break;
-            default: continue;
-          }
+          const cylinderType = item.cylinderType; // Use string directly
 
           // Find EMPTY cylinders in store (these were added back during the return)
           const emptyCylinders = await tx.cylinder.findMany({
             where: {
-              cylinderType: mappedCylinderType,
+              cylinderType: cylinderType, // Filter by string type
               currentStatus: CylinderStatus.EMPTY,
               location: 'Store - Ready for Refill'
             },
@@ -363,20 +347,12 @@ export async function POST(
         
         for (const item of gasItems) {
           const quantity = Number(item.quantity);
-          const cylinderType = item.cylinderType;
-          
-          let mappedCylinderType: CylinderType;
-          switch (cylinderType) {
-            case 'DOMESTIC_11_8KG': mappedCylinderType = CylinderType.DOMESTIC_11_8KG; break;
-            case 'STANDARD_15KG': mappedCylinderType = CylinderType.STANDARD_15KG; break;
-            case 'COMMERCIAL_45_4KG': mappedCylinderType = CylinderType.COMMERCIAL_45_4KG; break;
-            default: continue;
-          }
+          const cylinderType = item.cylinderType; // Use string directly
 
           // Find EMPTY cylinders in store (prioritize most recently updated - likely from this transaction)
           const emptyCylinders = await tx.cylinder.findMany({
             where: {
-              cylinderType: mappedCylinderType,
+              cylinderType: cylinderType, // Filter by string type
               currentStatus: CylinderStatus.EMPTY,
               location: 'Store - Ready for Refill'
             },

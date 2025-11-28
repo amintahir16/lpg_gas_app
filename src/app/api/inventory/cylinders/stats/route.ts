@@ -97,9 +97,30 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    // Deduplicate stats by display type to prevent duplicates
+    // This can happen if the same combination appears multiple times
+    const uniqueStatsMap = new Map<string, typeof processedStats[0]>();
+    processedStats.forEach(stat => {
+      const key = stat.type; // Use display type as unique key
+      if (!uniqueStatsMap.has(key)) {
+        uniqueStatsMap.set(key, stat);
+      } else {
+        // If duplicate exists, merge the counts
+        const existing = uniqueStatsMap.get(key)!;
+        existing.full += stat.full;
+        existing.empty += stat.empty;
+        existing.withCustomer += stat.withCustomer;
+        existing.retired += stat.retired;
+        existing.maintenance += stat.maintenance;
+        existing.total = existing.full + existing.empty + existing.retired + existing.maintenance;
+      }
+    });
+
+    const finalStats = Array.from(uniqueStatsMap.values());
+
     return NextResponse.json({
       success: true,
-      stats: processedStats
+      stats: finalStats
     });
   } catch (error) {
     console.error('Error fetching cylinder type stats:', error);

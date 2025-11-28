@@ -80,3 +80,20 @@ export function isValidCylinderCapacity(capacity: number): boolean {
   return capacity > 0 && capacity <= 100;
 }
 
+/**
+ * Get capacity from cylinder type string
+ * Handles both standard types (DOMESTIC_11_8KG) and custom types (CYLINDER_10KG)
+ */
+export function getCapacityFromTypeString(type: string): number {
+  // Check for standard type names
+  if (type.includes('DOMESTIC') || type.includes('11_8')) return 11.8;
+  if (type.includes('STANDARD') || type.includes('15')) return 15.0;
+  if (type.includes('COMMERCIAL') || type.includes('45_4')) return 45.4;
+  if (type.includes('6') && !type.includes('11_8') && !type.includes('15') && !type.includes('30') && !type.includes('45_4')) return 6.0;
+  if (type.includes('30')) return 30.0;
+  
+  // Extract capacity from type string like "CYLINDER_10KG" -> 10
+  const match = type.match(/(\d+\.?\d*)/);
+  return match ? parseFloat(match[1]) : 15.0; // Default to 15 if can't determine
+}
+

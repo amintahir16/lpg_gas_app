@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { CylinderType } from '@prisma/client';
 
 export async function PUT(
   request: NextRequest,
@@ -11,24 +10,14 @@ export async function PUT(
     const body = await request.json();
     const { typeName, cylinderType, capacity, currentStatus, location, storeId, vehicleId, purchaseDate, purchasePrice, lastMaintenanceDate, nextMaintenanceDate } = body;
 
-    // Handle custom cylinder types that may not be in the enum
-    let finalCylinderType = cylinderType;
-    const validEnumTypes = ['CYLINDER_6KG', 'DOMESTIC_11_8KG', 'STANDARD_15KG', 'CYLINDER_30KG', 'COMMERCIAL_45_4KG'];
-    
-    // Check if the cylinder type is a valid enum value
-    if (!validEnumTypes.includes(cylinderType)) {
-      // Custom type - use STANDARD_15KG as fallback enum value
-      finalCylinderType = 'STANDARD_15KG';
-      console.log(`Custom cylinder type "${cylinderType}" mapped to STANDARD_15KG enum. Actual capacity: ${capacity}kg`);
-    }
-
+    // Store the cylinder type directly as a string (no enum validation needed)
     const cylinder = await prisma.cylinder.update({
       where: {
         id
       },
       data: {
         typeName: typeName || null, // Store original type name for display
-        cylinderType: finalCylinderType as CylinderType,
+        cylinderType: cylinderType, // Store as string directly
         capacity: parseFloat(capacity),
         currentStatus,
         location,
