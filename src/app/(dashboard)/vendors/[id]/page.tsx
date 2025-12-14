@@ -298,6 +298,50 @@ export default function VendorDetailPage() {
     notes: '',
     paidAmount: 0
   });
+  // Price per 11.8kg for gas purchase - used to calculate unit prices for all cylinder types
+  const [pricePer11_8kg, setPricePer11_8kg] = useState<number>(0);
+
+  // Calculate unit price based on price per 11.8kg and cylinder capacity
+  const calculateUnitPriceFromBase = (itemName: string, basePrice: number): number => {
+    if (!itemName || !basePrice || basePrice <= 0) return 0;
+    
+    const name = itemName.toLowerCase();
+    // Extract capacity from item name (handles patterns like "6kg", "11.8kg", "15kg", "30kg", "45.4kg", etc.)
+    const weightMatch = name.match(/(\d+\.?\d*)\s*kg/i);
+    
+    if (weightMatch) {
+      const capacity = parseFloat(weightMatch[1]);
+      if (!isNaN(capacity) && capacity > 0) {
+        // Calculate proportional price: (capacity / 11.8) * basePrice
+        const calculatedPrice = (capacity / 11.8) * basePrice;
+        // Round to 2 decimal places
+        return Math.round(calculatedPrice * 100) / 100;
+      }
+    }
+    
+    return 0;
+  };
+
+  // Update unit prices for all items when base price changes
+  const updateUnitPricesFromBase = (basePrice: number) => {
+    if (!isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
+      return;
+    }
+    
+    const updatedItems = purchaseItems.map(item => {
+      if (item.itemName && item.itemName.trim()) {
+        const calculatedPrice = calculateUnitPriceFromBase(item.itemName, basePrice);
+        return {
+          ...item,
+          unitPrice: calculatedPrice,
+          totalPrice: Number(item.quantity) * calculatedPrice
+        };
+      }
+      return item;
+    });
+    
+    setPurchaseItems(updatedItems);
+  };
   const [usedCodes, setUsedCodes] = useState<Set<string>>(new Set());
 
   // Auto-populate purchase items when vendor items are loaded
@@ -369,9 +413,11 @@ export default function VendorDetailPage() {
     if (vendor && purchaseItems.length === 0) {
       if (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
         setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '', status: 'EMPTY' }]);
-      } else if (vendor?.category?.slug === 'gas_purchase') {
-        setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '' }]);
-      } else if (vendor?.category?.slug === 'vaporizer_purchase') {
+                        } else if (vendor?.category?.slug === 'gas_purchase') {
+                          setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '' }]);
+                          // Reset price per 11.8kg
+                          setPricePer11_8kg(0);
+                        } else if (vendor?.category?.slug === 'vaporizer_purchase') {
         setPurchaseItems([...defaultVaporizerItems]);
       } else if (vendor?.category?.slug === 'accessories_purchase') {
         setPurchaseItems([...defaultAccessoriesItems]);
@@ -747,6 +793,8 @@ export default function VendorDetailPage() {
     // Initialize with one empty item for gas purchase, or reset to trigger auto-population for others
     if (vendor?.category?.slug === 'gas_purchase') {
       setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '' }]);
+      // Reset price per 11.8kg when opening form
+      setPricePer11_8kg(0);
       // Fetch empty cylinders when opening gas purchase form
       fetchEmptyCylinders();
     } else if (vendor?.category?.slug === 'accessories_purchase') {
@@ -808,17 +856,23 @@ export default function VendorDetailPage() {
         Number(newItems[index].quantity) * Number(newItems[index].unitPrice);
     }
 
-    // For gas purchase, fetch empty cylinders when item is selected or quantity changes
-    if (isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
-      if (field === 'itemName' && value) {
-        // Fetch empty cylinders when item is selected and wait for it to complete
-        fetchEmptyCylinders().then((cylinders) => {
-          if (cylinders) {
-            // Update items to trigger re-render and show max quantity
-            setPurchaseItems([...newItems]);
-          }
-        });
-      } else if (field === 'quantity' && value > 0 && newItems[index].itemName) {
+      // For gas purchase, fetch empty cylinders when item is selected or quantity changes
+      if (isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
+        if (field === 'itemName' && value) {
+          // Fetch empty cylinders when item is selected and wait for it to complete
+          fetchEmptyCylinders().then((cylinders) => {
+            if (cylinders) {
+              // Auto-calculate unit price if base price is set
+              if (pricePer11_8kg > 0) {
+                const calculatedPrice = calculateUnitPriceFromBase(value, pricePer11_8kg);
+                newItems[index].unitPrice = calculatedPrice;
+                newItems[index].totalPrice = Number(newItems[index].quantity) * calculatedPrice;
+              }
+              // Update items to trigger re-render and show max quantity
+              setPurchaseItems([...newItems]);
+            }
+          });
+        } else if (field === 'quantity' && value > 0 && newItems[index].itemName) {
         // Fetch empty cylinders first, then validate quantity
         fetchEmptyCylinders().then((cylinders) => {
           if (cylinders) {
@@ -1094,6 +1148,8 @@ export default function VendorDetailPage() {
       if (vendor?.category?.slug === 'gas_purchase') {
         // Start with one empty item for gas purchase
         setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '' }]);
+        // Reset price per 11.8kg
+        setPricePer11_8kg(0);
       } else if (vendor?.category?.slug === 'accessories_purchase') {
         // Start with one empty item for accessories
         setPurchaseItems([{ itemName: '', category: '', quantity: 0, unitPrice: 0, totalPrice: 0, cylinderCodes: '' }]);
@@ -1440,7 +1496,13 @@ export default function VendorDetailPage() {
                 <option value="year">This Year</option>
               </select>
               <Button
-                onClick={showPurchaseForm ? () => setShowPurchaseForm(false) : handleOpenPurchaseForm}
+                onClick={showPurchaseForm ? () => {
+                  setShowPurchaseForm(false);
+                  // Reset price per 11.8kg when canceling
+                  if (vendor?.category?.slug === 'gas_purchase') {
+                    setPricePer11_8kg(0);
+                  }
+                } : handleOpenPurchaseForm}
                 className="flex items-center gap-2"
               >
                 <PlusIcon className="w-5 h-5" />
@@ -1486,6 +1548,32 @@ export default function VendorDetailPage() {
                       />
                     </div>
                   </div>
+
+                  {/* Price Per 11.8kg - Only for gas purchase */}
+                  {vendor?.category?.slug === 'gas_purchase' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Price Per 11.8kg
+                      </label>
+                      <Input
+                        type="number"
+                        value={pricePer11_8kg}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value) || 0;
+                          setPricePer11_8kg(value);
+                          // Auto-update unit prices for all items
+                          updateUnitPricesFromBase(value);
+                        }}
+                        placeholder="Enter price per 11.8kg"
+                        min="0"
+                        step="0.5"
+                        className="max-w-xs"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Unit prices for all cylinder types will be calculated based on this base price
+                      </p>
+                    </div>
+                  )}
 
                   <div>
                     {vendor?.category?.slug === 'accessories_purchase' ? (
@@ -1752,16 +1840,28 @@ export default function VendorDetailPage() {
                                     <Input
                                       type="number"
                                       value={item.unitPrice}
-                                      onChange={(e) => handlePurchaseItemChange(
-                                        index,
-                                        'unitPrice',
-                                        e.target.value
-                                      )}
+                                      onChange={(e) => {
+                                        // If price per 11.8kg is set, don't allow manual editing
+                                        // Otherwise allow manual entry
+                                        if (pricePer11_8kg > 0) {
+                                          // Recalculate from base price
+                                          const calculatedPrice = calculateUnitPriceFromBase(item.itemName, pricePer11_8kg);
+                                          handlePurchaseItemChange(index, 'unitPrice', calculatedPrice);
+                                        } else {
+                                          handlePurchaseItemChange(index, 'unitPrice', e.target.value);
+                                        }
+                                      }}
                                       placeholder="Enter price per unit"
                                       min="0"
-                                      step="1"
+                                      step="0.01"
                                       className="text-center border-0 focus:ring-1 bg-transparent"
+                                      readOnly={pricePer11_8kg > 0 && item.itemName ? true : false}
                                     />
+                                    {pricePer11_8kg > 0 && item.itemName && (
+                                      <p className="text-xs text-gray-500 text-center mt-1">
+                                        Auto-calculated
+                                      </p>
+                                    )}
                                   </td>
                                   <td className="border border-gray-300 px-4 py-2 text-center font-medium">
                                     {formatCurrency(item.totalPrice)}
@@ -2198,6 +2298,8 @@ export default function VendorDetailPage() {
                           setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '', status: 'EMPTY' }]);
                         } else if (vendor?.category?.slug === 'gas_purchase') {
                           setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '' }]);
+                          // Reset price per 11.8kg
+                          setPricePer11_8kg(0);
                         } else if (vendor?.category?.slug === 'vaporizer_purchase') {
                           setPurchaseItems(defaultVaporizerItems);
                         } else if (vendor?.category?.slug === 'accessories_purchase') {
