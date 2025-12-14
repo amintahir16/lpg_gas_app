@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
         displayType = `${trimmedTypeName} (${capacity !== null ? capacity : 'N/A'}kg)`;
       } else if (capacity !== null) {
         // No typeName but have capacity - use generic format with actual capacity
-        displayType = `Cylinder (${capacity}kg)`;
+          displayType = `Cylinder (${capacity}kg)`;
       } else {
         // Fallback to utility function (extracts capacity from enum)
         displayType = getCylinderTypeDisplayName(type);

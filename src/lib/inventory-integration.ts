@@ -70,12 +70,20 @@ export class InventoryIntegrationService {
       return;
     }
 
-    // For non-gas vendors, use item name detection
+    // Check if this is a cylinder purchase vendor
+    // If vendor is a cylinder purchase vendor, ALL items should be processed as cylinders
+    if (this.isCylinderPurchaseVendor(vendorCategory)) {
+      console.log(`📦 Processing as cylinder purchase (vendor category: ${vendorCategory})`);
+      await this.processCylinderPurchase(item);
+      return;
+    }
+
+    // For other vendors, use item name detection as fallback
     console.log(`🔍 Is cylinder item: ${this.isCylinderItem(itemName)}`);
     console.log(`🔍 Is gas item: ${this.isGasItem(itemName)}`);
 
     if (this.isCylinderItem(itemName)) {
-      console.log(`📦 Processing as cylinder purchase`);
+      console.log(`📦 Processing as cylinder purchase (detected from item name)`);
       await this.processCylinderPurchase(item);
     } else {
       console.log(`📦 Processing as generic product`);
@@ -133,6 +141,27 @@ export class InventoryIntegrationService {
     ];
     
     return vaporizerPatterns.some(pattern => normalizedSlug.includes(pattern));
+  }
+
+  /**
+   * Check if vendor is a cylinder purchase vendor
+   * If vendor is a cylinder purchase vendor, ALL items should be processed as cylinders
+   * regardless of item name (e.g., "plastic 12kg", "commercial 45.4kg", etc.)
+   */
+  private static isCylinderPurchaseVendor(categorySlug?: string): boolean {
+    if (!categorySlug) return false;
+    
+    const normalizedSlug = categorySlug.toLowerCase().replace(/[_-]/g, '');
+    const cylinderPurchasePatterns = [
+      'cylinderpurchase',
+      'cylinderspurchase',
+      'cylinder_purchase',
+      'cylinders_purchase',
+      'cylinderpurchases',
+      'cylinderspurchases'
+    ];
+    
+    return cylinderPurchasePatterns.some(pattern => normalizedSlug.includes(pattern));
   }
 
   /**

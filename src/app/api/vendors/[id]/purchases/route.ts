@@ -146,6 +146,37 @@ export async function POST(
     
     // Use database transaction to ensure both purchase and inventory updates succeed
     const purchase = await prisma.$transaction(async (tx) => {
+      // Get vendor category first to determine the correct category enum
+      const vendor = await tx.vendor.findUnique({
+        where: { id },
+        include: { category: true }
+      });
+
+      if (!vendor) {
+        throw new Error('Vendor not found');
+      }
+
+      // Map vendor category slug to VendorCategory enum
+      const getCategoryEnum = (slug: string | null | undefined): string => {
+        if (!slug) return 'GAS_PURCHASE'; // Default fallback
+        
+        const slugLower = slug.toLowerCase();
+        if (slugLower.includes('cylinder') || slugLower === 'cylinder_purchase') {
+          return 'CYLINDER_PURCHASE';
+        } else if (slugLower.includes('gas') || slugLower === 'gas_purchase') {
+          return 'GAS_PURCHASE';
+        } else if (slugLower.includes('vaporizer') || slugLower === 'vaporizer_purchase') {
+          return 'VAPORIZER_PURCHASE';
+        } else if (slugLower.includes('accessories') || slugLower === 'accessories_purchase') {
+          return 'ACCESSORIES_PURCHASE';
+        } else if (slugLower.includes('valve') || slugLower === 'valves_purchase') {
+          return 'VALVES_PURCHASE';
+        }
+        return 'GAS_PURCHASE'; // Default fallback
+      };
+
+      const categoryEnum = getCategoryEnum(vendor.category?.slug);
+
       // Create individual purchase entries for each item
       const purchaseEntries = await Promise.all(
         items.map((item: any) =>
@@ -153,7 +184,7 @@ export async function POST(
             data: {
               vendorId: id,
               userId: session.user.id,
-              category: 'GAS_PURCHASE', // Default category, can be made dynamic
+              category: categoryEnum as any,
               itemName: item.itemName,
               itemDescription: item.itemDescription || null,
               quantity: Number(item.quantity),
@@ -183,15 +214,9 @@ export async function POST(
         });
       }
 
-      // Get vendor category for inventory integration
-      const vendor = await tx.vendor.findUnique({
-        where: { id },
-        include: { category: true }
-      });
-
       // Integrate purchased items with inventory system
       try {
-        await InventoryIntegrationService.processPurchaseItems(items, vendor?.category?.slug);
+        await InventoryIntegrationService.processPurchaseItems(items, vendor.category?.slug);
         console.log('✅ Inventory integration completed successfully');
       } catch (inventoryError) {
         console.error('❌ Inventory integration failed:', inventoryError);

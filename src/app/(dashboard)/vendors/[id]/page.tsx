@@ -19,6 +19,7 @@ import {
 } from '@heroicons/react/24/outline';
 import VendorPaymentModal from '@/components/VendorPaymentModal';
 import VendorExportModal from '@/components/VendorExportModal';
+import { generateCylinderTypeFromCapacity } from '@/lib/cylinder-utils';
 
 interface Vendor {
   id: string;
@@ -262,6 +263,11 @@ export default function VendorDetailPage() {
       return [{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '' }];
     }
     
+    // For cylinder purchase, always start with one empty item row (matching gas purchase behavior)
+    if (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
+      return [{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '', status: 'EMPTY' }];
+    }
+    
     // For other categories, use actual vendor items from database if available
     if (vendor && vendorItems.length > 0) {
       return vendorItems.map(item => ({
@@ -277,9 +283,7 @@ export default function VendorDetailPage() {
     
     // Only use hardcoded fallback if no vendor items are available
     if (vendor) {
-      if (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
-        return defaultCylinderItems;
-      } else if (vendor?.category?.slug === 'vaporizer_purchase') {
+      if (vendor?.category?.slug === 'vaporizer_purchase') {
         return defaultVaporizerItems;
       }
     }
@@ -330,6 +334,11 @@ export default function VendorDetailPage() {
     if (vendor?.category?.slug === 'gas_purchase') {
       // Always start with one empty item row
       setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '' }]);
+      // Fetch empty cylinders when form is initialized for gas purchase
+      fetchEmptyCylinders();
+    } else if (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
+      // For cylinder purchase, always start with one empty item row (matching gas purchase behavior)
+      setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '', status: 'EMPTY' }]);
     } else if (vendor?.category?.slug === 'accessories_purchase') {
       // For accessories, start with empty item
       setPurchaseItems([{ itemName: '', category: '', quantity: 0, unitPrice: 0, totalPrice: 0, cylinderCodes: '' }]);
@@ -347,9 +356,7 @@ export default function VendorDetailPage() {
       setPurchaseItems(mappedItems);
     } else {
       // Fallback to hardcoded items if no vendor items
-      if (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
-        setPurchaseItems([...defaultCylinderItems]);
-      } else if (vendor?.category?.slug === 'vaporizer_purchase') {
+      if (vendor?.category?.slug === 'vaporizer_purchase') {
         setPurchaseItems([...defaultVaporizerItems]);
       } else {
         setPurchaseItems([{ itemName: '', quantity: 1, unitPrice: 0, totalPrice: 0 }]);
@@ -361,9 +368,9 @@ export default function VendorDetailPage() {
   useEffect(() => {
     if (vendor && purchaseItems.length === 0) {
       if (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
-        setPurchaseItems([...defaultCylinderItems]);
+        setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '', status: 'EMPTY' }]);
       } else if (vendor?.category?.slug === 'gas_purchase') {
-        setPurchaseItems([...defaultGasItems]);
+        setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '' }]);
       } else if (vendor?.category?.slug === 'vaporizer_purchase') {
         setPurchaseItems([...defaultVaporizerItems]);
       } else if (vendor?.category?.slug === 'accessories_purchase') {
@@ -371,6 +378,20 @@ export default function VendorDetailPage() {
       }
     }
   }, [vendor, purchaseItems.length]);
+
+  // Refetch empty cylinders when gas purchase items change (itemName selected)
+  useEffect(() => {
+    if (isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && showPurchaseForm) {
+      const hasItemSelected = purchaseItems.some(item => item.itemName && item.itemName.trim());
+      if (hasItemSelected) {
+        // Debounce the fetch to avoid too many calls
+        const timeoutId = setTimeout(() => {
+          fetchEmptyCylinders();
+        }, 300);
+        return () => clearTimeout(timeoutId);
+      }
+    }
+  }, [purchaseItems.map(item => item.itemName).join(','), showPurchaseForm, vendor?.category?.slug]);
 
   const fetchVendor = async () => {
     try {
@@ -390,11 +411,14 @@ export default function VendorDetailPage() {
       const response = await fetch('/api/inventory/empty-cylinders');
       if (!response.ok) throw new Error('Failed to fetch empty cylinders');
       const data = await response.json();
-      setEmptyCylinders(data.cylinders);
-      return data.cylinders; // Return the data for validation
+      console.log('📦 Fetched empty cylinders:', data.cylinders);
+      console.log('📦 Available types:', Object.keys(data.cylinders || {}));
+      setEmptyCylinders(data.cylinders || {});
+      return data.cylinders || {}; // Return the data for validation
     } catch (error) {
       console.error('Error fetching empty cylinders:', error);
-      return null;
+      setEmptyCylinders({});
+      return {};
     }
   };
 
@@ -433,8 +457,8 @@ export default function VendorDetailPage() {
     }
   };
 
-  // Filter purchase entries based on selected period
-  const getFilteredPurchaseEntries = () => {
+  // Group purchase entries by invoice number
+  const getGroupedPurchaseEntries = () => {
     if (!vendor?.purchase_entries) return [];
     
     const now = new Date();
@@ -467,8 +491,43 @@ export default function VendorDetailPage() {
       }
     });
     
-    return filtered;
+    // Group entries by invoice number
+    const grouped = filtered.reduce((acc, entry) => {
+      const invoiceNumber = entry.invoiceNumber || `no-invoice-${entry.id}`;
+      if (!acc[invoiceNumber]) {
+        acc[invoiceNumber] = {
+          id: entry.id, // Use first entry's ID as the group ID
+          invoiceNumber: entry.invoiceNumber,
+          purchaseDate: entry.purchaseDate,
+          status: entry.status,
+          notes: entry.notes,
+          items: [],
+          totalPrice: 0
+        };
+      }
+      acc[invoiceNumber].items.push(entry);
+      acc[invoiceNumber].totalPrice += Number(entry.totalPrice);
+      // Use the earliest date if multiple dates exist
+      if (new Date(entry.purchaseDate) < new Date(acc[invoiceNumber].purchaseDate)) {
+        acc[invoiceNumber].purchaseDate = entry.purchaseDate;
+      }
+      // If any entry is PAID, mark group as PAID; if any is PARTIAL, mark as PARTIAL
+      if (entry.status === 'PAID') {
+        acc[invoiceNumber].status = 'PAID';
+      } else if (entry.status === 'PARTIAL' && acc[invoiceNumber].status !== 'PAID') {
+        acc[invoiceNumber].status = 'PARTIAL';
+      }
+      return acc;
+    }, {} as Record<string, any>);
+    
+    // Convert to array and sort by date (newest first)
+    return Object.values(grouped).sort((a: any, b: any) => 
+      new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime()
+    );
   };
+  
+  // Keep the old function name for backward compatibility
+  const getFilteredPurchaseEntries = getGroupedPurchaseEntries;
 
   // Filter payment history based on selected report period
   const getFilteredPaymentHistory = () => {
@@ -752,8 +811,13 @@ export default function VendorDetailPage() {
     // For gas purchase, fetch empty cylinders when item is selected or quantity changes
     if (isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
       if (field === 'itemName' && value) {
-        // Fetch empty cylinders when item is selected
-        fetchEmptyCylinders();
+        // Fetch empty cylinders when item is selected and wait for it to complete
+        fetchEmptyCylinders().then((cylinders) => {
+          if (cylinders) {
+            // Update items to trigger re-render and show max quantity
+            setPurchaseItems([...newItems]);
+          }
+        });
       } else if (field === 'quantity' && value > 0 && newItems[index].itemName) {
         // Fetch empty cylinders first, then validate quantity
         fetchEmptyCylinders().then((cylinders) => {
@@ -768,6 +832,7 @@ export default function VendorDetailPage() {
             }
             
             console.log(`🔍 Validation: ${itemName}, Cylinder Type: ${cylinderType}, Requested: ${value}, Available: ${maxQuantity}`);
+            console.log(`🔍 Available cylinder types:`, Object.keys(cylinders));
             
             // If quantity exceeds available, automatically clamp to max (no alert, just enforce)
             if (maxQuantity > 0 && Number(value) > maxQuantity) {
@@ -783,52 +848,82 @@ export default function VendorDetailPage() {
     setPurchaseItems(newItems);
   };
 
-  // Helper function to get max quantity for gas purchase items
   // Helper function to extract cylinder type enum from item name
+  // Uses the same logic as backend (generateCylinderTypeFromCapacity) for consistency
   // Dynamically matches any weight pattern (6kg, 11.8kg, 15kg, 30kg, 45.4kg, etc.)
-  // Also tries to match by checking available cylinder types in emptyCylinders
   const getCylinderTypeFromItemName = (itemName: string): string | null => {
     if (!itemName) return null;
     
     const name = itemName.toLowerCase();
     
-    // Extract weight from item name (handles patterns like "6kg", "11.8kg", "15kg", "30kg", "45.4kg")
+    // Extract weight/capacity from item name (handles patterns like "6kg", "11.8kg", "15kg", "30kg", "45.4kg", etc.)
+    // Also handles formats like "Commercial (45.4kg) Gas", "commercial 45.4kg", etc.
     const weightMatch = name.match(/(\d+\.?\d*)\s*kg/i);
     
     if (weightMatch) {
-      const weight = parseFloat(weightMatch[1]);
+      const capacity = parseFloat(weightMatch[1]);
       
-      // Map common weights to cylinder types (includes new types: 6kg, 30kg)
-      if (Math.abs(weight - 6) < 0.1) {
-        return 'CYLINDER_6KG';
-      } else if (Math.abs(weight - 11.8) < 0.1 || name.includes('domestic')) {
-        return 'DOMESTIC_11_8KG';
-      } else if (Math.abs(weight - 15) < 0.1 || name.includes('standard')) {
-        return 'STANDARD_15KG';
-      } else if (Math.abs(weight - 30) < 0.1) {
-        return 'CYLINDER_30KG';
-      } else if (Math.abs(weight - 45.4) < 0.1 || name.includes('commercial')) {
-        return 'COMMERCIAL_45_4KG';
+      // Validate capacity
+      if (isNaN(capacity) || capacity <= 0) {
+        console.log(`⚠️ Invalid capacity extracted from item name: ${itemName} (capacity: ${capacity})`);
+        return null;
+      }
+      
+      // Use the same utility function as backend for consistency
+      // This generates enum like: CYLINDER_45_4KG, CYLINDER_11_8KG, etc.
+      const generatedType = generateCylinderTypeFromCapacity(capacity);
+      
+      console.log(`🔍 Extracted capacity: ${capacity}kg from "${itemName}" -> Generated type: "${generatedType}"`);
+      
+      // Check if this generated type exists in emptyCylinders
+      if (emptyCylinders[generatedType]) {
+        return generatedType;
+      }
+      
+      // Also check for legacy enum formats (DOMESTIC_11_8KG, STANDARD_15KG, COMMERCIAL_45_4KG)
+      // Map common weights to legacy types for backward compatibility
+      if (Math.abs(capacity - 11.8) < 0.1 || name.includes('domestic')) {
+        const legacyType = 'DOMESTIC_11_8KG';
+        if (emptyCylinders[legacyType]) {
+          return legacyType;
+        }
+        return generatedType; // Return generated type even if not in emptyCylinders yet
+      } else if (Math.abs(capacity - 15) < 0.1 || name.includes('standard')) {
+        const legacyType = 'STANDARD_15KG';
+        if (emptyCylinders[legacyType]) {
+          return legacyType;
+        }
+        return generatedType;
+      } else if (Math.abs(capacity - 45.4) < 0.1 || name.includes('commercial')) {
+        const legacyType = 'COMMERCIAL_45_4KG';
+        if (emptyCylinders[legacyType]) {
+          return legacyType;
+        }
+        return generatedType;
       } else {
         // For new cylinder types, try to find matching type in available cylinders
-        // Check if any cylinder type in emptyCylinders matches the weight pattern
         const availableTypes = Object.keys(emptyCylinders);
         for (const type of availableTypes) {
-          // Extract weight from cylinder type enum (e.g., "DOMESTIC_11_8KG" -> 11.8)
-          const typeWeightMatch = type.match(/(\d+\.?\d*)/);
+          // Extract weight from cylinder type enum
+          const typeWeightMatch = type.match(/(\d+)(?:_(\d+))?/);
           if (typeWeightMatch) {
-            const typeWeight = parseFloat(typeWeightMatch[1]);
-            if (Math.abs(typeWeight - weight) < 0.1) {
+            const wholePart = parseFloat(typeWeightMatch[1]);
+            const decimalPart = typeWeightMatch[2] ? parseFloat(typeWeightMatch[2]) / 10 : 0;
+            const typeWeight = wholePart + decimalPart;
+            
+            if (Math.abs(typeWeight - capacity) < 0.1) {
+              console.log(`✅ Found matching type in inventory: "${type}" (weight: ${typeWeight})`);
               return type;
             }
           }
         }
-        // If no match found, return null (system will still work, just won't show max quantity)
-        return null;
+        
+        // Return generated type even if not found (will be used by backend)
+        return generatedType;
       }
     }
     
-    // Fallback to keyword matching
+    // Fallback to keyword matching if no weight found
     if (name.includes('domestic') || name.includes('11.8')) {
       return 'DOMESTIC_11_8KG';
     } else if (name.includes('commercial') || name.includes('45.4')) {
@@ -841,6 +936,7 @@ export default function VendorDetailPage() {
       return 'CYLINDER_30KG';
     }
     
+    console.log(`⚠️ Could not extract cylinder type from item name: ${itemName}`);
     return null;
   };
 
@@ -856,12 +952,53 @@ export default function VendorDetailPage() {
     const cylinderType = getCylinderTypeFromItemName(itemName);
     
     if (!cylinderType) {
+      console.log(`⚠️ Could not determine cylinder type for: ${itemName}`);
       return null;
     }
     
+    // Debug logging
+    console.log(`🔍 getMaxQuantity - Item: "${itemName}", Extracted Type: "${cylinderType}"`);
+    console.log(`🔍 Available types in emptyCylinders:`, Object.keys(emptyCylinders));
+    console.log(`🔍 emptyCylinders object:`, emptyCylinders);
+    
     // Dynamically get count for any cylinder type
-    const cylinders = emptyCylinders[cylinderType];
-    return cylinders ? cylinders.length : 0;
+    // Try exact match first
+    let cylinders = emptyCylinders[cylinderType];
+    
+    // If not found, try case-insensitive match
+    if (!cylinders && Object.keys(emptyCylinders).length > 0) {
+      const matchingKey = Object.keys(emptyCylinders).find(
+        key => key.toUpperCase() === cylinderType.toUpperCase()
+      );
+      if (matchingKey) {
+        cylinders = emptyCylinders[matchingKey];
+        console.log(`✅ Found case-insensitive match: "${matchingKey}" for "${cylinderType}"`);
+      }
+    }
+    
+    // If still not found, try to match by extracting weight from both
+    if (!cylinders && Object.keys(emptyCylinders).length > 0) {
+      const itemWeightMatch = itemName.match(/(\d+\.?\d*)\s*kg/i);
+      if (itemWeightMatch) {
+        const itemWeight = parseFloat(itemWeightMatch[1]);
+        for (const key of Object.keys(emptyCylinders)) {
+          const keyWeightMatch = key.match(/(\d+\.?\d*)/);
+          if (keyWeightMatch) {
+            const keyWeight = parseFloat(keyWeightMatch[1]);
+            if (Math.abs(keyWeight - itemWeight) < 0.1) {
+              cylinders = emptyCylinders[key];
+              console.log(`✅ Found weight-based match: "${key}" (weight: ${keyWeight}) for item "${itemName}" (weight: ${itemWeight})`);
+              break;
+            }
+          }
+        }
+      }
+    }
+    
+    const count = cylinders ? cylinders.length : 0;
+    console.log(`🔍 Max quantity for "${itemName}" (type: "${cylinderType}"): ${count}`);
+    
+    return count;
   };
 
 
@@ -961,7 +1098,8 @@ export default function VendorDetailPage() {
         // Start with one empty item for accessories
         setPurchaseItems([{ itemName: '', category: '', quantity: 0, unitPrice: 0, totalPrice: 0, cylinderCodes: '' }]);
       } else if (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
-        setPurchaseItems(defaultCylinderItems);
+        // Start with one empty item for cylinder purchase (matching gas purchase behavior)
+        setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '', status: 'EMPTY' }]);
       } else if (vendor?.category?.slug === 'vaporizer_purchase') {
         setPurchaseItems(defaultVaporizerItems);
       } else {
@@ -1562,7 +1700,8 @@ export default function VendorDetailPage() {
                                       value={item.quantity}
                                       onChange={(e) => {
                                         const maxQty = getMaxQuantity(item.itemName);
-                                        let inputValue = e.target.value === '' ? '' : parseInt(e.target.value) || 0;
+                                        const parsedValue = e.target.value === '' ? 0 : parseInt(e.target.value) || 0;
+                                        let inputValue: number = parsedValue;
                                         
                                         // Enforce max quantity if available (prevent exceeding max)
                                         if (maxQty !== null && maxQty !== undefined && maxQty > 0 && inputValue > maxQty) {
@@ -1591,16 +1730,22 @@ export default function VendorDetailPage() {
                                       max={getMaxQuantity(item.itemName) || undefined}
                                       className="text-center border-0 focus:ring-1 bg-transparent"
                                     />
-                                      {getMaxQuantity(item.itemName) !== null && getMaxQuantity(item.itemName) !== undefined && getMaxQuantity(item.itemName) > 0 && (
-                                        <p className="text-xs text-gray-500 text-center">
-                                          Max: {getMaxQuantity(item.itemName)} available
-                                        </p>
-                                      )}
-                                      {getMaxQuantity(item.itemName) === 0 && item.itemName && (
-                                        <p className="text-xs text-red-500 text-center">
-                                          No empty cylinders available
-                                        </p>
-                                      )}
+                                      {(() => {
+                                        const maxQty = getMaxQuantity(item.itemName);
+                                        return maxQty !== null && maxQty !== undefined && maxQty > 0 && (
+                                          <p className="text-xs text-gray-500 text-center">
+                                            Max: {maxQty} available
+                                          </p>
+                                        );
+                                      })()}
+                                      {(() => {
+                                        const maxQty = getMaxQuantity(item.itemName);
+                                        return maxQty === 0 && item.itemName && (
+                                          <p className="text-xs text-red-500 text-center">
+                                            No empty cylinders available
+                                          </p>
+                                        );
+                                      })()}
                                     </div>
                                   </td>
                                   <td className="border border-gray-300 px-4 py-2">
@@ -1650,8 +1795,164 @@ export default function VendorDetailPage() {
                           </table>
                         </div>
                       </div>
-                    ) : ['cylinder_purchase', 'vaporizer_purchase'].includes(vendor?.category?.slug || '') ? (
-                      // Category-specific table format for cylinder and vaporizer
+                    ) : isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') ? (
+                      // Cylinder purchase form with dropdown for vendor items (matching gas purchase UI)
+                      <div>
+                        <div className="flex justify-between items-center mb-4">
+                          <label className="text-lg font-semibold text-gray-900">
+                            {vendor.category.name}
+                          </label>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleAddPurchaseItem}
+                          >
+                            <PlusIcon className="w-4 h-4 mr-1" />
+                            Add Item
+                          </Button>
+                        </div>
+                        
+                        <div className="overflow-x-auto">
+                          <table className="w-full border-collapse border border-gray-300" style={{ tableLayout: 'fixed' }}>
+                            <colgroup>
+                              <col style={{ width: '30%' }} />
+                              <col style={{ width: '15%' }} />
+                              <col style={{ width: '20%' }} />
+                              <col style={{ width: '20%' }} />
+                              <col style={{ width: '15%' }} />
+                            </colgroup>
+                            <thead>
+                              <tr className="bg-gray-50">
+                                <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-700">
+                                  Item
+                                </th>
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                  Quantity
+                                </th>
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                  Price per Unit
+                                </th>
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                  Price per Item
+                                </th>
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                  Actions
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {getDisplayItems().map((item, index) => (
+                                <tr key={index}>
+                                  <td className="border border-gray-300 px-4 py-2">
+                                    <select
+                                      value={item.itemName}
+                                      onChange={(e) => handlePurchaseItemChange(
+                                        index,
+                                        'itemName',
+                                        e.target.value
+                                      )}
+                                      className="w-full border-0 focus:ring-1 bg-transparent text-sm font-medium text-gray-900"
+                                    >
+                                      <option value="">Select Item</option>
+                                      {vendorItems.length > 0 ? (
+                                        vendorItems.map((vendorItem) => (
+                                          <option key={vendorItem.id} value={vendorItem.name}>
+                                            {vendorItem.name}
+                                          </option>
+                                        ))
+                                      ) : (
+                                        defaultCylinderItems.map((defaultItem, idx) => (
+                                          <option key={idx} value={defaultItem.itemName}>
+                                            {defaultItem.itemName}
+                                          </option>
+                                        ))
+                                      )}
+                                    </select>
+                                  </td>
+                                  <td className="border border-gray-300 px-4 py-2">
+                                    <div className="space-y-1">
+                                    <Input
+                                      type="number"
+                                      value={item.quantity}
+                                      onChange={(e) => handlePurchaseItemChange(
+                                        index,
+                                        'quantity',
+                                        e.target.value
+                                      )}
+                                      placeholder="Enter quantity"
+                                      min="0"
+                                      step="1"
+                                      max={getMaxQuantity(item.itemName) || undefined}
+                                      className="text-center border-0 focus:ring-1 bg-transparent"
+                                    />
+                                      {(() => {
+                                        const maxQty = getMaxQuantity(item.itemName);
+                                        return maxQty !== null && maxQty !== undefined && maxQty > 0 && (
+                                          <p className="text-xs text-gray-500 text-center">
+                                            Max: {maxQty} available
+                                          </p>
+                                        );
+                                      })()}
+                                      {(() => {
+                                        const maxQty = getMaxQuantity(item.itemName);
+                                        return maxQty === 0 && item.itemName && (
+                                          <p className="text-xs text-red-500 text-center">
+                                            No items available
+                                          </p>
+                                        );
+                                      })()}
+                                    </div>
+                                  </td>
+                                  <td className="border border-gray-300 px-4 py-2">
+                                    <Input
+                                      type="number"
+                                      value={item.unitPrice}
+                                      onChange={(e) => handlePurchaseItemChange(
+                                        index,
+                                        'unitPrice',
+                                        e.target.value
+                                      )}
+                                      placeholder="Enter price per unit"
+                                      min="0"
+                                      step="1"
+                                      className="text-center border-0 focus:ring-1 bg-transparent"
+                                    />
+                                  </td>
+                                  <td className="border border-gray-300 px-4 py-2 text-center font-medium">
+                                    {formatCurrency(item.totalPrice)}
+                                  </td>
+                                  <td className="border border-gray-300 px-4 py-2 text-center">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleRemovePurchaseItem(index)}
+                                      disabled={getDisplayItems().length <= 1}
+                                      className="text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      Remove
+                                    </Button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="bg-gray-50">
+                                <td colSpan={3} className="border border-gray-300 px-4 py-2 text-right font-semibold text-gray-700">
+                                  Grand Total:
+                                </td>
+                                <td className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-900">
+                                  {formatCurrency(calculatePurchaseTotal())}
+                                </td>
+                                <td className="border border-gray-300 px-4 py-2"></td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </div>
+                    ) : vendor?.category?.slug === 'vaporizer_purchase' ? (
+                      // Category-specific table format for vaporizer
                       <div>
                         <div className="flex justify-between items-center mb-4">
                           <label className="text-lg font-semibold text-gray-900">
@@ -1692,8 +1993,7 @@ export default function VendorDetailPage() {
                                       placeholder="Enter item name"
                                       className="border-0 focus:ring-1 bg-transparent text-sm font-medium text-gray-900"
                                       readOnly={
-                                        (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') && index < defaultCylinderItems.length) ||
-                                        (vendor?.category?.slug === 'vaporizer_purchase' && index < defaultVaporizerItems.length)
+                                        vendor?.category?.slug === 'vaporizer_purchase' && index < defaultVaporizerItems.length
                                       }
                                     />
                                   </td>
@@ -1741,10 +2041,7 @@ export default function VendorDetailPage() {
                                 </tr>
                               ))}
                               <tr className="bg-gray-50 font-bold">
-                                <td colSpan={
-                                  isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') ? 3 : 
-                                  isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') ? 3 : 3
-                                } className="border border-gray-300 px-4 py-2 text-right">
+                                <td colSpan={3} className="border border-gray-300 px-4 py-2 text-right">
                                   Total =
                                 </td>
                                 <td className="border border-gray-300 px-4 py-2 text-center">
@@ -1897,9 +2194,10 @@ export default function VendorDetailPage() {
                         
                         // Reset to default items based on vendor category
                         if (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
-                          setPurchaseItems(defaultCylinderItems);
+                          // Reset to one empty item for cylinder purchase (matching gas purchase behavior)
+                          setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '', status: 'EMPTY' }]);
                         } else if (vendor?.category?.slug === 'gas_purchase') {
-                          setPurchaseItems(defaultGasItems);
+                          setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '' }]);
                         } else if (vendor?.category?.slug === 'vaporizer_purchase') {
                           setPurchaseItems(defaultVaporizerItems);
                         } else if (vendor?.category?.slug === 'accessories_purchase') {
@@ -1939,7 +2237,7 @@ export default function VendorDetailPage() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {getFilteredPurchaseEntries().map((purchase, index) => (
+              {getFilteredPurchaseEntries().map((purchase: any, index: number) => (
                 <Card key={purchase.id}>
                   <CardContent className="p-6">
                     <div className="flex justify-between items-start mb-4">
@@ -1989,21 +2287,23 @@ export default function VendorDetailPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          <tr className="border-t border-gray-200">
-                            <td className="px-4 py-2">{purchase.itemName}</td>
-                            <td className="px-4 py-2 text-right">{purchase.quantity}</td>
-                            <td className="px-4 py-2 text-right">
-                              {formatCurrency(Number(purchase.unitPrice))}
-                            </td>
-                            {vendor?.category?.slug === 'cylinder_purchase' && (
-                              <td className="px-4 py-2 text-left text-xs text-gray-600">
-                                -
+                          {(purchase.items || [purchase]).map((item: any, itemIndex: number) => (
+                            <tr key={itemIndex} className="border-t border-gray-200">
+                              <td className="px-4 py-2">{item.itemName}</td>
+                              <td className="px-4 py-2 text-right">{item.quantity}</td>
+                              <td className="px-4 py-2 text-right">
+                                {formatCurrency(Number(item.unitPrice))}
                               </td>
-                            )}
-                            <td className="px-4 py-2 text-right font-medium">
-                              {formatCurrency(Number(purchase.totalPrice))}
-                            </td>
-                          </tr>
+                              {vendor?.category?.slug === 'cylinder_purchase' && (
+                                <td className="px-4 py-2 text-left text-xs text-gray-600">
+                                  {item.cylinderCodes || '-'}
+                                </td>
+                              )}
+                              <td className="px-4 py-2 text-right font-medium">
+                                {formatCurrency(Number(item.totalPrice))}
+                              </td>
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     </div>
@@ -2013,7 +2313,7 @@ export default function VendorDetailPage() {
                       <div>
                         <div className="text-xs text-gray-500 mb-1">Total Amount</div>
                         <div className="text-lg font-semibold text-gray-900">
-                          {formatCurrency(Number(purchase.totalPrice))}
+                          {formatCurrency(Number(purchase.totalPrice || purchase.items?.reduce((sum: number, item: any) => sum + Number(item.totalPrice), 0) || 0))}
                         </div>
                       </div>
                       
@@ -2046,7 +2346,9 @@ export default function VendorDetailPage() {
                         <div className={`text-lg font-semibold ${
                           (() => {
                             // Calculate running balance up to this transaction
-                            const currentIndex = vendor.purchase_entries?.findIndex(p => p.id === purchase.id) || 0;
+                            // Find the index of the first entry with this invoice number
+                            const firstEntryId = purchase.items?.[0]?.id || purchase.id;
+                            const currentIndex = vendor.purchase_entries?.findIndex(p => p.id === firstEntryId) || 0;
                             const transactionsUpToThis = vendor.purchase_entries?.slice(currentIndex) || [];
                             
                             // Calculate total purchases up to this point
@@ -2067,7 +2369,9 @@ export default function VendorDetailPage() {
                         }`}>
                           {(() => {
                             // Calculate running balance up to this transaction
-                            const currentIndex = vendor.purchase_entries?.findIndex(p => p.id === purchase.id) || 0;
+                            // Find the index of the first entry with this invoice number
+                            const firstEntryId = purchase.items?.[0]?.id || purchase.id;
+                            const currentIndex = vendor.purchase_entries?.findIndex(p => p.id === firstEntryId) || 0;
                             const transactionsUpToThis = vendor.purchase_entries?.slice(currentIndex) || [];
                             
                             // Calculate total purchases up to this point
