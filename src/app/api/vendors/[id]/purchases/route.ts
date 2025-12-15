@@ -52,12 +52,8 @@ export async function GET(
       };
     }
 
-    const purchases = await prisma.vendorPurchase.findMany({
+    const purchases = await prisma.purchaseEntry.findMany({
       where,
-      include: {
-        items: true,
-        payments: true
-      },
       orderBy: { purchaseDate: 'desc' }
     });
 
@@ -106,14 +102,15 @@ export async function POST(
 
     const { id } = await params;
     const body = await request.json();
-    const { items, invoiceNumber, notes, purchaseDate, paidAmount } = body;
+    const { items, invoiceNumber, notes, purchaseDate, paidAmount, paymentMethod } = body;
 
     console.log('Received purchase data:', {
       vendorId: id,
       invoiceNumber,
       itemsCount: items?.length,
       notes,
-      paidAmount
+      paidAmount,
+      paymentMethod
     });
 
     if (!items || items.length === 0) {
@@ -137,7 +134,7 @@ export async function POST(
     else if (paid > 0) paymentStatus = 'PARTIAL';
 
     // Determine individual purchase entry status
-    let entryStatus = 'PENDING';
+    let entryStatus: 'PENDING' | 'PAID' | 'PARTIAL' = 'PENDING';
     if (paid >= totalAmount) entryStatus = 'PAID';
     else if (paid > 0) entryStatus = 'PARTIAL';
 
@@ -190,7 +187,7 @@ export async function POST(
               quantity: Number(item.quantity),
               unitPrice: Number(item.unitPrice),
               totalPrice: Number(item.totalPrice),
-              status: entryStatus,
+              status: entryStatus as any,
               purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),
               invoiceNumber,
               notes
@@ -207,7 +204,7 @@ export async function POST(
             vendorId: id,
             amount: paid,
             paymentDate: new Date(),
-            method: 'CASH',
+            method: (paymentMethod || 'CASH') as any,
             status: 'COMPLETED',
             description: `Payment for invoice ${invoiceNumber}`
           }

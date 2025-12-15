@@ -296,7 +296,8 @@ export default function VendorDetailPage() {
   const [purchaseFormData, setPurchaseFormData] = useState({
     invoiceNumber: '',
     notes: '',
-    paidAmount: 0
+    paidAmount: 0,
+    paymentMethod: 'CASH' as string
   });
   // Price per 11.8kg for gas purchase - used to calculate unit prices for all cylinder types
   const [pricePer11_8kg, setPricePer11_8kg] = useState<number>(0);
@@ -314,8 +315,8 @@ export default function VendorDetailPage() {
       if (!isNaN(capacity) && capacity > 0) {
         // Calculate proportional price: (capacity / 11.8) * basePrice
         const calculatedPrice = (capacity / 11.8) * basePrice;
-        // Round to 2 decimal places
-        return Math.round(calculatedPrice * 100) / 100;
+        // Round off decimals to whole number
+        return Math.round(calculatedPrice);
       }
     }
     
@@ -786,7 +787,8 @@ export default function VendorDetailPage() {
     setPurchaseFormData({
       invoiceNumber: invoiceNumber,
       notes: '',
-      paidAmount: 0
+      paidAmount: 0,
+      paymentMethod: 'CASH'
     });
     setUsedCodes(new Set()); // Reset used codes for new form
     
@@ -1127,7 +1129,8 @@ export default function VendorDetailPage() {
           items: validItems,
           invoiceNumber: purchaseFormData.invoiceNumber,
           notes: purchaseFormData.notes,
-          paidAmount: purchaseFormData.paidAmount
+          paidAmount: purchaseFormData.paidAmount,
+          paymentMethod: purchaseFormData.paymentMethod
         })
       });
 
@@ -1162,7 +1165,7 @@ export default function VendorDetailPage() {
         setPurchaseItems([{ itemName: '', quantity: 1, unitPrice: 0, totalPrice: 0 }]);
       }
       
-      setPurchaseFormData({ invoiceNumber: '', notes: '', paidAmount: 0 });
+      setPurchaseFormData({ invoiceNumber: '', notes: '', paidAmount: 0, paymentMethod: 'CASH' });
       fetchVendor();
     } catch (error) {
       console.error('Error creating purchase:', error);
@@ -2264,24 +2267,47 @@ export default function VendorDetailPage() {
                     )}
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Paid Amount (Optional)
-                    </label>
-                    <Input
-                      type="number"
-                      value={purchaseFormData.paidAmount}
-                      onChange={(e) => setPurchaseFormData({
-                        ...purchaseFormData,
-                        paidAmount: Number(e.target.value)
-                      })}
-                      placeholder="Amount paid now"
-                      min="0"
-                      step="1"
-                    />
-                    <p className="text-sm text-gray-500 mt-1">
-                      Leave as 0 if payment will be made later
-                    </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Paid Amount (Optional)
+                      </label>
+                      <Input
+                        type="number"
+                        value={purchaseFormData.paidAmount}
+                        onChange={(e) => setPurchaseFormData({
+                          ...purchaseFormData,
+                          paidAmount: Number(e.target.value)
+                        })}
+                        placeholder="Amount paid now"
+                        min="0"
+                        step="1"
+                      />
+                      <p className="text-sm text-gray-500 mt-1">
+                        Leave as 0 if payment will be made later
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Payment Method <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={purchaseFormData.paymentMethod}
+                        onChange={(e) => setPurchaseFormData({
+                          ...purchaseFormData,
+                          paymentMethod: e.target.value
+                        })}
+                        className="flex h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-colors duration-200"
+                        required
+                      >
+                        <option value="CASH">💵 Cash</option>
+                        <option value="BANK_TRANSFER">🏦 Bank Transfer</option>
+                        <option value="CHECK">📄 Check</option>
+                        <option value="CREDIT_CARD">💳 Credit Card</option>
+                        <option value="DEBIT_CARD">💳 Debit Card</option>
+                        <option value="WIRE_TRANSFER">🔗 Wire Transfer</option>
+                      </select>
+                    </div>
                   </div>
 
                   <div className="flex gap-3">
@@ -2308,7 +2334,7 @@ export default function VendorDetailPage() {
                           setPurchaseItems([{ itemName: '', quantity: 1, unitPrice: 0, totalPrice: 0 }]);
                         }
                         
-                        setPurchaseFormData({ invoiceNumber: '', notes: '', paidAmount: 0 });
+                        setPurchaseFormData({ invoiceNumber: '', notes: '', paidAmount: 0, paymentMethod: 'CASH' });
                         setUsedCodes(new Set()); // Reset used codes
                       }}
                     >
@@ -2442,9 +2468,9 @@ export default function VendorDetailPage() {
                         </div>
                       </div>
                       
-                      {/* Net Affected Balance */}
+                      {/* Net Running Balance */}
                       <div>
-                        <div className="text-xs text-gray-500 mb-1">Net Affected Balance</div>
+                        <div className="text-xs text-gray-500 mb-1">Net Running Balance</div>
                         <div className={`text-lg font-semibold ${
                           (() => {
                             // Calculate running balance up to this transaction
@@ -2466,7 +2492,7 @@ export default function VendorDetailPage() {
                             // Running balance = payments - purchases
                             const runningBalance = totalPaymentsUpToThis - totalPurchasesUpToThis;
                             
-                            return runningBalance > 0 ? 'text-red-600' : 'text-green-600';
+                            return runningBalance < 0 ? 'text-red-600' : 'text-green-600';
                           })()
                         }`}>
                           {(() => {
