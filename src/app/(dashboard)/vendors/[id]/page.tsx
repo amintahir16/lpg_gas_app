@@ -367,6 +367,15 @@ export default function VendorDetailPage() {
     }
   }, [activeTab, reportPeriod]);
 
+  // Auto-update paid amount to match grand total when purchase items change
+  useEffect(() => {
+    const grandTotal = purchaseItems.reduce((sum, item) => sum + Number(item.totalPrice), 0);
+    setPurchaseFormData(prev => ({
+      ...prev,
+      paidAmount: grandTotal
+    }));
+  }, [purchaseItems]);
+
   // Initialize purchase items based on vendor category
   useEffect(() => {
     // Only run if vendor is loaded
