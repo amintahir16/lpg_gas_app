@@ -13,6 +13,8 @@ interface VendorPaymentModalProps {
   vendorName: string;
   outstandingBalance: number;
   onPaymentSuccess: () => void;
+  invoiceNumber?: string;
+  purchaseEntryTotal?: number;
 }
 
 export default function VendorPaymentModal({
@@ -21,7 +23,9 @@ export default function VendorPaymentModal({
   vendorId,
   vendorName,
   outstandingBalance,
-  onPaymentSuccess
+  onPaymentSuccess,
+  invoiceNumber,
+  purchaseEntryTotal
 }: VendorPaymentModalProps) {
   const [amount, setAmount] = useState('');
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
@@ -42,9 +46,10 @@ export default function VendorPaymentModal({
       return;
     }
 
-    if (paymentAmount > Math.abs(outstandingBalance)) {
+    const maxAmount = invoiceNumber && purchaseEntryTotal ? purchaseEntryTotal : Math.abs(outstandingBalance);
+    if (paymentAmount > maxAmount) {
       const confirmOverpay = confirm(
-        `The payment amount (Rs ${paymentAmount.toLocaleString()}) exceeds the outstanding balance (Rs ${Math.abs(outstandingBalance).toLocaleString()}).\n\nThis will create a credit balance in your favor. Do you want to proceed?`
+        `The payment amount (Rs ${paymentAmount.toLocaleString()}) exceeds the ${invoiceNumber ? 'invoice amount' : 'outstanding balance'} (Rs ${maxAmount.toLocaleString()}).\n\nThis will create a credit balance in your favor. Do you want to proceed?`
       );
       if (!confirmOverpay) return;
     }
@@ -60,7 +65,8 @@ export default function VendorPaymentModal({
           paymentDate,
           method: paymentMethod,
           reference: reference || null,
-          description: description || `Payment to ${vendorName}`
+          description: description || (invoiceNumber ? `Payment for invoice ${invoiceNumber}` : `Payment to ${vendorName}`),
+          invoiceNumber: invoiceNumber || null
         })
       });
 
@@ -86,8 +92,15 @@ export default function VendorPaymentModal({
   };
 
   const handleQuickAmount = (percentage: number) => {
-    const quickAmount = Math.abs(outstandingBalance) * percentage;
-    setAmount(quickAmount.toFixed(2));
+    // If paying for a specific entry, use entry total; otherwise use outstanding balance
+    const baseAmount = purchaseEntryTotal ? purchaseEntryTotal : Math.abs(outstandingBalance);
+    const quickAmount = baseAmount * percentage;
+    const roundedAmount = Math.round(quickAmount);
+    // Cap at the entry total if paying for a specific entry
+    const maxAmount = invoiceNumber && purchaseEntryTotal ? Math.round(purchaseEntryTotal) : undefined;
+    const finalAmount = maxAmount !== undefined && roundedAmount > maxAmount ? maxAmount : roundedAmount;
+    setAmount(finalAmount.toString());
+    setError(''); // Clear any previous errors
   };
 
   const formatCurrency = (value: number) => {
@@ -125,11 +138,13 @@ export default function VendorPaymentModal({
               <div>
                 <div className={`text-sm font-semibold uppercase tracking-wide ${
                   outstandingBalance < 0 ? 'text-green-600' : 'text-red-600'
-                }`}>Outstanding Balance</div>
+                }`}>
+                  {invoiceNumber ? `Invoice ${invoiceNumber} - Amount Due` : 'Outstanding Balance'}
+                </div>
                 <div className={`text-3xl font-bold mt-2 ${
                   outstandingBalance < 0 ? 'text-red-700' : 'text-black'
                 }`}>
-                  {formatCurrency(outstandingBalance)}
+                  {formatCurrency(Math.round(invoiceNumber && purchaseEntryTotal ? purchaseEntryTotal : outstandingBalance))}
                 </div>
                 <div className={`text-xs mt-1 flex items-center gap-1 ${
                   outstandingBalance < 0 ? 'text-red-500' : 'text-black'
@@ -137,7 +152,11 @@ export default function VendorPaymentModal({
                   <div className={`w-2 h-2 rounded-full ${
                     outstandingBalance < 0 ? 'bg-red-400' : 'bg-black'
                   }`}></div>
-                  {outstandingBalance < 0 ? 'Vendor owes you this amount' : 'You owe this amount to the vendor'}
+                  {invoiceNumber 
+                    ? `Payment for invoice ${invoiceNumber}`
+                    : outstandingBalance < 0 
+                      ? 'Vendor owes you this amount' 
+                      : 'You owe this amount to the vendor'}
                 </div>
               </div>
               <div className={`p-4 rounded-full ${
@@ -209,8 +228,42 @@ export default function VendorPaymentModal({
                 type="number"
                 step="1"
                 min="0"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                max={invoiceNumber && purchaseEntryTotal ? Math.round(purchaseEntryTotal) : undefined}
+                value={amount ? Math.round(parseFloat(amount) || 0).toString() : ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === '' || value === '-') {
+                    setAmount(value);
+                  } else {
+                    const numValue = parseFloat(value);
+                    if (!isNaN(numValue)) {
+                      const roundedValue = Math.round(numValue);
+                      // If paying for a specific entry, cap at the entry total
+                      const maxAmount = invoiceNumber && purchaseEntryTotal ? Math.round(purchaseEntryTotal) : undefined;
+                      if (maxAmount !== undefined && roundedValue > maxAmount) {
+                        setAmount(maxAmount.toString());
+                        setError(`Payment amount cannot exceed the invoice amount of Rs ${maxAmount.toLocaleString()}`);
+                      } else {
+                        setAmount(roundedValue.toString());
+                        setError(''); // Clear error if within limit
+                      }
+                    }
+                  }
+                }}
+                onBlur={(e) => {
+                  const value = e.target.value;
+                  if (value && !isNaN(parseFloat(value))) {
+                    const roundedValue = Math.round(parseFloat(value));
+                    const maxAmount = invoiceNumber && purchaseEntryTotal ? Math.round(purchaseEntryTotal) : undefined;
+                    if (maxAmount !== undefined && roundedValue > maxAmount) {
+                      setAmount(maxAmount.toString());
+                      setError(`Payment amount cannot exceed the invoice amount of Rs ${maxAmount.toLocaleString()}`);
+                    } else {
+                      setAmount(roundedValue.toString());
+                      setError('');
+                    }
+                  }
+                }}
                 placeholder="0"
                 className="pl-12 pr-4 py-4 text-xl font-bold border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg"
                 required
@@ -221,17 +274,17 @@ export default function VendorPaymentModal({
                 <div className="flex justify-between items-center text-sm mb-2">
                   <span className="text-gray-600 font-medium">Amount Paying:</span>
                   <span className="font-bold text-green-600 text-lg">
-                    {formatCurrency(parseFloat(amount))}
+                    {formatCurrency(Math.round(parseFloat(amount)))}
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-600 font-medium">Remaining Balance:</span>
                   <span className={`font-bold text-lg ${
-                    Math.abs(outstandingBalance) - parseFloat(amount) > 0 
+                    (invoiceNumber && purchaseEntryTotal ? purchaseEntryTotal : Math.abs(outstandingBalance)) - parseFloat(amount) > 0 
                       ? 'text-red-600' 
                       : 'text-green-600'
                   }`}>
-                    {formatCurrency(Math.max(0, Math.abs(outstandingBalance) - parseFloat(amount)))}
+                    {formatCurrency(Math.round(Math.max(0, (invoiceNumber && purchaseEntryTotal ? purchaseEntryTotal : Math.abs(outstandingBalance)) - parseFloat(amount))))}
                   </span>
                 </div>
               </div>
@@ -276,20 +329,22 @@ export default function VendorPaymentModal({
             </div>
           </div>
 
-          {/* Reference Number */}
-          <div>
-            <label htmlFor="reference" className="block text-sm font-semibold text-gray-700 mb-2">
-              Reference Number <span className="text-gray-400 font-normal">(Optional)</span>
-            </label>
-            <Input
-              id="reference"
-              type="text"
-              value={reference}
-              onChange={(e) => setReference(e.target.value)}
-              placeholder="Transaction ID, Check #, etc."
-              className="py-3 border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg"
-            />
-          </div>
+          {/* Reference Number - Only show for general payments, not for entry-specific payments */}
+          {!invoiceNumber && (
+            <div>
+              <label htmlFor="reference" className="block text-sm font-semibold text-gray-700 mb-2">
+                Reference Number <span className="text-gray-400 font-normal">(Optional)</span>
+              </label>
+              <Input
+                id="reference"
+                type="text"
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+                placeholder="Transaction ID, Check #, etc."
+                className="py-3 border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg"
+              />
+            </div>
+          )}
 
           {/* Description */}
           <div>

@@ -136,6 +136,8 @@ export default function VendorDetailPage() {
   
   // Payment modal state
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedInvoiceNumber, setSelectedInvoiceNumber] = useState<string | null>(null);
+  const [selectedEntryTotal, setSelectedEntryTotal] = useState<number | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
   const [directPayments, setDirectPayments] = useState<DirectPayment[]>([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -623,6 +625,8 @@ export default function VendorDetailPage() {
   };
 
   const handlePaymentSuccess = () => {
+    setSelectedInvoiceNumber(null);
+    setSelectedEntryTotal(null);
     fetchVendor();
     fetchFinancialReport();
     fetchDirectPayments();
@@ -1348,7 +1352,7 @@ export default function VendorDetailPage() {
               <div>
                 <p className="text-sm text-gray-500 mb-1">Cash Out (Purchases)</p>
                 <p className="text-2xl font-bold text-red-600">
-                  {formatCurrency(vendor.financialSummary.cashOut)}
+                  {formatCurrency(Math.round(vendor.financialSummary.cashOut))}
                 </p>
               </div>
               <div className="p-3 bg-red-100 rounded-lg">
@@ -1364,7 +1368,7 @@ export default function VendorDetailPage() {
               <div>
                 <p className="text-sm text-gray-500 mb-1">Cash In (Payments)</p>
                 <p className="text-2xl font-bold text-green-600">
-                  {formatCurrency(vendor.financialSummary.cashIn)}
+                  {formatCurrency(Math.round(vendor.financialSummary.cashIn))}
                 </p>
               </div>
               <div className="p-3 bg-green-100 rounded-lg">
@@ -1382,7 +1386,7 @@ export default function VendorDetailPage() {
                 <p className={`text-2xl font-bold ${
                   vendor.financialSummary.netBalance > 0 ? 'text-green-600' : 'text-red-600'
                 }`}>
-                  {formatCurrency(vendor.financialSummary.netBalance)}
+                  {formatCurrency(Math.round(vendor.financialSummary.netBalance))}
                 </p>
                 {vendor.financialSummary.netBalance > 0 && (
                   <p className="text-xs text-red-500 mt-1">
@@ -1405,7 +1409,11 @@ export default function VendorDetailPage() {
             </div>
             {vendor.financialSummary.outstandingBalance < 0 && (
               <Button
-                onClick={() => setShowPaymentModal(true)}
+                onClick={() => {
+                  setSelectedInvoiceNumber(null);
+                  setSelectedEntryTotal(null);
+                  setShowPaymentModal(true);
+                }}
                 className="w-full bg-green-600 hover:bg-green-700 text-white"
                 size="sm"
               >
@@ -1459,7 +1467,7 @@ export default function VendorDetailPage() {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              Purchase Entries
+              Entries
             </button>
             <button
               onClick={() => setActiveTab('items')}
@@ -1490,7 +1498,7 @@ export default function VendorDetailPage() {
         <div>
           <div className="mb-6 flex justify-between items-center">
             <h2 className="text-xl font-semibold text-gray-900">
-              Purchase Entries (Total {getFilteredPurchaseEntries().length})
+              Entries (Total {getFilteredPurchaseEntries().length})
             </h2>
             <div className="flex items-center gap-4">
               <select
@@ -2386,17 +2394,35 @@ export default function VendorDetailPage() {
                           {formatDate(purchase.purchaseDate)}
                         </p>
                       </div>
-                      <span
-                        className={`px-3 py-1 text-sm font-medium rounded-full ${
-                          purchase.status === 'PAID'
-                            ? 'bg-green-100 text-green-700'
-                            : purchase.status === 'PARTIAL'
-                            ? 'bg-yellow-100 text-yellow-700'
-                            : 'bg-red-100 text-red-700'
-                        }`}
-                      >
-                        {purchase.status}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {/* Make Payment Button for Unpaid/Partial Entries */}
+                        {(purchase.status === 'PENDING' || purchase.status === 'PARTIAL') && (
+                          <Button
+                            onClick={() => {
+                              const entryTotal = Number(purchase.totalPrice || purchase.items?.reduce((sum: number, item: any) => sum + Number(item.totalPrice), 0) || 0);
+                              setSelectedInvoiceNumber(purchase.invoiceNumber || null);
+                              setSelectedEntryTotal(entryTotal);
+                              setShowPaymentModal(true);
+                            }}
+                            className="bg-green-600 hover:bg-green-700 text-white"
+                            size="sm"
+                          >
+                            <BanknotesIcon className="h-4 w-4 mr-1.5" />
+                            Make Payment
+                          </Button>
+                        )}
+                        <span
+                          className={`px-3 py-1 text-sm font-medium rounded-full ${
+                            purchase.status === 'PAID'
+                              ? 'bg-green-100 text-green-700'
+                              : purchase.status === 'PARTIAL'
+                              ? 'bg-yellow-100 text-yellow-700'
+                              : 'bg-red-100 text-red-700'
+                          }`}
+                        >
+                          {purchase.status}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Items Table */}
@@ -2429,7 +2455,7 @@ export default function VendorDetailPage() {
                               <td className="px-4 py-2">{item.itemName}</td>
                               <td className="px-4 py-2 text-right">{item.quantity}</td>
                               <td className="px-4 py-2 text-right">
-                                {formatCurrency(Number(item.unitPrice))}
+                                {formatCurrency(Math.round(Number(item.unitPrice)))}
                               </td>
                               {vendor?.category?.slug === 'cylinder_purchase' && (
                                 <td className="px-4 py-2 text-left text-xs text-gray-600">
@@ -2437,7 +2463,7 @@ export default function VendorDetailPage() {
                                 </td>
                               )}
                               <td className="px-4 py-2 text-right font-medium">
-                                {formatCurrency(Number(item.totalPrice))}
+                                {formatCurrency(Math.round(Number(item.totalPrice)))}
                               </td>
                             </tr>
                           ))}
@@ -2450,7 +2476,7 @@ export default function VendorDetailPage() {
                       <div>
                         <div className="text-xs text-gray-500 mb-1">Total Amount</div>
                         <div className="text-lg font-semibold text-gray-900">
-                          {formatCurrency(Number(purchase.totalPrice || purchase.items?.reduce((sum: number, item: any) => sum + Number(item.totalPrice), 0) || 0))}
+                          {formatCurrency(Math.round(Number(purchase.totalPrice || purchase.items?.reduce((sum: number, item: any) => sum + Number(item.totalPrice), 0) || 0)))}
                         </div>
                       </div>
                       
@@ -2472,7 +2498,7 @@ export default function VendorDetailPage() {
                             const totalPaid = purchasePayments.reduce((sum, payment) => 
                               sum + Number(payment.amount), 0
                             );
-                            return formatCurrency(totalPaid);
+                            return formatCurrency(Math.round(totalPaid));
                           })()}
                         </div>
                       </div>
@@ -2524,7 +2550,7 @@ export default function VendorDetailPage() {
                             // Running balance = payments - purchases
                             const runningBalance = totalPaymentsUpToThis - totalPurchasesUpToThis;
                             
-                            return formatCurrency(runningBalance);
+                            return formatCurrency(Math.round(runningBalance));
                           })()}
                         </div>
                       </div>
@@ -2561,7 +2587,7 @@ export default function VendorDetailPage() {
                                   {formatDate(payment.paymentDate)} - {payment.method}
                                 </span>
                                 <span className="font-medium text-green-600">
-                                  {formatCurrency(Number(payment.amount))}
+                                  {formatCurrency(Math.round(Number(payment.amount)))}
                                 </span>
                               </div>
                             ))}
@@ -2758,7 +2784,7 @@ export default function VendorDetailPage() {
                   <CardContent className="p-6">
                     <p className="text-sm text-gray-500 mb-1">Cash Out</p>
                     <p className="text-2xl font-bold text-red-600">
-                      {formatCurrency(financialReport.cashOut)}
+                      {formatCurrency(Math.round(financialReport.cashOut))}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">
                       Total Purchases
@@ -2770,7 +2796,7 @@ export default function VendorDetailPage() {
                   <CardContent className="p-6">
                     <p className="text-sm text-gray-500 mb-1">Cash In</p>
                     <p className="text-2xl font-bold text-green-600">
-                      {formatCurrency(financialReport.cashIn)}
+                      {formatCurrency(Math.round(financialReport.cashIn))}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">
                       Total Payments
@@ -2782,9 +2808,9 @@ export default function VendorDetailPage() {
                   <CardContent className="p-6">
                     <p className="text-sm text-gray-500 mb-1">Net Balance</p>
                     <p className={`text-2xl font-bold ${
-                      financialReport.netBalance > 0 ? 'text-red-600' : 'text-gray-900'
+                      financialReport.netBalance > 0 ? 'text-green-600' : financialReport.netBalance < 0 ? 'text-red-600' : 'text-gray-900'
                     }`}>
-                      {formatCurrency(financialReport.netBalance)}
+                      {formatCurrency(Math.round(financialReport.netBalance))}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">
                       Outstanding
@@ -2820,14 +2846,14 @@ export default function VendorDetailPage() {
                     <div className="flex justify-between py-2 border-b border-gray-200">
                       <span className="text-gray-700">Total Payments:</span>
                       <span className="font-medium text-green-600">
-                        {formatCurrency(financialReport.totalPayments)}
+                        {formatCurrency(Math.round(financialReport.totalPayments))}
                       </span>
                     </div>
                     {financialReport.directPayments > 0 && (
                       <div className="flex justify-between py-2 border-b border-gray-200 pl-4">
                         <span className="text-sm text-gray-600">• Direct Payments:</span>
                         <span className="text-sm font-medium text-green-600">
-                          {formatCurrency(financialReport.directPayments)}
+                          {formatCurrency(Math.round(financialReport.directPayments))}
                         </span>
                       </div>
                     )}
@@ -2835,7 +2861,7 @@ export default function VendorDetailPage() {
                       <div className="flex justify-between py-2 border-b border-gray-200 pl-4">
                         <span className="text-sm text-gray-600">• Purchase Payments:</span>
                         <span className="text-sm font-medium text-green-600">
-                          {formatCurrency(financialReport.purchasePayments)}
+                          {formatCurrency(Math.round(financialReport.purchasePayments))}
                         </span>
                       </div>
                     )}
@@ -2844,7 +2870,7 @@ export default function VendorDetailPage() {
                       <span className={`font-bold text-lg ${
                         financialReport.outstandingBalance > 0 ? 'text-red-600' : 'text-gray-900'
                       }`}>
-                        {formatCurrency(financialReport.outstandingBalance)}
+                        {formatCurrency(Math.round(financialReport.outstandingBalance))}
                       </span>
                     </div>
                   </div>
@@ -2874,7 +2900,7 @@ export default function VendorDetailPage() {
                               <div className="flex-1">
                                 <div className="flex items-center gap-3 mb-2">
                                   <h4 className="text-xl font-bold text-gray-900">
-                                    {formatCurrency(Number(payment.amount))}
+                                    {formatCurrency(Math.round(Number(payment.amount)))}
                                   </h4>
                                   <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
                                     payment.status === 'COMPLETED' 
@@ -2953,11 +2979,17 @@ export default function VendorDetailPage() {
       {vendor && (
         <VendorPaymentModal
           isOpen={showPaymentModal}
-          onClose={() => setShowPaymentModal(false)}
+          onClose={() => {
+            setShowPaymentModal(false);
+            setSelectedInvoiceNumber(null);
+            setSelectedEntryTotal(null);
+          }}
           vendorId={vendorId}
           vendorName={vendor.companyName || vendor.name || 'Unknown Vendor'}
           outstandingBalance={vendor.financialSummary.outstandingBalance}
           onPaymentSuccess={handlePaymentSuccess}
+          invoiceNumber={selectedInvoiceNumber || undefined}
+          purchaseEntryTotal={selectedEntryTotal || undefined}
         />
       )}
 

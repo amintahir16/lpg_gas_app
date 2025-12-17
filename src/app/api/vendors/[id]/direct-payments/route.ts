@@ -67,7 +67,7 @@ export async function POST(
 
     const { id } = await params;
     const body = await request.json();
-    const { amount, paymentDate, method, reference, description } = body;
+    const { amount, paymentDate, method, reference, description, invoiceNumber } = body;
 
     // Validate required fields
     if (!amount || amount <= 0) {
@@ -77,39 +77,97 @@ export async function POST(
       );
     }
 
-    // Verify vendor exists
-    const vendor = await prisma.vendor.findUnique({
-      where: { id }
-    });
+    // Use transaction to ensure payment and entry status updates are atomic
+    const result = await prisma.$transaction(async (tx) => {
+      // Verify vendor exists
+      const vendor = await tx.vendor.findUnique({
+        where: { id }
+      });
 
-    if (!vendor) {
-      return NextResponse.json(
-        { error: 'Vendor not found' },
-        { status: 404 }
-      );
-    }
-
-    // Create direct payment
-    const payment = await prisma.vendorPayment.create({
-      data: {
-        vendorId: id,
-        amount: Number(amount),
-        paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
-        method: method || 'CASH',
-        status: 'COMPLETED',
-        reference: reference || null,
-        description: description || 'Direct payment to vendor'
+      if (!vendor) {
+        throw new Error('Vendor not found');
       }
-    });
 
-    console.log('✅ Direct payment created:', {
-      id: payment.id,
-      vendor: vendor.name,
-      amount: payment.amount
+      // Create direct payment
+      const payment = await tx.vendorPayment.create({
+        data: {
+          vendorId: id,
+          amount: Number(amount),
+          paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
+          method: method || 'CASH',
+          status: 'COMPLETED',
+          reference: reference || null,
+          description: description || (invoiceNumber ? `Payment for invoice ${invoiceNumber}` : 'Direct payment to vendor')
+        }
+      });
+
+      // If invoiceNumber is provided, update purchase entry statuses
+      if (invoiceNumber) {
+        // Find all purchase entries with this invoice number
+        const purchaseEntries = await tx.purchaseEntry.findMany({
+          where: {
+            vendorId: id,
+            invoiceNumber: invoiceNumber
+          }
+        });
+
+        if (purchaseEntries.length > 0) {
+          // Calculate total amount for this invoice
+          const invoiceTotal = purchaseEntries.reduce((sum, entry) => 
+            sum + Number(entry.totalPrice), 0
+          );
+
+          // Get existing payments for this invoice (excluding the one we just created)
+          const existingPayments = await tx.vendorPayment.findMany({
+            where: {
+              vendorId: id,
+              description: {
+                contains: invoiceNumber
+              },
+              id: {
+                not: payment.id
+              }
+            }
+          });
+
+          // Calculate total paid (existing + new payment)
+          const totalPaid = existingPayments.reduce((sum, p) => sum + Number(p.amount), 0) + Number(amount);
+
+          // Determine new status for all entries in this invoice
+          let newStatus: 'PAID' | 'PARTIAL' | 'PENDING' = 'PENDING';
+          if (totalPaid >= invoiceTotal) {
+            newStatus = 'PAID';
+          } else if (totalPaid > 0) {
+            newStatus = 'PARTIAL';
+          }
+
+          // Update all purchase entries with the new status
+          await tx.purchaseEntry.updateMany({
+            where: {
+              vendorId: id,
+              invoiceNumber: invoiceNumber
+            },
+            data: {
+              status: newStatus as any
+            }
+          });
+
+          console.log(`✅ Updated ${purchaseEntries.length} purchase entries for invoice ${invoiceNumber} to status: ${newStatus}`);
+        }
+      }
+
+      console.log('✅ Direct payment created:', {
+        id: payment.id,
+        vendor: vendor.name,
+        amount: payment.amount,
+        invoiceNumber: invoiceNumber || 'N/A'
+      });
+
+      return { payment };
     });
 
     return NextResponse.json({ 
-      payment,
+      payment: result.payment,
       message: 'Payment recorded successfully'
     }, { status: 201 });
   } catch (error) {

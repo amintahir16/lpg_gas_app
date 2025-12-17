@@ -93,20 +93,39 @@ export default function VendorExportModal({
       return data;
     }
     
+    // Set start date to beginning of day (00:00:00.000)
     const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    
+    // Set end date to end of day (23:59:59.999)
     const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999); // Include the entire end date
+    end.setHours(23, 59, 59, 999);
     
     const filtered = data.filter(item => {
-      const itemDate = new Date(item.purchaseDate || item.paymentDate || item.createdAt);
-      return itemDate >= start && itemDate <= end;
+      const itemDateStr = item.purchaseDate || item.paymentDate || item.createdAt;
+      if (!itemDateStr) return false;
+      
+      // Create date and normalize to start of day for comparison
+      const itemDate = new Date(itemDateStr);
+      // Compare dates by normalizing to start of day
+      const itemDateOnly = new Date(itemDate.getFullYear(), itemDate.getMonth(), itemDate.getDate());
+      const startDateOnly = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+      const endDateOnly = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+      
+      return itemDateOnly >= startDateOnly && itemDateOnly <= endDateOnly;
     });
     
     console.log('Date filtering:', {
       startDate,
       endDate,
+      start: start.toISOString(),
+      end: end.toISOString(),
       originalCount: data.length,
-      filteredCount: filtered.length
+      filteredCount: filtered.length,
+      sampleItemDates: data.slice(0, 3).map(item => ({
+        date: item.purchaseDate || item.paymentDate || item.createdAt,
+        included: filtered.includes(item)
+      }))
     });
     
     return filtered;
@@ -371,75 +390,8 @@ export default function VendorExportModal({
         }
       }
       
-      // Financial Summary Section (Date Range Specific)
-      const totalPurchases = purchases.reduce((sum, p) => sum + Number(p.totalPrice), 0);
-      const totalPayments = payments.reduce((sum, p) => sum + Number(p.amount), 0);
-      const netBalance = totalPayments - totalPurchases;
-      
-      if (yPosition > pageHeight - 100) {
-        doc.addPage();
-        yPosition = 20;
-      }
-      
-      // Summary Header with Date Range
-      doc.setFillColor(155, 89, 182);
-      doc.rect(15, yPosition, pageWidth - 30, 8, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(14);
-      doc.setFont('helvetica', 'bold');
-      doc.text('FINANCIAL SUMMARY', 20, yPosition + 6);
-      
-      yPosition += 20;
-      
-      // Summary Box
-      doc.setFillColor(248, 249, 250);
-      doc.rect(15, yPosition, pageWidth - 30, 60, 'F');
-      doc.setDrawColor(200, 200, 200);
-      doc.rect(15, yPosition, pageWidth - 30, 60, 'S');
-      
-      // Date Range Info
-      doc.setTextColor(100, 100, 100);
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
-      const dateRangeText = startDate && endDate 
-        ? `Summary for Period: ${formatDate(startDate)} - ${formatDate(endDate)}`
-        : 'Summary for All Time';
-      doc.text(dateRangeText, 25, yPosition + 10);
-      
-      // Summary Content
-      doc.setTextColor(0, 0, 0);
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      
-      // Total Purchases
-      doc.text('Total Purchases:', 25, yPosition + 25);
-      doc.setFont('helvetica', 'normal');
-      doc.text(formatCurrency(totalPurchases), pageWidth - 50, yPosition + 25, { align: 'right' });
-      
-      // Total Payments
-      doc.setFont('helvetica', 'bold');
-      doc.text('Total Payments:', 25, yPosition + 35);
-      doc.setFont('helvetica', 'normal');
-      doc.text(formatCurrency(totalPayments), pageWidth - 50, yPosition + 35, { align: 'right' });
-      
-      // Net Balance
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(14);
-      doc.text('Net Balance:', 25, yPosition + 50);
-      doc.setTextColor(netBalance >= 0 ? 39 : 231, netBalance >= 0 ? 174 : 76, netBalance >= 0 ? 96 : 60);
-      doc.text(formatCurrency(netBalance), pageWidth - 50, yPosition + 50, { align: 'right' });
-      
-      // Balance Interpretation
-      doc.setTextColor(100, 100, 100);
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'italic');
-      const balanceText = netBalance >= 0 
-        ? 'You owe this amount to the vendor'
-        : 'Vendor owes you this amount';
-      doc.text(balanceText, 25, yPosition + 58);
-      
       // Footer
-      yPosition += 70;
+      yPosition += 20;
       doc.setTextColor(100, 100, 100);
       doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
