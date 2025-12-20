@@ -226,7 +226,44 @@ export default function AccessoriesInventoryPage() {
     }
   };
 
+  // Normalize and format category name
+  const normalizeAndFormatCategoryName = (categoryName: string): string => {
+    if (!categoryName) return '';
+    
+    // First normalize: trim and lowercase
+    const normalized = categoryName.trim().toLowerCase();
+    
+    if (!normalized) return '';
+    
+    // Handle common variations
+    if (normalized === 'stove' || normalized === 'stoves') {
+      return 'Stoves';
+    } else if (normalized === 'regulator' || normalized === 'regulators') {
+      return 'Regulators';
+    } else if (normalized === 'valve' || normalized === 'valves') {
+      return 'Valves';
+    } else if (normalized === 'pipe' || normalized === 'pipes' || normalized === 'gas pipe' || normalized === 'gas pipes') {
+      return 'Gas Pipes';
+    } else if (normalized === 'vaporizer' || normalized === 'vaporizers' || normalized === 'vaporiser' || normalized === 'vaporisers') {
+      return 'Vaporizers';
+    } else {
+      // Capitalize first letter of each word
+      return normalized
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+    }
+  };
+
   const handleCreateCustomItem = async (itemName: string) => {
+    // First normalize the category name, then format it
+    const normalizedCategoryName = normalizeAndFormatCategoryName(itemName);
+    
+    if (!normalizedCategoryName) {
+      alert('Please enter a valid category name');
+      return;
+    }
+    
     try {
       const response = await fetch('/api/inventory/custom-items', {
         method: 'POST',
@@ -234,8 +271,8 @@ export default function AccessoriesInventoryPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          name: itemName, // This creates a new category
-          type: itemName, // This is the first item in the category
+          name: normalizedCategoryName, // This creates a new category (normalized and formatted)
+          type: normalizedCategoryName, // This is the first item in the category
           quantity: 0,
           costPerPiece: 0,
           totalCost: 0
@@ -245,7 +282,7 @@ export default function AccessoriesInventoryPage() {
 
       if (response.ok) {
         await fetchData();
-        setActiveTab(itemName); // Set the new category as active tab
+        setActiveTab(normalizedCategoryName); // Set the new category as active tab
         setShowAddItemForm(false);
         setNewItemName('');
         alert('Custom item category created successfully!');
