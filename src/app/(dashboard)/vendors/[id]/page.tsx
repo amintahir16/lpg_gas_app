@@ -270,28 +270,15 @@ export default function VendorDetailPage() {
       return [{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '', status: 'EMPTY' }];
     }
     
-    // For other categories, use actual vendor items from database if available
-    if (vendor && vendorItems.length > 0) {
-      return vendorItems.map(item => ({
-        itemName: item.name,
-        quantity: 0,
-        unitPrice: 0,
-        totalPrice: 0,
-        status: 'EMPTY',
-        category: item.category || '',
-        cylinderCodes: ''
-      }));
+    // For vaporizer purchase, start with one empty item row (matching cylinder purchase behavior)
+    if (vendor?.category?.slug === 'vaporizer_purchase') {
+      return [{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0 }];
     }
     
-    // Only use hardcoded fallback if no vendor items are available
-    if (vendor) {
-      if (vendor?.category?.slug === 'vaporizer_purchase') {
-        return defaultVaporizerItems;
-      }
-    }
-    
-    // Final fallback
-    return [{ itemName: '', quantity: 1, unitPrice: 0, totalPrice: 0 }];
+    // For other categories (valves, etc.), start with one empty item row
+    // Users can add items via the "Add Item" button or select from dropdown
+    // Final fallback - one empty item row for generic form
+    return [{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0 }];
   };
   
   const [vendorItems, setVendorItems] = useState<Array<{id: string, name: string, category: string, description?: string}>>([]);
@@ -413,9 +400,11 @@ export default function VendorDetailPage() {
     } else {
       // Fallback to hardcoded items if no vendor items
       if (vendor?.category?.slug === 'vaporizer_purchase') {
-        setPurchaseItems([...defaultVaporizerItems]);
+        // Start with one empty item row (matching cylinder purchase behavior)
+        setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0 }]);
       } else {
-        setPurchaseItems([{ itemName: '', quantity: 1, unitPrice: 0, totalPrice: 0 }]);
+        // Generic form (valves, etc.) - start with one empty item row
+        setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0 }]);
       }
     }
   }, [vendor, vendorItems]);
@@ -430,7 +419,8 @@ export default function VendorDetailPage() {
                           // Reset price per 11.8kg
                           setPricePer11_8kg(0);
                         } else if (vendor?.category?.slug === 'vaporizer_purchase') {
-        setPurchaseItems([...defaultVaporizerItems]);
+        // Start with one empty item row (matching cylinder purchase behavior)
+        setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0 }]);
       } else if (vendor?.category?.slug === 'accessories_purchase') {
         setPurchaseItems([...defaultAccessoriesItems]);
       }
@@ -1173,9 +1163,11 @@ export default function VendorDetailPage() {
         // Start with one empty item for cylinder purchase (matching gas purchase behavior)
         setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '', status: 'EMPTY' }]);
       } else if (vendor?.category?.slug === 'vaporizer_purchase') {
-        setPurchaseItems(defaultVaporizerItems);
+        // Start with one empty item row (matching cylinder purchase behavior)
+        setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0 }]);
       } else {
-        setPurchaseItems([{ itemName: '', quantity: 1, unitPrice: 0, totalPrice: 0 }]);
+        // Generic form (valves, etc.) - start with one empty item row
+        setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0 }]);
       }
       
       setPurchaseFormData({ invoiceNumber: '', notes: '', paidAmount: 0, paymentMethod: 'CASH' });
@@ -1615,7 +1607,15 @@ export default function VendorDetailPage() {
                         </div>
                         
                         <div className="overflow-x-auto">
-                          <table className="w-full border-collapse border border-gray-300">
+                          <table className="w-full border-collapse border border-gray-300" style={{ tableLayout: 'fixed' }}>
+                            <colgroup>
+                              <col style={{ width: '23%' }} />
+                              <col style={{ width: '23%' }} />
+                              <col style={{ width: '13%' }} />
+                              <col style={{ width: '13%' }} />
+                              <col style={{ width: '13%' }} />
+                              <col style={{ width: '15%' }} />
+                            </colgroup>
                             <thead>
                               <tr className="bg-gray-50">
                                 <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-700">
@@ -1628,10 +1628,10 @@ export default function VendorDetailPage() {
                                   Quantity
                                 </th>
                                 <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
-                                  Unit Price
+                                  Price Per Unit
                                 </th>
                                 <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
-                                  Total Price
+                                  Price Per Item
                                 </th>
                                 <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
                                   Actions
@@ -1695,7 +1695,7 @@ export default function VendorDetailPage() {
                                     />
                                   </td>
                                   <td className="border border-gray-300 px-4 py-2 text-center font-medium text-gray-900">
-                                    PKR {item.totalPrice || 0}
+                                    Rs {item.totalPrice || 0}
                                   </td>
                                   <td className="border border-gray-300 px-4 py-2 text-center">
                                     <Button
@@ -1718,7 +1718,7 @@ export default function VendorDetailPage() {
                                   Grand Total:
                                 </td>
                                 <td className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-900">
-                                  PKR {purchaseItems.reduce((sum, item) => sum + (item.totalPrice || 0), 0)}
+                                  Rs {purchaseItems.reduce((sum, item) => sum + (item.totalPrice || 0), 0)}
                                 </td>
                                 <td className="border border-gray-300 px-4 py-2"></td>
                               </tr>
@@ -2072,29 +2072,48 @@ export default function VendorDetailPage() {
                         </div>
                       </div>
                     ) : vendor?.category?.slug === 'vaporizer_purchase' ? (
-                      // Category-specific table format for vaporizer
+                      // Vaporizer purchase form with dropdown for vendor items (matching cylinder purchase UI)
                       <div>
                         <div className="flex justify-between items-center mb-4">
                           <label className="text-lg font-semibold text-gray-900">
                             {vendor.category.name}
                           </label>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleAddPurchaseItem}
+                          >
+                            <PlusIcon className="w-4 h-4 mr-1" />
+                            Add Item
+                          </Button>
                         </div>
                         
                         <div className="overflow-x-auto">
-                          <table className="w-full border-collapse border border-gray-300 table-fixed">
+                          <table className="w-full border-collapse border border-gray-300" style={{ tableLayout: 'fixed' }}>
+                            <colgroup>
+                              <col style={{ width: '30%' }} />
+                              <col style={{ width: '15%' }} />
+                              <col style={{ width: '20%' }} />
+                              <col style={{ width: '20%' }} />
+                              <col style={{ width: '15%' }} />
+                            </colgroup>
                             <thead>
                               <tr className="bg-gray-50">
-                                <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-700 w-2/5">
+                                <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-700">
                                   Item
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700 w-1/5">
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
                                   Quantity
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700 w-1/5">
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
                                   Price per Unit
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700 w-1/5">
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
                                   Price per Item
+                                </th>
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                  Actions
                                 </th>
                               </tr>
                             </thead>
@@ -2102,23 +2121,32 @@ export default function VendorDetailPage() {
                               {getDisplayItems().map((item, index) => (
                                 <tr key={index}>
                                   <td className="border border-gray-300 px-4 py-2">
-                                    {/* Use input field for all items to maintain consistent alignment */}
-                                    <Input
+                                    <select
                                       value={item.itemName}
                                       onChange={(e) => handlePurchaseItemChange(
                                         index,
                                         'itemName',
                                         e.target.value
                                       )}
-                                      placeholder="Enter item name"
-                                      className="border-0 focus:ring-1 bg-transparent text-sm font-medium text-gray-900"
-                                      readOnly={
-                                        vendor?.category?.slug === 'vaporizer_purchase' && index < defaultVaporizerItems.length
-                                      }
-                                    />
+                                      className="w-full border-0 focus:ring-1 bg-transparent text-sm font-medium text-gray-900"
+                                    >
+                                      <option value="">Select Item</option>
+                                      {vendorItems.length > 0 ? (
+                                        vendorItems.map((vendorItem) => (
+                                          <option key={vendorItem.id} value={vendorItem.name}>
+                                            {vendorItem.name}
+                                          </option>
+                                        ))
+                                      ) : (
+                                        defaultVaporizerItems.map((defaultItem, idx) => (
+                                          <option key={idx} value={defaultItem.itemName}>
+                                            {defaultItem.itemName}
+                                          </option>
+                                        ))
+                                      )}
+                                    </select>
                                   </td>
                                   <td className="border border-gray-300 px-4 py-2">
-                                    <div className="space-y-1">
                                     <Input
                                       type="number"
                                       value={item.quantity}
@@ -2130,15 +2158,8 @@ export default function VendorDetailPage() {
                                       placeholder="Enter quantity"
                                       min="0"
                                       step="1"
-                                        max={getMaxQuantity(item.itemName) || undefined}
                                       className="text-center border-0 focus:ring-1 bg-transparent"
                                     />
-                                      {getMaxQuantity(item.itemName) !== null && (
-                                        <p className="text-xs text-gray-500 text-center">
-                                          Max: {getMaxQuantity(item.itemName)} available
-                                        </p>
-                                      )}
-                                    </div>
                                   </td>
                                   <td className="border border-gray-300 px-4 py-2">
                                     <Input
@@ -2158,26 +2179,41 @@ export default function VendorDetailPage() {
                                   <td className="border border-gray-300 px-4 py-2 text-center font-medium">
                                     {formatCurrency(item.totalPrice)}
                                   </td>
+                                  <td className="border border-gray-300 px-4 py-2 text-center">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleRemovePurchaseItem(index)}
+                                      disabled={getDisplayItems().length <= 1}
+                                      className="text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      Remove
+                                    </Button>
+                                  </td>
                                 </tr>
                               ))}
-                              <tr className="bg-gray-50 font-bold">
-                                <td colSpan={3} className="border border-gray-300 px-4 py-2 text-right">
-                                  Total =
+                            </tbody>
+                            <tfoot>
+                              <tr className="bg-gray-50">
+                                <td colSpan={3} className="border border-gray-300 px-4 py-2 text-right font-semibold text-gray-700">
+                                  Grand Total:
                                 </td>
-                                <td className="border border-gray-300 px-4 py-2 text-center">
+                                <td className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-900">
                                   {formatCurrency(calculatePurchaseTotal())}
                                 </td>
+                                <td className="border border-gray-300 px-4 py-2"></td>
                               </tr>
-                            </tbody>
+                            </tfoot>
                           </table>
                         </div>
                       </div>
                     ) : (
-                      // Generic form for other categories
+                      // Generic form for other categories (valves, etc.) - matching cylinder purchase UI
                       <div>
-                        <div className="flex justify-between items-center mb-3">
-                          <label className="text-sm font-medium text-gray-700">
-                            Items
+                        <div className="flex justify-between items-center mb-4">
+                          <label className="text-lg font-semibold text-gray-900">
+                            {vendor?.category?.name || 'Items'}
                           </label>
                           <Button
                             type="button"
@@ -2191,31 +2227,59 @@ export default function VendorDetailPage() {
                         </div>
 
                         <div className="overflow-x-auto">
-                          <table className="w-full border-collapse border border-gray-300 table-fixed">
+                          <table className="w-full border-collapse border border-gray-300" style={{ tableLayout: 'fixed' }}>
+                            <colgroup>
+                              <col style={{ width: '30%' }} />
+                              <col style={{ width: '15%' }} />
+                              <col style={{ width: '20%' }} />
+                              <col style={{ width: '20%' }} />
+                              <col style={{ width: '15%' }} />
+                            </colgroup>
                             <thead>
                               <tr className="bg-gray-50">
-                                <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-700 w-2/5">
+                                <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-700">
                                   Item
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700 w-1/5">
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
                                   Quantity
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700 w-1/5">
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
                                   Price per Unit
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700 w-1/5">
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
                                   Price per Item
+                                </th>
+                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                  Actions
                                 </th>
                               </tr>
                             </thead>
                             <tbody>
                               {getDisplayItems().map((item, index) => (
                                 <tr key={index}>
-                                  <td className="border border-gray-300 px-4 py-2 font-medium text-gray-900">
-                                    {item.itemName}
+                                  <td className="border border-gray-300 px-4 py-2">
+                                    <select
+                                      value={item.itemName}
+                                      onChange={(e) => handlePurchaseItemChange(
+                                        index,
+                                        'itemName',
+                                        e.target.value
+                                      )}
+                                      className="w-full border-0 focus:ring-1 bg-transparent text-sm font-medium text-gray-900"
+                                    >
+                                      <option value="">Select Item</option>
+                                      {vendorItems.length > 0 ? (
+                                        vendorItems.map((vendorItem) => (
+                                          <option key={vendorItem.id} value={vendorItem.name}>
+                                            {vendorItem.name}
+                                          </option>
+                                        ))
+                                      ) : (
+                                        <option value={item.itemName}>{item.itemName}</option>
+                                      )}
+                                    </select>
                                   </td>
                                   <td className="border border-gray-300 px-4 py-2">
-                                    <div className="space-y-1">
                                     <Input
                                       type="number"
                                       value={item.quantity}
@@ -2227,15 +2291,8 @@ export default function VendorDetailPage() {
                                       placeholder="Enter quantity"
                                       min="0"
                                       step="1"
-                                        max={getMaxQuantity(item.itemName) || undefined}
                                       className="text-center border-0 focus:ring-1 bg-transparent"
                                     />
-                                      {getMaxQuantity(item.itemName) !== null && (
-                                        <p className="text-xs text-gray-500 text-center">
-                                          Max: {getMaxQuantity(item.itemName)} available
-                                        </p>
-                                      )}
-                                    </div>
                                   </td>
                                   <td className="border border-gray-300 px-4 py-2">
                                     <Input
@@ -2253,32 +2310,35 @@ export default function VendorDetailPage() {
                                     />
                                   </td>
                                   <td className="border border-gray-300 px-4 py-2 text-center font-medium">
-                                    {formatCurrency(item.totalPrice)}
+                                    {formatCurrency(Number(item.totalPrice) || 0)}
+                                  </td>
+                                  <td className="border border-gray-300 px-4 py-2 text-center">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleRemovePurchaseItem(index)}
+                                      disabled={getDisplayItems().length <= 1}
+                                      className="text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      Remove
+                                    </Button>
                                   </td>
                                 </tr>
                               ))}
-                              <tr className="bg-gray-50 font-bold">
-                                <td colSpan={
-                                  isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') ? 3 : 
-                                  isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '') ? 3 : 3
-                                } className="border border-gray-300 px-4 py-2 text-right">
-                                  Total =
-                                </td>
-                                <td className="border border-gray-300 px-4 py-2 text-center">
-                                  {formatCurrency(calculatePurchaseTotal())}
-                                </td>
-                              </tr>
                             </tbody>
+                            <tfoot>
+                              <tr className="bg-gray-50">
+                                <td colSpan={3} className="border border-gray-300 px-4 py-2 text-right font-semibold text-gray-700">
+                                  Grand Total:
+                                </td>
+                                <td className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-900">
+                                  {formatCurrency(calculatePurchaseTotal() || 0)}
+                                </td>
+                                <td className="border border-gray-300 px-4 py-2"></td>
+                              </tr>
+                            </tfoot>
                           </table>
-                        </div>
-
-                        <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
-                          <span className="font-semibold text-gray-900">
-                            Total Amount:
-                          </span>
-                          <span className="text-xl font-bold text-gray-900">
-                            {formatCurrency(calculatePurchaseTotal())}
-                          </span>
                         </div>
                       </div>
                     )}
@@ -2344,7 +2404,8 @@ export default function VendorDetailPage() {
                           // Reset price per 11.8kg
                           setPricePer11_8kg(0);
                         } else if (vendor?.category?.slug === 'vaporizer_purchase') {
-                          setPurchaseItems(defaultVaporizerItems);
+                          // Start with one empty item row (matching cylinder purchase behavior)
+                          setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0 }]);
                         } else if (vendor?.category?.slug === 'accessories_purchase') {
                           setPurchaseItems(defaultAccessoriesItems);
                         } else {

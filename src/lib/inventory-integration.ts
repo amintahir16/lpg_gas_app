@@ -70,6 +70,13 @@ export class InventoryIntegrationService {
       return;
     }
 
+    // Check if this is a valves purchase vendor
+    if (this.isValvesPurchaseVendor(vendorCategory)) {
+      console.log(`🔧 Processing as valves purchase (vendor category: ${vendorCategory})`);
+      await this.processValvesPurchase(item);
+      return;
+    }
+
     // Check if this is a cylinder purchase vendor
     // If vendor is a cylinder purchase vendor, ALL items should be processed as cylinders
     if (this.isCylinderPurchaseVendor(vendorCategory)) {
@@ -141,6 +148,23 @@ export class InventoryIntegrationService {
     ];
     
     return vaporizerPatterns.some(pattern => normalizedSlug.includes(pattern));
+  }
+
+  /**
+   * Check if vendor is a valves purchase vendor
+   */
+  private static isValvesPurchaseVendor(categorySlug?: string): boolean {
+    if (!categorySlug) return false;
+    
+    const normalizedSlug = categorySlug.toLowerCase().replace(/[_-]/g, '');
+    const valvesPatterns = [
+      'valvespurchase',
+      'valves_purchase',
+      'valvepurchase',
+      'valve_purchase'
+    ];
+    
+    return valvesPatterns.some(pattern => normalizedSlug.includes(pattern));
   }
 
   /**
@@ -319,6 +343,30 @@ export class InventoryIntegrationService {
     
     // Use CustomItem table for all vaporizers (same as accessories)
     await this.processCustomItemPurchase(item, category);
+  }
+
+  /**
+   * Process valves purchase - add to CustomItem table with "Valves" category
+   */
+  private static async processValvesPurchase(item: VendorPurchaseItem): Promise<void> {
+    const itemName = item.itemName; // This becomes the "type" in inventory
+    const quantity = Number(item.quantity); // Ensure it's a number
+    const unitPrice = Number(item.unitPrice); // Ensure it's a number
+    const totalCost = quantity * unitPrice;
+
+    console.log(`🔧 Processing valves purchase: ${itemName} (${quantity} units at ${unitPrice} each)`);
+
+    // Always use "Valves" category for valves purchases
+    // The category should come from the vendor item if available, otherwise default to "Valves"
+    const category = item.category || 'Valves';
+    
+    // Normalize to "Valves" to ensure consistency
+    const normalizedCategory = this.normalizeCategoryName(category);
+    
+    console.log(`📂 Using category: ${normalizedCategory} for item: ${itemName}`);
+    
+    // Use CustomItem table for all valves (same as accessories and vaporizers)
+    await this.processCustomItemPurchase(item, normalizedCategory);
   }
 
 
