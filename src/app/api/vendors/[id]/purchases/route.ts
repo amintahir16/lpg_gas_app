@@ -176,14 +176,31 @@ export async function POST(
 
       // Create individual purchase entries for each item
       const purchaseEntries = await Promise.all(
-        items.map((item: any) =>
-          tx.purchaseEntry.create({
+        items.map((item: any) => {
+          // For accessories purchases, ALWAYS store the category in itemDescription
+          // This ensures category is always available even if vendor item is deleted later
+          // (Similar to how itemName is stored - it persists independently)
+          let itemDescription = item.itemDescription || null;
+          if (categoryEnum === 'ACCESSORIES_PURCHASE') {
+            // Always store category in itemDescription for accessories purchases
+            // This makes it persistent like itemName, so it shows even if vendor item is deleted
+            if (item.category) {
+              itemDescription = item.category;
+            } else {
+              // If category not provided, try to get it from vendor items
+              // This handles cases where category might not be in the request
+              // But we should always have it from the form, so this is a fallback
+              console.log('⚠️ Category not provided in item data for accessories purchase:', item.itemName);
+            }
+          }
+          
+          return tx.purchaseEntry.create({
             data: {
               vendorId: id,
               userId: session.user.id,
               category: categoryEnum as any,
               itemName: item.itemName,
-              itemDescription: item.itemDescription || null,
+              itemDescription: itemDescription, // Stores category for accessories, description for others
               quantity: Number(item.quantity),
               unitPrice: Number(item.unitPrice),
               totalPrice: Number(item.totalPrice),
@@ -192,8 +209,8 @@ export async function POST(
               invoiceNumber,
               notes
             }
-          })
-        )
+          });
+        })
       );
 
       // Create payment if paid amount > 0

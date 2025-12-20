@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { normalizeTypeName } from '@/lib/cylinder-utils';
 
 export async function PUT(
   request: NextRequest,
@@ -10,13 +11,18 @@ export async function PUT(
     const body = await request.json();
     const { typeName, cylinderType, capacity, currentStatus, location, storeId, vehicleId, purchaseDate, purchasePrice, lastMaintenanceDate, nextMaintenanceDate } = body;
 
+    // IMPORTANT: Normalize typeName to consistent case format before storing
+    // This ensures "special", "Special", "SPECIAL" all become "Special"
+    // This prevents duplicate cards in inventory dashboard
+    const normalizedTypeName = normalizeTypeName(typeName) || null;
+
     // Store the cylinder type directly as a string (no enum validation needed)
     const cylinder = await prisma.cylinder.update({
       where: {
         id
       },
       data: {
-        typeName: typeName || null, // Store original type name for display
+        typeName: normalizedTypeName, // Store normalized type name for consistent grouping
         cylinderType: cylinderType, // Store as string directly
         capacity: parseFloat(capacity),
         currentStatus,

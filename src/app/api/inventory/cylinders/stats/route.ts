@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
+import { getCylinderTypeDisplayName, normalizeTypeName } from '@/lib/cylinder-utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,29 +19,41 @@ export async function GET(request: NextRequest) {
       }
     });
 
+    // Use shared normalization function from cylinder-utils
+    // This ensures consistent case normalization across the entire application
+
     // Process cylinder type stats dynamically (handles any cylinder type)
     // Note: Exclude WITH_CUSTOMER from inventory totals as they are tracked separately
     // Create unique combinations of typeName + capacity + cylinderType
+    // IMPORTANT: Normalize typeName to lowercase for case-insensitive grouping
+    // This ensures "special" and "Special" are treated as the same type
     // Use a delimiter that won't conflict with data (|||)
     const uniqueCombinations = [...new Set(
-      cylinderTypeStats.map(stat => 
-        `${stat.cylinderType}|||${stat.capacity?.toString() || 'null'}|||${stat.typeName || 'null'}`
-      )
+      cylinderTypeStats.map(stat => {
+        // Normalize typeName to lowercase for grouping (case-insensitive)
+        const normalizedTypeName = stat.typeName 
+          ? stat.typeName.toLowerCase().trim() 
+          : 'null';
+        return `${stat.cylinderType}|||${stat.capacity?.toString() || 'null'}|||${normalizedTypeName}`;
+      })
     )];
     
     const processedStats = uniqueCombinations.map(combination => {
-      const [type, capacityStr, typeName] = combination.split('|||');
+      const [type, capacityStr, normalizedTypeNameLower] = combination.split('|||');
       const capacity = capacityStr !== 'null' ? parseFloat(capacityStr) : null;
-      const actualTypeName = typeName !== 'null' ? typeName : null;
+      const normalizedTypeNameLowercase = normalizedTypeNameLower !== 'null' ? normalizedTypeNameLower : null;
 
-      // Find all stats for this combination
+      // Find all stats for this combination using case-insensitive typeName comparison
+      // This groups "special", "Special", "SPECIAL" together
       const statsForCombination = cylinderTypeStats.filter(stat => {
         const statCapacityStr = stat.capacity?.toString() || 'null';
-        const statTypeName = stat.typeName || null;
+        const statTypeNameLower = stat.typeName 
+          ? stat.typeName.toLowerCase().trim() 
+          : 'null';
         return (
           stat.cylinderType === type &&
           statCapacityStr === capacityStr &&
-          statTypeName === actualTypeName
+          statTypeNameLower === normalizedTypeNameLowercase
         );
       });
 
@@ -53,15 +65,18 @@ export async function GET(request: NextRequest) {
       
       // Fully dynamic display logic - works for any cylinder type
       // Priority 1: If typeName exists, use it with capacity
+      // Normalize typeName to proper case format for display (capitalize first letter of each word)
       let displayType: string;
-      const trimmedTypeName = actualTypeName ? String(actualTypeName).trim() : '';
+      const normalizedTypeName = normalizeTypeName(normalizedTypeNameLowercase);
+      const trimmedTypeName = normalizedTypeName ? String(normalizedTypeName).trim() : '';
       
       if (trimmedTypeName && trimmedTypeName !== '' && trimmedTypeName !== 'Cylinder') {
-        // Use typeName with actual capacity from database
+        // Use normalized typeName with actual capacity from database
+        // This ensures consistent display format (e.g., "Special" not "special" or "SPECIAL")
         displayType = `${trimmedTypeName} (${capacity !== null ? capacity : 'N/A'}kg)`;
       } else if (capacity !== null) {
         // No typeName but have capacity - use generic format with actual capacity
-          displayType = `Cylinder (${capacity}kg)`;
+        displayType = `Cylinder (${capacity}kg)`;
       } else {
         // Fallback to utility function (extracts capacity from enum)
         displayType = getCylinderTypeDisplayName(type);
@@ -100,6 +115,33 @@ export async function GET(request: NextRequest) {
     });
 
     const finalStats = Array.from(uniqueStatsMap.values());
+
+    // Sort stats to maintain consistent card positions
+    // Sort by: 1) capacity (ascending), 2) typeName (alphabetically)
+    // This ensures cards stay in the same position when updates occur
+    finalStats.sort((a, b) => {
+      // Extract typeName and capacity from display type for sorting
+      const aMatch = a.type.match(/^([^(]+)\s*\((\d+\.?\d*)kg\)/);
+      const bMatch = b.type.match(/^([^(]+)\s*\((\d+\.?\d*)kg\)/);
+      
+      if (aMatch && bMatch) {
+        const aTypeName = aMatch[1].trim().toLowerCase();
+        const bTypeName = bMatch[1].trim().toLowerCase();
+        const aCapacity = parseFloat(aMatch[2]);
+        const bCapacity = parseFloat(bMatch[2]);
+        
+        // First sort by capacity (ascending)
+        if (aCapacity !== bCapacity) {
+          return aCapacity - bCapacity;
+        }
+        
+        // If capacity is the same, sort by typeName alphabetically
+        return aTypeName.localeCompare(bTypeName);
+      }
+      
+      // Fallback: sort by display type string
+      return a.type.localeCompare(b.type);
+    });
 
     return NextResponse.json({
       success: true,

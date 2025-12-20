@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   PlusIcon,
-  CurrencyDollarIcon,
   ShoppingBagIcon,
   PencilIcon,
   TrashIcon,
@@ -274,12 +273,6 @@ export default function VendorsPage() {
           {categories.length} {categories.length === 1 ? 'category' : 'categories'}
         </div>
         <div className="flex gap-3">
-          <Link href="/vendors/credits">
-            <Button variant="outline" className="flex items-center gap-2">
-              <CurrencyDollarIcon className="w-5 h-5" />
-              Credit Management
-            </Button>
-          </Link>
           <Button
             onClick={() => setShowAddForm(!showAddForm)}
             className="flex items-center gap-2"

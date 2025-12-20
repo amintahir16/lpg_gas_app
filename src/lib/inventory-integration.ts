@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db';
-import { generateCylinderTypeFromCapacity } from './cylinder-utils';
+import { generateCylinderTypeFromCapacity, normalizeTypeName } from './cylinder-utils';
 
 export interface VendorPurchaseItem {
   itemName: string;
@@ -616,6 +616,10 @@ export class InventoryIntegrationService {
    * - "Domestic (11.8kg)" -> "Domestic"
    * - "Standard 15kg" -> "Standard"
    * - "Special (10kg)" -> "Special"
+   * - "special 10kg" -> "Special" (case-insensitive normalization)
+   * 
+   * IMPORTANT: Always normalizes to consistent case (capitalize first letter of each word)
+   * to ensure "special" and "Special" are treated as the same cylinder type
    */
   private static extractTypeNameFromItemName(itemName: string): string | null {
     if (!itemName) return null;
@@ -633,25 +637,9 @@ export class InventoryIntegrationService {
     if (typeNameMatch && typeNameMatch[1]) {
       const extractedName = typeNameMatch[1].trim();
       
-      // Normalize common type names
-      const normalized = extractedName.toLowerCase();
-      
-      // Map to standard names for consistency
-      if (normalized.includes('domestic')) {
-        return 'Domestic';
-      } else if (normalized.includes('standard')) {
-        return 'Standard';
-      } else if (normalized.includes('commercial')) {
-        return 'Commercial';
-      } else if (normalized.includes('cylinder') && extractedName.length <= 10) {
-        // If it's just "Cylinder" or similar generic name, return null to use default display
-        return null;
-      } else {
-        // Return the extracted name (capitalize first letter of each word)
-        return extractedName.split(' ')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-          .join(' ');
-      }
+      // Use shared normalization function to ensure consistent case
+      // This ensures "special", "Special", "SPECIAL" all become "Special"
+      return normalizeTypeName(extractedName);
     }
     
     // If no match found, return null (will use default display logic)

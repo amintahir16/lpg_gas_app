@@ -285,24 +285,24 @@ export default function VendorCreditsPage() {
               <div className="space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">Total Purchases:</span>
-                  <span className="font-medium">{formatCurrency(vendor.totalPurchases)}</span>
+                  <span className="font-medium">{formatCurrency(Math.round(vendor.totalPurchases))}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">Total Payments:</span>
-                  <span className="font-medium">{formatCurrency(vendor.totalPayments)}</span>
+                  <span className="font-medium">{formatCurrency(Math.round(vendor.totalPayments))}</span>
                 </div>
                 <div className="border-t pt-3">
                   <div className="flex justify-between text-sm font-semibold">
                     <span>Balance:</span>
                     <span className={vendor.hasCredit ? 'text-green-600' : vendor.hasOutstanding ? 'text-red-600' : 'text-gray-600'}>
-                      {vendor.hasCredit ? '+' : ''}{formatCurrency(vendor.outstandingBalance)}
+                      {vendor.hasCredit ? '+' : ''}{formatCurrency(Math.round(vendor.outstandingBalance))}
                     </span>
                   </div>
                   <div className="text-xs text-gray-500 mt-1">
                     {vendor.hasCredit 
-                      ? `${formatCurrency(vendor.creditBalance)} credit (vendor owes you)`
+                      ? `${formatCurrency(Math.round(vendor.creditBalance))} credit (vendor owes you)`
                       : vendor.hasOutstanding
-                      ? `${formatCurrency(vendor.outstandingBalance)} outstanding (you owe vendor)`
+                      ? `${formatCurrency(Math.round(vendor.outstandingBalance))} outstanding (you owe vendor)`
                       : 'Fully balanced'
                     }
                   </div>

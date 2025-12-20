@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { generateUniqueCylinderCode } from '@/lib/cylinder-code-generator';
+import { normalizeTypeName } from '@/lib/cylinder-utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -160,11 +161,16 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { code, typeName, cylinderType, capacity, currentStatus, location, storeId, vehicleId, purchaseDate, purchasePrice } = body;
 
+    // IMPORTANT: Normalize typeName to consistent case format before storing
+    // This ensures "special", "Special", "SPECIAL" all become "Special"
+    // This prevents duplicate cards in inventory dashboard
+    const normalizedTypeName = normalizeTypeName(typeName) || null;
+
     // Use provided code or generate one based on type name
     let cylinderCode = code;
     if (!cylinderCode) {
-      // Generate code based on type name (isTypeName = true)
-      const nameForCode = typeName || 'Cylinder';
+      // Generate code based on normalized type name (isTypeName = true)
+      const nameForCode = normalizedTypeName || 'Cylinder';
       cylinderCode = await generateUniqueCylinderCode(nameForCode, true);
     }
 
@@ -182,11 +188,12 @@ export async function POST(request: NextRequest) {
 
     // Store the cylinder type directly as a string (no enum validation needed)
     // The type is generated from capacity or mapped from known types
+    // Store normalized typeName to ensure consistent grouping in stats
     const cylinder = await prisma.cylinder.create({
       data: {
         code: cylinderCode,
         cylinderType: cylinderType, // Store as string directly
-        typeName: typeName || null, // Store original type name for display
+        typeName: normalizedTypeName, // Store normalized type name for consistent grouping
         capacity: parseFloat(capacity),
         currentStatus: currentStatus || 'FULL',
         location,

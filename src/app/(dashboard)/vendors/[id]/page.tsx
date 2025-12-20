@@ -2430,6 +2430,11 @@ export default function VendorDetailPage() {
                       <table className="w-full text-sm">
                         <thead className="bg-gray-50">
                           <tr>
+                            {vendor?.category?.slug === 'accessories_purchase' && (
+                              <th className="px-4 py-2 text-left font-medium text-gray-700">
+                                Category
+                              </th>
+                            )}
                             <th className="px-4 py-2 text-left font-medium text-gray-700">
                               Item
                             </th>
@@ -2450,23 +2455,42 @@ export default function VendorDetailPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {(purchase.items || [purchase]).map((item: any, itemIndex: number) => (
-                            <tr key={itemIndex} className="border-t border-gray-200">
-                              <td className="px-4 py-2">{item.itemName}</td>
-                              <td className="px-4 py-2 text-right">{item.quantity}</td>
-                              <td className="px-4 py-2 text-right">
-                                {formatCurrency(Math.round(Number(item.unitPrice)))}
-                              </td>
-                              {vendor?.category?.slug === 'cylinder_purchase' && (
-                                <td className="px-4 py-2 text-left text-xs text-gray-600">
-                                  {item.cylinderCodes || '-'}
+                          {(purchase.items || [purchase]).map((item: any, itemIndex: number) => {
+                            // For accessories purchases, get category from itemDescription
+                            // itemDescription stores the category name for accessories purchases (just like itemName stores the item name)
+                            // This ensures category is always available even if vendor item is deleted
+                            let categoryDisplay = '-';
+                            if (vendor?.category?.slug === 'accessories_purchase') {
+                              // itemDescription contains the category for accessories purchases
+                              // This is stored when the purchase is created, so it persists even if vendor item is deleted
+                              if (item.itemDescription && item.itemDescription.trim()) {
+                                categoryDisplay = item.itemDescription;
+                              }
+                            }
+                            
+                            return (
+                              <tr key={itemIndex} className="border-t border-gray-200">
+                                {vendor?.category?.slug === 'accessories_purchase' && (
+                                  <td className="px-4 py-2 text-gray-600 font-medium">
+                                    {categoryDisplay}
+                                  </td>
+                                )}
+                                <td className="px-4 py-2">{item.itemName}</td>
+                                <td className="px-4 py-2 text-right">{item.quantity}</td>
+                                <td className="px-4 py-2 text-right">
+                                  {formatCurrency(Math.round(Number(item.unitPrice)))}
                                 </td>
-                              )}
-                              <td className="px-4 py-2 text-right font-medium">
-                                {formatCurrency(Math.round(Number(item.totalPrice)))}
-                              </td>
-                            </tr>
-                          ))}
+                                {vendor?.category?.slug === 'cylinder_purchase' && (
+                                  <td className="px-4 py-2 text-left text-xs text-gray-600">
+                                    {item.cylinderCodes || '-'}
+                                  </td>
+                                )}
+                                <td className="px-4 py-2 text-right font-medium">
+                                  {formatCurrency(Math.round(Number(item.totalPrice)))}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>

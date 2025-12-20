@@ -14,7 +14,7 @@ import {
   CubeIcon,
   TrashIcon
 } from '@heroicons/react/24/outline';
-import { getCylinderTypeDisplayName, getCylinderWeight, generateCylinderTypeFromCapacity, isValidCylinderCapacity } from '@/lib/cylinder-utils';
+import { getCylinderTypeDisplayName, getCylinderWeight, generateCylinderTypeFromCapacity, isValidCylinderCapacity, normalizeTypeName } from '@/lib/cylinder-utils';
 import { getCylinderTypeOptions } from '@/lib/cylinder-types';
 
 interface Cylinder {
@@ -142,7 +142,33 @@ export default function CylindersInventoryPage() {
             existing.total = existing.full + existing.empty + existing.retired + existing.maintenance;
           }
         });
-        setCylinderTypeStats(Array.from(statsMap.values()));
+        // Sort stats to maintain consistent card positions
+        // Sort by: 1) capacity (ascending), 2) typeName (alphabetically)
+        const sortedStats = Array.from(statsMap.values()).sort((a, b) => {
+          // Extract typeName and capacity from display type for sorting
+          const aMatch = a.type.match(/^([^(]+)\s*\((\d+\.?\d*)kg\)/);
+          const bMatch = b.type.match(/^([^(]+)\s*\((\d+\.?\d*)kg\)/);
+          
+          if (aMatch && bMatch) {
+            const aTypeName = aMatch[1].trim().toLowerCase();
+            const bTypeName = bMatch[1].trim().toLowerCase();
+            const aCapacity = parseFloat(aMatch[2]);
+            const bCapacity = parseFloat(bMatch[2]);
+            
+            // First sort by capacity (ascending)
+            if (aCapacity !== bCapacity) {
+              return aCapacity - bCapacity;
+            }
+            
+            // If capacity is the same, sort by typeName alphabetically
+            return aTypeName.localeCompare(bTypeName);
+          }
+          
+          // Fallback: sort by display type string
+          return a.type.localeCompare(b.type);
+        });
+        
+        setCylinderTypeStats(sortedStats);
       } else {
         console.error('Failed to fetch stats, status:', response.status);
         const errorData = await response.json().catch(() => ({}));
@@ -438,8 +464,10 @@ export default function CylindersInventoryPage() {
       }
       
       // Extract type name from input
+      // IMPORTANT: Normalize to consistent case to ensure "special" and "Special" are treated the same
       const typeNameMatch = inputValue.match(/^([A-Za-z]+(?:\s+[A-Za-z]+)*)/);
-      const typeName = typeNameMatch ? typeNameMatch[1].trim() : 'Cylinder';
+      const extractedTypeName = typeNameMatch ? typeNameMatch[1].trim() : 'Cylinder';
+      const typeName = normalizeTypeName(extractedTypeName) || 'Cylinder';
       
       // Generate enum type dynamically from capacity - fully flexible approach
       // No hardcoded type mappings - works for any capacity
@@ -523,8 +551,17 @@ export default function CylindersInventoryPage() {
       {/* Type Statistics */}
       {cylinderTypeStats.length > 0 ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {cylinderTypeStats.map((stat, index) => (
-          <Card key={`stat-${stat.type}-${stat.typeEnum || 'unknown'}-${index}`} className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
+          {cylinderTypeStats.map((stat, index) => {
+            // Use a stable key based on type and capacity to maintain position
+            // Extract capacity for a more stable key
+            const capacityMatch = stat.type.match(/\((\d+\.?\d*)kg\)/);
+            const capacity = capacityMatch ? capacityMatch[1] : '0';
+            const typeNameMatch = stat.type.match(/^([^(]+)/);
+            const typeName = typeNameMatch ? typeNameMatch[1].trim().toLowerCase() : 'unknown';
+            const stableKey = `${typeName}-${capacity}-${stat.typeEnum || 'unknown'}`;
+            
+            return (
+          <Card key={stableKey} className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-3">
               <CardTitle className="text-xs font-semibold text-gray-600 truncate pr-1">
                 {stat.type}
@@ -560,7 +597,8 @@ export default function CylindersInventoryPage() {
               </div>
             </CardContent>
           </Card>
-          ))}
+          );
+          })}
         </div>
       ) : (
         <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
@@ -846,8 +884,10 @@ export default function CylindersInventoryPage() {
                   
                   // Extract type name from input (remove numbers and "kg")
                   // Examples: "Domestic 11.8" -> "Domestic", "Standard 15" -> "Standard", "Custom 12kg" -> "Custom"
+                  // IMPORTANT: Normalize to consistent case to ensure "special" and "Special" are treated the same
                   const typeNameMatch = inputValue.match(/^([A-Za-z]+(?:\s+[A-Za-z]+)*)/);
-                  const typeName = typeNameMatch ? typeNameMatch[1].trim() : 'Cylinder';
+                  const extractedTypeName = typeNameMatch ? typeNameMatch[1].trim() : 'Cylinder';
+                  const typeName = normalizeTypeName(extractedTypeName) || 'Cylinder';
                   
                   // Generate enum type dynamically from capacity - fully flexible approach
                   // No hardcoded type mappings - works for any capacity

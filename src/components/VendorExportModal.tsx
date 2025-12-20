@@ -31,6 +31,7 @@ export default function VendorExportModal({
   const [loading, setLoading] = useState(false);
   const [allPayments, setAllPayments] = useState<any[]>([]);
   const [allPurchases, setAllPurchases] = useState<any[]>([]);
+  const [vendorCategorySlug, setVendorCategorySlug] = useState<string | null>(null);
 
   // Fetch all data when modal opens
   const fetchAllData = async () => {
@@ -43,12 +44,14 @@ export default function VendorExportModal({
         setAllPayments(paymentsData.payments || []);
       }
 
-      // Fetch all purchases
+      // Fetch all purchases and vendor category
       const purchasesResponse = await fetch(`/api/vendors/${vendorId}?t=${Date.now()}`);
       if (purchasesResponse.ok) {
         const vendorData = await purchasesResponse.json();
         console.log('Fetched purchases for export:', vendorData.purchase_entries?.length || 0, 'purchases');
         setAllPurchases(vendorData.purchase_entries || []);
+        // Store vendor category slug to determine if we need to show category column
+        setVendorCategorySlug(vendorData.vendor?.category?.slug || null);
       }
     } catch (error) {
       console.error('Error fetching data for export:', error);
@@ -257,20 +260,34 @@ export default function VendorExportModal({
           
           yPosition += 15;
           
-          const purchaseData = purchases.map((purchase, index) => [
-            index + 1,
-            purchase.invoiceNumber || 'N/A',
-            formatDate(purchase.purchaseDate),
-            purchase.itemName || 'N/A',
-            purchase.quantity || 0,
-            formatCurrencyForPDF(Number(purchase.unitPrice)),
-            formatCurrencyForPDF(Number(purchase.totalPrice)),
-            purchase.status || 'PENDING'
-          ]);
+          // Check if this is an accessories purchase vendor
+          const isAccessoriesPurchase = vendorCategorySlug === 'accessories_purchase';
+          
+          // Build purchase data with conditional category column
+          const purchaseData = purchases.map((purchase, index) => {
+            const baseRow = [
+              index + 1,
+              purchase.invoiceNumber || 'N/A',
+              formatDate(purchase.purchaseDate),
+              purchase.itemName || 'N/A',
+              purchase.quantity || 0,
+              formatCurrencyForPDF(Number(purchase.unitPrice)),
+              formatCurrencyForPDF(Number(purchase.totalPrice)),
+              purchase.status || 'PENDING'
+            ];
+            
+            // For accessories purchases, insert category column before Item (index 3)
+            if (isAccessoriesPurchase) {
+              const category = purchase.itemDescription || '-';
+              baseRow.splice(3, 0, category); // Insert category at index 3, before Item
+            }
+            
+            return baseRow;
+          });
           
           // Add total row
           const totalPurchases = purchases.reduce((sum, p) => sum + Number(p.totalPrice), 0);
-          purchaseData.push([
+          const totalRow: any[] = [
             '',
             '',
             '',
@@ -279,10 +296,51 @@ export default function VendorExportModal({
             'TOTAL:',
             formatCurrencyForPDF(totalPurchases),
             ''
-          ]);
+          ];
+          
+          // For accessories purchases, add empty cell for category column
+          if (isAccessoriesPurchase) {
+            totalRow.splice(3, 0, ''); // Insert empty category cell at index 3
+          }
+          
+          purchaseData.push(totalRow);
+          
+          // Build header row with conditional category column
+          const headerRow = ['#', 'Invoice', 'Date', 'Item', 'Qty', 'Unit Price (Rs)', 'Total (Rs)', 'Status'];
+          if (isAccessoriesPurchase) {
+            headerRow.splice(3, 0, 'Category'); // Insert Category at index 3, before Item
+          }
+          
+          // Build column styles with conditional category column
+          // Column indices: 0=#, 1=Invoice, 2=Date, 3=Category(if accessories)/Item, 4=Item(if accessories)/Qty, etc.
+          const columnStyles: any = {};
+          
+          if (isAccessoriesPurchase) {
+            // With Category column: #, Invoice, Date, Category, Item, Qty, Unit Price, Total, Status
+            // Balanced widths to maintain professional alignment - total ~180 (same as non-accessories)
+            columnStyles[0] = { halign: 'center', cellWidth: 12 }; // #
+            columnStyles[1] = { cellWidth: 24 }; // Invoice
+            columnStyles[2] = { cellWidth: 20 }; // Date
+            columnStyles[3] = { cellWidth: 20 }; // Category
+            columnStyles[4] = { cellWidth: 28 }; // Item
+            columnStyles[5] = { halign: 'center', cellWidth: 12 }; // Qty
+            columnStyles[6] = { halign: 'right', cellWidth: 24, overflow: 'linebreak' }; // Unit Price
+            columnStyles[7] = { halign: 'right', cellWidth: 24, overflow: 'linebreak' }; // Total
+            columnStyles[8] = { halign: 'center', cellWidth: 16 }; // Status
+          } else {
+            // Without Category column: #, Invoice, Date, Item, Qty, Unit Price, Total, Status
+            columnStyles[0] = { halign: 'center', cellWidth: 15 }; // #
+            columnStyles[1] = { cellWidth: 25 }; // Invoice
+            columnStyles[2] = { cellWidth: 20 }; // Date
+            columnStyles[3] = { cellWidth: 35 }; // Item
+            columnStyles[4] = { halign: 'center', cellWidth: 15 }; // Qty
+            columnStyles[5] = { halign: 'right', cellWidth: 25, overflow: 'linebreak' }; // Unit Price
+            columnStyles[6] = { halign: 'right', cellWidth: 25, overflow: 'linebreak' }; // Total
+            columnStyles[7] = { halign: 'center', cellWidth: 20 }; // Status
+          }
           
           autoTable(doc, {
-            head: [['#', 'Invoice', 'Date', 'Item', 'Qty', 'Unit Price (Rs)', 'Total (Rs)', 'Status']],
+            head: [headerRow],
             body: purchaseData,
             startY: yPosition,
             styles: { 
@@ -300,16 +358,7 @@ export default function VendorExportModal({
             alternateRowStyles: { 
               fillColor: [248, 249, 250] 
             },
-            columnStyles: {
-              0: { halign: 'center', cellWidth: 15 },
-              1: { cellWidth: 25 },
-              2: { cellWidth: 20 },
-              3: { cellWidth: 35 },
-              4: { halign: 'center', cellWidth: 15 },
-              5: { halign: 'right', cellWidth: 25, overflow: 'linebreak' },
-              6: { halign: 'right', cellWidth: 25, overflow: 'linebreak' },
-              7: { halign: 'center', cellWidth: 20 }
-            },
+            columnStyles: columnStyles,
           });
           
           yPosition = (doc as any).lastAutoTable.finalY + 25;

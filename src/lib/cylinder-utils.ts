@@ -99,6 +99,42 @@ export function getCapacityFromTypeString(type: string): number {
 }
 
 /**
+ * Normalize type name to consistent case format (capitalize first letter of each word)
+ * This ensures "special", "Special", "SPECIAL" all become "Special"
+ * Handles case-insensitive normalization for consistent grouping in inventory
+ * 
+ * @param typeName - The type name to normalize (e.g., "special", "Special", "SPECIAL")
+ * @returns Normalized type name with proper case (e.g., "Special") or null if input is empty
+ */
+export function normalizeTypeName(typeName: string | null | undefined): string | null {
+  if (!typeName) return null;
+  const trimmed = typeName.trim();
+  if (!trimmed) return null;
+  
+  // Normalize to lowercase first, then capitalize first letter of each word
+  const normalized = trimmed.toLowerCase();
+  
+  // Map to standard names for consistency (case-insensitive matching)
+  if (normalized.includes('domestic')) {
+    return 'Domestic';
+  } else if (normalized.includes('standard')) {
+    return 'Standard';
+  } else if (normalized.includes('commercial')) {
+    return 'Commercial';
+  } else if (normalized.includes('cylinder') && normalized.length <= 10) {
+    // If it's just "Cylinder" or similar generic name, return null to use default display
+    return null;
+  } else {
+    // ALWAYS normalize custom names to consistent case format
+    // Capitalize first letter of each word, lowercase the rest
+    // This ensures "special", "Special", "SPECIAL" all become "Special"
+    return normalized.split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  }
+}
+
+/**
  * Get cylinder code prefix from type name or cylinder type
  * Domestic -> DM, Standard -> ST, Commercial -> CM, Custom names -> First two letters
  */

@@ -353,37 +353,40 @@ export default function CategoryVendorsPage() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {filteredVendors.map((vendor) => (
-            <Card key={vendor.id} className="hover:shadow-lg transition-shadow h-full">
-              <CardContent className="p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex-1">
-                    <Link href={`/vendors/${vendor.id}`} className="block">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-1 hover:text-blue-600">
+            <Link
+              key={vendor.id}
+              href={`/vendors/${vendor.id}`}
+              className="block h-full"
+            >
+              <Card className="hover:shadow-lg transition-all duration-200 h-full cursor-pointer group hover:border-blue-300 border-2 border-transparent">
+                <CardContent className="p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-1 group-hover:text-blue-600 transition-colors">
                         {vendor.name || vendor.companyName || 'Unnamed Vendor'}
                       </h3>
                       <p className="text-sm text-gray-500">{vendor.vendorCode}</p>
-                    </Link>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {vendor.totalBalance > 0 && (
+                        <span className="px-3 py-1 bg-red-100 text-red-700 text-sm font-medium rounded-full">
+                          Outstanding
+                        </span>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          confirmDeleteVendor(vendor.id);
+                        }}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {vendor.totalBalance > 0 && (
-                      <span className="px-3 py-1 bg-red-100 text-red-700 text-sm font-medium rounded-full">
-                        Outstanding
-                      </span>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        confirmDeleteVendor(vendor.id);
-                      }}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <TrashIcon className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
 
                   {(vendor.contactPerson || vendor.phone || vendor.address) && (
                     <div className="space-y-2 mb-4 text-sm text-gray-600">
@@ -412,24 +415,25 @@ export default function CategoryVendorsPage() {
                     <div>
                       <div className="text-xs text-gray-500 mb-1">Total Purchases</div>
                       <div className="text-sm font-semibold text-gray-900">
-                        {formatCurrency(vendor.totalPurchases)}
+                        {formatCurrency(Math.round(vendor.totalPurchases))}
                       </div>
                     </div>
                     <div>
                       <div className="text-xs text-gray-500 mb-1">Paid</div>
                       <div className="text-sm font-semibold text-green-600">
-                        {formatCurrency(vendor.totalPaid)}
+                        {formatCurrency(Math.round(vendor.totalPaid))}
                       </div>
                     </div>
                     <div>
                       <div className="text-xs text-gray-500 mb-1">Balance</div>
                       <div className={`text-sm font-semibold ${vendor.totalBalance > 0 ? 'text-red-600' : 'text-gray-600'}`}>
-                        {vendor.totalBalance > 0 ? '-' : ''}{formatCurrency(Math.abs(vendor.totalBalance))}
+                        {vendor.totalBalance > 0 ? '-' : ''}{formatCurrency(Math.round(Math.abs(vendor.totalBalance)))}
                       </div>
                     </div>
                   </div>
                 </CardContent>
               </Card>
+            </Link>
           ))}
         </div>
       )}
