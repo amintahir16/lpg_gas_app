@@ -188,6 +188,11 @@ export async function GET(
       switch (transaction.transactionType) {
         case 'SALE':
           totalOut += totalAmount;
+          // Include partial payments made at sale time in Total In
+          if (transaction.paidAmount) {
+            const paidAmount = parseFloat(transaction.paidAmount.toString());
+            totalIn += paidAmount;
+          }
           break;
         case 'PAYMENT':
         case 'BUYBACK':

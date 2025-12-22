@@ -10,7 +10,7 @@ import { Select } from '@/components/ui/select';
 import { useInventoryValidation } from '@/hooks/useInventoryValidation';
 import { useCylinderStock } from '@/hooks/useCylinderStock';
 import { ProfessionalAccessorySelector } from '@/components/ui/ProfessionalAccessorySelector';
-import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
+import { getCylinderTypeDisplayName, getCapacityFromTypeString } from '@/lib/cylinder-utils';
 import { 
   ArrowLeftIcon,
   DocumentTextIcon,
@@ -25,7 +25,8 @@ import {
   CalculatorIcon,
   CalendarIcon,
   FunnelIcon,
-  XMarkIcon
+  XMarkIcon,
+  PlusIcon
 } from '@heroicons/react/24/outline';
 
 interface B2BCustomer {
@@ -163,15 +164,31 @@ export default function B2BCustomerDetailPage() {
   const [salePaymentMethod, setSalePaymentMethod] = useState('CASH');
   const [salePaymentReference, setSalePaymentReference] = useState('');
 
-  // Gas transaction form data
+  // Gas transaction form data - now supports dynamic rows
   const [gasItems, setGasItems] = useState([
-    { cylinderType: 'DOMESTIC_11_8KG', delivered: 0, pricePerItem: 0, emptyReturned: 0, remainingDue: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackPricePerItem: 0, buybackTotal: 0 },
-    { cylinderType: 'STANDARD_15KG', delivered: 0, pricePerItem: 0, emptyReturned: 0, remainingDue: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackPricePerItem: 0, buybackTotal: 0 },
-    { cylinderType: 'COMMERCIAL_45_4KG', delivered: 0, pricePerItem: 0, emptyReturned: 0, remainingDue: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackPricePerItem: 0, buybackTotal: 0 }
+    { cylinderType: '', delivered: 0, pricePerItem: 0, emptyReturned: 0, remainingDue: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackPricePerItem: 0, buybackTotal: 0 }
   ]);
+  
+  // Available cylinder types from inventory
+  const [availableCylinderTypes, setAvailableCylinderTypes] = useState<Array<{
+    type: string;
+    typeEnum: string;
+    full: number;
+    empty: number;
+    total: number;
+  }>>([]);
+  const [loadingCylinderTypes, setLoadingCylinderTypes] = useState(true);
   
   // Pricing information
   const [pricingInfo, setPricingInfo] = useState<any>(null);
+
+  // Cylinder dues (dynamic)
+  const [cylinderDues, setCylinderDues] = useState<Array<{
+    cylinderType: string;
+    displayName: string;
+    count: number;
+  }>>([]);
+  const [loadingCylinderDues, setLoadingCylinderDues] = useState(false);
 
   // Inventory validation
   const { validateInventory, isFieldValid, hasAnyErrors, clearValidationError, clearAllValidationErrors } = useInventoryValidation();
@@ -253,6 +270,56 @@ export default function B2BCustomerDetailPage() {
     fetchMarginCategories();
   }, []);
 
+  // Fetch available cylinder types from inventory
+  useEffect(() => {
+    const fetchAvailableCylinderTypes = async () => {
+      try {
+        setLoadingCylinderTypes(true);
+        const response = await fetch('/api/inventory/cylinders/stats');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.stats) {
+            // Show all cylinder types from inventory (including those with 0 stock)
+            // This allows selection of any cylinder type that exists in the inventory
+            setAvailableCylinderTypes(data.stats);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching available cylinder types:', error);
+      } finally {
+        setLoadingCylinderTypes(false);
+      }
+    };
+
+    fetchAvailableCylinderTypes();
+  }, []);
+
+  // Fetch cylinder dues dynamically
+  useEffect(() => {
+    const fetchCylinderDues = async () => {
+      if (!customerId) return;
+      
+      try {
+        setLoadingCylinderDues(true);
+        const response = await fetch(`/api/customers/b2b/${customerId}/cylinder-dues`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.cylinderDues) {
+            setCylinderDues(data.cylinderDues);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching cylinder dues:', error);
+      } finally {
+        setLoadingCylinderDues(false);
+      }
+    };
+
+    if (customer) {
+      fetchCylinderDues();
+    }
+  }, [customerId, customer]);
+
 
   // Update gas items with current cylinder dues when customer data loads
   useEffect(() => {
@@ -266,33 +333,8 @@ export default function B2BCustomerDetailPage() {
     }
   }, [customer]);
 
-  // Auto-populate original prices from pricing system when pricing info is available
-  useEffect(() => {
-    if (pricingInfo && transactionType === 'BUYBACK') {
-      setGasItems(prevItems => 
-        prevItems.map(item => {
-          let calculatedPrice = 0;
-          
-          switch (item.cylinderType) {
-            case 'DOMESTIC_11_8KG':
-              calculatedPrice = pricingInfo.finalPrices.domestic118kg;
-              break;
-            case 'STANDARD_15KG':
-              calculatedPrice = pricingInfo.finalPrices.standard15kg;
-              break;
-            case 'COMMERCIAL_45_4KG':
-              calculatedPrice = pricingInfo.finalPrices.commercial454kg;
-              break;
-          }
-          
-          return {
-            ...item,
-            originalSoldPrice: calculatedPrice
-          };
-        })
-      );
-    }
-  }, [pricingInfo, transactionType]);
+  // Auto-populate original prices from pricing system when pricing info is available (for BUYBACK)
+  // This is now handled in updateGasItem when cylinderType is selected
 
   // Update remaining due calculation when transaction type changes
   useEffect(() => {
@@ -502,46 +544,118 @@ export default function B2BCustomerDetailPage() {
     return getCylinderTypeDisplayName(type);
   };
 
-  const calculateBuybackAmount = (originalPrice: number, remainingKg: number, totalKg: number) => {
-    const buybackRate = 0.6; // 60% of original price
+  // Get full stock count for a cylinder type (FULL status only)
+  // Aggregates full count for the selected cylinder type from inventory
+  const getFullStockCount = (cylinderType: string): number => {
+    if (!cylinderType) return 0;
+    // Find the selected cylinder stat - match by typeEnum
+    const cylinderStat = availableCylinderTypes.find(stat => stat.typeEnum === cylinderType);
+    // Return the full count (cylinders with FULL status) for the selected type
+    return cylinderStat ? cylinderStat.full : 0;
+  };
+
+  // Get display name for cylinder type from available types
+  const getCylinderDisplayName = (cylinderType: string): string => {
+    if (!cylinderType) return 'Select cylinder type';
+    const cylinderStat = availableCylinderTypes.find(stat => stat.typeEnum === cylinderType);
+    return cylinderStat ? cylinderStat.type : getCylinderTypeDisplayName(cylinderType);
+  };
+
+  // Get display name for transaction item (for ledger display)
+  const getTransactionItemDisplayName = (item: B2BTransactionItem): string => {
+    if (item.cylinderType) {
+      // Try to get from availableCylinderTypes first (has proper typeName)
+      const cylinderStat = availableCylinderTypes.find(stat => stat.typeEnum === item.cylinderType);
+      if (cylinderStat) {
+        return cylinderStat.type;
+      }
+      // Fallback to utility function
+      return getCylinderTypeDisplayName(item.cylinderType);
+    }
+    // For non-cylinder items, use productName
+    return item.productName;
+  };
+
+  // Add a new gas item row
+  const addGasItemRow = () => {
+    setGasItems([...gasItems, { 
+      cylinderType: '', 
+      delivered: 0, 
+      pricePerItem: 0, 
+      emptyReturned: 0, 
+      remainingDue: 0, 
+      remainingKg: 0, 
+      originalSoldPrice: 0, 
+      buybackRate: 0.6, 
+      buybackPricePerItem: 0, 
+      buybackTotal: 0 
+    }]);
+  };
+
+  // Remove a gas item row
+  const removeGasItemRow = (index: number) => {
+    if (gasItems.length > 1) {
+      const newItems = gasItems.filter((_, i) => i !== index);
+      setGasItems(newItems);
+    }
+  };
+
+  const calculateBuybackAmount = (originalPrice: number, remainingKg: number, totalKg: number, buybackRate: number) => {
     const remainingPercentage = remainingKg / totalKg;
     return originalPrice * remainingPercentage * buybackRate;
   };
 
   const updateGasItem = (index: number, field: string, value: any) => {
     const newItems = [...gasItems];
+    const oldItem = newItems[index];
     newItems[index] = { ...newItems[index], [field]: value };
     
-    // Auto-apply calculated price when delivered quantity is set
-    if (field === 'delivered' && value > 0 && pricingInfo) {
-      const cylinderType = newItems[index].cylinderType;
-      let calculatedPrice = 0;
-      
-      switch (cylinderType) {
-        case 'DOMESTIC_11_8KG':
-          calculatedPrice = pricingInfo.finalPrices.domestic118kg;
-          break;
-        case 'STANDARD_15KG':
-          calculatedPrice = pricingInfo.finalPrices.standard15kg;
-          break;
-        case 'COMMERCIAL_45_4KG':
-          calculatedPrice = pricingInfo.finalPrices.commercial454kg;
-          break;
+    // Reset delivered quantity when cylinder type changes
+    if (field === 'cylinderType' && value !== oldItem.cylinderType && oldItem.cylinderType !== '') {
+      newItems[index].delivered = 0;
+    }
+    
+    // Auto-calculate price when cylinder type is selected (based on customer's margin category)
+    if (field === 'cylinderType' && value && pricingInfo && pricingInfo.calculation?.endPricePerKg) {
+      const cylinderCapacity = getCapacityFromTypeString(value);
+      if (cylinderCapacity > 0) {
+        // Calculate price: (costPerKg + marginPerKg) × cylinderCapacity
+        const calculatedPrice = Math.round(pricingInfo.calculation.endPricePerKg * cylinderCapacity);
+        if (transactionType === 'SALE') {
+          newItems[index].pricePerItem = calculatedPrice;
+        } else if (transactionType === 'BUYBACK') {
+          // For buyback, set originalSoldPrice (the price the cylinder was originally sold at)
+          newItems[index].originalSoldPrice = calculatedPrice;
+        }
       }
-      
-      if (calculatedPrice > 0) {
-        newItems[index].pricePerItem = calculatedPrice;
+    }
+    
+    // Auto-apply calculated price when delivered quantity is set (fallback for old logic)
+    if (field === 'delivered' && value > 0 && pricingInfo && !newItems[index].pricePerItem) {
+      const cylinderType = newItems[index].cylinderType;
+      if (cylinderType) {
+        const cylinderCapacity = getCapacityFromTypeString(cylinderType);
+        if (cylinderCapacity > 0 && pricingInfo.calculation?.endPricePerKg) {
+          const calculatedPrice = Math.round(pricingInfo.calculation.endPricePerKg * cylinderCapacity);
+          newItems[index].pricePerItem = calculatedPrice;
+        }
       }
     }
     
     // Calculate buyback if it's a buyback transaction
     if (transactionType === 'BUYBACK') {
-      if (newItems[index].remainingKg > 0 && newItems[index].originalSoldPrice > 0) {
-        const totalKg = newItems[index].cylinderType === 'DOMESTIC_11_8KG' ? 11.8 :
-                       newItems[index].cylinderType === 'STANDARD_15KG' ? 15 : 45.4;
-        const buybackAmount = calculateBuybackAmount(newItems[index].originalSoldPrice, newItems[index].remainingKg, totalKg);
-        newItems[index].buybackPricePerItem = buybackAmount;
-        newItems[index].buybackTotal = buybackAmount * (newItems[index].emptyReturned || 0);
+      const buybackRate = newItems[index].buybackRate || 0.6; // Default to 60% if not set
+      if (newItems[index].remainingKg > 0 && newItems[index].originalSoldPrice > 0 && newItems[index].cylinderType) {
+        // Get total capacity dynamically from cylinder type
+        const totalKg = getCapacityFromTypeString(newItems[index].cylinderType);
+        if (totalKg > 0) {
+          const buybackAmount = calculateBuybackAmount(newItems[index].originalSoldPrice, newItems[index].remainingKg, totalKg, buybackRate);
+          newItems[index].buybackPricePerItem = buybackAmount;
+          newItems[index].buybackTotal = buybackAmount * (newItems[index].emptyReturned || 0);
+        } else {
+          newItems[index].buybackPricePerItem = 0;
+          newItems[index].buybackTotal = 0;
+        }
       } else {
         // Reset buyback amounts if conditions not met
         newItems[index].buybackPricePerItem = 0;
@@ -743,18 +857,11 @@ export default function B2BCustomerDetailPage() {
   };
 
   const getCurrentCylinderDue = (cylinderType: string) => {
-    if (!customer) return 0;
+    if (!cylinderType) return 0;
     
-    switch (cylinderType) {
-      case 'DOMESTIC_11_8KG':
-        return customer.domestic118kgDue || 0;
-      case 'STANDARD_15KG':
-        return customer.standard15kgDue || 0;
-      case 'COMMERCIAL_45_4KG':
-        return customer.commercial454kgDue || 0;
-      default:
-        return 0;
-    }
+    // Use dynamic cylinder dues from API
+    const due = cylinderDues.find(d => d.cylinderType === cylinderType);
+    return due ? due.count : 0;
   };
 
   const handleTransactionSubmit = async (e: React.FormEvent) => {
@@ -900,6 +1007,15 @@ export default function B2BCustomerDetailPage() {
       
       // Refresh customer data multiple times to ensure it's updated
       await fetchCustomerLedger();
+      
+      // Refresh cylinder dues after transaction
+      const duesResponse = await fetch(`/api/customers/b2b/${customerId}/cylinder-dues`);
+      if (duesResponse.ok) {
+        const duesData = await duesResponse.json();
+        if (duesData.success && duesData.cylinderDues) {
+          setCylinderDues(duesData.cylinderDues);
+        }
+      }
       
       // Force refresh after short delay
       setTimeout(async () => {
@@ -1105,26 +1221,22 @@ export default function B2BCustomerDetailPage() {
             {/* Cylinders Due */}
             <div>
               <p className="text-sm font-medium text-gray-500 mb-2">Remaining Cylinders Due</p>
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-sm">Domestic (11.8kg)</span>
-                  <Badge variant={customer.domestic118kgDue > 0 ? 'destructive' : 'secondary'}>
-                    {customer.domestic118kgDue}
-                  </Badge>
+              {loadingCylinderDues ? (
+                <div className="text-sm text-gray-500">Loading...</div>
+              ) : cylinderDues.length > 0 ? (
+                <div className="space-y-2">
+                  {cylinderDues.map((due) => (
+                    <div key={due.cylinderType} className="flex justify-between">
+                      <span className="text-sm">{due.displayName}</span>
+                      <Badge variant={due.count > 0 ? 'destructive' : 'secondary'}>
+                        {due.count}
+                      </Badge>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-sm">Standard (15kg)</span>
-                  <Badge variant={customer.standard15kgDue > 0 ? 'destructive' : 'secondary'}>
-                    {customer.standard15kgDue}
-                  </Badge>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm">Commercial (45.4kg)</span>
-                  <Badge variant={customer.commercial454kgDue > 0 ? 'destructive' : 'secondary'}>
-                    {customer.commercial454kgDue}
-                  </Badge>
-                </div>
-              </div>
+              ) : (
+                <div className="text-sm text-gray-500">No cylinders due</div>
+              )}
             </div>
 
             {/* Quick Actions */}
@@ -1250,8 +1362,8 @@ export default function B2BCustomerDetailPage() {
                           <ul className="mt-1 space-y-1">
                             <li>• Enter remaining gas quantity (e.g., 5kg, 10kg)</li>
                             <li>• Original selling price is automatically calculated from pricing system</li>
-                            <li>• System calculates 60% buyback rate automatically</li>
-                            <li>• Buyback amount = Auto Price × (Remaining Gas / Total Gas) × 60%</li>
+                            <li>• Enter your desired buyback rate percentage (default: 60%)</li>
+                            <li>• Buyback amount = Auto Price × (Remaining Gas / Total Gas) × Buyback Rate</li>
                           </ul>
                         </div>
                       )}
@@ -1302,145 +1414,215 @@ export default function B2BCustomerDetailPage() {
                     
                     <CardContent>
                       <div className="overflow-x-auto">
-                        <table className="w-full">
+                        <table className="w-full border-collapse">
                           <thead>
-                            <tr className="border-b">
-                              <th className="text-left py-2">
+                            <tr className="border-b-2 border-gray-200 bg-gray-50">
+                              <th className="text-left py-3 px-4 font-semibold text-sm text-gray-700">
                                 {transactionType === 'SALE' ? 'Gas Cylinder delivered' :
                                  transactionType === 'BUYBACK' ? 'Gas Cylinder Type' :
                                  'Gas Cylinder Type'}
                               </th>
                               {transactionType === 'SALE' && (
                                 <>
-                                  <th className="text-left py-2">Delivered Cylinders</th>
-                                  <th className="text-left py-2">Price Per Item</th>
-                                  <th className="text-left py-2">Total Price per Item</th>
+                                  <th className="text-left py-3 px-4 font-semibold text-sm text-gray-700">Delivered Cylinders</th>
+                                  <th className="text-left py-3 px-4 font-semibold text-sm text-gray-700">Price Per Item</th>
+                                  <th className="text-left py-3 px-4 font-semibold text-sm text-gray-700">Total Price per Item</th>
                                 </>
                               )}
                               {(transactionType === 'BUYBACK' || transactionType === 'RETURN_EMPTY') && (
-                                <th className="text-left py-2">Empty Cylinders returned</th>
+                                <th className="text-left py-3 px-4 font-semibold text-sm text-gray-700">Cylinders Returned</th>
                               )}
                               {transactionType === 'BUYBACK' && (
                                 <>
-                                  <th className="text-left py-2">Remaining Gas (kg)</th>
-                                  <th className="text-left py-2">Original Price (Auto)</th>
-                                  <th className="text-left py-2">Buyback Rate (60%)</th>
-                                  <th className="text-left py-2">Buyback Amount</th>
+                                  <th className="text-left py-3 px-4 font-semibold text-sm text-gray-700">Remaining Gas (kg)</th>
+                                  <th className="text-left py-3 px-4 font-semibold text-sm text-gray-700">Original Price (Auto)</th>
+                                  <th className="text-left py-3 px-4 font-semibold text-sm text-gray-700">Buyback Rate (%)</th>
+                                  <th className="text-left py-3 px-4 font-semibold text-sm text-gray-700">Buyback Amount</th>
                                 </>
                               )}
-                              <th className="text-left py-2">Remaining Cylinders Due</th>
+                              <th className="text-center py-3 px-4 font-semibold text-sm text-gray-700 w-20">Actions</th>
                             </tr>
                           </thead>
                           <tbody>
                             {gasItems.map((item, index) => {
-                              const stockInfo = getCylinderStock(item.cylinderType);
-                              const isExceedingStock = item.delivered > 0 && stockInfo && item.delivered > stockInfo.available;
+                              const fullStockCount = getFullStockCount(item.cylinderType);
+                              const isExceedingStock = item.delivered > 0 && fullStockCount > 0 && item.delivered > fullStockCount;
                               
                               return (
-                                <tr key={index} id={`cylinder-item-${index}`} className="border-b">
-                                  <td className="py-2">
-                                    <div>
-                                      {item.cylinderType === 'DOMESTIC_11_8KG' ? 'Domestic (11.8kg)' :
-                                       item.cylinderType === 'STANDARD_15KG' ? 'Standard (15kg)' :
-                                       'Commercial (45.4kg)'}
-                                      {stockInfo && (
-                                        <div className="text-xs text-gray-500 mt-1">
-                                          Stock: {stockInfo.available} units
+                                <tr key={index} id={`cylinder-item-${index}`} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
+                                  <td className="py-3 px-4 align-top">
+                                    <div className="space-y-2 min-w-[200px]">
+                                      <div className="relative w-full">
+                                        {loadingCylinderTypes ? (
+                                          <div className="flex h-10 w-full items-center justify-center rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                                            Loading cylinder types...
+                                          </div>
+                                        ) : (
+                                          <>
+                                            <select
+                                              value={item.cylinderType || ''}
+                                              onChange={(e) => {
+                                                updateGasItem(index, 'cylinderType', e.target.value);
+                                              }}
+                                              disabled={loadingCylinderTypes || availableCylinderTypes.length === 0}
+                                              className="w-full pl-3 pr-8 text-sm border border-gray-300 rounded-md bg-white text-gray-900 appearance-none cursor-pointer focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-colors disabled:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-500"
+                                              style={{
+                                                height: '2.75rem',
+                                                paddingTop: '0.75rem',
+                                                paddingBottom: '0.75rem',
+                                                lineHeight: '1.25rem'
+                                              }}
+                                            >
+                                              <option value="">Select cylinder type</option>
+                                              {availableCylinderTypes.map((stat, statIndex) => (
+                                                <option 
+                                                  key={`${stat.typeEnum}-${statIndex}`} 
+                                                  value={stat.typeEnum}
+                                                >
+                                                  {stat.type}
+                                                </option>
+                                              ))}
+                                            </select>
+                                            <svg className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                          </>
+                                        )}
+                                      </div>
+                                      {item.cylinderType && (
+                                        <div className="text-xs text-gray-500 font-medium">
+                                          Stock: <span className="text-gray-700">{fullStockCount}</span> units (Full)
                                         </div>
                                       )}
                                     </div>
                                   </td>
                                 {transactionType === 'SALE' && (
                                   <>
-                                    <td className="py-2">
-                                      <Input
-                                        type="number"
-                                        min="0"
-                                        max={stockInfo ? stockInfo.available : undefined}
-                                        value={item.delivered}
-                                        onChange={(e) => updateGasItem(index, 'delivered', parseInt(e.target.value) || 0)}
-                                        className={`w-20 ${
-                                          isExceedingStock
-                                            ? 'border-red-500 bg-red-50 text-red-900 focus:border-red-500 focus:ring-red-500'
-                                            : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
-                                        }`}
-                                      />
-                                      {isExceedingStock && (
-                                        <div className="text-xs text-red-600 mt-1">
-                                          Exceeds available stock ({stockInfo?.available})
-                                        </div>
-                                      )}
+                                    <td className="py-3 px-4 align-top">
+                                      <div className="space-y-1">
+                                        <Input
+                                          type="number"
+                                          min="0"
+                                          max={fullStockCount > 0 ? fullStockCount : undefined}
+                                          value={item.delivered}
+                                          onChange={(e) => updateGasItem(index, 'delivered', parseInt(e.target.value) || 0)}
+                                          disabled={!item.cylinderType}
+                                          className={`w-20 h-10 ${
+                                            isExceedingStock
+                                              ? 'border-red-500 bg-red-50 text-red-900 focus:border-red-500 focus:ring-red-500'
+                                              : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                                          } ${!item.cylinderType ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                                        />
+                                        {isExceedingStock && (
+                                          <div className="text-xs text-red-600 font-medium">
+                                            Exceeds stock ({fullStockCount})
+                                          </div>
+                                        )}
+                                      </div>
                                     </td>
-                                    <td className="py-2">
+                                    <td className="py-3 px-4 align-top">
                                       <Input
                                         type="number"
                                         min="0"
                                         step="0.01"
                                         value={item.pricePerItem}
                                         onChange={(e) => updateGasItem(index, 'pricePerItem', parseFloat(e.target.value) || 0)}
-                                        className="w-24"
+                                        disabled={!item.cylinderType}
+                                        className={`w-28 h-10 ${!item.cylinderType ? 'bg-gray-50 cursor-not-allowed' : ''}`}
                                       />
                                     </td>
-                                    <td className="py-2 font-semibold">
-                                      {formatCurrency(item.delivered * item.pricePerItem)}
+                                    <td className="py-3 px-4 align-top">
+                                      <div className="text-sm font-semibold text-gray-900 pt-2">
+                                        {formatCurrency(item.delivered * item.pricePerItem)}
+                                      </div>
                                     </td>
                                   </>
                                 )}
                                 {(transactionType === 'BUYBACK' || transactionType === 'RETURN_EMPTY') && (
-                                  <td className="py-2">
+                                  <td className="py-3 px-4 align-top">
                                     <Input
                                       type="number"
                                       min="0"
                                       value={item.emptyReturned}
                                       onChange={(e) => updateGasItem(index, 'emptyReturned', parseInt(e.target.value) || 0)}
-                                      className="w-20"
+                                      className="w-20 h-10"
                                     />
                                   </td>
                                 )}
                                 {transactionType === 'BUYBACK' && (
                                   <>
-                                    <td className="py-2">
+                                    <td className="py-3 px-4 align-top">
                                       <Input
                                         type="number"
                                         min="0"
                                         step="0.1"
                                         value={item.remainingKg}
                                         onChange={(e) => updateGasItem(index, 'remainingKg', parseFloat(e.target.value) || 0)}
-                                        className="w-20"
+                                        className="w-20 h-10"
                                         placeholder="5.0"
                                       />
                                     </td>
-                                    <td className="py-2">
+                                    <td className="py-3 px-4 align-top">
                                       <Input
                                         type="number"
                                         min="0"
                                         step="0.01"
                                         value={item.originalSoldPrice}
                                         readOnly
-                                        className="w-24 bg-gray-50 text-gray-700 cursor-not-allowed"
+                                        className="w-28 h-10 bg-gray-50 text-gray-700 cursor-not-allowed"
                                         placeholder="Auto-calculated"
                                       />
                                     </td>
-                                    <td className="py-2 text-center font-semibold text-green-600">
-                                      60%
+                                    <td className="py-3 px-4 align-top">
+                                      <div className="flex items-center space-x-1">
+                                        <Input
+                                          type="number"
+                                          min="0"
+                                          max="100"
+                                          step="0.1"
+                                          value={item.buybackRate ? (item.buybackRate * 100) : 60}
+                                          onChange={(e) => {
+                                            const inputValue = e.target.value;
+                                            // Allow empty input while typing
+                                            if (inputValue === '' || inputValue === '.') {
+                                              return;
+                                            }
+                                            const rateValue = parseFloat(inputValue);
+                                            if (!isNaN(rateValue) && rateValue >= 0 && rateValue <= 100) {
+                                              updateGasItem(index, 'buybackRate', rateValue / 100);
+                                            }
+                                          }}
+                                          onBlur={(e) => {
+                                            // Ensure a valid value on blur, default to 60 if empty
+                                            const inputValue = e.target.value;
+                                            if (inputValue === '' || isNaN(parseFloat(inputValue))) {
+                                              updateGasItem(index, 'buybackRate', 0.6);
+                                            }
+                                          }}
+                                          className="w-20 h-10 text-sm text-center"
+                                          placeholder="60"
+                                        />
+                                        <span className="text-sm text-gray-600">%</span>
+                                      </div>
                                     </td>
-                                    <td className="py-2 font-semibold text-green-600">
-                                      {formatCurrency(item.buybackTotal)}
+                                    <td className="py-3 px-4 align-top">
+                                      <div className="text-sm font-semibold text-green-600 pt-2">
+                                        {formatCurrency(item.buybackTotal)}
+                                      </div>
                                     </td>
                                   </>
                                 )}
-                                <td className="py-2">
-                                  <div className="flex items-center space-x-2">
-                                    <Badge 
-                                      variant={item.remainingDue > 0 ? "destructive" : "secondary"}
-                                      className={item.remainingDue > 0 ? "bg-red-100 text-red-800" : ""}
-                                    >
-                                      {item.remainingDue}
-                                    </Badge>
-                                    {item.remainingDue > 0 && (
-                                      <span className="text-xs text-gray-500">
-                                        (Current: {getCurrentCylinderDue(item.cylinderType)})
-                                      </span>
+                                <td className="py-3 px-4 align-top">
+                                  <div className="flex items-center justify-center">
+                                    {gasItems.length > 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => removeGasItemRow(index)}
+                                        className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+                                        title="Remove item"
+                                      >
+                                        <XMarkIcon className="w-5 h-5" />
+                                      </button>
                                     )}
                                   </div>
                                 </td>
@@ -1449,6 +1631,18 @@ export default function B2BCustomerDetailPage() {
                             })}
                           </tbody>
                         </table>
+                        <div className="mt-4 flex justify-start">
+                          <Button
+                            type="button"
+                            onClick={addGasItemRow}
+                            variant="outline"
+                            size="sm"
+                            className="flex items-center gap-2 border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"
+                          >
+                            <PlusIcon className="w-4 h-4" />
+                            Add Item
+                          </Button>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -1616,7 +1810,7 @@ export default function B2BCustomerDetailPage() {
                         )}
                       </p>
                       <p className="text-sm text-gray-600">
-                        (60% of original price for remaining gas)
+                        (Based on buyback rate × original price for remaining gas)
                       </p>
                     </div>
                   )}
@@ -1972,8 +2166,17 @@ export default function B2BCustomerDetailPage() {
                       <div className="max-w-xs">
                         {transaction.items.map((item, index) => (
                           <div key={index} className="text-xs">
-                            {item.productName} x{item.quantity}
-                            {item.cylinderType && ` (${item.cylinderType})`}
+                            {getTransactionItemDisplayName(item)} x{item.quantity}
+                            {transaction.transactionType === 'BUYBACK' && item.remainingKg && (
+                              <span className="text-gray-500 ml-1">
+                                ({item.remainingKg}kg remaining)
+                              </span>
+                            )}
+                            {transaction.transactionType === 'BUYBACK' && item.buybackRate && (
+                              <span className="text-gray-500 ml-1">
+                                ({((item.buybackRate || 0) * 100).toFixed(1)}% buyback)
+                              </span>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -1981,17 +2184,35 @@ export default function B2BCustomerDetailPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-medium">
                       {transaction.transactionType === 'SALE' 
                         ? (() => {
+                            // For fully paid SALE transactions, show dash (paid amount cancels out)
+                            if (transaction.paymentStatus === 'FULLY_PAID') {
+                              return '-';
+                            }
                             // For SALE transactions, show unpaid amount (not total)
                             const unpaidAmount = transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined
                               ? Number(transaction.unpaidAmount)
-                              : (transaction.paymentStatus === 'FULLY_PAID' ? 0 : transaction.totalAmount);
+                              : transaction.totalAmount;
                             return unpaidAmount > 0 ? formatCurrency(unpaidAmount) : '-';
                           })()
                         : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">
-                      {['PAYMENT', 'BUYBACK', 'ADJUSTMENT', 'CREDIT_NOTE'].includes(transaction.transactionType) 
-                        ? formatCurrency(transaction.totalAmount) : '-'}
+                      {(() => {
+                        // Show credit for payment transactions
+                        if (['PAYMENT', 'BUYBACK', 'ADJUSTMENT', 'CREDIT_NOTE'].includes(transaction.transactionType)) {
+                          return formatCurrency(transaction.totalAmount);
+                        }
+                        // For fully paid SALE transactions, show dash (paid amount cancels out)
+                        if (transaction.transactionType === 'SALE' && transaction.paymentStatus === 'FULLY_PAID') {
+                          return '-';
+                        }
+                        // For SALE transactions, show paid amount in credit column if partially paid
+                        if (transaction.transactionType === 'SALE' && transaction.paidAmount) {
+                          const paidAmount = Number(transaction.paidAmount);
+                          return paidAmount > 0 ? formatCurrency(paidAmount) : '-';
+                        }
+                        return '-';
+                      })()}
                     </td>
                     <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${
                       (() => {
@@ -2359,7 +2580,13 @@ export default function B2BCustomerDetailPage() {
                               <tr className="bg-gray-50">
                                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-b">Item</th>
                                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-b">Quantity</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-b">Price Per Item</th>
+                                {selectedTransaction.transactionType === 'BUYBACK' && (
+                                  <>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-b">Remaining Gas (kg)</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-b">Buyback Rate</th>
+                                  </>
+                                )}
+                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-b">{selectedTransaction.transactionType === 'BUYBACK' ? 'Buyback Price' : 'Price Per Item'}</th>
                                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-b">Total Price</th>
                               </tr>
                             </thead>
@@ -2367,15 +2594,29 @@ export default function B2BCustomerDetailPage() {
                               {selectedTransaction.items.map((item: any, index: number) => (
                                 <tr key={index} className="border-b hover:bg-gray-50">
                                   <td className="px-4 py-3 text-sm text-gray-900">
-                                    {item.cylinderType ? getCylinderTypeDisplay(item.cylinderType) : item.productName}
+                                    {getTransactionItemDisplayName(item)}
                                   </td>
                                   <td className="px-4 py-3 text-sm text-gray-700">{Number(item.quantity)}</td>
-                                  <td className="px-4 py-3 text-sm text-gray-700">{formatCurrency(Number(item.pricePerItem))}</td>
+                                  {selectedTransaction.transactionType === 'BUYBACK' && (
+                                    <>
+                                      <td className="px-4 py-3 text-sm text-gray-700">
+                                        {item.remainingKg ? `${Number(item.remainingKg)} kg` : '-'}
+                                      </td>
+                                      <td className="px-4 py-3 text-sm text-gray-700">
+                                        {item.buybackRate ? `${((item.buybackRate || 0) * 100).toFixed(1)}%` : '-'}
+                                      </td>
+                                    </>
+                                  )}
+                                  <td className="px-4 py-3 text-sm text-gray-700">
+                                    {selectedTransaction.transactionType === 'BUYBACK' 
+                                      ? formatCurrency(Number(item.buybackPricePerItem || 0))
+                                      : formatCurrency(Number(item.pricePerItem))}
+                                  </td>
                                   <td className="px-4 py-3 text-sm font-semibold text-gray-900">{formatCurrency(Number(item.totalPrice))}</td>
                                 </tr>
                               ))}
                               <tr className="bg-gray-50 font-semibold">
-                                <td colSpan={3} className="px-4 py-3 text-right text-sm text-gray-900">Total:</td>
+                                <td colSpan={selectedTransaction.transactionType === 'BUYBACK' ? 5 : 3} className="px-4 py-3 text-right text-sm text-gray-900">Total:</td>
                                 <td className="px-4 py-3 text-sm text-gray-900">{formatCurrency(selectedTransaction.totalAmount)}</td>
                               </tr>
                             </tbody>

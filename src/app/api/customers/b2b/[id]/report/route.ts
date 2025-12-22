@@ -33,13 +33,27 @@ function formatTransactionType(type: string): string {
 }
 
 // Helper function to get cylinder type display name - uses dynamic utility
-function getCylinderTypeDisplay(type: string): string {
-  // Use dynamic utility function - works for any cylinder type
+// This will be enhanced with cylinder type mapping in the generatePDF function
+function getCylinderTypeDisplay(type: string, cylinderTypeMap?: Map<string, { typeName: string | null, capacity: number | null }>): string {
+  if (!type) return 'N/A';
+  
+  // If we have a type map with proper typeName, use it
+  if (cylinderTypeMap && cylinderTypeMap.has(type)) {
+    const cylinderInfo = cylinderTypeMap.get(type)!;
+    if (cylinderInfo.typeName && cylinderInfo.typeName.trim() !== '' && cylinderInfo.typeName.trim() !== 'Cylinder') {
+      const capacity = cylinderInfo.capacity !== null ? cylinderInfo.capacity : 'N/A';
+      return `${cylinderInfo.typeName} (${capacity}kg)`;
+    } else if (cylinderInfo.capacity !== null) {
+      return `Cylinder (${cylinderInfo.capacity}kg)`;
+    }
+  }
+  
+  // Fallback to dynamic utility function
   return getCylinderTypeDisplayName(type);
 }
 
 // Dynamic import to ensure proper loading in Next.js API routes
-async function generatePDF(customer: any, transactions: any[], startDate: string | null, endDate: string | null) {
+async function generatePDF(customer: any, transactions: any[], startDate: string | null, endDate: string | null, cylinderTypeMap?: Map<string, { typeName: string | null, capacity: number | null }>) {
   // Import jsPDF and jspdf-autotable
   const jsPDFModule = await import('jspdf');
   const autoTableModule = await import('jspdf-autotable');
@@ -170,11 +184,26 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
     }) : '-';
     
     // Build items description
-    const items = [];
+    const items: string[] = [];
     if (transaction.items && transaction.items.length > 0) {
       transaction.items.forEach((item: any) => {
+        let itemText = '';
         if (item.cylinderType) {
-          items.push(`${getCylinderTypeDisplay(item.cylinderType)} x${item.quantity || 0}`);
+          itemText = `${getCylinderTypeDisplay(item.cylinderType, cylinderTypeMap)} x${item.quantity || 0}`;
+          // Add buyback details for BUYBACK transactions
+          if (transaction.transactionType === 'BUYBACK') {
+            const buybackDetails: string[] = [];
+            if (item.remainingKg) {
+              buybackDetails.push(`${Number(item.remainingKg).toFixed(1)}kg remaining`);
+            }
+            if (item.buybackRate) {
+              buybackDetails.push(`${(item.buybackRate * 100).toFixed(1)}% rate`);
+            }
+            if (buybackDetails.length > 0) {
+              itemText += ` (${buybackDetails.join(', ')})`;
+            }
+          }
+          items.push(itemText);
         } else if (item.productName) {
           items.push(`${item.productName} x${item.quantity || 0}`);
         } else if (item.itemName) {
@@ -192,7 +221,24 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
     let debit = '';
     let credit = '';
     if (transaction.transactionType === 'SALE') {
-      debit = formatCurrency(totalAmount);
+      // For fully paid SALE transactions, show dash (paid amount cancels out)
+      if (transaction.paymentStatus === 'FULLY_PAID') {
+        debit = '-';
+      } else {
+        // Show unpaid amount in debit column
+        const unpaidAmount = transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined
+          ? Number(transaction.unpaidAmount)
+          : totalAmount;
+        debit = unpaidAmount > 0 ? formatCurrency(unpaidAmount) : '-';
+      }
+      // Show paid amount in credit column if partially or fully paid
+      if (transaction.paidAmount) {
+        const paidAmount = Number(transaction.paidAmount);
+        credit = paidAmount > 0 ? formatCurrency(paidAmount) : '-';
+      } else if (transaction.paymentStatus === 'FULLY_PAID') {
+        // For fully paid, show dash in credit too
+        credit = '-';
+      }
     } else if (['PAYMENT', 'BUYBACK', 'ADJUSTMENT', 'CREDIT_NOTE'].includes(transaction.transactionType)) {
       credit = formatCurrency(totalAmount);
     }
@@ -201,12 +247,24 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
     // runningBalance from ledger API is positive (Sales - Payments), so we negate it
     const netBalance = -(transaction.runningBalance || 0);
     
+    // Format transaction type with payment status for SALE transactions
+    let transactionTypeText = formatTransactionType(transaction.transactionType);
+    if (transaction.transactionType === 'SALE' && transaction.paymentStatus) {
+      if (transaction.paymentStatus === 'PARTIAL') {
+        transactionTypeText = 'Sale (Partial)';
+      } else if (transaction.paymentStatus === 'FULLY_PAID') {
+        transactionTypeText = 'Sale (Paid)';
+      } else if (transaction.paymentStatus === 'UNPAID') {
+        transactionTypeText = 'Sale (Unpaid)';
+      }
+    }
+    
     return [
       index + 1,
       date,
       time,
       transaction.billSno || '-',
-      formatTransactionType(transaction.transactionType),
+      transactionTypeText,
       itemsText,
       debit,
       credit,
@@ -215,12 +273,23 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
   });
   
   // Add total row
+  // Total Out: Sum of all SALE transaction total amounts
   const totalOut = sortedTransactions
     .filter(t => t.transactionType === 'SALE')
     .reduce((sum, t) => sum + Number(t.totalAmount), 0);
-  const totalIn = sortedTransactions
-    .filter(t => ['PAYMENT', 'BUYBACK', 'ADJUSTMENT', 'CREDIT_NOTE'].includes(t.transactionType))
-    .reduce((sum, t) => sum + Number(t.totalAmount), 0);
+  
+  // Total In: Sum of separate payments + partial payments from SALE transactions
+  const totalIn = sortedTransactions.reduce((sum, t) => {
+    // Separate payment transactions
+    if (['PAYMENT', 'BUYBACK', 'ADJUSTMENT', 'CREDIT_NOTE'].includes(t.transactionType)) {
+      return sum + Number(t.totalAmount);
+    }
+    // Partial payments from SALE transactions
+    if (t.transactionType === 'SALE' && t.paidAmount) {
+      return sum + Number(t.paidAmount);
+    }
+    return sum;
+  }, 0);
   
   tableData.push([
     '',
@@ -255,15 +324,16 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
       fillColor: [248, 249, 250] 
     },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 12 },
-      1: { cellWidth: 22 },
-      2: { cellWidth: 18 },
-      3: { cellWidth: 28 },
-      4: { cellWidth: 22 },
-      5: { cellWidth: 50 },
-      6: { halign: 'right', cellWidth: 22 },
-      7: { halign: 'right', cellWidth: 22 },
-      8: { halign: 'right', cellWidth: 24 }
+      0: { halign: 'center', cellWidth: 8 },       // #
+      1: { cellWidth: 16 },                         // Date
+      2: { cellWidth: 14 },                         // Time
+      3: { cellWidth: 22 },                         // Bill No.
+      4: { cellWidth: 26 },                         // Type (accommodates "Sale (Partial)")
+      5: { cellWidth: 35 },                         // Items
+      6: { halign: 'right', cellWidth: 18 },        // Out (-) (Rs)
+      7: { halign: 'right', cellWidth: 18 },        // In (+) (Rs)
+      8: { halign: 'right', cellWidth: 16 }         // Net Balance (Rs)
+      // Total: 8+16+14+22+26+35+18+18+16 = 173mm (fits within 180mm content width)
     },
     margin: { left: 15, right: 15 }
   });
@@ -328,24 +398,29 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
   doc.setTextColor(39, 174, 96); // Green color
   doc.text(formatCurrency(totalIn), pageWidth - 50, yPosition + 42, { align: 'right' });
   
-  // Net Balance = Total Out - Total In (negative when customer owes)
+  // Net Balance = Total Out - Total In
+  // Negative when customer owes (Total Out > Total In)
+  // Positive when customer has credit (Total In > Total Out)
   const netBalance = totalOut - totalIn;
+  const displayBalance = netBalance; // Positive means customer owes, negative means credit
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
   doc.text('Net Balance:', 25, yPosition + 55);
-  doc.setTextColor(netBalance < 0 ? 231 : 39, netBalance < 0 ? 76 : 174, netBalance < 0 ? 60 : 96);
-  doc.text(formatCurrency(netBalance), pageWidth - 50, yPosition + 55, { align: 'right' });
+  doc.setTextColor(displayBalance > 0 ? 231 : 39, displayBalance > 0 ? 76 : 174, displayBalance > 0 ? 60 : 96);
+  // Display with negative sign when customer owes (positive balance)
+  const balanceValueText = displayBalance > 0 ? `-${formatCurrency(displayBalance)}` : formatCurrency(Math.abs(displayBalance));
+  doc.text(balanceValueText, pageWidth - 50, yPosition + 55, { align: 'right' });
   
   // Balance Interpretation
   doc.setTextColor(100, 100, 100);
   doc.setFontSize(8);
   doc.setFont('helvetica', 'italic');
-  const balanceText = netBalance < 0 
-    ? 'Customer owes this amount'
-    : netBalance > 0
+  const balanceStatusText = displayBalance > 0 
+    ? 'Customer owes you'
+    : displayBalance < 0
     ? 'Customer has credit'
     : 'Balance settled';
-  doc.text(balanceText, 25, yPosition + 62);
+  doc.text(balanceStatusText, 25, yPosition + 62);
   
   // Footer
   yPosition += 75;
@@ -499,8 +574,53 @@ export async function GET(
       };
     });
 
+    // Build cylinder type mapping for proper display names
+    // Get all unique cylinder types from transaction items
+    const uniqueCylinderTypes = new Set<string>();
+    transactionsWithBalance.forEach(transaction => {
+      transaction.items?.forEach((item: any) => {
+        if (item.cylinderType) {
+          uniqueCylinderTypes.add(item.cylinderType);
+        }
+      });
+    });
+
+    // Query cylinders to get typeName and capacity for each cylinderType
+    const cylinderTypeMap = new Map<string, { typeName: string | null, capacity: number | null }>();
+    
+    if (uniqueCylinderTypes.size > 0) {
+      // Query cylinders and group by cylinderType to get unique typeName and capacity
+      const cylinders = await prisma.cylinder.findMany({
+        where: {
+          cylinderType: { in: Array.from(uniqueCylinderTypes) }
+        },
+        select: {
+          cylinderType: true,
+          typeName: true,
+          capacity: true
+        }
+      });
+
+      // Build the mapping - use the first cylinder of each type for typeName and capacity
+      cylinders.forEach(cylinder => {
+        if (!cylinderTypeMap.has(cylinder.cylinderType)) {
+          cylinderTypeMap.set(cylinder.cylinderType, {
+            typeName: cylinder.typeName,
+            capacity: cylinder.capacity ? Number(cylinder.capacity) : null
+          });
+        }
+      });
+
+      // For cylinder types not found in database, set to null (will use fallback)
+      uniqueCylinderTypes.forEach(type => {
+        if (!cylinderTypeMap.has(type)) {
+          cylinderTypeMap.set(type, { typeName: null, capacity: null });
+        }
+      });
+    }
+
     // Generate PDF
-    const doc = await generatePDF(customer, transactionsWithBalance, startDate, endDate);
+    const doc = await generatePDF(customer, transactionsWithBalance, startDate, endDate, cylinderTypeMap);
 
     // Generate PDF buffer
     const pdfBlob = doc.output('blob');

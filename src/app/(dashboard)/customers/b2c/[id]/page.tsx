@@ -250,7 +250,6 @@ export default function B2CCustomerDetailPage() {
   const getCylinderTypeDisplay = (type: string | null) => {
     if (!type) return 'N/A';
     return getCylinderTypeDisplayName(type);
-    }
   };
 
   if (error || !customer) {

@@ -141,11 +141,12 @@ export async function POST(request: NextRequest) {
             // Calculate buyback amounts if it's a buyback transaction
             let buybackAmount = 0;
             let buybackTotal = 0;
+            const buybackRate = item.buybackRate || 0.6; // Use provided rate or default to 60%
             if (transactionType === 'BUYBACK' && item.remainingKg > 0 && item.originalSoldPrice > 0) {
               // Get capacity dynamically from cylinder type - fully flexible
               const totalKg = getCapacityFromTypeString(item.cylinderType);
               const remainingPercentage = item.remainingKg / totalKg;
-              buybackAmount = item.originalSoldPrice * remainingPercentage * 0.6; // 60% buyback rate
+              buybackAmount = item.originalSoldPrice * remainingPercentage * buybackRate;
               buybackTotal = buybackAmount * (item.emptyReturned || 0);
             }
 
@@ -166,7 +167,7 @@ export async function POST(request: NextRequest) {
               returnedCondition: item.returnedCondition || (item.emptyReturned > 0 ? 'EMPTY' : null),
               remainingKg: item.remainingKg ? parseFloat(item.remainingKg) : null,
               originalSoldPrice: item.originalSoldPrice ? parseFloat(item.originalSoldPrice) : null,
-              buybackRate: transactionType === 'BUYBACK' ? 0.6 : null,
+              buybackRate: transactionType === 'BUYBACK' ? buybackRate : null,
               buybackPricePerItem: transactionType === 'BUYBACK' ? buybackAmount : null,
               buybackTotal: transactionType === 'BUYBACK' ? buybackTotal : null,
             };

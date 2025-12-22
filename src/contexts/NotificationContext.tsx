@@ -161,17 +161,32 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
 
-      const response = await fetch('/api/notifications?limit=100');
+      const response = await fetch('/api/notifications?limit=100', {
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
       if (!response.ok) {
-        console.log('Failed to fetch notifications');
-        console.log(response);
-        throw new Error('Failed to fetch notifications');
+        // Only log error if it's not a network error
+        if (response.status !== 0) {
+          console.log('Failed to fetch notifications:', response.status, response.statusText);
+        }
+        // Don't throw error for network issues - just silently fail
+        return;
       }
 
       const data = await response.json();
       dispatch({ type: 'SET_NOTIFICATIONS', payload: data.notifications || [] });
       dispatch({ type: 'SET_LAST_UPDATE', payload: new Date() });
     } catch (error) {
+      // Silently handle network errors (e.g., when offline or API unavailable)
+      // Only log if it's a real error, not a network failure
+      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+        // Network error - silently ignore
+        return;
+      }
       const errorMessage = error instanceof Error ? error.message : 'Failed to fetch notifications';
       dispatch({ type: 'SET_ERROR', payload: errorMessage });
       console.error('Error fetching notifications:', error);
@@ -185,12 +200,24 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     if (!session?.user) return;
 
     try {
-      const response = await fetch('/api/notifications/stats');
+      const response = await fetch('/api/notifications/stats', {
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
       if (response.ok) {
         const data = await response.json();
         dispatch({ type: 'SET_STATS', payload: data });
       }
     } catch (error) {
+      // Silently handle network errors (e.g., when offline or API unavailable)
+      // Only log if it's a real error, not a network failure
+      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+        // Network error - silently ignore
+        return;
+      }
       console.error('Error fetching notification stats:', error);
     }
   }, [session?.user]);

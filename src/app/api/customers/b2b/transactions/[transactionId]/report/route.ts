@@ -144,6 +144,8 @@ async function generatePDF(transaction: any, customer: any) {
   yPosition += 8;
   
   // Items Table with proper column widths
+  const isBuyback = transaction.transactionType === 'BUYBACK';
+  
   const tableData = transaction.items.map((item: any) => {
     // Determine item name: use cylinder display name if cylinderType exists, otherwise use productName
     let itemName = 'N/A';
@@ -153,24 +155,56 @@ async function generatePDF(transaction: any, customer: any) {
       itemName = item.productName;
     }
     
-    return [
-      itemName,
-      Number(item.quantity).toString(),
-      formatCurrency(Number(item.pricePerItem)),
-      formatCurrency(Number(item.totalPrice))
-    ];
+    if (isBuyback) {
+      // For buyback transactions, include remaining gas and buyback rate
+      const remainingKg = item.remainingKg ? Number(item.remainingKg).toFixed(1) : '-';
+      const buybackRate = item.buybackRate ? ((item.buybackRate * 100).toFixed(1) + '%') : '-';
+      const price = item.buybackPricePerItem ? formatCurrency(Number(item.buybackPricePerItem)) : formatCurrency(Number(item.pricePerItem));
+      
+      return [
+        itemName,
+        Number(item.quantity).toString(),
+        remainingKg + ' kg',
+        buybackRate,
+        price,
+        formatCurrency(Number(item.totalPrice))
+      ];
+    } else {
+      // For other transaction types, use standard format
+      return [
+        itemName,
+        Number(item.quantity).toString(),
+        formatCurrency(Number(item.pricePerItem)),
+        formatCurrency(Number(item.totalPrice))
+      ];
+    }
   });
   
   // Calculate proper column widths based on content width (in mm)
-  // Item: 50%, Quantity: 15%, Price Per Item: 17.5%, Total Price: 17.5%
-  const itemWidth = contentWidth * 0.50;
-  const quantityWidth = contentWidth * 0.15;
-  const priceWidth = contentWidth * 0.175;
-  const totalWidth = contentWidth * 0.175;
+  let itemWidth, quantityWidth, priceWidth, totalWidth;
+  let headers: string[];
+  
+  if (isBuyback) {
+    // Item: 30%, Quantity: 10%, Remaining Gas: 12%, Buyback Rate: 12%, Buyback Price: 18%, Total: 18%
+    itemWidth = contentWidth * 0.30;
+    quantityWidth = contentWidth * 0.10;
+    const remainingWidth = contentWidth * 0.12;
+    const rateWidth = contentWidth * 0.12;
+    priceWidth = contentWidth * 0.18;
+    totalWidth = contentWidth * 0.18;
+    headers = ['Item', 'Quantity', 'Remaining Gas', 'Buyback Rate', 'Buyback Price', 'Total Price'];
+  } else {
+    // Item: 50%, Quantity: 15%, Price Per Item: 17.5%, Total Price: 17.5%
+    itemWidth = contentWidth * 0.50;
+    quantityWidth = contentWidth * 0.15;
+    priceWidth = contentWidth * 0.175;
+    totalWidth = contentWidth * 0.175;
+    headers = ['Item', 'Quantity', 'Price Per Item', 'Total Price'];
+  }
   
   autoTable(doc, {
     startY: yPosition,
-    head: [['Item', 'Quantity', 'Price Per Item', 'Total Price']],
+    head: [headers],
     body: tableData,
     theme: 'striped',
     margin: { left: margin, right: margin },
@@ -180,7 +214,14 @@ async function generatePDF(transaction: any, customer: any) {
       fontStyle: 'bold',
       halign: 'left'
     },
-    columnStyles: {
+    columnStyles: isBuyback ? {
+      0: { cellWidth: itemWidth, halign: 'left' }, // Item name left-aligned
+      1: { cellWidth: quantityWidth, halign: 'center' }, // Quantity centered
+      2: { cellWidth: contentWidth * 0.12, halign: 'center' }, // Remaining Gas centered
+      3: { cellWidth: contentWidth * 0.12, halign: 'center' }, // Buyback Rate centered
+      4: { cellWidth: priceWidth, halign: 'right' }, // Buyback Price right-aligned
+      5: { cellWidth: totalWidth, halign: 'right' } // Total right-aligned
+    } : {
       0: { cellWidth: itemWidth, halign: 'left' }, // Item name left-aligned
       1: { cellWidth: quantityWidth, halign: 'center' }, // Quantity centered
       2: { cellWidth: priceWidth, halign: 'right' }, // Price right-aligned
@@ -227,7 +268,11 @@ async function generatePDF(transaction: any, customer: any) {
   doc.text(totalAmountValue, rightX, summaryY, { align: 'right' });
   
   // Payment details
-  if (transaction.paymentStatus === 'FULLY_PAID' && transaction.paidAmount) {
+  // BUYBACK transactions are always considered paid (credit to customer)
+  if (transaction.transactionType === 'BUYBACK') {
+    doc.setFont('helvetica', 'normal');
+    doc.text('Status: Paid', margin + 5, summaryY + 8);
+  } else if (transaction.paymentStatus === 'FULLY_PAID' && transaction.paidAmount) {
     doc.setFont('helvetica', 'normal');
     doc.text('Payment Received:', margin + 5, summaryY + 8);
     doc.text(formatCurrency(Number(transaction.paidAmount)), rightX, summaryY + 8, { align: 'right' });
