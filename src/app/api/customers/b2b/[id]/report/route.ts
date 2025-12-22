@@ -9,6 +9,12 @@ function formatCurrency(amount: number): string {
   return `PKR ${amount.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+// Helper function to format currency with Rs and rounded to whole numbers (for Out, In, Net Balance columns)
+function formatCurrencyRsRounded(amount: number): string {
+  const rounded = Math.round(amount);
+  return `Rs ${rounded.toLocaleString('en-PK', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+}
+
 // Helper function to format date
 function formatDate(dateString: string | Date): string {
   const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
@@ -229,18 +235,18 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
         const unpaidAmount = transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined
           ? Number(transaction.unpaidAmount)
           : totalAmount;
-        debit = unpaidAmount > 0 ? formatCurrency(unpaidAmount) : '-';
+        debit = unpaidAmount > 0 ? formatCurrencyRsRounded(unpaidAmount) : '-';
       }
       // Show paid amount in credit column if partially or fully paid
       if (transaction.paidAmount) {
         const paidAmount = Number(transaction.paidAmount);
-        credit = paidAmount > 0 ? formatCurrency(paidAmount) : '-';
+        credit = paidAmount > 0 ? formatCurrencyRsRounded(paidAmount) : '-';
       } else if (transaction.paymentStatus === 'FULLY_PAID') {
         // For fully paid, show dash in credit too
         credit = '-';
       }
     } else if (['PAYMENT', 'BUYBACK', 'ADJUSTMENT', 'CREDIT_NOTE'].includes(transaction.transactionType)) {
-      credit = formatCurrency(totalAmount);
+      credit = formatCurrencyRsRounded(totalAmount);
     }
     
     // Net Balance = negative when customer owes, positive when customer has credit
@@ -268,7 +274,7 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
       itemsText,
       debit,
       credit,
-      formatCurrency(netBalance)
+      formatCurrencyRsRounded(netBalance)
     ];
   });
   
@@ -298,8 +304,8 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
     '',
     'TOTAL:',
     '',
-    formatCurrency(totalOut),
-    formatCurrency(totalIn),
+    formatCurrencyRsRounded(totalOut),
+    formatCurrencyRsRounded(totalIn),
     ''
   ]);
   
@@ -325,15 +331,15 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
     },
     columnStyles: {
       0: { halign: 'center', cellWidth: 8 },       // #
-      1: { cellWidth: 16 },                         // Date
-      2: { cellWidth: 14 },                         // Time
-      3: { cellWidth: 22 },                         // Bill No.
-      4: { cellWidth: 26 },                         // Type (accommodates "Sale (Partial)")
-      5: { cellWidth: 35 },                         // Items
+      1: { cellWidth: 15 },                         // Date
+      2: { cellWidth: 13 },                         // Time
+      3: { cellWidth: 20 },                         // Bill No.
+      4: { cellWidth: 24 },                         // Type (accommodates "Sale (Partial)")
+      5: { cellWidth: 33 },                         // Items
       6: { halign: 'right', cellWidth: 18 },        // Out (-) (Rs)
       7: { halign: 'right', cellWidth: 18 },        // In (+) (Rs)
-      8: { halign: 'right', cellWidth: 16 }         // Net Balance (Rs)
-      // Total: 8+16+14+22+26+35+18+18+16 = 173mm (fits within 180mm content width)
+      8: { halign: 'right', cellWidth: 22 }         // Net Balance (Rs)
+      // Total: 8+15+13+20+24+33+18+18+22 = 171mm (fits within 180mm content width)
     },
     margin: { left: 15, right: 15 }
   });
@@ -388,7 +394,7 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
   doc.text('Total Out (-):', 25, yPosition + 32);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(231, 76, 60); // Red color
-  doc.text(formatCurrency(totalOut), pageWidth - 50, yPosition + 32, { align: 'right' });
+  doc.text(formatCurrencyRsRounded(totalOut), pageWidth - 50, yPosition + 32, { align: 'right' });
   
   // Total In (Payments)
   doc.setFont('helvetica', 'bold');
@@ -396,7 +402,7 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
   doc.text('Total In (+):', 25, yPosition + 42);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(39, 174, 96); // Green color
-  doc.text(formatCurrency(totalIn), pageWidth - 50, yPosition + 42, { align: 'right' });
+  doc.text(formatCurrencyRsRounded(totalIn), pageWidth - 50, yPosition + 42, { align: 'right' });
   
   // Net Balance = Total Out - Total In
   // Negative when customer owes (Total Out > Total In)
@@ -408,7 +414,7 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
   doc.text('Net Balance:', 25, yPosition + 55);
   doc.setTextColor(displayBalance > 0 ? 231 : 39, displayBalance > 0 ? 76 : 174, displayBalance > 0 ? 60 : 96);
   // Display with negative sign when customer owes (positive balance)
-  const balanceValueText = displayBalance > 0 ? `-${formatCurrency(displayBalance)}` : formatCurrency(Math.abs(displayBalance));
+  const balanceValueText = displayBalance > 0 ? `-${formatCurrencyRsRounded(displayBalance)}` : formatCurrencyRsRounded(Math.abs(displayBalance));
   doc.text(balanceValueText, pageWidth - 50, yPosition + 55, { align: 'right' });
   
   // Balance Interpretation
@@ -500,20 +506,34 @@ export async function GET(
       : allTransactions;
 
     // Calculate running balance for all transactions
+    // Use same logic as ledger API: for SALE transactions, use unpaidAmount
     let runningBalance = 0;
     const allTransactionsWithBalance = allTransactions.map((transaction) => {
       const totalAmount = parseFloat(transaction.totalAmount.toString());
       let balanceImpact = 0;
       switch (transaction.transactionType) {
         case 'SALE':
-          balanceImpact = totalAmount;
+          // For SALE transactions, only unpaid amount affects balance
+          // Check if paymentStatus is FULLY_PAID first (new format)
+          if (transaction.paymentStatus === 'FULLY_PAID') {
+            // Fully paid sale - zero balance impact
+            balanceImpact = 0;
+          } else if (transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined) {
+            // New format with unpaidAmount field
+            balanceImpact = parseFloat(transaction.unpaidAmount.toString());
+          } else {
+            // Old transaction format - no payment info, assume fully unpaid
+            balanceImpact = totalAmount;
+          }
           break;
         case 'PAYMENT':
         case 'BUYBACK':
         case 'ADJUSTMENT':
         case 'CREDIT_NOTE':
-          balanceImpact = -totalAmount;
+          balanceImpact = -totalAmount; // Decreases what customer owes
           break;
+        default:
+          balanceImpact = 0;
       }
       runningBalance += balanceImpact;
       return {
@@ -523,27 +543,36 @@ export async function GET(
     });
 
     // Calculate starting balance before filtered range (same logic as ledger API)
+    // Use createdAt to match ledger API exactly
     let startingBalance = 0;
     if (filteredTransactions.length > 0 && (startDate || endDate)) {
-      const firstFilteredDate = new Date(filteredTransactions[0].date);
-      const transactionsBeforeFilter = allTransactions.filter(t => {
-        const tDate = new Date(t.date);
-        return tDate < firstFilteredDate;
-      });
+      const firstFilteredCreatedAt = filteredTransactions[0].createdAt;
+      const transactionsBeforeFilter = allTransactions.filter(t => 
+        t.createdAt < firstFilteredCreatedAt
+      );
       
       transactionsBeforeFilter.forEach(transaction => {
         const totalAmount = parseFloat(transaction.totalAmount.toString());
         let balanceImpact = 0;
         switch (transaction.transactionType) {
           case 'SALE':
-            balanceImpact = totalAmount;
+            // For SALE transactions, only unpaid amount affects balance
+            if (transaction.paymentStatus === 'FULLY_PAID') {
+              balanceImpact = 0; // Fully paid sale - zero impact
+            } else if (transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined) {
+              balanceImpact = parseFloat(transaction.unpaidAmount.toString());
+            } else {
+              balanceImpact = totalAmount; // Old format - assume fully unpaid
+            }
             break;
           case 'PAYMENT':
           case 'BUYBACK':
           case 'ADJUSTMENT':
           case 'CREDIT_NOTE':
-            balanceImpact = -totalAmount;
+            balanceImpact = -totalAmount; // Decreases what customer owes
             break;
+          default:
+            balanceImpact = 0;
         }
         startingBalance += balanceImpact;
       });
@@ -551,20 +580,30 @@ export async function GET(
 
     // Calculate running balances for filtered transactions
     // runningBalance is positive (Sales - Payments), we'll negate for display
+    // Use same logic as ledger API: for SALE transactions, use unpaidAmount
     let currentBalance = startingBalance;
     const transactionsWithBalance = filteredTransactions.map((transaction) => {
       const totalAmount = parseFloat(transaction.totalAmount.toString());
       let balanceImpact = 0;
       switch (transaction.transactionType) {
         case 'SALE':
-          balanceImpact = totalAmount;
+          // For SALE transactions, only unpaid amount affects balance
+          if (transaction.paymentStatus === 'FULLY_PAID') {
+            balanceImpact = 0; // Fully paid sale - zero impact
+          } else if (transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined) {
+            balanceImpact = parseFloat(transaction.unpaidAmount.toString());
+          } else {
+            balanceImpact = totalAmount; // Old format - assume fully unpaid
+          }
           break;
         case 'PAYMENT':
         case 'BUYBACK':
         case 'ADJUSTMENT':
         case 'CREDIT_NOTE':
-          balanceImpact = -totalAmount;
+          balanceImpact = -totalAmount; // Decreases what customer owes
           break;
+        default:
+          balanceImpact = 0;
       }
       currentBalance += balanceImpact;
       
