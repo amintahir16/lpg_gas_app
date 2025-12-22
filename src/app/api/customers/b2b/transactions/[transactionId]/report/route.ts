@@ -209,7 +209,7 @@ async function generatePDF(transaction: any, customer: any) {
     theme: 'striped',
     margin: { left: margin, right: margin },
     headStyles: { 
-      fillColor: [52, 73, 94], 
+      fillColor: [41, 128, 185], 
       textColor: [255, 255, 255], 
       fontStyle: 'bold',
       halign: 'left'
@@ -232,7 +232,7 @@ async function generatePDF(transaction: any, customer: any) {
       cellPadding: 4,
       overflow: 'visible'
     },
-    alternateRowStyles: { fillColor: [245, 245, 245] }
+    alternateRowStyles: { fillColor: [248, 249, 250] }
   });
   
   // Summary Section
@@ -246,10 +246,10 @@ async function generatePDF(transaction: any, customer: any) {
     yPosition = finalY;
   }
   
-  doc.setFillColor(102, 51, 153);
+  doc.setFillColor(155, 89, 182);
   doc.rect(margin, yPosition, contentWidth, 8, 'F');
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(11);
+  doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.text('SUMMARY', margin + 5, yPosition + 6);
   
