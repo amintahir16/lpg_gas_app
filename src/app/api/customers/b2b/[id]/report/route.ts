@@ -310,10 +310,12 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
   ]);
   
   // Add table - use autoTable as a function, not a method
+  // Set tableWidth to match header width exactly (pageWidth - 30)
   autoTable(doc, {
     head: [['#', 'Date', 'Time', 'Bill No.', 'Type', 'Items', 'Out (-) (Rs)', 'In (+) (Rs)', 'Net Balance (Rs)']],
     body: tableData,
     startY: yPosition,
+    tableWidth: pageWidth - 30, // Match header width exactly
     styles: { 
       fontSize: 8,
       cellPadding: 3,
@@ -331,15 +333,15 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
     },
     columnStyles: {
       0: { halign: 'center', cellWidth: 8 },       // #
-      1: { cellWidth: 15 },                         // Date
-      2: { cellWidth: 13 },                         // Time
-      3: { cellWidth: 20 },                         // Bill No.
-      4: { cellWidth: 24 },                         // Type (accommodates "Sale (Partial)")
-      5: { cellWidth: 33 },                         // Items
+      1: { cellWidth: 16.5 },                       // Date
+      2: { cellWidth: 14.5 },                       // Time
+      3: { cellWidth: 21.5 },                       // Bill No.
+      4: { cellWidth: 25.5 },                       // Type (accommodates "Sale (Partial)")
+      5: { cellWidth: 35 },                         // Items
       6: { halign: 'right', cellWidth: 18 },        // Out (-) (Rs)
       7: { halign: 'right', cellWidth: 18 },        // In (+) (Rs)
       8: { halign: 'right', cellWidth: 22 }         // Net Balance (Rs)
-      // Total: 8+15+13+20+24+33+18+18+22 = 171mm (fits within 180mm content width)
+      // Total: 8+16.5+14.5+21.5+25.5+35+18+18+22 = 179mm (autoTable will scale to 180mm with tableWidth)
     },
     margin: { left: 15, right: 15 }
   });
