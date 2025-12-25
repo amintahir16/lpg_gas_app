@@ -75,16 +75,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate bill sequence number
-    const today = new Date().toISOString().split('T')[0];
-    const billSequence = await prisma.billSequence.upsert({
-      where: { date: new Date(today) },
-      update: { sequence: { increment: 1 } },
-      create: { date: new Date(today), sequence: 1 },
-    });
-
-    const billSno = `B2B${today.replace(/-/g, '')}${String(billSequence.sequence).padStart(4, '0')}`;
-
     // Calculate payment status and unpaid amount for SALE transactions
     let paidAmountValue: number | null = null;
     let unpaidAmountValue: number | null = null;
@@ -109,6 +99,33 @@ export async function POST(request: NextRequest) {
 
     // Start a transaction to ensure data consistency
     const result = await prisma.$transaction(async (tx) => {
+      // Generate per-customer bill sequence number (1, 2, 3... for each customer)
+      // Find the max existing bill number for this customer and use max + 1
+      const existingTransactions = await tx.b2BTransaction.findMany({
+        where: { customerId },
+        select: { billSno: true },
+        orderBy: { createdAt: 'desc' }
+      });
+      
+      // Find the highest numeric bill number
+      let maxBillNo = 0;
+      for (const t of existingTransactions) {
+        const num = parseInt(t.billSno, 10);
+        if (!isNaN(num) && num > maxBillNo) {
+          maxBillNo = num;
+        }
+      }
+      
+      // Next bill number is max + 1
+      const nextBillNo = maxBillNo + 1;
+      const billSno = String(nextBillNo);
+      
+      // Update customer's billSequence to keep it in sync
+      await tx.customer.update({
+        where: { id: customerId },
+        data: { billSequence: nextBillNo }
+      });
+
       // Create the transaction
       const transaction = await tx.b2BTransaction.create({
         data: {

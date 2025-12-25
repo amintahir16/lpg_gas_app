@@ -41,6 +41,7 @@ model Customer {
   domestic118kgDue   Int              @default(0)
   standard15kgDue    Int              @default(0)
   commercial454kgDue Int              @default(0)
+  billSequence       Int              @default(0)  // Per-customer bill sequence number
   notes              String?
   isActive           Boolean          @default(true)
   createdBy          String
@@ -544,7 +545,7 @@ model CustomItem {
 model B2BTransaction {
   id               String               @id @default(cuid())
   transactionType  B2BTransactionType
-  billSno          String               @unique
+  billSno          String               // Per-customer bill sequence number
   customerId       String
   date             DateTime
   time             DateTime
@@ -565,6 +566,7 @@ model B2BTransaction {
   users            User                 @relation(fields: [createdBy], references: [id])
   customer         Customer             @relation(fields: [customerId], references: [id])
 
+  @@unique([customerId, billSno])  // Each customer has their own bill sequence
   @@map("b2b_transactions")
 }
 
