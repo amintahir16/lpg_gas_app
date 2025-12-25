@@ -1030,7 +1030,45 @@ export default function B2BCustomerDetailPage() {
       // This ensures proper tracking: empty returns have no credit, buyback has credit
       const returnGasItems: any[] = [];
       
-      returnItems.forEach(item => {
+      // Validate return items have cylinder type selected
+      for (let index = 0; index < returnItems.length; index++) {
+        const item = returnItems[index];
+        
+        // Check for empty return without cylinder type
+        if (item.emptyReturned > 0 && (!item.cylinderType || item.cylinderType.trim() === '')) {
+          setError(`Please select a cylinder type for return item ${index + 1} in the Cylinders Returned section.`);
+          // Expand the returns section so user can see the issue
+          setReturnsExpanded(true);
+          // Scroll to error message after a brief delay
+          setTimeout(() => {
+            const errorElement = document.querySelector('.bg-red-50.border-l-4');
+            if (errorElement) {
+              errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }, 100);
+          return;
+        }
+        
+        // Check for buyback without cylinder type
+        if (item.buybackQuantity > 0 && (!item.cylinderType || item.cylinderType.trim() === '')) {
+          setError(`Please select a cylinder type for buyback item ${index + 1} in the Cylinders buyback section.`);
+          // Expand the returns section so user can see the issue
+          setReturnsExpanded(true);
+          // Scroll to error message after a brief delay
+          setTimeout(() => {
+            const errorElement = document.querySelector('.bg-red-50.border-l-4');
+            if (errorElement) {
+              errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }, 100);
+          return;
+        }
+        
+        // Skip items without cylinder type or quantity
+        if (!item.cylinderType || item.cylinderType.trim() === '') {
+          continue;
+        }
+        
         // Add EMPTY RETURN item (no remaining gas, no credit)
         if (item.emptyReturned > 0) {
           returnGasItems.push({
@@ -1062,7 +1100,7 @@ export default function B2BCustomerDetailPage() {
             isBuyback: true,
           });
         }
-      });
+      }
 
       // Combine all gas items
       const allGasItems = [...deliveryGasItems, ...returnGasItems];
@@ -1441,6 +1479,31 @@ export default function B2BCustomerDetailPage() {
               </button>
             </div>
             
+            {/* Error Display in Form */}
+            {error && (
+              <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3 flex-1">
+                    <p className="text-sm font-medium text-red-800">{error}</p>
+                  </div>
+                  <div className="ml-auto pl-3">
+                    <button
+                      type="button"
+                      onClick={() => setError(null)}
+                      className="inline-flex text-red-400 hover:text-red-600 focus:outline-none"
+                    >
+                      <XMarkIcon className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            
             <form onSubmit={handleTransactionSubmit} className="space-y-4">
               {/* Date and Time Row */}
               <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
@@ -1558,7 +1621,7 @@ export default function B2BCustomerDetailPage() {
                                   value={item.delivered || ''}
                                           onChange={(e) => updateGasItem(index, 'delivered', parseInt(e.target.value) || 0)}
                                           disabled={!item.cylinderType}
-                                  className={`w-full h-10 ${isExceedingStock ? 'border-red-500 bg-red-50' : ''} ${!item.cylinderType ? 'bg-gray-100' : ''}`}
+                                  className={`w-full px-3 py-2 text-sm border border-gray-300 rounded-md ${isExceedingStock ? 'border-red-500 bg-red-50' : 'bg-white'} ${!item.cylinderType ? 'bg-gray-100' : ''} focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500`}
                                   placeholder="0"
                                         />
                                 {isExceedingStock && <div className="text-xs text-red-600 mt-1">Exceeds stock!</div>}
@@ -1571,12 +1634,12 @@ export default function B2BCustomerDetailPage() {
                                   value={item.pricePerItem || ''}
                                         onChange={(e) => updateGasItem(index, 'pricePerItem', parseFloat(e.target.value) || 0)}
                                         disabled={!item.cylinderType}
-                                  className={`w-full h-10 ${!item.cylinderType ? 'bg-gray-100' : ''}`}
+                                  className={`w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white ${!item.cylinderType ? 'bg-gray-100' : ''} focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500`}
                                   placeholder="0.00"
                                       />
                                     </td>
                               <td className="py-2 px-2 align-top">
-                                <div className="text-sm font-semibold text-gray-900 h-10 flex items-center">
+                                <div className="w-full px-3 py-2 text-sm font-semibold text-gray-900 flex items-center">
                                         {formatCurrency(item.delivered * item.pricePerItem)}
                                       </div>
                                     </td>
@@ -1657,46 +1720,46 @@ export default function B2BCustomerDetailPage() {
                       <tbody>
                         {returnItems.map((item, index) => (
                           <tr key={index} className="border-b border-gray-100">
-                            <td className="py-2 px-2">
+                            <td className="py-2 px-2 align-top">
                               <div className="relative">
                                 <select
                                   value={item.cylinderType || ''}
                                   onChange={(e) => updateReturnItem(index, 'cylinderType', e.target.value)}
-                                  className="w-full h-10 pl-3 pr-8 text-sm border border-gray-300 rounded-lg bg-white appearance-none cursor-pointer focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                                  className="w-full px-3 py-2 text-sm cursor-pointer border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                                 >
                                   <option value="">Select type...</option>
                                   {availableCylinderTypes.map((stat, i) => (
                                     <option key={`ret-${stat.typeEnum}-${i}`} value={stat.typeEnum}>{stat.type}</option>
                                   ))}
                                 </select>
-                                <svg className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
                               </div>
+                              {item.cylinderType && (
+                                <div className="text-xs text-gray-500 mt-1">Remaining Due: {getCurrentCylinderDue(item.cylinderType)} units</div>
+                              )}
                             </td>
-                            <td className="py-2 px-2">
+                            <td className="py-2 px-2 align-top">
                                     <Input
                                       type="number"
                                       min="0"
                                 value={item.emptyReturned || ''}
                                 onChange={(e) => updateReturnItem(index, 'emptyReturned', parseInt(e.target.value) || 0)}
                                 disabled={!item.cylinderType}
-                                className={`w-16 h-10 ${!item.cylinderType ? 'bg-gray-100' : ''}`}
+                                className={`w-16 px-3 py-2 text-sm border border-gray-300 rounded-md ${!item.cylinderType ? 'bg-gray-100' : 'bg-white'} focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500`}
                                 placeholder="0"
                                     />
                                   </td>
-                            <td className="py-2 px-2">
+                            <td className="py-2 px-2 align-top">
                                       <Input
                                         type="number"
                                         min="0"
                                 value={item.buybackQuantity || ''}
                                 onChange={(e) => updateReturnItem(index, 'buybackQuantity', parseInt(e.target.value) || 0)}
                                 disabled={!item.cylinderType}
-                                className={`w-16 h-10 ${!item.cylinderType ? 'bg-gray-100' : ''}`}
+                                className={`w-16 px-3 py-2 text-sm border border-gray-300 rounded-md ${!item.cylinderType ? 'bg-gray-100' : 'bg-white'} focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500`}
                                 placeholder="0"
                                       />
                                     </td>
-                            <td className="py-2 px-2">
+                            <td className="py-2 px-2 align-top">
                                       <Input
                                         type="number"
                                         min="0"
@@ -1704,11 +1767,11 @@ export default function B2BCustomerDetailPage() {
                                 value={item.remainingKg || ''}
                                 onChange={(e) => updateReturnItem(index, 'remainingKg', parseFloat(e.target.value) || 0)}
                                 disabled={!item.cylinderType || item.buybackQuantity === 0}
-                                className={`w-20 h-10 ${(!item.cylinderType || item.buybackQuantity === 0) ? 'bg-gray-100' : ''}`}
+                                className={`w-20 px-3 py-2 text-sm border border-gray-300 rounded-md ${(!item.cylinderType || item.buybackQuantity === 0) ? 'bg-gray-100' : 'bg-white'} focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500`}
                                 placeholder="0"
                                       />
                                     </td>
-                            <td className="py-2 px-2">
+                            <td className="py-2 px-2 align-top">
                               <div className="flex items-center gap-1">
                                         <Input
                                           type="number"
@@ -1717,17 +1780,17 @@ export default function B2BCustomerDetailPage() {
                                           value={item.buybackRate ? (item.buybackRate * 100) : 60}
                                   onChange={(e) => updateReturnItem(index, 'buybackRate', (parseFloat(e.target.value) || 60) / 100)}
                                   disabled={!item.cylinderType || item.buybackQuantity === 0}
-                                  className={`w-16 h-10 text-center ${(!item.cylinderType || item.buybackQuantity === 0) ? 'bg-gray-100' : ''}`}
+                                  className={`w-16 px-3 py-2 text-sm text-center border border-gray-300 rounded-md ${(!item.cylinderType || item.buybackQuantity === 0) ? 'bg-gray-100' : 'bg-white'} focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500`}
                                         />
                                 <span className="text-xs text-gray-500">%</span>
                                       </div>
                                     </td>
-                            <td className="py-2 px-2">
-                              <div className={`text-sm font-semibold ${item.buybackCredit > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                            <td className="py-2 px-2 align-top">
+                              <div className={`w-full px-3 py-2 text-sm font-semibold ${item.buybackCredit > 0 ? 'text-green-600' : 'text-gray-400'}`}>
                                 {formatCurrency(item.buybackCredit)}
                                       </div>
                                     </td>
-                            <td className="py-2 px-2 text-center">
+                            <td className="py-2 px-2 text-center align-top">
                               {returnItems.length > 1 && (
                                       <button
                                         type="button"
@@ -1830,7 +1893,7 @@ export default function B2BCustomerDetailPage() {
                             value={salePaymentAmount || ''}
                             onChange={(e) => setSalePaymentAmount(parseFloat(e.target.value) || 0)}
                             placeholder="0.00"
-                            className="text-lg [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
                             onWheel={(e) => e.currentTarget.blur()}
                           />
                         </div>
@@ -1839,7 +1902,7 @@ export default function B2BCustomerDetailPage() {
                           <select
                             value={salePaymentMethod}
                             onChange={(e) => setSalePaymentMethod(e.target.value)}
-                          className="w-full h-10 px-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          className="w-full px-3 py-2 text-sm cursor-pointer border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           >
                             <option value="CASH">Cash</option>
                             <option value="BANK_TRANSFER">Bank Transfer</option>
@@ -1854,6 +1917,7 @@ export default function B2BCustomerDetailPage() {
                           value={salePaymentReference}
                           onChange={(e) => setSalePaymentReference(e.target.value)}
                           placeholder="Check #, Trans ID..."
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
                     </div>
