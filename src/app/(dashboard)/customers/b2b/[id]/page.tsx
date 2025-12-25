@@ -145,9 +145,20 @@ export default function B2BCustomerDetailPage() {
 
   // Transaction form states
   const [showTransactionForm, setShowTransactionForm] = useState(false);
-  const [transactionType, setTransactionType] = useState<'SALE' | 'PAYMENT' | 'BUYBACK' | 'RETURN_EMPTY'>('SALE');
+  const [transactionType, setTransactionType] = useState<'SALE' | 'PAYMENT' | 'BUYBACK' | 'RETURN_EMPTY' | 'UNIFIED'>('UNIFIED');
   const [transactionDate, setTransactionDate] = useState(new Date().toISOString().split('T')[0]);
   const [transactionTime, setTransactionTime] = useState(new Date().toTimeString().slice(0, 5));
+  
+  // Unified form section collapse states
+  const [deliveryExpanded, setDeliveryExpanded] = useState(true);
+  const [returnsExpanded, setReturnsExpanded] = useState(false);
+  const [accessoriesExpanded, setAccessoriesExpanded] = useState(false);
+  const [paymentExpanded, setPaymentExpanded] = useState(false);
+  
+  // Return items for unified form (separate from delivery gasItems concept)
+  const [returnItems, setReturnItems] = useState([
+    { cylinderType: '', emptyReturned: 0, buybackQuantity: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackCredit: 0 }
+  ]);
   
   // Transaction detail modal states
   const [selectedTransaction, setSelectedTransaction] = useState<B2BTransaction | null>(null);
@@ -864,12 +875,126 @@ export default function B2BCustomerDetailPage() {
     return due ? due.count : 0;
   };
 
+  // ========== UNIFIED TRANSACTION HELPERS ==========
+  
+  // Add a new return item row
+  const addReturnItemRow = () => {
+    setReturnItems([...returnItems, { 
+      cylinderType: '', 
+      emptyReturned: 0, 
+      buybackQuantity: 0, 
+      remainingKg: 0, 
+      originalSoldPrice: 0, 
+      buybackRate: 0.6, 
+      buybackCredit: 0 
+    }]);
+  };
+
+  // Remove a return item row
+  const removeReturnItemRow = (index: number) => {
+    if (returnItems.length > 1) {
+      const newItems = returnItems.filter((_, i) => i !== index);
+      setReturnItems(newItems);
+    }
+  };
+
+  // Update return item
+  const updateReturnItem = (index: number, field: string, value: any) => {
+    const newItems = [...returnItems];
+    newItems[index] = { ...newItems[index], [field]: value };
+    
+    // Auto-set original price when cylinder type is selected
+    if (field === 'cylinderType' && value && pricingInfo && pricingInfo.calculation?.endPricePerKg) {
+      const cylinderCapacity = getCapacityFromTypeString(value);
+      if (cylinderCapacity > 0) {
+        const calculatedPrice = Math.round(pricingInfo.calculation.endPricePerKg * cylinderCapacity);
+        newItems[index].originalSoldPrice = calculatedPrice;
+      }
+    }
+    
+    // Calculate buyback credit
+    const item = newItems[index];
+    if (item.buybackQuantity > 0 && item.remainingKg > 0 && item.originalSoldPrice > 0 && item.cylinderType) {
+      const totalKg = getCapacityFromTypeString(item.cylinderType);
+      if (totalKg > 0) {
+        const remainingPercentage = item.remainingKg / totalKg;
+        const buybackRate = item.buybackRate || 0.6;
+        const creditPerUnit = item.originalSoldPrice * remainingPercentage * buybackRate;
+        newItems[index].buybackCredit = creditPerUnit * item.buybackQuantity;
+      }
+    } else {
+      newItems[index].buybackCredit = 0;
+    }
+    
+    setReturnItems(newItems);
+  };
+
+  // Calculate unified transaction summary
+  const getUnifiedTransactionSummary = () => {
+    // Delivery totals
+    const deliveryTotal = gasItems.reduce((sum, item) => sum + (item.delivered * item.pricePerItem), 0);
+    const accessoryTotal = accessoryItems.reduce((sum, item) => sum + item.totalPrice, 0);
+    
+    // Return totals
+    const totalEmptyReturned = returnItems.reduce((sum, item) => sum + item.emptyReturned, 0);
+    const totalBuybackQuantity = returnItems.reduce((sum, item) => sum + item.buybackQuantity, 0);
+    const totalBuybackCredit = returnItems.reduce((sum, item) => sum + item.buybackCredit, 0);
+    
+    // Cylinder counts
+    const totalDelivered = gasItems.reduce((sum, item) => sum + item.delivered, 0);
+    const totalReturned = totalEmptyReturned + totalBuybackQuantity;
+    
+    // Net calculations
+    const grossSaleAmount = deliveryTotal + accessoryTotal;
+    const netAmount = grossSaleAmount - totalBuybackCredit;
+    const balanceImpact = netAmount - salePaymentAmount; // Positive = customer owes, negative = overpaid
+    
+    // Check what sections have data
+    const hasDelivery = gasItems.some(item => item.delivered > 0);
+    const hasAccessories = accessoryItems.some(item => item.quantity > 0);
+    const hasReturns = returnItems.some(item => item.emptyReturned > 0 || item.buybackQuantity > 0);
+    const hasPayment = salePaymentAmount > 0;
+    
+    return {
+      deliveryTotal,
+      accessoryTotal,
+      grossSaleAmount,
+      totalEmptyReturned,
+      totalBuybackQuantity,
+      totalBuybackCredit,
+      totalDelivered,
+      totalReturned,
+      netAmount,
+      paymentReceived: salePaymentAmount,
+      balanceImpact,
+      hasDelivery,
+      hasAccessories,
+      hasReturns,
+      hasPayment
+    };
+  };
+
+  // Reset unified form
+  const resetUnifiedForm = () => {
+    setGasItems([{ cylinderType: '', delivered: 0, pricePerItem: 0, emptyReturned: 0, remainingDue: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackPricePerItem: 0, buybackTotal: 0 }]);
+    setReturnItems([{ cylinderType: '', emptyReturned: 0, buybackQuantity: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackCredit: 0 }]);
+    setAccessoryItems([]);
+    setSalePaymentAmount(0);
+    setSalePaymentMethod('CASH');
+    setSalePaymentReference('');
+    setDeliveryExpanded(true);
+    setReturnsExpanded(false);
+    setAccessoriesExpanded(false);
+    setPaymentExpanded(false);
+    setError(null);
+    setHasAccessoryErrors(false);
+    clearAllValidationErrors();
+  };
+
   const handleTransactionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
-      const formData = new FormData(e.currentTarget as HTMLFormElement);
-      
       // Check for cylinder validation errors and scroll to first invalid item
       if (firstInvalidCylinderIndex !== null) {
         scrollToInvalidCylinderItem();
@@ -882,100 +1007,145 @@ export default function B2BCustomerDetailPage() {
         return;
       }
 
-      // Validate gas items - ensure no empty delivered cylinders are sent
-      const validGasItems = gasItems.filter(item => {
-        if (item.delivered > 0 || item.emptyReturned > 0) {
-          return true;
+      // Get the unified transaction summary
+      const summary = getUnifiedTransactionSummary();
+      
+      // Validate that there is at least something in the transaction
+      const hasAnyData = summary.hasDelivery || summary.hasAccessories || summary.hasReturns || summary.hasPayment;
+      
+      if (!hasAnyData) {
+        setError('Please add at least one item or action before creating a transaction.');
+        return;
+      }
+
+      // Prepare gas items for delivery (sales)
+      const deliveryGasItems = gasItems.filter(item => item.delivered > 0).map(item => ({
+        cylinderType: item.cylinderType,
+        delivered: item.delivered,
+        pricePerItem: item.pricePerItem,
+        emptyReturned: 0, // Delivery only
+      }));
+
+      // Prepare return items - SEPARATE items for empty returns and buyback
+      // This ensures proper tracking: empty returns have no credit, buyback has credit
+      const returnGasItems: any[] = [];
+      
+      returnItems.forEach(item => {
+        // Add EMPTY RETURN item (no remaining gas, no credit)
+        if (item.emptyReturned > 0) {
+          returnGasItems.push({
+            cylinderType: item.cylinderType,
+            delivered: 0,
+            emptyReturned: item.emptyReturned,
+            pricePerItem: 0,
+            // No buyback fields for empty returns
+            remainingKg: 0,
+            originalSoldPrice: 0,
+            buybackRate: 0,
+            buybackTotal: 0,
+            isBuyback: false,
+          });
         }
-        // Log skipped items for debugging
-        console.log(`Skipping gas item: ${item.cylinderType} - delivered: ${item.delivered}, emptyReturned: ${item.emptyReturned}`);
-        return false;
+        
+        // Add BUYBACK item (has remaining gas and credit)
+        if (item.buybackQuantity > 0) {
+          returnGasItems.push({
+            cylinderType: item.cylinderType,
+            delivered: 0,
+            emptyReturned: item.buybackQuantity, // Backend uses emptyReturned for cylinder dues
+            pricePerItem: 0,
+            // Buyback-specific fields
+            remainingKg: item.remainingKg,
+            originalSoldPrice: item.originalSoldPrice,
+            buybackRate: item.buybackRate,
+            buybackTotal: item.buybackCredit,
+            isBuyback: true,
+          });
+        }
       });
 
-      console.log(`Processing ${validGasItems.length} valid gas items out of ${gasItems.length} total items`);
-      
-      // Validate that there are items with quantity > 0
-      if (transactionType === 'SALE') {
-        const hasGasItems = gasItems.some(item => item.delivered > 0);
-        const hasAccessoryItems = accessoryItems.some(item => item.quantity > 0);
-        
-        // Check if there are any items with monetary value
-        const hasMonetaryGasItems = gasItems.some(item => item.delivered > 0);
-        const hasMonetaryAccessoryItems = accessoryItems.some(item => 
-          item.quantity > 0 && item.pricePerItem > 0
-        );
-        
-        // Check if there are free vaporizers (quantity > 0 but both prices = 0)
-        const hasFreeVaporizers = accessoryItems.some(item => 
-          item.quantity > 0 && 
-          item.isVaporizer && 
-          item.usagePrice === 0 && 
-          item.sellingPrice === 0
-        );
-        
-        // Allow transaction if:
-        // 1. There are gas items with monetary value, OR
-        // 2. There are accessories with monetary value, OR  
-        // 3. There are free vaporizers (special case)
-        const isValidTransaction = hasMonetaryGasItems || hasMonetaryAccessoryItems || hasFreeVaporizers;
-        
-        if (!isValidTransaction) {
-          setError('Please add at least one item with quantity greater than 0 before creating a transaction.');
-          return;
-        }
-      } else if (transactionType === 'BUYBACK' || transactionType === 'RETURN_EMPTY') {
-        const hasReturnItems = gasItems.some(item => item.emptyReturned > 0);
-        
-        if (!hasReturnItems) {
-          setError('Please add at least one item to return before creating a transaction.');
-          return;
+      // Combine all gas items
+      const allGasItems = [...deliveryGasItems, ...returnGasItems];
+
+      console.log(`Processing unified transaction: ${deliveryGasItems.length} delivery items, ${returnGasItems.length} return items`);
+
+      // Determine effective transaction type for backend
+      // Priority: If has delivery → SALE (backend handles everything in SALE)
+      // If only payment → PAYMENT
+      // If only returns → RETURN_EMPTY or BUYBACK
+      let effectiveTransactionType: string = 'SALE';
+      if (!summary.hasDelivery && !summary.hasAccessories) {
+        if (summary.hasPayment && !summary.hasReturns) {
+          effectiveTransactionType = 'PAYMENT';
+        } else if (summary.hasReturns && summary.totalBuybackCredit > 0) {
+          effectiveTransactionType = 'BUYBACK';
+        } else if (summary.hasReturns) {
+          effectiveTransactionType = 'RETURN_EMPTY';
+        } else if (summary.hasPayment) {
+          effectiveTransactionType = 'PAYMENT';
         }
       }
-      
-      // Calculate total amount based on transaction type
-      let totalAmount = 0;
-      if (transactionType === 'SALE') {
-        totalAmount = gasItems.reduce((sum, item) => sum + (item.delivered * item.pricePerItem), 0) +
-                     accessoryItems.reduce((sum, item) => sum + item.totalPrice, 0);
-      } else if (transactionType === 'BUYBACK') {
-        totalAmount = gasItems.reduce((sum, item) => sum + item.buybackTotal, 0);
-      } else if (transactionType === 'PAYMENT') {
-        totalAmount = parseFloat(formData.get('paymentAmount') as string) || 0;
-      }
-      
-      // Check if this is a fully paid sale (payment amount equals sale amount)
-      const isFullyPaidSale = transactionType === 'SALE' && salePaymentAmount > 0 && 
-                              Math.abs(salePaymentAmount - totalAmount) < 0.01; // Allow 0.01 tolerance for floating point
+
+      // Calculate total amount based on what's in the transaction
+      const totalAmount = effectiveTransactionType === 'PAYMENT' 
+        ? salePaymentAmount 
+        : effectiveTransactionType === 'BUYBACK'
+        ? summary.totalBuybackCredit
+        : summary.netAmount;
+
+      // Check if this is a fully paid transaction
+      const isFullyPaid = salePaymentAmount > 0 && Math.abs(salePaymentAmount - summary.netAmount) < 0.01;
+
+      // Build notes based on what's in the transaction
+      let notes = '';
+      const noteParts = [];
+      if (summary.hasDelivery) noteParts.push(`${summary.totalDelivered} cylinders delivered`);
+      if (summary.totalEmptyReturned > 0) noteParts.push(`${summary.totalEmptyReturned} empty returned`);
+      if (summary.totalBuybackQuantity > 0) noteParts.push(`${summary.totalBuybackQuantity} buyback (${formatCurrency(summary.totalBuybackCredit)} credit)`);
+      if (summary.hasAccessories) noteParts.push(`accessories sold`);
+      if (summary.hasPayment) noteParts.push(`${formatCurrency(salePaymentAmount)} payment received via ${salePaymentMethod}`);
+      notes = noteParts.join(' • ');
 
       const transactionData = {
-        transactionType,
+        transactionType: effectiveTransactionType,
         customerId,
         date: transactionDate,
         time: transactionTime,
         totalAmount,
-        // For SALE transactions, include payment info if provided
-        paidAmount: transactionType === 'SALE' && salePaymentAmount > 0 ? salePaymentAmount : undefined,
-        paymentMethod: transactionType === 'SALE' && salePaymentAmount > 0 ? salePaymentMethod : undefined,
-        paymentReference: transactionType === 'PAYMENT' ? formData.get('paymentReference') : (transactionType === 'SALE' && salePaymentAmount > 0 ? (salePaymentReference || `Payment on Sale`) : null),
-        notes: transactionType === 'SALE' && salePaymentAmount > 0 
-          ? (isFullyPaidSale 
-              ? `Fully paid sale - Payment of ${formatCurrency(salePaymentAmount)} received via ${salePaymentMethod}` 
-              : `Partial payment of ${formatCurrency(salePaymentAmount)} received via ${salePaymentMethod}. Remaining: ${formatCurrency(totalAmount - salePaymentAmount)}`)
-          : (transactionType === 'PAYMENT' ? formData.get('notes') : null),
-        gasItems: transactionType === 'PAYMENT' ? [] : validGasItems,
-        accessoryItems: transactionType === 'PAYMENT' ? [] : accessoryItems.filter(item => item.quantity > 0).map(item => ({
+        // Payment info
+        paidAmount: salePaymentAmount > 0 ? salePaymentAmount : undefined,
+        paymentMethod: salePaymentAmount > 0 ? salePaymentMethod : undefined,
+        paymentReference: salePaymentAmount > 0 ? (salePaymentReference || 'Payment') : null,
+        notes,
+        // Combined gas items (delivery + returns)
+        gasItems: effectiveTransactionType === 'PAYMENT' ? [] : allGasItems,
+        // Accessories
+        accessoryItems: effectiveTransactionType === 'PAYMENT' ? [] : accessoryItems.filter(item => item.quantity > 0).map(item => ({
           productName: `${item.category} - ${item.itemType}`,
           quantity: item.quantity,
           pricePerItem: item.pricePerItem,
           totalPrice: item.totalPrice,
           cylinderType: null,
-          // Vaporizer-specific fields
           isVaporizer: item.isVaporizer,
           usagePrice: item.usagePrice,
           sellingPrice: item.sellingPrice,
           costPerPiece: item.costPerPiece
-        }))
+        })),
+        // Unified transaction metadata
+        isUnifiedTransaction: true,
+        unifiedSummary: {
+          deliveryTotal: summary.deliveryTotal,
+          accessoryTotal: summary.accessoryTotal,
+          buybackCredit: summary.totalBuybackCredit,
+          netAmount: summary.netAmount,
+          paymentReceived: summary.paymentReceived,
+          balanceImpact: summary.balanceImpact,
+          totalDelivered: summary.totalDelivered,
+          totalReturned: summary.totalReturned,
+        }
       };
+
+      console.log('Submitting unified transaction:', transactionData);
 
       const response = await fetch('/api/customers/b2b/transactions', {
         method: 'POST',
@@ -995,17 +1165,9 @@ export default function B2BCustomerDetailPage() {
       
       // Reset form and refresh data
       setShowTransactionForm(false);
-      setGasItems(gasItems.map(item => ({ ...item, delivered: 0, emptyReturned: 0 })));
-      setAccessoryItems([]);
+      resetUnifiedForm();
       
-      // Reset payment form states
-      setPaymentAgainst('');
-      setPaymentQuantity(0);
-      setSalePaymentAmount(0);
-      setSalePaymentMethod('CASH');
-      setSalePaymentReference('');
-      
-      // Refresh customer data multiple times to ensure it's updated
+      // Refresh customer data
       await fetchCustomerLedger();
       
       // Refresh cylinder dues after transaction
@@ -1022,12 +1184,6 @@ export default function B2BCustomerDetailPage() {
         console.log('Force refreshing customer data...');
         await fetchCustomerLedger();
       }, 1000);
-      
-      // Another refresh after longer delay
-      setTimeout(async () => {
-        console.log('Final refresh of customer data...');
-        await fetchCustomerLedger();
-      }, 2000);
       
       alert('Transaction created successfully!');
     } catch (err) {
@@ -1239,614 +1395,603 @@ export default function B2BCustomerDetailPage() {
               )}
             </div>
 
-            {/* Quick Actions */}
+            {/* Quick Actions - Unified Transaction */}
             <div className="space-y-3">
               <Button
                 type="button"
                 onClick={() => {
-                  setTransactionType('SALE');
+                  setTransactionType('UNIFIED');
+                  resetUnifiedForm();
                   setShowTransactionForm(true);
-                  setError(null); // Clear any previous errors
-                  setHasAccessoryErrors(false); // Clear accessory validation errors
-                  clearAllValidationErrors(); // Clear cylinder validation errors
-                  // Reset sale payment states
-                  setSalePaymentAmount(0);
-                  setSalePaymentMethod('CASH');
-                  setSalePaymentReference('');
                 }}
-                className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
+                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg"
               >
-                <DocumentTextIcon className="w-4 h-4 mr-2" />
-                New Sale
+                <PlusIcon className="w-4 h-4 mr-2" />
+                New Transaction
               </Button>
-              <Button
-                type="button"
-                onClick={() => {
-                  setTransactionType('PAYMENT');
-                  setShowTransactionForm(true);
-                  setError(null); // Clear any previous errors
-                }}
-                className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
-              >
-                <CreditCardIcon className="w-4 h-4 mr-2" />
-                New Payment
-              </Button>
-              <Button
-                type="button"
-                onClick={() => {
-                  setTransactionType('BUYBACK');
-                  setShowTransactionForm(true);
-                  setError(null); // Clear any previous errors
-                }}
-                variant="outline"
-                className="w-full"
-              >
-                <ArrowPathIcon className="w-4 h-4 mr-2" />
-                Gas Buyback
-              </Button>
-              <Button
-                type="button"
-                onClick={() => {
-                  setTransactionType('RETURN_EMPTY');
-                  setShowTransactionForm(true);
-                  setError(null); // Clear any previous errors
-                }}
-                variant="outline"
-                className="w-full"
-              >
-                <ArrowPathIcon className="w-4 h-4 mr-2" />
-                Return Empty
-              </Button>
+              <p className="text-xs text-gray-500 text-center">
+                Sale, Payment, Buyback & Returns in one transaction
+              </p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Transaction Form Modal */}
+      {/* Unified Transaction Form Modal */}
       {showTransactionForm && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-10 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                {transactionType === 'SALE' ? 'New Sale Transaction' :
-                 transactionType === 'PAYMENT' ? 'New Payment' :
-                 transactionType === 'BUYBACK' ? 'Gas Buyback' : 'Return Empty Cylinders'}
-              </h3>
-              
-              <form onSubmit={handleTransactionSubmit} className="space-y-6">
-                {/* Date and Time */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Date</label>
-                    <Input
-                      type="date"
-                      value={transactionDate}
-                      onChange={(e) => setTransactionDate(e.target.value)}
-                      required
-                    />
+        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm overflow-y-auto h-full w-full z-50">
+          <div className="relative top-6 mx-auto p-6 border-0 w-11/12 max-w-5xl shadow-2xl rounded-xl bg-white mb-10">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
+                    <PlusIcon className="w-5 h-5 text-white" />
                   </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Time</label>
-                    <Input
-                      type="time"
-                      value={transactionTime}
-                      onChange={(e) => setTransactionTime(e.target.value)}
-                      required
-                    />
-                  </div>
+                  New Transaction
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">Fill in the sections that apply to this transaction</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTransactionForm(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <XMarkIcon className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleTransactionSubmit} className="space-y-4">
+              {/* Date and Time Row */}
+              <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                  <Input
+                    type="date"
+                    value={transactionDate}
+                    onChange={(e) => setTransactionDate(e.target.value)}
+                    required
+                    className="bg-white"
+                  />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
+                  <Input
+                    type="time"
+                    value={transactionTime}
+                    onChange={(e) => setTransactionTime(e.target.value)}
+                    required
+                    className="bg-white"
+                  />
+                </div>
+              </div>
 
-
-                {/* Gas Section */}
-                {(transactionType === 'SALE' || transactionType === 'BUYBACK' || transactionType === 'RETURN_EMPTY') && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg font-semibold text-gray-900">
-                        {transactionType === 'SALE' ? 'Gas Delivery' :
-                         transactionType === 'BUYBACK' ? 'Gas Buyback' :
-                         'Empty Cylinder Return'}
-                      </CardTitle>
-                      {transactionType === 'SALE' && (
-                        <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded-md">
-                          <p><strong>Remaining Cylinders Due Logic:</strong></p>
-                          <ul className="mt-1 space-y-1">
-                            <li>• <strong>Sale:</strong> Current Due + Delivered Cylinders = New Due</li>
-                            <li>• <strong>Return/Buyback:</strong> Current Due - Returned Cylinders = New Due</li>
-                            <li>• <strong>Payment:</strong> No change to cylinder dues</li>
-                          </ul>
-                        </div>
+              {/* ========== SECTION 1: CYLINDERS DELIVERED ========== */}
+              <div className={`border rounded-xl overflow-hidden transition-all ${deliveryExpanded ? 'border-green-200 bg-green-50/30' : 'border-gray-200'}`}>
+                <button
+                  type="button"
+                  onClick={() => setDeliveryExpanded(!deliveryExpanded)}
+                  className={`w-full flex items-center justify-between p-4 text-left transition-colors ${deliveryExpanded ? 'bg-green-100/50' : 'hover:bg-gray-50'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${deliveryExpanded ? 'bg-green-600' : 'bg-gray-300'}`}>
+                      <CubeIcon className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <span className="font-semibold text-gray-900">Cylinders Delivered</span>
+                      {gasItems.some(item => item.delivered > 0) && (
+                        <Badge className="ml-2 bg-green-100 text-green-700 border-green-200">
+                          {gasItems.reduce((sum, item) => sum + item.delivered, 0)} cylinders
+                        </Badge>
                       )}
-                      {transactionType === 'BUYBACK' && (
-                        <div className="text-sm text-gray-600 bg-green-50 p-3 rounded-md">
-                          <p><strong>Gas Buyback Logic:</strong></p>
-                          <ul className="mt-1 space-y-1">
-                            <li>• Enter remaining gas quantity (e.g., 5kg, 10kg)</li>
-                            <li>• Original selling price is automatically calculated from pricing system</li>
-                            <li>• Enter your desired buyback rate percentage (default: 60%)</li>
-                            <li>• Buyback amount = Auto Price × (Remaining Gas / Total Gas) × Buyback Rate</li>
-                          </ul>
-                        </div>
-                      )}
-                      {transactionType === 'RETURN_EMPTY' && (
-                        <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-md">
-                          <p><strong>Empty Cylinder Return:</strong></p>
-                          <ul className="mt-1 space-y-1">
-                            <li>• Enter quantity of empty cylinders being returned</li>
-                            <li>• This reduces the customer's cylinder dues</li>
-                            <li>• No payment involved - just inventory adjustment</li>
-                          </ul>
-                        </div>
-                      )}
-                    </CardHeader>
-                    
-                    {/* Pricing Information Banner */}
-                    {pricingInfo && transactionType === 'SALE' && (
-                      <div className="px-6 pb-4">
-                        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h4 className="font-semibold text-blue-900">Auto-Pricing Information</h4>
-                              <p className="text-sm text-blue-700">
-                                Category: <strong>{pricingInfo.category.name}</strong> | 
-                                Plant Price: <strong>Rs {pricingInfo.plantPrice.price118kg}</strong> | 
-                                Margin: <strong>Rs {pricingInfo.category.marginPerKg}/kg</strong>
-                              </p>
-                              <p className="text-sm text-blue-600 mt-1">
-                                Calculated Prices: 11.8kg = Rs {pricingInfo.finalPrices.domestic118kg} | 
-                                15kg = Rs {pricingInfo.finalPrices.standard15kg} | 
-                                45.4kg = Rs {pricingInfo.finalPrices.commercial454kg}
-                              </p>
-                            </div>
-                            <Button 
-                              type="button" 
-                              onClick={applyCalculatedPrices} 
-                              variant="outline" 
-                              size="sm"
-                              className="bg-blue-50 text-blue-700 border-blue-200"
-                            >
-                              <CalculatorIcon className="w-4 h-4 mr-2" />
-                              Apply Auto-Pricing
-                            </Button>
+                    </div>
+                  </div>
+                  <svg className={`w-5 h-5 text-gray-500 transition-transform ${deliveryExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                {deliveryExpanded && (
+                  <div className="p-4 border-t border-green-200">
+                    {/* Pricing Info Banner */}
+                    {pricingInfo && (
+                      <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm">
+                            <span className="font-medium text-blue-900">Auto-Pricing: </span>
+                            <span className="text-blue-700">
+                              {pricingInfo.category?.name} | Margin: Rs {pricingInfo.category?.marginPerKg}/kg
+                            </span>
                           </div>
+                          <Button 
+                            type="button" 
+                            onClick={applyCalculatedPrices} 
+                            variant="outline" 
+                            size="sm"
+                            className="bg-white text-blue-700 border-blue-200 text-xs"
+                          >
+                            <CalculatorIcon className="w-3 h-3 mr-1" />
+                            Apply Prices
+                          </Button>
                         </div>
                       </div>
                     )}
                     
-                    <CardContent>
-                      <div className="overflow-x-auto">
-                        <table className="w-full border-collapse">
-                          <thead>
-                            <tr className="border-b-2 border-gray-200 bg-gray-50">
-                              <th className="text-left py-3 px-4 font-semibold text-sm text-gray-700">
-                                {transactionType === 'SALE' ? 'Gas Cylinder delivered' :
-                                 transactionType === 'BUYBACK' ? 'Gas Cylinder Type' :
-                                 'Gas Cylinder Type'}
-                              </th>
-                              {transactionType === 'SALE' && (
-                                <>
-                                  <th className="text-left py-3 px-4 font-semibold text-sm text-gray-700">Delivered Cylinders</th>
-                                  <th className="text-left py-3 px-4 font-semibold text-sm text-gray-700">Price Per Item</th>
-                                  <th className="text-left py-3 px-4 font-semibold text-sm text-gray-700">Total Price per Item</th>
-                                </>
-                              )}
-                              {(transactionType === 'BUYBACK' || transactionType === 'RETURN_EMPTY') && (
-                                <th className="text-left py-3 px-4 font-semibold text-sm text-gray-700">Cylinders Returned</th>
-                              )}
-                              {transactionType === 'BUYBACK' && (
-                                <>
-                                  <th className="text-left py-3 px-4 font-semibold text-sm text-gray-700">Remaining Gas (kg)</th>
-                                  <th className="text-left py-3 px-4 font-semibold text-sm text-gray-700">Original Price (Auto)</th>
-                                  <th className="text-left py-3 px-4 font-semibold text-sm text-gray-700">Buyback Rate (%)</th>
-                                  <th className="text-left py-3 px-4 font-semibold text-sm text-gray-700">Buyback Amount</th>
-                                </>
-                              )}
-                              <th className="text-center py-3 px-4 font-semibold text-sm text-gray-700 w-20">Actions</th>
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-gray-200 text-xs text-gray-500 uppercase tracking-wider">
+                          <th className="text-left py-2 px-2 font-medium">Cylinder Type</th>
+                          <th className="text-left py-2 px-2 font-medium">Quantity</th>
+                          <th className="text-left py-2 px-2 font-medium">Price/Unit</th>
+                          <th className="text-left py-2 px-2 font-medium">Total</th>
+                          <th className="text-center py-2 px-2 font-medium w-16"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {gasItems.map((item, index) => {
+                          const fullStockCount = getFullStockCount(item.cylinderType);
+                          const isExceedingStock = item.delivered > 0 && fullStockCount > 0 && item.delivered > fullStockCount;
+                          
+                          return (
+                            <tr key={index} id={`cylinder-item-${index}`} className="border-b border-gray-100">
+                              <td className="py-2 px-2">
+                                <div className="relative">
+                                  <select
+                                    value={item.cylinderType || ''}
+                                    onChange={(e) => updateGasItem(index, 'cylinderType', e.target.value)}
+                                    className="w-full h-10 pl-3 pr-8 text-sm border border-gray-300 rounded-lg bg-white appearance-none cursor-pointer focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+                                  >
+                                    <option value="">Select type...</option>
+                                    {availableCylinderTypes.map((stat, i) => (
+                                      <option key={`${stat.typeEnum}-${i}`} value={stat.typeEnum}>{stat.type}</option>
+                                    ))}
+                                  </select>
+                                  <svg className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </div>
+                                {item.cylinderType && (
+                                  <div className="text-xs text-gray-500 mt-1">Stock: {fullStockCount} units</div>
+                                )}
+                              </td>
+                              <td className="py-2 px-2">
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  value={item.delivered || ''}
+                                  onChange={(e) => updateGasItem(index, 'delivered', parseInt(e.target.value) || 0)}
+                                  disabled={!item.cylinderType}
+                                  className={`w-20 h-10 ${isExceedingStock ? 'border-red-500 bg-red-50' : ''} ${!item.cylinderType ? 'bg-gray-100' : ''}`}
+                                  placeholder="0"
+                                />
+                                {isExceedingStock && <div className="text-xs text-red-600 mt-1">Exceeds stock!</div>}
+                              </td>
+                              <td className="py-2 px-2">
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={item.pricePerItem || ''}
+                                  onChange={(e) => updateGasItem(index, 'pricePerItem', parseFloat(e.target.value) || 0)}
+                                  disabled={!item.cylinderType}
+                                  className={`w-28 h-10 ${!item.cylinderType ? 'bg-gray-100' : ''}`}
+                                  placeholder="0.00"
+                                />
+                              </td>
+                              <td className="py-2 px-2">
+                                <div className="text-sm font-semibold text-gray-900">
+                                  {formatCurrency(item.delivered * item.pricePerItem)}
+                                </div>
+                              </td>
+                              <td className="py-2 px-2 text-center">
+                                {gasItems.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeGasItemRow(index)}
+                                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                                  >
+                                    <XMarkIcon className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </td>
                             </tr>
-                          </thead>
-                          <tbody>
-                            {gasItems.map((item, index) => {
-                              const fullStockCount = getFullStockCount(item.cylinderType);
-                              const isExceedingStock = item.delivered > 0 && fullStockCount > 0 && item.delivered > fullStockCount;
-                              
-                              return (
-                                <tr key={index} id={`cylinder-item-${index}`} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
-                                  <td className="py-3 px-4 align-top">
-                                    <div className="space-y-2 min-w-[200px]">
-                                      <div className="relative w-full">
-                                        {loadingCylinderTypes ? (
-                                          <div className="flex h-10 w-full items-center justify-center rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-500">
-                                            Loading cylinder types...
-                                          </div>
-                                        ) : (
-                                          <>
-                                            <select
-                                              value={item.cylinderType || ''}
-                                              onChange={(e) => {
-                                                updateGasItem(index, 'cylinderType', e.target.value);
-                                              }}
-                                              disabled={loadingCylinderTypes || availableCylinderTypes.length === 0}
-                                              className="w-full pl-3 pr-8 text-sm border border-gray-300 rounded-md bg-white text-gray-900 appearance-none cursor-pointer focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-colors disabled:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-500"
-                                              style={{
-                                                height: '2.75rem',
-                                                paddingTop: '0.75rem',
-                                                paddingBottom: '0.75rem',
-                                                lineHeight: '1.25rem'
-                                              }}
-                                            >
-                                              <option value="">Select cylinder type</option>
-                                              {availableCylinderTypes.map((stat, statIndex) => (
-                                                <option 
-                                                  key={`${stat.typeEnum}-${statIndex}`} 
-                                                  value={stat.typeEnum}
-                                                >
-                                                  {stat.type}
-                                                </option>
-                                              ))}
-                                            </select>
-                                            <svg className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                            </svg>
-                                          </>
-                                        )}
-                                      </div>
-                                      {item.cylinderType && (
-                                        <div className="text-xs text-gray-500 font-medium">
-                                          Stock: <span className="text-gray-700">{fullStockCount}</span> units (Full)
-                                        </div>
-                                      )}
-                                    </div>
-                                  </td>
-                                {transactionType === 'SALE' && (
-                                  <>
-                                    <td className="py-3 px-4 align-top">
-                                      <div className="space-y-1">
-                                        <Input
-                                          type="number"
-                                          min="0"
-                                          max={fullStockCount > 0 ? fullStockCount : undefined}
-                                          value={item.delivered}
-                                          onChange={(e) => updateGasItem(index, 'delivered', parseInt(e.target.value) || 0)}
-                                          disabled={!item.cylinderType}
-                                          className={`w-20 h-10 ${
-                                            isExceedingStock
-                                              ? 'border-red-500 bg-red-50 text-red-900 focus:border-red-500 focus:ring-red-500'
-                                              : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
-                                          } ${!item.cylinderType ? 'bg-gray-50 cursor-not-allowed' : ''}`}
-                                        />
-                                        {isExceedingStock && (
-                                          <div className="text-xs text-red-600 font-medium">
-                                            Exceeds stock ({fullStockCount})
-                                          </div>
-                                        )}
-                                      </div>
-                                    </td>
-                                    <td className="py-3 px-4 align-top">
-                                      <Input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={item.pricePerItem}
-                                        onChange={(e) => updateGasItem(index, 'pricePerItem', parseFloat(e.target.value) || 0)}
-                                        disabled={!item.cylinderType}
-                                        className={`w-28 h-10 ${!item.cylinderType ? 'bg-gray-50 cursor-not-allowed' : ''}`}
-                                      />
-                                    </td>
-                                    <td className="py-3 px-4 align-top">
-                                      <div className="text-sm font-semibold text-gray-900 pt-2">
-                                        {formatCurrency(item.delivered * item.pricePerItem)}
-                                      </div>
-                                    </td>
-                                  </>
-                                )}
-                                {(transactionType === 'BUYBACK' || transactionType === 'RETURN_EMPTY') && (
-                                  <td className="py-3 px-4 align-top">
-                                    <Input
-                                      type="number"
-                                      min="0"
-                                      value={item.emptyReturned}
-                                      onChange={(e) => updateGasItem(index, 'emptyReturned', parseInt(e.target.value) || 0)}
-                                      className="w-20 h-10"
-                                    />
-                                  </td>
-                                )}
-                                {transactionType === 'BUYBACK' && (
-                                  <>
-                                    <td className="py-3 px-4 align-top">
-                                      <Input
-                                        type="number"
-                                        min="0"
-                                        step="0.1"
-                                        value={item.remainingKg}
-                                        onChange={(e) => updateGasItem(index, 'remainingKg', parseFloat(e.target.value) || 0)}
-                                        className="w-20 h-10"
-                                        placeholder="5.0"
-                                      />
-                                    </td>
-                                    <td className="py-3 px-4 align-top">
-                                      <Input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={item.originalSoldPrice}
-                                        readOnly
-                                        className="w-28 h-10 bg-gray-50 text-gray-700 cursor-not-allowed"
-                                        placeholder="Auto-calculated"
-                                      />
-                                    </td>
-                                    <td className="py-3 px-4 align-top">
-                                      <div className="flex items-center space-x-1">
-                                        <Input
-                                          type="number"
-                                          min="0"
-                                          max="100"
-                                          step="0.1"
-                                          value={item.buybackRate ? (item.buybackRate * 100) : 60}
-                                          onChange={(e) => {
-                                            const inputValue = e.target.value;
-                                            // Allow empty input while typing
-                                            if (inputValue === '' || inputValue === '.') {
-                                              return;
-                                            }
-                                            const rateValue = parseFloat(inputValue);
-                                            if (!isNaN(rateValue) && rateValue >= 0 && rateValue <= 100) {
-                                              updateGasItem(index, 'buybackRate', rateValue / 100);
-                                            }
-                                          }}
-                                          onBlur={(e) => {
-                                            // Ensure a valid value on blur, default to 60 if empty
-                                            const inputValue = e.target.value;
-                                            if (inputValue === '' || isNaN(parseFloat(inputValue))) {
-                                              updateGasItem(index, 'buybackRate', 0.6);
-                                            }
-                                          }}
-                                          className="w-20 h-10 text-sm text-center"
-                                          placeholder="60"
-                                        />
-                                        <span className="text-sm text-gray-600">%</span>
-                                      </div>
-                                    </td>
-                                    <td className="py-3 px-4 align-top">
-                                      <div className="text-sm font-semibold text-green-600 pt-2">
-                                        {formatCurrency(item.buybackTotal)}
-                                      </div>
-                                    </td>
-                                  </>
-                                )}
-                                <td className="py-3 px-4 align-top">
-                                  <div className="flex items-center justify-center">
-                                    {gasItems.length > 1 && (
-                                      <button
-                                        type="button"
-                                        onClick={() => removeGasItemRow(index)}
-                                        className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
-                                        title="Remove item"
-                                      >
-                                        <XMarkIcon className="w-5 h-5" />
-                                      </button>
-                                    )}
-                                  </div>
-                                </td>
-                              </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                        <div className="mt-4 flex justify-start">
-                          <Button
-                            type="button"
-                            onClick={addGasItemRow}
-                            variant="outline"
-                            size="sm"
-                            className="flex items-center gap-2 border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"
-                          >
-                            <PlusIcon className="w-4 h-4" />
-                            Add Item
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Accessories Section */}
-                {transactionType === 'SALE' && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg font-semibold text-gray-900">Accessories</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <ProfessionalAccessorySelector
-                        accessoryItems={accessoryItems}
-                        setAccessoryItems={setAccessoryItems}
-                        onValidationChange={setHasAccessoryErrors}
-                        onInventoryValidationChange={handleInventoryValidationChange}
-                      />
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Payment Details - Only for PAYMENT type */}
-                {transactionType === 'PAYMENT' && (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Amount (PKR)</label>
-                      <Input 
-                        name="paymentAmount" 
-                        type="number"
-                        placeholder="Enter payment amount"
-                        step="0.01"
-                        min="0.01"
-                        required
-                        className="text-lg [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
-                        onWheel={(e) => e.currentTarget.blur()}
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Method</label>
-                      <select
-                        name="paymentMethod"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        required
-                      >
-                        <option value="CASH">Cash</option>
-                        <option value="BANK_TRANSFER">Bank Transfer</option>
-                        <option value="CHECK">Check</option>
-                        <option value="CREDIT_CARD">Credit Card</option>
-                        <option value="DEBIT_CARD">Debit Card</option>
-                      </select>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Reference (Optional)</label>
-                      <Input 
-                        name="paymentReference" 
-                        placeholder="e.g., Check #1234, Transaction ID, etc."
-                        className="text-sm"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Notes (Optional)</label>
-                      <Input 
-                        name="notes" 
-                        placeholder="Additional notes about this payment"
-                        className="text-sm"
-                      />
-                    </div>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    <Button
+                      type="button"
+                      onClick={addGasItemRow}
+                      variant="outline"
+                      size="sm"
+                      className="mt-3 text-green-700 border-green-300 hover:bg-green-50"
+                    >
+                      <PlusIcon className="w-4 h-4 mr-1" />
+                      Add Cylinder
+                    </Button>
                   </div>
                 )}
+              </div>
 
-
-                {/* Payment Section for SALE */}
-                {transactionType === 'SALE' && (
-                  <Card className="border-2 border-blue-200 bg-blue-50/30">
-                    <CardHeader>
-                      <CardTitle className="text-lg font-semibold text-gray-900">
-                        Payment on Sale (Optional)
-                      </CardTitle>
-                      <CardDescription className="text-sm text-gray-600">
-                        Accept payment immediately with this sale transaction
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-2">
-                            Payment Amount (PKR)
-                          </label>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={salePaymentAmount || ''}
-                            onChange={(e) => setSalePaymentAmount(parseFloat(e.target.value) || 0)}
-                            placeholder="0.00"
-                            className="text-lg [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
-                            onWheel={(e) => e.currentTarget.blur()}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-2">
-                            Payment Method
-                          </label>
-                          <select
-                            value={salePaymentMethod}
-                            onChange={(e) => setSalePaymentMethod(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          >
-                            <option value="CASH">Cash</option>
-                            <option value="BANK_TRANSFER">Bank Transfer</option>
-                            <option value="CHECK">Check</option>
-                            <option value="CREDIT_CARD">Credit Card</option>
-                            <option value="DEBIT_CARD">Debit Card</option>
-                          </select>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Total Amount */}
-                <div className="text-right space-y-2">
-                  {transactionType === 'SALE' && (
-                    <>
-                      <div className="space-y-1">
-                        <p className="text-lg font-semibold text-gray-900">
-                          Total Sale Amount: {formatCurrency(
-                            gasItems.reduce((sum, item) => sum + (item.delivered * item.pricePerItem), 0) +
-                            accessoryItems.reduce((sum, item) => sum + item.totalPrice, 0)
-                          )}
-                        </p>
-                        {salePaymentAmount > 0 && (
-                          <>
-                            <p className="text-md font-medium text-green-600">
-                              Payment Received: {formatCurrency(salePaymentAmount)}
-                            </p>
-                            <p className={`text-lg font-semibold ${
-                              (gasItems.reduce((sum, item) => sum + (item.delivered * item.pricePerItem), 0) +
-                               accessoryItems.reduce((sum, item) => sum + item.totalPrice, 0)) - salePaymentAmount > 0
-                                ? 'text-red-600' 
-                                : (gasItems.reduce((sum, item) => sum + (item.delivered * item.pricePerItem), 0) +
-                                   accessoryItems.reduce((sum, item) => sum + item.totalPrice, 0)) - salePaymentAmount < 0
-                                ? 'text-green-600'
-                                : 'text-gray-900'
-                            }`}>
-                              Remaining Balance: {formatCurrency(
-                                (gasItems.reduce((sum, item) => sum + (item.delivered * item.pricePerItem), 0) +
-                                 accessoryItems.reduce((sum, item) => sum + item.totalPrice, 0)) - salePaymentAmount
-                              )}
-                            </p>
-                          </>
-                        )}
-                      </div>
-                    </>
-                  )}
-                  {transactionType === 'BUYBACK' && (
+              {/* ========== SECTION 2: CYLINDERS RETURNED ========== */}
+              <div className={`border rounded-xl overflow-hidden transition-all ${returnsExpanded ? 'border-orange-200 bg-orange-50/30' : 'border-gray-200'}`}>
+                <button
+                  type="button"
+                  onClick={() => setReturnsExpanded(!returnsExpanded)}
+                  className={`w-full flex items-center justify-between p-4 text-left transition-colors ${returnsExpanded ? 'bg-orange-100/50' : 'hover:bg-gray-50'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${returnsExpanded ? 'bg-orange-500' : 'bg-gray-300'}`}>
+                      <ArrowPathIcon className="w-4 h-4 text-white" />
+                    </div>
                     <div>
-                      <p className="text-lg font-semibold text-green-600">
-                        Total Buyback Amount: {formatCurrency(
-                          gasItems.reduce((sum, item) => sum + item.buybackTotal, 0)
-                        )}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        (Based on buyback rate × original price for remaining gas)
-                      </p>
+                      <span className="font-semibold text-gray-900">Cylinders Returned</span>
+                      <span className="text-xs text-gray-500 ml-2">(Empty & Buyback)</span>
+                      {returnItems.some(item => item.emptyReturned > 0 || item.buybackQuantity > 0) && (
+                        <Badge className="ml-2 bg-orange-100 text-orange-700 border-orange-200">
+                          {returnItems.reduce((sum, item) => sum + item.emptyReturned + item.buybackQuantity, 0)} cylinders
+                        </Badge>
+                      )}
                     </div>
-                  )}
-                  {transactionType === 'PAYMENT' && (
-                    <div className="text-right">
-                      <p className="text-lg font-semibold text-green-600">
-                        Payment Amount: Enter amount in form above
-                      </p>
+                  </div>
+                  <svg className={`w-5 h-5 text-gray-500 transition-transform ${returnsExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                {returnsExpanded && (
+                  <div className="p-4 border-t border-orange-200">
+                    <div className="mb-3 p-3 bg-orange-50 border border-orange-200 rounded-lg text-sm text-orange-800">
+                      <strong>Empty Return:</strong> No credit • <strong>Buyback:</strong> Customer gets credit for remaining gas
                     </div>
-                  )}
-                  {transactionType === 'RETURN_EMPTY' && (
-                    <p className="text-lg font-semibold text-gray-600">
-                      Empty Return - No Amount
-                    </p>
-                  )}
-                </div>
+                    
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-gray-200 text-xs text-gray-500 uppercase tracking-wider">
+                          <th className="text-left py-2 px-2 font-medium">Cylinder Type</th>
+                          <th className="text-left py-2 px-2 font-medium">Empty Qty</th>
+                          <th className="text-left py-2 px-2 font-medium">Buyback Qty</th>
+                          <th className="text-left py-2 px-2 font-medium">Remaining Kg</th>
+                          <th className="text-left py-2 px-2 font-medium">Rate %</th>
+                          <th className="text-left py-2 px-2 font-medium">Credit</th>
+                          <th className="text-center py-2 px-2 font-medium w-16"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {returnItems.map((item, index) => (
+                          <tr key={index} className="border-b border-gray-100">
+                            <td className="py-2 px-2">
+                              <div className="relative">
+                                <select
+                                  value={item.cylinderType || ''}
+                                  onChange={(e) => updateReturnItem(index, 'cylinderType', e.target.value)}
+                                  className="w-full h-10 pl-3 pr-8 text-sm border border-gray-300 rounded-lg bg-white appearance-none cursor-pointer focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                                >
+                                  <option value="">Select type...</option>
+                                  {availableCylinderTypes.map((stat, i) => (
+                                    <option key={`ret-${stat.typeEnum}-${i}`} value={stat.typeEnum}>{stat.type}</option>
+                                  ))}
+                                </select>
+                                <svg className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </div>
+                            </td>
+                            <td className="py-2 px-2">
+                              <Input
+                                type="number"
+                                min="0"
+                                value={item.emptyReturned || ''}
+                                onChange={(e) => updateReturnItem(index, 'emptyReturned', parseInt(e.target.value) || 0)}
+                                disabled={!item.cylinderType}
+                                className={`w-16 h-10 ${!item.cylinderType ? 'bg-gray-100' : ''}`}
+                                placeholder="0"
+                              />
+                            </td>
+                            <td className="py-2 px-2">
+                              <Input
+                                type="number"
+                                min="0"
+                                value={item.buybackQuantity || ''}
+                                onChange={(e) => updateReturnItem(index, 'buybackQuantity', parseInt(e.target.value) || 0)}
+                                disabled={!item.cylinderType}
+                                className={`w-16 h-10 ${!item.cylinderType ? 'bg-gray-100' : ''}`}
+                                placeholder="0"
+                              />
+                            </td>
+                            <td className="py-2 px-2">
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.1"
+                                value={item.remainingKg || ''}
+                                onChange={(e) => updateReturnItem(index, 'remainingKg', parseFloat(e.target.value) || 0)}
+                                disabled={!item.cylinderType || item.buybackQuantity === 0}
+                                className={`w-20 h-10 ${(!item.cylinderType || item.buybackQuantity === 0) ? 'bg-gray-100' : ''}`}
+                                placeholder="0"
+                              />
+                            </td>
+                            <td className="py-2 px-2">
+                              <div className="flex items-center gap-1">
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  value={item.buybackRate ? (item.buybackRate * 100) : 60}
+                                  onChange={(e) => updateReturnItem(index, 'buybackRate', (parseFloat(e.target.value) || 60) / 100)}
+                                  disabled={!item.cylinderType || item.buybackQuantity === 0}
+                                  className={`w-16 h-10 text-center ${(!item.cylinderType || item.buybackQuantity === 0) ? 'bg-gray-100' : ''}`}
+                                />
+                                <span className="text-xs text-gray-500">%</span>
+                              </div>
+                            </td>
+                            <td className="py-2 px-2">
+                              <div className={`text-sm font-semibold ${item.buybackCredit > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                                {formatCurrency(item.buybackCredit)}
+                              </div>
+                            </td>
+                            <td className="py-2 px-2 text-center">
+                              {returnItems.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeReturnItemRow(index)}
+                                  className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                                >
+                                  <XMarkIcon className="w-4 h-4" />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <Button
+                      type="button"
+                      onClick={addReturnItemRow}
+                      variant="outline"
+                      size="sm"
+                      className="mt-3 text-orange-700 border-orange-300 hover:bg-orange-50"
+                    >
+                      <PlusIcon className="w-4 h-4 mr-1" />
+                      Add Return
+                    </Button>
+                  </div>
+                )}
+              </div>
 
-                {/* Form Actions */}
-                <div className="flex justify-end space-x-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setShowTransactionForm(false)}
-                    className="font-medium"
-                  >
-                    Cancel
-                  </Button>
-                  <Button 
-                    type="submit" 
-                    className="font-medium"
-                  >
-                    Create Transaction
-                  </Button>
-                </div>
-              </form>
-            </div>
+              {/* ========== SECTION 3: ACCESSORIES ========== */}
+              <div className={`border rounded-xl overflow-hidden transition-all ${accessoriesExpanded ? 'border-purple-200 bg-purple-50/30' : 'border-gray-200'}`}>
+                <button
+                  type="button"
+                  onClick={() => setAccessoriesExpanded(!accessoriesExpanded)}
+                  className={`w-full flex items-center justify-between p-4 text-left transition-colors ${accessoriesExpanded ? 'bg-purple-100/50' : 'hover:bg-gray-50'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${accessoriesExpanded ? 'bg-purple-600' : 'bg-gray-300'}`}>
+                      <CubeIcon className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <span className="font-semibold text-gray-900">Accessories</span>
+                      {accessoryItems.some(item => item.quantity > 0) && (
+                        <Badge className="ml-2 bg-purple-100 text-purple-700 border-purple-200">
+                          {accessoryItems.filter(i => i.quantity > 0).length} items
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  <svg className={`w-5 h-5 text-gray-500 transition-transform ${accessoriesExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                {accessoriesExpanded && (
+                  <div className="p-4 border-t border-purple-200">
+                    <ProfessionalAccessorySelector
+                      accessoryItems={accessoryItems}
+                      setAccessoryItems={setAccessoryItems}
+                      onValidationChange={setHasAccessoryErrors}
+                      onInventoryValidationChange={handleInventoryValidationChange}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* ========== SECTION 4: PAYMENT ========== */}
+              <div className={`border rounded-xl overflow-hidden transition-all ${paymentExpanded ? 'border-blue-200 bg-blue-50/30' : 'border-gray-200'}`}>
+                <button
+                  type="button"
+                  onClick={() => setPaymentExpanded(!paymentExpanded)}
+                  className={`w-full flex items-center justify-between p-4 text-left transition-colors ${paymentExpanded ? 'bg-blue-100/50' : 'hover:bg-gray-50'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${paymentExpanded ? 'bg-blue-600' : 'bg-gray-300'}`}>
+                      <CreditCardIcon className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <span className="font-semibold text-gray-900">Payment Received</span>
+                      {salePaymentAmount > 0 && (
+                        <Badge className="ml-2 bg-blue-100 text-blue-700 border-blue-200">
+                          {formatCurrency(salePaymentAmount)}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  <svg className={`w-5 h-5 text-gray-500 transition-transform ${paymentExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                {paymentExpanded && (
+                  <div className="p-4 border-t border-blue-200">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Amount (PKR)</label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={salePaymentAmount || ''}
+                          onChange={(e) => setSalePaymentAmount(parseFloat(e.target.value) || 0)}
+                          placeholder="0.00"
+                          className="text-lg [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                          onWheel={(e) => e.currentTarget.blur()}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Method</label>
+                        <select
+                          value={salePaymentMethod}
+                          onChange={(e) => setSalePaymentMethod(e.target.value)}
+                          className="w-full h-10 px-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          <option value="CASH">Cash</option>
+                          <option value="BANK_TRANSFER">Bank Transfer</option>
+                          <option value="CHECK">Check</option>
+                          <option value="CREDIT_CARD">Credit Card</option>
+                          <option value="DEBIT_CARD">Debit Card</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Reference (Optional)</label>
+                        <Input
+                          value={salePaymentReference}
+                          onChange={(e) => setSalePaymentReference(e.target.value)}
+                          placeholder="Check #, Trans ID..."
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* Quick Pay Button */}
+                    {(() => {
+                      const summary = getUnifiedTransactionSummary();
+                      return summary.netAmount > 0 && (
+                        <Button
+                          type="button"
+                          onClick={() => setSalePaymentAmount(summary.netAmount)}
+                          variant="outline"
+                          size="sm"
+                          className="mt-3 text-blue-700 border-blue-300 hover:bg-blue-50"
+                        >
+                          Pay Full Amount ({formatCurrency(summary.netAmount)})
+                        </Button>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+
+              {/* ========== TRANSACTION SUMMARY ========== */}
+              {(() => {
+                const summary = getUnifiedTransactionSummary();
+                const hasAnyData = summary.hasDelivery || summary.hasAccessories || summary.hasReturns || summary.hasPayment;
+                
+                if (!hasAnyData) return null;
+                
+                return (
+                  <div className="p-4 bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200 rounded-xl">
+                    <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <CalculatorIcon className="w-5 h-5 text-slate-600" />
+                      Transaction Summary
+                    </h4>
+                    
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                      {summary.hasDelivery && (
+                        <div className="bg-white p-3 rounded-lg border border-gray-200">
+                          <div className="text-xs text-gray-500 uppercase tracking-wider">Sale</div>
+                          <div className="text-lg font-bold text-gray-900">{formatCurrency(summary.deliveryTotal)}</div>
+                          <div className="text-xs text-gray-500">{summary.totalDelivered} cylinders</div>
+                        </div>
+                      )}
+                      {summary.hasAccessories && (
+                        <div className="bg-white p-3 rounded-lg border border-gray-200">
+                          <div className="text-xs text-gray-500 uppercase tracking-wider">Accessories</div>
+                          <div className="text-lg font-bold text-gray-900">{formatCurrency(summary.accessoryTotal)}</div>
+                        </div>
+                      )}
+                      {summary.totalBuybackCredit > 0 && (
+                        <div className="bg-white p-3 rounded-lg border border-green-200">
+                          <div className="text-xs text-green-600 uppercase tracking-wider">Buyback Credit</div>
+                          <div className="text-lg font-bold text-green-600">-{formatCurrency(summary.totalBuybackCredit)}</div>
+                          <div className="text-xs text-gray-500">{summary.totalBuybackQuantity} cylinders</div>
+                        </div>
+                      )}
+                      {summary.totalEmptyReturned > 0 && (
+                        <div className="bg-white p-3 rounded-lg border border-gray-200">
+                          <div className="text-xs text-gray-500 uppercase tracking-wider">Empty Returns</div>
+                          <div className="text-lg font-bold text-gray-600">{summary.totalEmptyReturned}</div>
+                          <div className="text-xs text-gray-500">No credit</div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="border-t border-slate-300 pt-3 space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Gross Amount:</span>
+                        <span className="font-medium">{formatCurrency(summary.grossSaleAmount)}</span>
+                      </div>
+                      {summary.totalBuybackCredit > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Less Buyback Credit:</span>
+                          <span className="font-medium text-green-600">-{formatCurrency(summary.totalBuybackCredit)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-base font-semibold border-t border-slate-200 pt-2">
+                        <span>Net Amount:</span>
+                        <span>{formatCurrency(summary.netAmount)}</span>
+                      </div>
+                      {summary.hasPayment && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Payment Received:</span>
+                          <span className="font-medium text-blue-600">-{formatCurrency(summary.paymentReceived)}</span>
+                        </div>
+                      )}
+                      <div className={`flex justify-between text-lg font-bold border-t border-slate-300 pt-2 ${
+                        summary.balanceImpact > 0 ? 'text-red-600' : summary.balanceImpact < 0 ? 'text-green-600' : 'text-gray-900'
+                      }`}>
+                        <span>Balance Impact:</span>
+                        <span>
+                          {summary.balanceImpact > 0 ? '+' : ''}{formatCurrency(summary.balanceImpact)}
+                          <span className="text-xs font-normal ml-1">
+                            ({summary.balanceImpact > 0 ? 'owes' : summary.balanceImpact < 0 ? 'overpaid' : 'settled'})
+                          </span>
+                        </span>
+                      </div>
+                      
+                      {/* Cylinder Summary */}
+                      {(summary.totalDelivered > 0 || summary.totalReturned > 0) && (
+                        <div className="text-sm text-gray-600 pt-2 border-t border-slate-200">
+                          <span className="font-medium">Cylinder Dues: </span>
+                          {summary.totalDelivered > 0 && <span className="text-red-600">+{summary.totalDelivered} delivered</span>}
+                          {summary.totalDelivered > 0 && summary.totalReturned > 0 && <span>, </span>}
+                          {summary.totalReturned > 0 && <span className="text-green-600">-{summary.totalReturned} returned</span>}
+                          <span className="font-semibold ml-2">
+                            (Net: {summary.totalDelivered - summary.totalReturned >= 0 ? '+' : ''}{summary.totalDelivered - summary.totalReturned})
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Form Actions */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowTransactionForm(false)}
+                  className="px-6"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  className="px-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+                >
+                  Create Transaction
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -2132,85 +2277,195 @@ export default function B2BCustomerDetailPage() {
                       {transaction.billSno}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex flex-col gap-1">
-                        <Badge variant={
-                          transaction.transactionType === 'SALE' ? 'success' :
-                          transaction.transactionType === 'PAYMENT' ? 'info' :
-                          transaction.transactionType === 'BUYBACK' ? 'warning' : 'secondary'
-                        }>
-                          {transaction.transactionType}
-                          {transaction.voided && ' (VOIDED)'}
-                        </Badge>
-                        {transaction.transactionType === 'SALE' && transaction.paymentStatus && (
-                          <Badge 
-                            variant={
-                              transaction.paymentStatus === 'FULLY_PAID' ? 'success' :
-                              transaction.paymentStatus === 'PARTIAL' ? 'warning' :
-                              'destructive'
-                            }
-                            className="text-xs"
-                          >
-                            {transaction.paymentStatus === 'FULLY_PAID' ? 'Paid' :
-                             transaction.paymentStatus === 'PARTIAL' ? 'Partial' :
-                             'Unpaid'}
-                            {transaction.paidAmount && (
-                              <span className="ml-1">
-                                ({formatCurrency(Number(transaction.paidAmount))})
-                              </span>
+                      {(() => {
+                        // Categorize items to show appropriate badges
+                        const saleItems = transaction.items.filter((item: any) => 
+                          item.pricePerItem > 0 && !item.returnedCondition
+                        );
+                        const buybackItems = transaction.items.filter((item: any) => 
+                          item.returnedCondition === 'EMPTY' && item.remainingKg && Number(item.remainingKg) > 0
+                        );
+                        const emptyReturnItems = transaction.items.filter((item: any) => 
+                          item.returnedCondition === 'EMPTY' && (!item.remainingKg || Number(item.remainingKg) === 0)
+                        );
+                        
+                        const hasSales = saleItems.length > 0;
+                        const hasBuyback = buybackItems.length > 0;
+                        const hasEmptyReturns = emptyReturnItems.length > 0;
+                        
+                        return (
+                          <div className="flex flex-wrap gap-1">
+                            {/* Primary transaction type badge */}
+                            {transaction.transactionType === 'SALE' && hasSales && (
+                              <Badge variant="success">SALE</Badge>
                             )}
-                          </Badge>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-700">
-                      <div className="max-w-xs">
-                        {transaction.items.map((item, index) => (
-                          <div key={index} className="text-xs">
-                            {getTransactionItemDisplayName(item)} x{item.quantity}
-                            {transaction.transactionType === 'BUYBACK' && item.remainingKg && (
-                              <span className="text-gray-500 ml-1">
-                                ({item.remainingKg}kg remaining)
-                              </span>
+                            {transaction.transactionType === 'PAYMENT' && (
+                              <Badge variant="info">PAYMENT</Badge>
                             )}
-                            {transaction.transactionType === 'BUYBACK' && item.buybackRate && (
-                              <span className="text-gray-500 ml-1">
-                                ({((item.buybackRate || 0) * 100).toFixed(1)}% buyback)
-                              </span>
+                            {/* Show BUYBACK badge if there are buyback items */}
+                            {(transaction.transactionType === 'BUYBACK' || hasBuyback) && hasBuyback && (
+                              <Badge variant="warning">BUYBACK</Badge>
+                            )}
+                            {/* Show RETURN badge if there are empty return items */}
+                            {(transaction.transactionType === 'RETURN_EMPTY' || hasEmptyReturns) && hasEmptyReturns && (
+                              <Badge variant="secondary">RETURN</Badge>
+                            )}
+                            {/* Fallback for other transaction types */}
+                            {!hasSales && !hasBuyback && !hasEmptyReturns && transaction.transactionType !== 'PAYMENT' && (
+                              <Badge variant="secondary">{transaction.transactionType}</Badge>
+                            )}
+                            {transaction.voided && <Badge variant="destructive">VOIDED</Badge>}
+                            
+                            {/* Payment status for SALE transactions */}
+                            {transaction.transactionType === 'SALE' && transaction.paymentStatus && (
+                              <Badge 
+                                variant={
+                                  transaction.paymentStatus === 'FULLY_PAID' ? 'success' :
+                                  transaction.paymentStatus === 'PARTIAL' ? 'warning' :
+                                  'destructive'
+                                }
+                                className="text-xs"
+                              >
+                                {transaction.paymentStatus === 'FULLY_PAID' ? 'Paid' :
+                                 transaction.paymentStatus === 'PARTIAL' ? 'Partial' :
+                                 'Unpaid'}
+                                {transaction.paidAmount && transaction.paymentStatus !== 'UNPAID' && (
+                                  <span className="ml-1">
+                                    ({formatCurrency(Number(transaction.paidAmount))})
+                                  </span>
+                                )}
+                              </Badge>
                             )}
                           </div>
-                        ))}
-                      </div>
+                        );
+                      })()}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-700">
+                      {(() => {
+                        // Categorize items for grouped display
+                        const saleItems = transaction.items.filter((item: any) => 
+                          item.pricePerItem > 0 && !item.returnedCondition
+                        );
+                        const buybackItems = transaction.items.filter((item: any) => 
+                          item.returnedCondition === 'EMPTY' && item.remainingKg && Number(item.remainingKg) > 0
+                        );
+                        const emptyReturnItems = transaction.items.filter((item: any) => 
+                          item.returnedCondition === 'EMPTY' && (!item.remainingKg || Number(item.remainingKg) === 0)
+                        );
+                        
+                        return (
+                          <div className="max-w-md space-y-1">
+                            {/* SALE ITEMS */}
+                            {saleItems.length > 0 && (
+                              <div>
+                                <span className="text-xs font-semibold text-green-700 bg-green-50 px-1 rounded">Sold:</span>
+                                {saleItems.map((item: any, index: number) => (
+                                  <span key={`sale-${index}`} className="text-xs text-gray-700 ml-1">
+                                    {getTransactionItemDisplayName(item)} x{item.quantity}
+                                    {index < saleItems.length - 1 ? ', ' : ''}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            
+                            {/* BUYBACK ITEMS */}
+                            {buybackItems.length > 0 && (
+                              <div>
+                                <span className="text-xs font-semibold text-orange-700 bg-orange-50 px-1 rounded">Buyback:</span>
+                                {buybackItems.map((item: any, index: number) => (
+                                  <span key={`buyback-${index}`} className="text-xs text-gray-700 ml-1">
+                                    {getTransactionItemDisplayName(item)} x{item.quantity}
+                                    <span className="text-gray-500">
+                                      ({item.remainingKg}kg, {((item.buybackRate || 0) * 100).toFixed(0)}%)
+                                    </span>
+                                    {index < buybackItems.length - 1 ? ', ' : ''}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            
+                            {/* EMPTY RETURN ITEMS */}
+                            {emptyReturnItems.length > 0 && (
+                              <div>
+                                <span className="text-xs font-semibold text-gray-600 bg-gray-100 px-1 rounded">Returned:</span>
+                                {emptyReturnItems.map((item: any, index: number) => (
+                                  <span key={`return-${index}`} className="text-xs text-gray-600 ml-1">
+                                    {getTransactionItemDisplayName(item)} x{item.quantity}
+                                    {index < emptyReturnItems.length - 1 ? ', ' : ''}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            
+                            {/* PAYMENT-ONLY transactions */}
+                            {transaction.transactionType === 'PAYMENT' && transaction.items.length === 0 && (
+                              <span className="text-xs text-gray-500 italic">Payment received</span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-medium">
-                      {transaction.transactionType === 'SALE' 
-                        ? (() => {
-                            // For fully paid SALE transactions, show dash (paid amount cancels out)
-                            if (transaction.paymentStatus === 'FULLY_PAID') {
-                              return '-';
+                      {(() => {
+                        if (transaction.transactionType === 'SALE') {
+                          // Calculate actual sale amount from items (items with positive price)
+                          const saleTotal = transaction.items?.reduce((sum: number, item: B2BTransactionItem) => {
+                            const hasPrice = item.pricePerItem && Number(item.pricePerItem) > 0;
+                            const hasBuybackData = item.remainingKg && Number(item.remainingKg) > 0;
+                            // Only count items that are sales (have price and no buyback data)
+                            if (hasPrice && !hasBuybackData && !item.buybackRate) {
+                              return sum + (Number(item.totalPrice) || 0);
                             }
-                            // For SALE transactions, show unpaid amount (not total)
-                            const unpaidAmount = transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined
-                              ? Number(transaction.unpaidAmount)
-                              : transaction.totalAmount;
-                            return unpaidAmount > 0 ? formatCurrency(unpaidAmount) : '-';
-                          })()
-                        : '-'}
+                            return sum;
+                          }, 0) || 0;
+                          
+                          // If we have sale items, show the sale total
+                          if (saleTotal > 0) {
+                            return formatCurrency(saleTotal);
+                          }
+                          
+                          // Fallback to totalAmount if no items breakdown
+                          return formatCurrency(transaction.totalAmount);
+                        }
+                        return '-';
+                      })()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">
                       {(() => {
                         // Show credit for payment transactions
-                        if (['PAYMENT', 'BUYBACK', 'ADJUSTMENT', 'CREDIT_NOTE'].includes(transaction.transactionType)) {
+                        if (['PAYMENT', 'ADJUSTMENT', 'CREDIT_NOTE'].includes(transaction.transactionType)) {
                           return formatCurrency(transaction.totalAmount);
                         }
-                        // For fully paid SALE transactions, show dash (paid amount cancels out)
-                        if (transaction.transactionType === 'SALE' && transaction.paymentStatus === 'FULLY_PAID') {
-                          return '-';
+                        
+                        // For pure BUYBACK transactions
+                        if (transaction.transactionType === 'BUYBACK') {
+                          return formatCurrency(transaction.totalAmount);
                         }
-                        // For SALE transactions, show paid amount in credit column if partially paid
-                        if (transaction.transactionType === 'SALE' && transaction.paidAmount) {
-                          const paidAmount = Number(transaction.paidAmount);
-                          return paidAmount > 0 ? formatCurrency(paidAmount) : '-';
+                        
+                        // For SALE transactions, calculate buyback credit + payment
+                        if (transaction.transactionType === 'SALE') {
+                          // Calculate buyback credit from items
+                          // Only count items that are ACTUAL buybacks (have remaining gas > 0 AND no regular sale price)
+                          const buybackCredit = transaction.items?.reduce((sum: number, item: B2BTransactionItem) => {
+                            const hasBuybackData = item.remainingKg && Number(item.remainingKg) > 0;
+                            const hasRegularPrice = item.pricePerItem && Number(item.pricePerItem) > 0;
+                            
+                            // Only count as buyback if it has buyback data AND no regular sale price
+                            // This prevents sale items from being counted as buyback
+                            if (hasBuybackData && !hasRegularPrice) {
+                              return sum + (Number(item.totalPrice) || 0);
+                            }
+                            return sum;
+                          }, 0) || 0;
+                          
+                          // Add any payment received
+                          const paidAmount = transaction.paidAmount ? Number(transaction.paidAmount) : 0;
+                          
+                          const totalCredit = buybackCredit + paidAmount;
+                          
+                          return totalCredit > 0 ? formatCurrency(totalCredit) : '-';
                         }
+                        
                         return '-';
                       })()}
                     </td>
@@ -2487,28 +2742,58 @@ export default function B2BCustomerDetailPage() {
                       </div>
                       <div>
                         <p className="text-sm text-gray-600">Transaction Type</p>
-                        <Badge variant={
-                          selectedTransaction.transactionType === 'SALE' ? 'success' :
-                          selectedTransaction.transactionType === 'PAYMENT' ? 'info' :
-                          selectedTransaction.transactionType === 'BUYBACK' ? 'warning' : 'secondary'
-                        }>
-                          {selectedTransaction.transactionType}
-                          {selectedTransaction.voided && ' (VOIDED)'}
-                        </Badge>
-                        {selectedTransaction.transactionType === 'SALE' && selectedTransaction.paymentStatus && (
-                          <Badge 
-                            variant={
-                              (selectedTransaction.paymentStatus === 'FULLY_PAID' ? 'success' :
-                              selectedTransaction.paymentStatus === 'PARTIAL' ? 'warning' :
-                              'destructive') as 'success' | 'warning' | 'destructive'
-                            }
-                            className="ml-2 text-xs"
-                          >
-                            {selectedTransaction.paymentStatus === 'FULLY_PAID' ? 'Paid' :
-                             selectedTransaction.paymentStatus === 'PARTIAL' ? 'Partial' :
-                             'Unpaid'}
-                          </Badge>
-                        )}
+                        {(() => {
+                          // Categorize items to show appropriate badges
+                          const saleItems = selectedTransaction.items?.filter((item: any) => 
+                            item.pricePerItem > 0 && !item.returnedCondition
+                          ) || [];
+                          const buybackItems = selectedTransaction.items?.filter((item: any) => 
+                            item.returnedCondition === 'EMPTY' && item.remainingKg && Number(item.remainingKg) > 0
+                          ) || [];
+                          const emptyReturnItems = selectedTransaction.items?.filter((item: any) => 
+                            item.returnedCondition === 'EMPTY' && (!item.remainingKg || Number(item.remainingKg) === 0)
+                          ) || [];
+                          
+                          const hasSales = saleItems.length > 0;
+                          const hasBuyback = buybackItems.length > 0;
+                          const hasEmptyReturns = emptyReturnItems.length > 0;
+                          
+                          return (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {selectedTransaction.transactionType === 'SALE' && hasSales && (
+                                <Badge variant="success">SALE</Badge>
+                              )}
+                              {selectedTransaction.transactionType === 'PAYMENT' && (
+                                <Badge variant="info">PAYMENT</Badge>
+                              )}
+                              {(selectedTransaction.transactionType === 'BUYBACK' || hasBuyback) && hasBuyback && (
+                                <Badge variant="warning">BUYBACK</Badge>
+                              )}
+                              {(selectedTransaction.transactionType === 'RETURN_EMPTY' || hasEmptyReturns) && hasEmptyReturns && (
+                                <Badge variant="secondary">RETURN</Badge>
+                              )}
+                              {!hasSales && !hasBuyback && !hasEmptyReturns && selectedTransaction.transactionType !== 'PAYMENT' && (
+                                <Badge variant="secondary">{selectedTransaction.transactionType}</Badge>
+                              )}
+                              {selectedTransaction.voided && <Badge variant="destructive">VOIDED</Badge>}
+                              
+                              {selectedTransaction.transactionType === 'SALE' && selectedTransaction.paymentStatus && (
+                                <Badge 
+                                  variant={
+                                    (selectedTransaction.paymentStatus === 'FULLY_PAID' ? 'success' :
+                                    selectedTransaction.paymentStatus === 'PARTIAL' ? 'warning' :
+                                    'destructive') as 'success' | 'warning' | 'destructive'
+                                  }
+                                  className="text-xs"
+                                >
+                                  {selectedTransaction.paymentStatus === 'FULLY_PAID' ? 'Paid' :
+                                   selectedTransaction.paymentStatus === 'PARTIAL' ? 'Partial' :
+                                   'Unpaid'}
+                                </Badge>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                       <div>
                         <p className="text-sm text-gray-600">Date</p>
@@ -2567,61 +2852,153 @@ export default function B2BCustomerDetailPage() {
                     </CardContent>
                   </Card>
 
-                  {/* Items Table */}
+                  {/* Items Table - Grouped by Category */}
                   <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
                     <CardHeader>
                       <CardTitle className="text-lg font-semibold text-gray-900">Transaction Items</CardTitle>
                     </CardHeader>
                     <CardContent>
                       {selectedTransaction.items && selectedTransaction.items.length > 0 ? (
-                        <div className="overflow-x-auto">
-                          <table className="w-full border-collapse">
-                            <thead>
-                              <tr className="bg-gray-50">
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-b">Item</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-b">Quantity</th>
-                                {selectedTransaction.transactionType === 'BUYBACK' && (
-                                  <>
-                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-b">Remaining Gas (kg)</th>
-                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-b">Buyback Rate</th>
-                                  </>
+                        (() => {
+                          // Categorize items
+                          const saleItems = selectedTransaction.items.filter((item: any) => 
+                            item.pricePerItem > 0 && !item.returnedCondition
+                          );
+                          const buybackItems = selectedTransaction.items.filter((item: any) => 
+                            item.returnedCondition === 'EMPTY' && item.remainingKg && Number(item.remainingKg) > 0
+                          );
+                          const emptyReturnItems = selectedTransaction.items.filter((item: any) => 
+                            item.returnedCondition === 'EMPTY' && (!item.remainingKg || Number(item.remainingKg) === 0)
+                          );
+                          
+                          const saleTotal = saleItems.reduce((sum: number, item: any) => sum + Number(item.totalPrice || 0), 0);
+                          const buybackTotal = buybackItems.reduce((sum: number, item: any) => sum + Number(item.totalPrice || 0), 0);
+                          
+                          return (
+                            <div className="space-y-4">
+                              {/* SALE ITEMS */}
+                              {saleItems.length > 0 && (
+                                <div>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Badge variant="success" className="text-xs">SOLD</Badge>
+                                    <span className="text-sm font-medium text-gray-700">{saleItems.length} item(s)</span>
+                                  </div>
+                                  <div className="overflow-x-auto border border-green-200 rounded-lg">
+                                    <table className="w-full border-collapse">
+                                      <thead>
+                                        <tr className="bg-green-50">
+                                          <th className="px-4 py-2 text-left text-xs font-semibold text-green-700 uppercase">Item</th>
+                                          <th className="px-4 py-2 text-left text-xs font-semibold text-green-700 uppercase">Qty</th>
+                                          <th className="px-4 py-2 text-left text-xs font-semibold text-green-700 uppercase">Price/Unit</th>
+                                          <th className="px-4 py-2 text-left text-xs font-semibold text-green-700 uppercase">Total</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {saleItems.map((item: any, index: number) => (
+                                          <tr key={`sale-${index}`} className="border-t border-green-100">
+                                            <td className="px-4 py-2 text-sm text-gray-900">{getTransactionItemDisplayName(item)}</td>
+                                            <td className="px-4 py-2 text-sm text-gray-700">{Number(item.quantity)}</td>
+                                            <td className="px-4 py-2 text-sm text-gray-700">{formatCurrency(Number(item.pricePerItem))}</td>
+                                            <td className="px-4 py-2 text-sm font-semibold text-gray-900">{formatCurrency(Number(item.totalPrice))}</td>
+                                          </tr>
+                                        ))}
+                                        <tr className="bg-green-50 font-semibold">
+                                          <td colSpan={3} className="px-4 py-2 text-right text-sm text-green-800">Subtotal:</td>
+                                          <td className="px-4 py-2 text-sm text-green-800">{formatCurrency(saleTotal)}</td>
+                                        </tr>
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* BUYBACK ITEMS */}
+                              {buybackItems.length > 0 && (
+                                <div>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Badge variant="warning" className="text-xs">BUYBACK</Badge>
+                                    <span className="text-sm font-medium text-gray-700">{buybackItems.length} cylinder(s)</span>
+                                    <span className="text-sm text-orange-600">(Credit to customer)</span>
+                                  </div>
+                                  <div className="overflow-x-auto border border-orange-200 rounded-lg">
+                                    <table className="w-full border-collapse">
+                                      <thead>
+                                        <tr className="bg-orange-50">
+                                          <th className="px-4 py-2 text-left text-xs font-semibold text-orange-700 uppercase">Cylinder</th>
+                                          <th className="px-4 py-2 text-left text-xs font-semibold text-orange-700 uppercase">Qty</th>
+                                          <th className="px-4 py-2 text-left text-xs font-semibold text-orange-700 uppercase">Remaining Gas</th>
+                                          <th className="px-4 py-2 text-left text-xs font-semibold text-orange-700 uppercase">Rate</th>
+                                          <th className="px-4 py-2 text-left text-xs font-semibold text-orange-700 uppercase">Credit</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {buybackItems.map((item: any, index: number) => (
+                                          <tr key={`buyback-${index}`} className="border-t border-orange-100">
+                                            <td className="px-4 py-2 text-sm text-gray-900">{getTransactionItemDisplayName(item)}</td>
+                                            <td className="px-4 py-2 text-sm text-gray-700">{Number(item.quantity)}</td>
+                                            <td className="px-4 py-2 text-sm text-gray-700">{Number(item.remainingKg)} kg</td>
+                                            <td className="px-4 py-2 text-sm text-gray-700">{((item.buybackRate || 0) * 100).toFixed(0)}%</td>
+                                            <td className="px-4 py-2 text-sm font-semibold text-orange-600">{formatCurrency(Number(item.totalPrice))}</td>
+                                          </tr>
+                                        ))}
+                                        <tr className="bg-orange-50 font-semibold">
+                                          <td colSpan={4} className="px-4 py-2 text-right text-sm text-orange-800">Total Credit:</td>
+                                          <td className="px-4 py-2 text-sm text-orange-800">{formatCurrency(buybackTotal)}</td>
+                                        </tr>
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* EMPTY RETURN ITEMS */}
+                              {emptyReturnItems.length > 0 && (
+                                <div>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Badge variant="secondary" className="text-xs">RETURNED EMPTY</Badge>
+                                    <span className="text-sm font-medium text-gray-700">{emptyReturnItems.length} cylinder(s)</span>
+                                    <span className="text-sm text-gray-500">(No credit)</span>
+                                  </div>
+                                  <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                                    <table className="w-full border-collapse">
+                                      <thead>
+                                        <tr className="bg-gray-50">
+                                          <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Cylinder</th>
+                                          <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Qty</th>
+                                          <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {emptyReturnItems.map((item: any, index: number) => (
+                                          <tr key={`return-${index}`} className="border-t border-gray-100">
+                                            <td className="px-4 py-2 text-sm text-gray-900">{getTransactionItemDisplayName(item)}</td>
+                                            <td className="px-4 py-2 text-sm text-gray-700">{Number(item.quantity)}</td>
+                                            <td className="px-4 py-2 text-sm text-gray-500 italic">Empty - Returned to inventory</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* GRAND TOTAL */}
+                              <div className="border-t-2 border-gray-300 pt-3 mt-4">
+                                <div className="flex justify-between items-center text-lg font-bold">
+                                  <span>Net Transaction Amount:</span>
+                                  <span className={selectedTransaction.totalAmount >= 0 ? 'text-gray-900' : 'text-green-600'}>
+                                    {formatCurrency(selectedTransaction.totalAmount)}
+                                  </span>
+                                </div>
+                                {saleItems.length > 0 && buybackItems.length > 0 && (
+                                  <div className="text-sm text-gray-500 mt-1">
+                                    Sale ({formatCurrency(saleTotal)}) - Buyback Credit ({formatCurrency(buybackTotal)}) = {formatCurrency(saleTotal - buybackTotal)}
+                                  </div>
                                 )}
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-b">{selectedTransaction.transactionType === 'BUYBACK' ? 'Buyback Price' : 'Price Per Item'}</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-b">Total Price</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {selectedTransaction.items.map((item: any, index: number) => (
-                                <tr key={index} className="border-b hover:bg-gray-50">
-                                  <td className="px-4 py-3 text-sm text-gray-900">
-                                    {getTransactionItemDisplayName(item)}
-                                  </td>
-                                  <td className="px-4 py-3 text-sm text-gray-700">{Number(item.quantity)}</td>
-                                  {selectedTransaction.transactionType === 'BUYBACK' && (
-                                    <>
-                                      <td className="px-4 py-3 text-sm text-gray-700">
-                                        {item.remainingKg ? `${Number(item.remainingKg)} kg` : '-'}
-                                      </td>
-                                      <td className="px-4 py-3 text-sm text-gray-700">
-                                        {item.buybackRate ? `${((item.buybackRate || 0) * 100).toFixed(1)}%` : '-'}
-                                      </td>
-                                    </>
-                                  )}
-                                  <td className="px-4 py-3 text-sm text-gray-700">
-                                    {selectedTransaction.transactionType === 'BUYBACK' 
-                                      ? formatCurrency(Number(item.buybackPricePerItem || 0))
-                                      : formatCurrency(Number(item.pricePerItem))}
-                                  </td>
-                                  <td className="px-4 py-3 text-sm font-semibold text-gray-900">{formatCurrency(Number(item.totalPrice))}</td>
-                                </tr>
-                              ))}
-                              <tr className="bg-gray-50 font-semibold">
-                                <td colSpan={selectedTransaction.transactionType === 'BUYBACK' ? 5 : 3} className="px-4 py-3 text-right text-sm text-gray-900">Total:</td>
-                                <td className="px-4 py-3 text-sm text-gray-900">{formatCurrency(selectedTransaction.totalAmount)}</td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
+                              </div>
+                            </div>
+                          );
+                        })()
                       ) : (
                         <p className="text-gray-500 text-center py-4">No items in this transaction</p>
                       )}

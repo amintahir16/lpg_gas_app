@@ -138,16 +138,26 @@ export async function POST(request: NextRequest) {
       if (allItems.length > 0) {
         await tx.b2BTransactionItem.createMany({
           data: allItems.map((item: any) => {
-            // Calculate buyback amounts if it's a buyback transaction
+            // Calculate buyback amounts if:
+            // 1. It's a BUYBACK transaction type, OR
+            // 2. Item is marked as buyback (isBuyback: true), OR
+            // 3. Item has remainingKg > 0 (indicating it's a buyback item in unified transaction)
             let buybackAmount = 0;
             let buybackTotal = 0;
             const buybackRate = item.buybackRate || 0.6; // Use provided rate or default to 60%
-            if (transactionType === 'BUYBACK' && item.remainingKg > 0 && item.originalSoldPrice > 0) {
+            const isBuybackItem = transactionType === 'BUYBACK' || item.isBuyback === true || (item.remainingKg && item.remainingKg > 0);
+            
+            if (isBuybackItem && item.remainingKg > 0 && item.originalSoldPrice > 0) {
               // Get capacity dynamically from cylinder type - fully flexible
               const totalKg = getCapacityFromTypeString(item.cylinderType);
               const remainingPercentage = item.remainingKg / totalKg;
               buybackAmount = item.originalSoldPrice * remainingPercentage * buybackRate;
-              buybackTotal = buybackAmount * (item.emptyReturned || 0);
+              buybackTotal = buybackAmount * (item.emptyReturned || 1);
+            }
+            
+            // Use pre-calculated buyback total from frontend if available
+            if (item.buybackTotal && item.buybackTotal > 0) {
+              buybackTotal = item.buybackTotal;
             }
 
             // Create product name with quality for stoves
@@ -162,14 +172,16 @@ export async function POST(request: NextRequest) {
               productName: productName,
               quantity: parseFloat(item.delivered || item.quantity || item.emptyReturned || 0),
               pricePerItem: parseFloat(item.pricePerItem || 0),
-              totalPrice: transactionType === 'BUYBACK' ? buybackTotal : parseFloat(String((item.delivered || item.quantity || 0) * (item.pricePerItem || 0))),
+              totalPrice: isBuybackItem && buybackTotal > 0 ? buybackTotal : parseFloat(String((item.delivered || item.quantity || 0) * (item.pricePerItem || 0))),
               cylinderType: item.cylinderType,
               returnedCondition: item.returnedCondition || (item.emptyReturned > 0 ? 'EMPTY' : null),
-              remainingKg: item.remainingKg ? parseFloat(item.remainingKg) : null,
-              originalSoldPrice: item.originalSoldPrice ? parseFloat(item.originalSoldPrice) : null,
-              buybackRate: transactionType === 'BUYBACK' ? buybackRate : null,
-              buybackPricePerItem: transactionType === 'BUYBACK' ? buybackAmount : null,
-              buybackTotal: transactionType === 'BUYBACK' ? buybackTotal : null,
+              // Only store remainingKg for actual buyback items (not empty returns)
+              remainingKg: isBuybackItem && item.remainingKg > 0 ? parseFloat(item.remainingKg) : null,
+              originalSoldPrice: isBuybackItem && item.originalSoldPrice > 0 ? parseFloat(item.originalSoldPrice) : null,
+              // Only store buyback rate for actual buyback items
+              buybackRate: isBuybackItem && item.remainingKg > 0 ? buybackRate : null,
+              buybackPricePerItem: isBuybackItem && buybackAmount > 0 ? buybackAmount : null,
+              buybackTotal: isBuybackItem && buybackTotal > 0 ? buybackTotal : null,
             };
           }),
         });
@@ -191,16 +203,48 @@ export async function POST(request: NextRequest) {
       
       console.log(`Processing transaction type: ${transactionType}, amount: ${totalAmount}`);
       console.log(`Current ledger balance: ${newLedgerBalance}, Type: ${typeof newLedgerBalance}`);
+      
+      // Check if this is a unified transaction with buyback credit
+      const isUnifiedTransaction = body.isUnifiedTransaction === true;
+      const unifiedSummary = body.unifiedSummary;
+      
+      // Calculate total buyback credit from return items
+      let totalBuybackCredit = 0;
+      if (isUnifiedTransaction && unifiedSummary) {
+        totalBuybackCredit = unifiedSummary.buybackCredit || 0;
+      } else {
+        // Legacy: calculate from gasItems
+        totalBuybackCredit = gasItems.reduce((sum: number, item: any) => sum + (item.buybackTotal || 0), 0);
+      }
+      
       switch (transactionType) {
         case 'SALE':
-          // For SALE transactions, only unpaid amount affects balance
+          // For SALE transactions, calculate net amount including buyback credit
           const saleAmount = parseFloat(totalAmount);
-          const unpaid = unpaidAmountValue !== null ? unpaidAmountValue : saleAmount;
+          const buybackCreditAmount = totalBuybackCredit;
           
-          console.log(`SALE transaction: total=${saleAmount}, paid=${paidAmountValue || 0}, unpaid=${unpaid}`);
+          // Net sale amount = sale total - buyback credit
+          const netSaleAmount = saleAmount - buybackCreditAmount;
+          
+          // Unpaid = net amount - payment received
+          const unpaid = unpaidAmountValue !== null 
+            ? Math.max(0, netSaleAmount - (paidAmountValue || 0))
+            : netSaleAmount;
+          
+          console.log(`SALE transaction: total=${saleAmount}, buybackCredit=${buybackCreditAmount}, netSale=${netSaleAmount}`);
+          console.log(`SALE transaction: paid=${paidAmountValue || 0}, unpaid=${unpaid}`);
           console.log(`SALE transaction: adding unpaid amount ${unpaid} to ledger balance`);
-          newLedgerBalance += unpaid;
+          
+          // For unified transactions, use the balance impact directly if available
+          if (isUnifiedTransaction && unifiedSummary && unifiedSummary.balanceImpact !== undefined) {
+            newLedgerBalance += unifiedSummary.balanceImpact;
+            console.log(`Using unified balance impact: ${unifiedSummary.balanceImpact}`);
+          } else {
+            newLedgerBalance += unpaid;
+          }
+          
           console.log(`New ledger balance after calculation: ${newLedgerBalance}`);
+          
           // Update cylinder due counts for sales - ONLY if delivered > 0
           gasItems.forEach((item: any) => {
             if (item.delivered > 0) {
@@ -219,7 +263,9 @@ export async function POST(request: NextRequest) {
             } else {
               console.log(`Skipping cylinder: ${item.cylinderType} - delivered: ${item.delivered} (not delivered)`);
             }
+            // Handle returns within the same transaction (unified transaction)
             if (item.emptyReturned > 0) {
+              console.log(`Processing cylinder return: ${item.cylinderType} - ${item.emptyReturned} returned`);
               switch (item.cylinderType) {
                 case 'DOMESTIC_11_8KG':
                   newDomestic118kgDue = Math.max(0, newDomestic118kgDue - item.emptyReturned);
@@ -380,13 +426,18 @@ export async function POST(request: NextRequest) {
       }
 
       // Update inventory for returned cylinders (add back to stock)
-      if ((transactionType === 'BUYBACK' || transactionType === 'RETURN_EMPTY') && gasItems.length > 0) {
+      // Now also handles returns within SALE transactions (unified transactions)
+      const hasReturns = gasItems.some((item: any) => item.emptyReturned > 0);
+      if ((transactionType === 'BUYBACK' || transactionType === 'RETURN_EMPTY' || (transactionType === 'SALE' && hasReturns)) && gasItems.length > 0) {
+        console.log('🔄 Processing returned cylinders for inventory...');
         for (const gasItem of gasItems) {
           if (gasItem.emptyReturned > 0) {
             const quantity = parseInt(gasItem.emptyReturned);
             const cylinderType = gasItem.cylinderType;
             
             if (quantity > 0 && cylinderType) {
+              console.log(`Processing return: ${quantity} x ${cylinderType}`);
+              
               // Find cylinders that are currently with this customer
               const cylindersWithCustomer = await tx.cylinder.findMany({
                 where: {
@@ -408,7 +459,7 @@ export async function POST(request: NextRequest) {
                     location: 'Store - Ready for Refill'
                   }
                 });
-                console.log(`Updated ${quantity} ${cylinderType} cylinders to EMPTY status in inventory`);
+                console.log(`✅ Updated ${quantity} ${cylinderType} cylinders to EMPTY status in inventory`);
               } else {
                 // If not enough cylinders found with customer, create new ones
                 const cylindersToCreate = quantity - cylindersWithCustomer.length;
@@ -438,7 +489,7 @@ export async function POST(request: NextRequest) {
                     },
                   });
                 }
-                console.log(`Added ${quantity} empty ${cylinderType} cylinders to inventory (${cylindersWithCustomer.length} updated, ${cylindersToCreate} created)`);
+                console.log(`✅ Added ${quantity} empty ${cylinderType} cylinders to inventory (${cylindersWithCustomer.length} updated, ${cylindersToCreate} created)`);
               }
             }
           }

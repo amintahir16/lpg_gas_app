@@ -25,21 +25,7 @@ function formatDate(dateString: string | Date): string {
   });
 }
 
-// Helper function to format transaction type
-function formatTransactionType(type: string): string {
-  const typeMap: { [key: string]: string } = {
-    'SALE': 'Sale',
-    'PAYMENT': 'Payment',
-    'BUYBACK': 'Buyback',
-    'RETURN_EMPTY': 'Return Empty',
-    'ADJUSTMENT': 'Adjustment',
-    'CREDIT_NOTE': 'Credit Note'
-  };
-  return typeMap[type] || type;
-}
-
 // Helper function to get cylinder type display name - uses dynamic utility
-// This will be enhanced with cylinder type mapping in the generatePDF function
 function getCylinderTypeDisplay(type: string, cylinderTypeMap?: Map<string, { typeName: string | null, capacity: number | null }>): string {
   if (!type) return 'N/A';
   
@@ -56,6 +42,143 @@ function getCylinderTypeDisplay(type: string, cylinderTypeMap?: Map<string, { ty
   
   // Fallback to dynamic utility function
   return getCylinderTypeDisplayName(type);
+}
+
+// Categorize items into Sale, Buyback, and Return
+function categorizeItems(items: any[]): {
+  saleItems: any[];
+  buybackItems: any[];
+  returnItems: any[];
+} {
+  const saleItems: any[] = [];
+  const buybackItems: any[] = [];
+  const returnItems: any[] = [];
+  
+  items.forEach(item => {
+    const hasRegularPrice = item.pricePerItem && Number(item.pricePerItem) > 0;
+    const hasBuybackData = item.remainingKg && Number(item.remainingKg) > 0;
+    // Key check: buybackRate being SET (even if 0) indicates this is a buyback item
+    const hasBuybackRateSet = item.buybackRate !== null && item.buybackRate !== undefined;
+    
+    // BUYBACK items: have buybackRate set (including 0%) - this is the definitive indicator
+    // A buyback with 0% rate still has buybackRate = 0, while sales have buybackRate = null
+    if (hasBuybackRateSet) {
+      buybackItems.push(item);
+    }
+    // SALE items: have a regular sale price AND no buyback rate set
+    else if (hasRegularPrice && !hasBuybackRateSet) {
+      saleItems.push(item);
+    }
+    // Empty returns: cylinder with no sale price and no buyback rate
+    else if (item.cylinderType && !hasRegularPrice && !hasBuybackRateSet && !hasBuybackData) {
+      returnItems.push(item);
+    }
+    // Non-cylinder items (accessories) with price
+    else if (item.productName && hasRegularPrice) {
+      saleItems.push(item);
+    }
+    // Default to return items for cylinders
+    else if (item.cylinderType) {
+      returnItems.push(item);
+    }
+  });
+  
+  return { saleItems, buybackItems, returnItems };
+}
+
+// Get transaction type display text with unified transaction support
+function getTransactionTypeText(transaction: any, cylinderTypeMap?: Map<string, { typeName: string | null, capacity: number | null }>): string {
+  const { saleItems, buybackItems, returnItems } = categorizeItems(transaction.items || []);
+  
+  const types: string[] = [];
+  
+  if (saleItems.length > 0 && saleItems.some((item: any) => item.pricePerItem && Number(item.pricePerItem) > 0)) {
+    if (transaction.paymentStatus === 'FULLY_PAID') {
+      types.push('Sale (Paid)');
+    } else if (transaction.paymentStatus === 'PARTIAL') {
+      types.push('Sale (Partial)');
+    } else if (transaction.paymentStatus === 'UNPAID') {
+      types.push('Sale (Unpaid)');
+    } else {
+      types.push('Sale');
+    }
+  }
+  
+  if (buybackItems.length > 0) {
+    types.push('Buyback');
+  }
+  
+  if (returnItems.length > 0) {
+    types.push('Return');
+  }
+  
+  // If only payment transaction
+  if (types.length === 0) {
+    if (transaction.transactionType === 'PAYMENT') {
+      return 'Payment';
+    }
+    return transaction.transactionType;
+  }
+  
+  return types.join(' + ');
+}
+
+// Build items description with proper categorization
+function buildItemsDescription(transaction: any, cylinderTypeMap?: Map<string, { typeName: string | null, capacity: number | null }>): string {
+  const { saleItems, buybackItems, returnItems } = categorizeItems(transaction.items || []);
+  
+  const parts: string[] = [];
+  
+  // Sale items
+  if (saleItems.length > 0) {
+    const saleDescriptions = saleItems.map((item: any) => {
+      if (item.cylinderType) {
+        return `${getCylinderTypeDisplay(item.cylinderType, cylinderTypeMap)} x${item.quantity || 0}`;
+      } else if (item.productName) {
+        return `${item.productName} x${item.quantity || 0}`;
+      }
+      return '';
+    }).filter(Boolean);
+    
+    if (saleDescriptions.length > 0) {
+      parts.push(`Sold: ${saleDescriptions.join(', ')}`);
+    }
+  }
+  
+  // Buyback items
+  if (buybackItems.length > 0) {
+    const buybackDescriptions = buybackItems.map((item: any) => {
+      const name = item.cylinderType ? getCylinderTypeDisplay(item.cylinderType, cylinderTypeMap) : 'Item';
+      const details: string[] = [];
+      if (item.remainingKg && Number(item.remainingKg) > 0) {
+        details.push(`${Number(item.remainingKg).toFixed(1)}kg`);
+      }
+      if (item.buybackRate) {
+        details.push(`${(Number(item.buybackRate) * 100).toFixed(0)}%`);
+      }
+      const detailsStr = details.length > 0 ? ` (${details.join(', ')})` : '';
+      return `${name} x${item.quantity || 0}${detailsStr}`;
+    });
+    
+    parts.push(`Buyback: ${buybackDescriptions.join(', ')}`);
+  }
+  
+  // Return items
+  if (returnItems.length > 0) {
+    const returnDescriptions = returnItems.map((item: any) => {
+      const name = item.cylinderType ? getCylinderTypeDisplay(item.cylinderType, cylinderTypeMap) : 'Item';
+      return `${name} x${item.quantity || 0}`;
+    });
+    
+    parts.push(`Returned: ${returnDescriptions.join(', ')}`);
+  }
+  
+  // Payment only transaction
+  if (parts.length === 0 && transaction.transactionType === 'PAYMENT') {
+    return 'Payment Received';
+  }
+  
+  return parts.join(' | ') || '-';
 }
 
 // Dynamic import to ensure proper loading in Next.js API routes
@@ -189,81 +312,51 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
       minute: '2-digit' 
     }) : '-';
     
-    // Build items description
-    const items: string[] = [];
-    if (transaction.items && transaction.items.length > 0) {
-      transaction.items.forEach((item: any) => {
-        let itemText = '';
-        if (item.cylinderType) {
-          itemText = `${getCylinderTypeDisplay(item.cylinderType, cylinderTypeMap)} x${item.quantity || 0}`;
-          // Add buyback details for BUYBACK transactions
-          if (transaction.transactionType === 'BUYBACK') {
-            const buybackDetails: string[] = [];
-            if (item.remainingKg) {
-              buybackDetails.push(`${Number(item.remainingKg).toFixed(1)}kg remaining`);
-            }
-            if (item.buybackRate) {
-              buybackDetails.push(`${(item.buybackRate * 100).toFixed(1)}% rate`);
-            }
-            if (buybackDetails.length > 0) {
-              itemText += ` (${buybackDetails.join(', ')})`;
-            }
-          }
-          items.push(itemText);
-        } else if (item.productName) {
-          items.push(`${item.productName} x${item.quantity || 0}`);
-        } else if (item.itemName) {
-          items.push(`${item.itemName} x${item.quantity || 0}`);
-        }
-      });
-    }
+    // Build items description with categorization
+    const itemsText = buildItemsDescription(transaction, cylinderTypeMap);
     
-    const itemsText = items.join(', ') || '-';
     const totalAmount = Number(transaction.totalAmount);
     
+    // Categorize items for proper debit/credit calculation
+    const { saleItems, buybackItems } = categorizeItems(transaction.items || []);
+    
     // Calculate debit (Out) and credit (In)
-    // Out = Sales (increases what customer owes) - shown in red
-    // In = Payments (decreases what customer owes) - shown in green
     let debit = '';
     let credit = '';
+    
     if (transaction.transactionType === 'SALE') {
-      // For fully paid SALE transactions, show dash (paid amount cancels out)
-      if (transaction.paymentStatus === 'FULLY_PAID') {
-        debit = '-';
+      // Calculate actual sale amount from sale items
+      const saleTotal = saleItems.reduce((sum: number, item: any) => sum + (Number(item.totalPrice) || 0), 0);
+      
+      // Show actual sale amount in debit (if we have sale items)
+      if (saleTotal > 0) {
+        debit = formatCurrencyRsRounded(saleTotal);
       } else {
-        // Show unpaid amount in debit column
-        const unpaidAmount = transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined
-          ? Number(transaction.unpaidAmount)
-          : totalAmount;
-        debit = unpaidAmount > 0 ? formatCurrencyRsRounded(unpaidAmount) : '-';
+        // Fallback to totalAmount if no items breakdown
+        debit = formatCurrencyRsRounded(totalAmount);
       }
-      // Show paid amount in credit column if partially or fully paid
-      if (transaction.paidAmount) {
-        const paidAmount = Number(transaction.paidAmount);
-        credit = paidAmount > 0 ? formatCurrencyRsRounded(paidAmount) : '-';
-      } else if (transaction.paymentStatus === 'FULLY_PAID') {
-        // For fully paid, show dash in credit too
-        credit = '-';
+      
+      // Calculate buyback credit
+      const buybackCredit = buybackItems.reduce((sum: number, item: any) => sum + (Number(item.totalPrice) || 0), 0);
+      
+      // Add any payment received
+      const paidAmount = transaction.paidAmount ? Number(transaction.paidAmount) : 0;
+      
+      const totalCredit = buybackCredit + paidAmount;
+      
+      if (totalCredit > 0) {
+        credit = formatCurrencyRsRounded(totalCredit);
       }
-    } else if (['PAYMENT', 'BUYBACK', 'ADJUSTMENT', 'CREDIT_NOTE'].includes(transaction.transactionType)) {
+    } else if (['PAYMENT', 'ADJUSTMENT', 'CREDIT_NOTE'].includes(transaction.transactionType)) {
+      credit = formatCurrencyRsRounded(totalAmount);
+    } else if (transaction.transactionType === 'BUYBACK') {
       credit = formatCurrencyRsRounded(totalAmount);
     }
     
-    // Net Balance = negative when customer owes, positive when customer has credit
-    // runningBalance from ledger API is positive (Sales - Payments), so we negate it
     const netBalance = -(transaction.runningBalance || 0);
     
-    // Format transaction type with payment status for SALE transactions
-    let transactionTypeText = formatTransactionType(transaction.transactionType);
-    if (transaction.transactionType === 'SALE' && transaction.paymentStatus) {
-      if (transaction.paymentStatus === 'PARTIAL') {
-        transactionTypeText = 'Sale (Partial)';
-      } else if (transaction.paymentStatus === 'FULLY_PAID') {
-        transactionTypeText = 'Sale (Paid)';
-      } else if (transaction.paymentStatus === 'UNPAID') {
-        transactionTypeText = 'Sale (Unpaid)';
-      }
-    }
+    // Get transaction type text with unified support
+    const transactionTypeText = getTransactionTypeText(transaction, cylinderTypeMap);
     
     return [
       index + 1,
@@ -278,21 +371,34 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
     ];
   });
   
-  // Add total row
-  // Total Out: Sum of all SALE transaction total amounts
-  const totalOut = sortedTransactions
-    .filter(t => t.transactionType === 'SALE')
-    .reduce((sum, t) => sum + Number(t.totalAmount), 0);
+  // Add total row - calculate actual sale totals and credits
+  const totalOut = sortedTransactions.reduce((sum, t) => {
+    if (t.transactionType === 'SALE') {
+      // Calculate actual sale amount from sale items
+      const { saleItems } = categorizeItems(t.items || []);
+      const saleTotal = saleItems.reduce((sSum: number, item: any) => sSum + (Number(item.totalPrice) || 0), 0);
+      
+      // If we have sale items, use that total; otherwise fallback to totalAmount
+      return sum + (saleTotal > 0 ? saleTotal : Number(t.totalAmount));
+    }
+    return sum;
+  }, 0);
   
-  // Total In: Sum of separate payments + partial payments from SALE transactions
   const totalIn = sortedTransactions.reduce((sum, t) => {
-    // Separate payment transactions
-    if (['PAYMENT', 'BUYBACK', 'ADJUSTMENT', 'CREDIT_NOTE'].includes(t.transactionType)) {
+    // Payment transactions
+    if (['PAYMENT', 'ADJUSTMENT', 'CREDIT_NOTE'].includes(t.transactionType)) {
       return sum + Number(t.totalAmount);
     }
-    // Partial payments from SALE transactions
-    if (t.transactionType === 'SALE' && t.paidAmount) {
-      return sum + Number(t.paidAmount);
+    // Pure BUYBACK transactions
+    if (t.transactionType === 'BUYBACK') {
+      return sum + Number(t.totalAmount);
+    }
+    // SALE transactions - add buyback credits + payments
+    if (t.transactionType === 'SALE') {
+      const { buybackItems } = categorizeItems(t.items || []);
+      const buybackCredit = buybackItems.reduce((bSum: number, item: any) => bSum + (Number(item.totalPrice) || 0), 0);
+      const paidAmount = t.paidAmount ? Number(t.paidAmount) : 0;
+      return sum + buybackCredit + paidAmount;
     }
     return sum;
   }, 0);
@@ -309,39 +415,38 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
     ''
   ]);
   
-  // Add table - use autoTable as a function, not a method
-  // Set tableWidth to match header width exactly (pageWidth - 30)
+  // Add table
   autoTable(doc, {
-    head: [['#', 'Date', 'Time', 'Bill No.', 'Type', 'Items', 'Out (-) (Rs)', 'In (+) (Rs)', 'Net Balance (Rs)']],
+    head: [['#', 'Date', 'Time', 'Bill No.', 'Type', 'Details', 'Out (-)', 'In (+)', 'Balance']],
     body: tableData,
     startY: yPosition,
-    tableWidth: pageWidth - 30, // Match header width exactly
+    tableWidth: pageWidth - 30,
     styles: { 
-      fontSize: 8,
-      cellPadding: 3,
+      fontSize: 7,
+      cellPadding: 2,
       lineColor: [200, 200, 200],
-      lineWidth: 0.5
+      lineWidth: 0.5,
+      overflow: 'linebreak'
     },
     headStyles: { 
       fillColor: [41, 128, 185],
       textColor: [255, 255, 255],
       fontStyle: 'bold',
-      fontSize: 9
+      fontSize: 8
     },
     alternateRowStyles: { 
       fillColor: [248, 249, 250] 
     },
     columnStyles: {
       0: { halign: 'center', cellWidth: 8 },       // #
-      1: { cellWidth: 16.5 },                       // Date
-      2: { cellWidth: 14.5 },                       // Time
-      3: { cellWidth: 21.5 },                       // Bill No.
-      4: { cellWidth: 25.5 },                       // Type (accommodates "Sale (Partial)")
-      5: { cellWidth: 35 },                         // Items
-      6: { halign: 'right', cellWidth: 18 },        // Out (-) (Rs)
-      7: { halign: 'right', cellWidth: 18 },        // In (+) (Rs)
-      8: { halign: 'right', cellWidth: 22 }         // Net Balance (Rs)
-      // Total: 8+16.5+14.5+21.5+25.5+35+18+18+22 = 179mm (autoTable will scale to 180mm with tableWidth)
+      1: { cellWidth: 16 },                         // Date
+      2: { cellWidth: 12 },                         // Time
+      3: { cellWidth: 20 },                         // Bill No.
+      4: { cellWidth: 22 },                         // Type
+      5: { cellWidth: 50 },                         // Details (wider for categorized items)
+      6: { halign: 'right', cellWidth: 16 },        // Out (-)
+      7: { halign: 'right', cellWidth: 16 },        // In (+)
+      8: { halign: 'right', cellWidth: 18 }         // Balance
     },
     margin: { left: 15, right: 15 }
   });
@@ -398,24 +503,22 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
   doc.setTextColor(231, 76, 60); // Red color
   doc.text(formatCurrencyRsRounded(totalOut), pageWidth - 50, yPosition + 32, { align: 'right' });
   
-  // Total In (Payments)
+  // Total In (Payments + Buybacks)
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(0, 0, 0); // Reset to black
+  doc.setTextColor(0, 0, 0);
   doc.text('Total In (+):', 25, yPosition + 42);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(39, 174, 96); // Green color
   doc.text(formatCurrencyRsRounded(totalIn), pageWidth - 50, yPosition + 42, { align: 'right' });
   
-  // Net Balance = Total Out - Total In
-  // Negative when customer owes (Total Out > Total In)
-  // Positive when customer has credit (Total In > Total Out)
+  // Net Balance
   const netBalance = totalOut - totalIn;
-  const displayBalance = netBalance; // Positive means customer owes, negative means credit
+  const displayBalance = netBalance;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
+  doc.setTextColor(0, 0, 0);
   doc.text('Net Balance:', 25, yPosition + 55);
   doc.setTextColor(displayBalance > 0 ? 231 : 39, displayBalance > 0 ? 76 : 174, displayBalance > 0 ? 60 : 96);
-  // Display with negative sign when customer owes (positive balance)
   const balanceValueText = displayBalance > 0 ? `-${formatCurrencyRsRounded(displayBalance)}` : formatCurrencyRsRounded(Math.abs(displayBalance));
   doc.text(balanceValueText, pageWidth - 50, yPosition + 55, { align: 'right' });
   
@@ -508,23 +611,17 @@ export async function GET(
       : allTransactions;
 
     // Calculate running balance for all transactions
-    // Use same logic as ledger API: for SALE transactions, use unpaidAmount
     let runningBalance = 0;
     const allTransactionsWithBalance = allTransactions.map((transaction) => {
       const totalAmount = parseFloat(transaction.totalAmount.toString());
       let balanceImpact = 0;
       switch (transaction.transactionType) {
         case 'SALE':
-          // For SALE transactions, only unpaid amount affects balance
-          // Check if paymentStatus is FULLY_PAID first (new format)
           if (transaction.paymentStatus === 'FULLY_PAID') {
-            // Fully paid sale - zero balance impact
             balanceImpact = 0;
           } else if (transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined) {
-            // New format with unpaidAmount field
             balanceImpact = parseFloat(transaction.unpaidAmount.toString());
           } else {
-            // Old transaction format - no payment info, assume fully unpaid
             balanceImpact = totalAmount;
           }
           break;
@@ -532,7 +629,7 @@ export async function GET(
         case 'BUYBACK':
         case 'ADJUSTMENT':
         case 'CREDIT_NOTE':
-          balanceImpact = -totalAmount; // Decreases what customer owes
+          balanceImpact = -totalAmount;
           break;
         default:
           balanceImpact = 0;
@@ -544,8 +641,7 @@ export async function GET(
       };
     });
 
-    // Calculate starting balance before filtered range (same logic as ledger API)
-    // Use createdAt to match ledger API exactly
+    // Calculate starting balance before filtered range
     let startingBalance = 0;
     if (filteredTransactions.length > 0 && (startDate || endDate)) {
       const firstFilteredCreatedAt = filteredTransactions[0].createdAt;
@@ -558,20 +654,19 @@ export async function GET(
         let balanceImpact = 0;
         switch (transaction.transactionType) {
           case 'SALE':
-            // For SALE transactions, only unpaid amount affects balance
             if (transaction.paymentStatus === 'FULLY_PAID') {
-              balanceImpact = 0; // Fully paid sale - zero impact
+              balanceImpact = 0;
             } else if (transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined) {
               balanceImpact = parseFloat(transaction.unpaidAmount.toString());
             } else {
-              balanceImpact = totalAmount; // Old format - assume fully unpaid
+              balanceImpact = totalAmount;
             }
             break;
           case 'PAYMENT':
           case 'BUYBACK':
           case 'ADJUSTMENT':
           case 'CREDIT_NOTE':
-            balanceImpact = -totalAmount; // Decreases what customer owes
+            balanceImpact = -totalAmount;
             break;
           default:
             balanceImpact = 0;
@@ -581,28 +676,25 @@ export async function GET(
     }
 
     // Calculate running balances for filtered transactions
-    // runningBalance is positive (Sales - Payments), we'll negate for display
-    // Use same logic as ledger API: for SALE transactions, use unpaidAmount
     let currentBalance = startingBalance;
     const transactionsWithBalance = filteredTransactions.map((transaction) => {
       const totalAmount = parseFloat(transaction.totalAmount.toString());
       let balanceImpact = 0;
       switch (transaction.transactionType) {
         case 'SALE':
-          // For SALE transactions, only unpaid amount affects balance
           if (transaction.paymentStatus === 'FULLY_PAID') {
-            balanceImpact = 0; // Fully paid sale - zero impact
+            balanceImpact = 0;
           } else if (transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined) {
             balanceImpact = parseFloat(transaction.unpaidAmount.toString());
           } else {
-            balanceImpact = totalAmount; // Old format - assume fully unpaid
+            balanceImpact = totalAmount;
           }
           break;
         case 'PAYMENT':
         case 'BUYBACK':
         case 'ADJUSTMENT':
         case 'CREDIT_NOTE':
-          balanceImpact = -totalAmount; // Decreases what customer owes
+          balanceImpact = -totalAmount;
           break;
         default:
           balanceImpact = 0;
@@ -611,12 +703,11 @@ export async function GET(
       
       return {
         ...transaction,
-        runningBalance: currentBalance // Positive, will be negated for display
+        runningBalance: currentBalance
       };
     });
 
     // Build cylinder type mapping for proper display names
-    // Get all unique cylinder types from transaction items
     const uniqueCylinderTypes = new Set<string>();
     transactionsWithBalance.forEach(transaction => {
       transaction.items?.forEach((item: any) => {
@@ -626,11 +717,9 @@ export async function GET(
       });
     });
 
-    // Query cylinders to get typeName and capacity for each cylinderType
     const cylinderTypeMap = new Map<string, { typeName: string | null, capacity: number | null }>();
     
     if (uniqueCylinderTypes.size > 0) {
-      // Query cylinders and group by cylinderType to get unique typeName and capacity
       const cylinders = await prisma.cylinder.findMany({
         where: {
           cylinderType: { in: Array.from(uniqueCylinderTypes) }
@@ -642,7 +731,6 @@ export async function GET(
         }
       });
 
-      // Build the mapping - use the first cylinder of each type for typeName and capacity
       cylinders.forEach(cylinder => {
         if (!cylinderTypeMap.has(cylinder.cylinderType)) {
           cylinderTypeMap.set(cylinder.cylinderType, {
@@ -652,7 +740,6 @@ export async function GET(
         }
       });
 
-      // For cylinder types not found in database, set to null (will use fallback)
       uniqueCylinderTypes.forEach(type => {
         if (!cylinderTypeMap.has(type)) {
           cylinderTypeMap.set(type, { typeName: null, capacity: null });
@@ -684,4 +771,3 @@ export async function GET(
     );
   }
 }
-

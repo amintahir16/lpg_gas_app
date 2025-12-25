@@ -9,6 +9,12 @@ function formatCurrency(amount: number): string {
   return `PKR ${amount.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+// Helper function to format currency with Rs rounded
+function formatCurrencyRs(amount: number): string {
+  const rounded = Math.round(amount);
+  return `Rs ${rounded.toLocaleString('en-PK', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+}
+
 // Helper function to format date
 function formatDate(dateString: string | Date): string {
   const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
@@ -19,15 +25,96 @@ function formatDate(dateString: string | Date): string {
   });
 }
 
-// Helper function to get cylinder type display name - uses dynamic utility
-function getCylinderTypeDisplay(type: string | null): string {
+// Helper function to get cylinder type display name - uses database mapping with fallback
+function getCylinderTypeDisplay(type: string | null, cylinderTypeMap?: Map<string, { typeName: string | null, capacity: number | null }>): string {
   if (!type) return 'N/A';
-  // Use dynamic utility function - works for any cylinder type
+  
+  // If we have a type map with proper typeName, use it
+  if (cylinderTypeMap && cylinderTypeMap.has(type)) {
+    const cylinderInfo = cylinderTypeMap.get(type)!;
+    if (cylinderInfo.typeName && cylinderInfo.typeName.trim() !== '' && cylinderInfo.typeName.trim() !== 'Cylinder') {
+      const capacity = cylinderInfo.capacity !== null ? cylinderInfo.capacity : 'N/A';
+      return `${cylinderInfo.typeName} (${capacity}kg)`;
+    } else if (cylinderInfo.capacity !== null) {
+      return `Cylinder (${cylinderInfo.capacity}kg)`;
+    }
+  }
+  
+  // Fallback to dynamic utility function
   return getCylinderTypeDisplayName(type);
 }
 
+// Categorize items into Sale, Buyback, and Return
+function categorizeItems(items: any[], transactionType: string): {
+  saleItems: any[];
+  buybackItems: any[];
+  returnItems: any[];
+} {
+  const saleItems: any[] = [];
+  const buybackItems: any[] = [];
+  const returnItems: any[] = [];
+  
+  items.forEach(item => {
+    const hasRegularPrice = item.pricePerItem && Number(item.pricePerItem) > 0;
+    const hasBuybackData = item.remainingKg && Number(item.remainingKg) > 0;
+    // Key check: buybackRate being SET (even if 0) indicates this is a buyback item
+    const hasBuybackRateSet = item.buybackRate !== null && item.buybackRate !== undefined;
+    
+    // BUYBACK items: have buybackRate set (including 0%) - this is the definitive indicator
+    // A buyback with 0% rate still has buybackRate = 0, while sales have buybackRate = null
+    if (hasBuybackRateSet) {
+      buybackItems.push(item);
+    }
+    // SALE items: have a regular sale price AND no buyback rate set
+    else if (hasRegularPrice && !hasBuybackRateSet) {
+      saleItems.push(item);
+    }
+    // Empty returns: cylinder with no sale price and no buyback rate
+    else if (item.cylinderType && !hasRegularPrice && !hasBuybackRateSet && !hasBuybackData) {
+      returnItems.push(item);
+    }
+    // Non-cylinder items (accessories) with price
+    else if (item.productName && hasRegularPrice) {
+      saleItems.push(item);
+    }
+    // Default to return items for cylinders
+    else if (item.cylinderType) {
+      returnItems.push(item);
+    }
+  });
+  
+  return { saleItems, buybackItems, returnItems };
+}
+
+// Determine transaction type badges to display
+function getTransactionTypeBadges(saleItems: any[], buybackItems: any[], returnItems: any[], transactionType: string): string[] {
+  const badges: string[] = [];
+  
+  // If we have sale items with positive value
+  if (saleItems.length > 0 && saleItems.some(item => item.pricePerItem && Number(item.pricePerItem) > 0)) {
+    badges.push('SALE');
+  }
+  
+  // If we have buyback items
+  if (buybackItems.length > 0) {
+    badges.push('BUYBACK');
+  }
+  
+  // If we have return items
+  if (returnItems.length > 0) {
+    badges.push('RETURN');
+  }
+  
+  // If no badges, use the original transaction type
+  if (badges.length === 0) {
+    badges.push(transactionType);
+  }
+  
+  return badges;
+}
+
 // Dynamic import to ensure proper loading in Next.js API routes
-async function generatePDF(transaction: any, customer: any) {
+async function generatePDF(transaction: any, customer: any, cylinderTypeMap: Map<string, { typeName: string | null, capacity: number | null }>) {
   const jsPDFModule = await import('jspdf');
   const autoTableModule = await import('jspdf-autotable');
   
@@ -37,7 +124,7 @@ async function generatePDF(transaction: any, customer: any) {
   
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 20; // Professional margins (20mm on each side)
+  const margin = 20;
   const contentWidth = pageWidth - (margin * 2);
   
   // Professional Header with Company Branding
@@ -105,7 +192,6 @@ async function generatePDF(transaction: any, customer: any) {
     yPosition += 6;
   }
   if (customer.address) {
-    // Handle long addresses with text wrapping
     const addressLines = doc.splitTextToSize(`Address: ${customer.address}`, contentWidth - 10);
     doc.text(addressLines, margin + 5, yPosition + 18);
     yPosition += (addressLines.length - 1) * 6;
@@ -113,7 +199,11 @@ async function generatePDF(transaction: any, customer: any) {
   
   yPosition += (customer.email && customer.address ? 30 : customer.email || customer.address ? 24 : 18);
   
-  // Transaction Details
+  // Categorize items
+  const { saleItems, buybackItems, returnItems } = categorizeItems(transaction.items || [], transaction.transactionType);
+  const badges = getTransactionTypeBadges(saleItems, buybackItems, returnItems, transaction.transactionType);
+  
+  // Transaction Details Header
   if (yPosition > pageHeight - 100) {
     doc.addPage();
     yPosition = 20;
@@ -128,122 +218,174 @@ async function generatePDF(transaction: any, customer: any) {
   
   yPosition += 15;
   
-  // Transaction Type and Payment Status (removed redundant Total Amount here)
+  // Transaction Type badges
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Transaction Type: ${transaction.transactionType}`, margin + 5, yPosition);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Transaction Type: ', margin + 5, yPosition);
   
-  if (transaction.paymentStatus) {
-    const statusText = transaction.paymentStatus === 'FULLY_PAID' ? 'Paid' : 
-                      transaction.paymentStatus === 'PARTIAL' ? 'Partial' : 'Unpaid';
-    doc.text(`Payment Status: ${statusText}`, margin + 5, yPosition + 6);
-    yPosition += 6;
-  }
+  let badgeX = margin + 45;
+  badges.forEach((badge, index) => {
+    // Draw badge background
+    const badgeWidth = doc.getTextWidth(badge) + 8;
+    let badgeColor: [number, number, number];
+    
+    switch (badge) {
+      case 'SALE':
+        badgeColor = [34, 197, 94]; // Green
+        break;
+      case 'BUYBACK':
+        badgeColor = [251, 146, 60]; // Orange
+        break;
+      case 'RETURN':
+        badgeColor = [156, 163, 175]; // Gray
+        break;
+      case 'PAYMENT':
+        badgeColor = [59, 130, 246]; // Blue
+        break;
+      default:
+        badgeColor = [107, 114, 128]; // Gray
+    }
+    
+    doc.setFillColor(...badgeColor);
+    doc.roundedRect(badgeX, yPosition - 4, badgeWidth, 6, 1, 1, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(8);
+    doc.text(badge, badgeX + 4, yPosition);
+    badgeX += badgeWidth + 3;
+  });
   
   yPosition += 8;
   
-  // Items Table with proper column widths
-  const isBuyback = transaction.transactionType === 'BUYBACK';
-  
-  const tableData = transaction.items.map((item: any) => {
-    // Determine item name: use cylinder display name if cylinderType exists, otherwise use productName
-    let itemName = 'N/A';
-    if (item.cylinderType) {
-      itemName = getCylinderTypeDisplay(item.cylinderType);
-    } else if (item.productName) {
-      itemName = item.productName;
-    }
-    
-    if (isBuyback) {
-      // For buyback transactions, include remaining gas and buyback rate
-      const remainingKg = item.remainingKg ? Number(item.remainingKg).toFixed(1) : '-';
-      const buybackRate = item.buybackRate ? ((item.buybackRate * 100).toFixed(1) + '%') : '-';
-      const price = item.buybackPricePerItem ? formatCurrency(Number(item.buybackPricePerItem)) : formatCurrency(Number(item.pricePerItem));
-      
-      return [
-        itemName,
-        Number(item.quantity).toString(),
-        remainingKg + ' kg',
-        buybackRate,
-        price,
-        formatCurrency(Number(item.totalPrice))
-      ];
-    } else {
-      // For other transaction types, use standard format
-      return [
-        itemName,
-        Number(item.quantity).toString(),
-        formatCurrency(Number(item.pricePerItem)),
-        formatCurrency(Number(item.totalPrice))
-      ];
-    }
-  });
-  
-  // Calculate proper column widths based on content width (in mm)
-  let itemWidth, quantityWidth, priceWidth, totalWidth;
-  let headers: string[];
-  
-  if (isBuyback) {
-    // Item: 30%, Quantity: 10%, Remaining Gas: 12%, Buyback Rate: 12%, Buyback Price: 18%, Total: 18%
-    itemWidth = contentWidth * 0.30;
-    quantityWidth = contentWidth * 0.10;
-    const remainingWidth = contentWidth * 0.12;
-    const rateWidth = contentWidth * 0.12;
-    priceWidth = contentWidth * 0.18;
-    totalWidth = contentWidth * 0.18;
-    headers = ['Item', 'Quantity', 'Remaining Gas', 'Buyback Rate', 'Buyback Price', 'Total Price'];
-  } else {
-    // Item: 50%, Quantity: 15%, Price Per Item: 17.5%, Total Price: 17.5%
-    itemWidth = contentWidth * 0.50;
-    quantityWidth = contentWidth * 0.15;
-    priceWidth = contentWidth * 0.175;
-    totalWidth = contentWidth * 0.175;
-    headers = ['Item', 'Quantity', 'Price Per Item', 'Total Price'];
+  // Payment Status
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  if (transaction.paymentStatus) {
+    const statusText = transaction.paymentStatus === 'FULLY_PAID' ? 'Paid' : 
+                      transaction.paymentStatus === 'PARTIAL' ? 'Partial' : 'Unpaid';
+    doc.text(`Payment Status: ${statusText}`, margin + 5, yPosition);
+    yPosition += 8;
   }
   
-  autoTable(doc, {
-    startY: yPosition,
-    head: [headers],
-    body: tableData,
-    theme: 'striped',
-    margin: { left: margin, right: margin },
-    headStyles: { 
-      fillColor: [41, 128, 185], 
-      textColor: [255, 255, 255], 
-      fontStyle: 'bold',
-      halign: 'left'
-    },
-    columnStyles: isBuyback ? {
-      0: { cellWidth: itemWidth, halign: 'left' }, // Item name left-aligned
-      1: { cellWidth: quantityWidth, halign: 'center' }, // Quantity centered
-      2: { cellWidth: contentWidth * 0.12, halign: 'center' }, // Remaining Gas centered
-      3: { cellWidth: contentWidth * 0.12, halign: 'center' }, // Buyback Rate centered
-      4: { cellWidth: priceWidth, halign: 'right' }, // Buyback Price right-aligned
-      5: { cellWidth: totalWidth, halign: 'right' } // Total right-aligned
-    } : {
-      0: { cellWidth: itemWidth, halign: 'left' }, // Item name left-aligned
-      1: { cellWidth: quantityWidth, halign: 'center' }, // Quantity centered
-      2: { cellWidth: priceWidth, halign: 'right' }, // Price right-aligned
-      3: { cellWidth: totalWidth, halign: 'right' } // Total right-aligned
-    },
-    styles: { 
-      fontSize: 10, 
-      cellPadding: 4,
-      overflow: 'visible'
-    },
-    alternateRowStyles: { fillColor: [248, 249, 250] }
-  });
+  yPosition += 5;
+  
+  // Helper function to draw an items table
+  const drawItemsTable = (title: string, items: any[], isBuyback: boolean = false, isReturn: boolean = false, titleColor: [number, number, number]) => {
+    if (items.length === 0) return;
+    
+    // Check if we need a new page
+    if (yPosition > pageHeight - 60) {
+      doc.addPage();
+      yPosition = 20;
+    }
+    
+    // Section title with colored bar
+    doc.setFillColor(...titleColor);
+    doc.rect(margin, yPosition, contentWidth, 6, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(title, margin + 3, yPosition + 4.5);
+    yPosition += 10;
+    
+    // Prepare table data
+    let headers: string[];
+    let tableData: any[];
+    let columnStyles: any;
+    
+    if (isBuyback) {
+      headers = ['Item', 'Qty', 'Remaining Gas', 'Buyback Rate', 'Credit/Item', 'Total Credit'];
+      tableData = items.map(item => {
+        const itemName = item.cylinderType ? getCylinderTypeDisplay(item.cylinderType, cylinderTypeMap) : (item.productName || 'N/A');
+        const remainingKg = item.remainingKg ? `${Number(item.remainingKg).toFixed(1)} kg` : '-';
+        const buybackRate = item.buybackRate ? `${(Number(item.buybackRate) * 100).toFixed(0)}%` : '-';
+        const creditPerItem = item.buybackPricePerItem ? formatCurrencyRs(Number(item.buybackPricePerItem)) : '-';
+        const totalCredit = item.totalPrice ? formatCurrencyRs(Number(item.totalPrice)) : '-';
+        
+        return [itemName, item.quantity, remainingKg, buybackRate, creditPerItem, totalCredit];
+      });
+      columnStyles = {
+        0: { cellWidth: contentWidth * 0.28, halign: 'left' },
+        1: { cellWidth: contentWidth * 0.08, halign: 'center' },
+        2: { cellWidth: contentWidth * 0.16, halign: 'center' },
+        3: { cellWidth: contentWidth * 0.14, halign: 'center' },
+        4: { cellWidth: contentWidth * 0.17, halign: 'right' },
+        5: { cellWidth: contentWidth * 0.17, halign: 'right' }
+      };
+    } else if (isReturn) {
+      headers = ['Item', 'Quantity', 'Status'];
+      tableData = items.map(item => {
+        const itemName = item.cylinderType ? getCylinderTypeDisplay(item.cylinderType, cylinderTypeMap) : (item.productName || 'N/A');
+        return [itemName, item.quantity, 'Empty Returned'];
+      });
+      columnStyles = {
+        0: { cellWidth: contentWidth * 0.50, halign: 'left' },
+        1: { cellWidth: contentWidth * 0.20, halign: 'center' },
+        2: { cellWidth: contentWidth * 0.30, halign: 'center' }
+      };
+    } else {
+      headers = ['Item', 'Quantity', 'Price/Item', 'Total Price'];
+      tableData = items.map(item => {
+        const itemName = item.cylinderType ? getCylinderTypeDisplay(item.cylinderType, cylinderTypeMap) : (item.productName || 'N/A');
+        const pricePerItem = item.pricePerItem ? formatCurrencyRs(Number(item.pricePerItem)) : 'Rs 0';
+        const totalPrice = item.totalPrice ? formatCurrencyRs(Number(item.totalPrice)) : 'Rs 0';
+        return [itemName, item.quantity, pricePerItem, totalPrice];
+      });
+      columnStyles = {
+        0: { cellWidth: contentWidth * 0.45, halign: 'left' },
+        1: { cellWidth: contentWidth * 0.15, halign: 'center' },
+        2: { cellWidth: contentWidth * 0.20, halign: 'right' },
+        3: { cellWidth: contentWidth * 0.20, halign: 'right' }
+      };
+    }
+    
+    autoTable(doc, {
+      startY: yPosition,
+      head: [headers],
+      body: tableData,
+      theme: 'striped',
+      margin: { left: margin, right: margin },
+      headStyles: { 
+        fillColor: titleColor, 
+        textColor: [255, 255, 255], 
+        fontStyle: 'bold',
+        halign: 'left',
+        fontSize: 9
+      },
+      columnStyles: columnStyles,
+      styles: { 
+        fontSize: 9, 
+        cellPadding: 3,
+        overflow: 'visible'
+      },
+      alternateRowStyles: { fillColor: [248, 249, 250] }
+    });
+    
+    yPosition = (doc as any).lastAutoTable.finalY + 8;
+  };
+  
+  // Draw Sale Items table
+  if (saleItems.length > 0) {
+    drawItemsTable('SOLD ITEMS', saleItems, false, false, [34, 197, 94]);
+  }
+  
+  // Draw Buyback Items table
+  if (buybackItems.length > 0) {
+    drawItemsTable('BUYBACK ITEMS', buybackItems, true, false, [251, 146, 60]);
+  }
+  
+  // Draw Return Items table
+  if (returnItems.length > 0) {
+    drawItemsTable('EMPTY RETURNS', returnItems, false, true, [107, 114, 128]);
+  }
   
   // Summary Section
-  const finalY = (doc as any).lastAutoTable.finalY + 15;
+  yPosition += 5;
   
-  // Check if we need a new page for summary
-  if (finalY > pageHeight - 50) {
+  if (yPosition > pageHeight - 60) {
     doc.addPage();
     yPosition = 20;
-  } else {
-    yPosition = finalY;
   }
   
   doc.setFillColor(155, 89, 182);
@@ -253,42 +395,102 @@ async function generatePDF(transaction: any, customer: any) {
   doc.setFont('helvetica', 'bold');
   doc.text('SUMMARY', margin + 5, yPosition + 6);
   
-  const summaryY = yPosition + 18;
+  yPosition += 15;
+  
+  // Summary Box
+  doc.setFillColor(248, 249, 250);
+  const summaryHeight = 50;
+  doc.rect(margin, yPosition, contentWidth, summaryHeight, 'F');
+  doc.setDrawColor(200, 200, 200);
+  doc.rect(margin, yPosition, contentWidth, summaryHeight, 'S');
+  
+  const summaryY = yPosition + 10;
+  const rightX = pageWidth - margin - 10;
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(10);
   
-  // Right-align all summary values for professional appearance
-  const rightX = pageWidth - margin - 5;
+  // Calculate totals
+  const saleTotal = saleItems.reduce((sum, item) => sum + (Number(item.totalPrice) || 0), 0);
+  const buybackTotal = buybackItems.reduce((sum, item) => sum + (Number(item.totalPrice) || 0), 0);
   
-  // Total Amount
-  doc.setFont('helvetica', 'bold');
-  const totalAmountText = `Total Amount:`;
-  const totalAmountValue = formatCurrency(Number(transaction.totalAmount));
-  doc.text(totalAmountText, margin + 5, summaryY);
-  doc.text(totalAmountValue, rightX, summaryY, { align: 'right' });
+  let currentY = summaryY;
   
-  // Payment details
-  // BUYBACK transactions are always considered paid (credit to customer)
-  if (transaction.transactionType === 'BUYBACK') {
+  // Sale Total
+  if (saleTotal > 0) {
     doc.setFont('helvetica', 'normal');
-    doc.text('Status: Paid', margin + 5, summaryY + 8);
-  } else if (transaction.paymentStatus === 'FULLY_PAID' && transaction.paidAmount) {
-    doc.setFont('helvetica', 'normal');
-    doc.text('Payment Received:', margin + 5, summaryY + 8);
-    doc.text(formatCurrency(Number(transaction.paidAmount)), rightX, summaryY + 8, { align: 'right' });
-    doc.text('Status: Fully Paid', margin + 5, summaryY + 14);
-  } else if (transaction.paymentStatus === 'PARTIAL' && transaction.paidAmount && transaction.unpaidAmount) {
-    doc.setFont('helvetica', 'normal');
-    doc.text('Payment Received:', margin + 5, summaryY + 8);
-    doc.text(formatCurrency(Number(transaction.paidAmount)), rightX, summaryY + 8, { align: 'right' });
-    doc.text('Remaining:', margin + 5, summaryY + 14);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(220, 38, 38); // Red for unpaid amount
-    doc.text(formatCurrency(Number(transaction.unpaidAmount)), rightX, summaryY + 14, { align: 'right' });
+    doc.text('Sale Total:', margin + 10, currentY);
+    doc.setTextColor(34, 197, 94);
+    doc.text(formatCurrencyRs(saleTotal), rightX, currentY, { align: 'right' });
     doc.setTextColor(0, 0, 0);
-  } else {
+    currentY += 8;
+  }
+  
+  // Buyback Credit
+  if (buybackTotal > 0) {
     doc.setFont('helvetica', 'normal');
-    doc.text('Status: Unpaid', margin + 5, summaryY + 8);
+    doc.text('Buyback Credit:', margin + 10, currentY);
+    doc.setTextColor(251, 146, 60);
+    doc.text(`-${formatCurrencyRs(buybackTotal)}`, rightX, currentY, { align: 'right' });
+    doc.setTextColor(0, 0, 0);
+    currentY += 8;
+  }
+  
+  // Empty Returns Count
+  if (returnItems.length > 0) {
+    const returnCount = returnItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Empty Cylinders Returned:', margin + 10, currentY);
+    doc.setTextColor(107, 114, 128);
+    doc.text(`${returnCount} cylinder${returnCount > 1 ? 's' : ''}`, rightX, currentY, { align: 'right' });
+    doc.setTextColor(0, 0, 0);
+    currentY += 8;
+  }
+  
+  // Net Amount / Total
+  currentY += 2;
+  doc.setDrawColor(150, 150, 150);
+  doc.line(margin + 10, currentY - 2, rightX, currentY - 2);
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  const netAmount = saleTotal - buybackTotal;
+  doc.text('Net Amount:', margin + 10, currentY + 4);
+  
+  if (netAmount >= 0) {
+    doc.setTextColor(0, 0, 0);
+    doc.text(formatCurrencyRs(netAmount), rightX, currentY + 4, { align: 'right' });
+  } else {
+    doc.setTextColor(34, 197, 94);
+    doc.text(`Credit: ${formatCurrencyRs(Math.abs(netAmount))}`, rightX, currentY + 4, { align: 'right' });
+  }
+  
+  yPosition += summaryHeight + 10;
+  
+  // Payment Details (if applicable)
+  if (transaction.paidAmount || transaction.paymentStatus === 'FULLY_PAID') {
+    if (yPosition > pageHeight - 40) {
+      doc.addPage();
+      yPosition = 20;
+    }
+    
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    
+    if (transaction.paidAmount) {
+      doc.text(`Payment Received: ${formatCurrencyRs(Number(transaction.paidAmount))}`, margin + 5, yPosition);
+      yPosition += 6;
+    }
+    
+    if (transaction.paymentMethod) {
+      doc.text(`Payment Method: ${transaction.paymentMethod}`, margin + 5, yPosition);
+      yPosition += 6;
+    }
+    
+    if (transaction.unpaidAmount && Number(transaction.unpaidAmount) > 0) {
+      doc.setTextColor(220, 38, 38);
+      doc.text(`Remaining Balance: ${formatCurrencyRs(Number(transaction.unpaidAmount))}`, margin + 5, yPosition);
+    }
   }
   
   // Footer
@@ -336,8 +538,49 @@ export async function GET(
       return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
     }
 
-    // Generate PDF
-    const doc = await generatePDF(transaction, transaction.customer);
+    // Build cylinder type mapping for proper display names
+    const uniqueCylinderTypes = new Set<string>();
+    transaction.items?.forEach((item: any) => {
+      if (item.cylinderType) {
+        uniqueCylinderTypes.add(item.cylinderType);
+      }
+    });
+
+    const cylinderTypeMap = new Map<string, { typeName: string | null, capacity: number | null }>();
+    
+    if (uniqueCylinderTypes.size > 0) {
+      // Query cylinders to get typeName and capacity for each cylinderType
+      const cylinders = await prisma.cylinder.findMany({
+        where: {
+          cylinderType: { in: Array.from(uniqueCylinderTypes) }
+        },
+        select: {
+          cylinderType: true,
+          typeName: true,
+          capacity: true
+        }
+      });
+
+      // Build the mapping - use the first cylinder of each type for typeName and capacity
+      cylinders.forEach(cylinder => {
+        if (!cylinderTypeMap.has(cylinder.cylinderType)) {
+          cylinderTypeMap.set(cylinder.cylinderType, {
+            typeName: cylinder.typeName,
+            capacity: cylinder.capacity ? Number(cylinder.capacity) : null
+          });
+        }
+      });
+
+      // For cylinder types not found in database, set to null (will use fallback)
+      uniqueCylinderTypes.forEach(type => {
+        if (!cylinderTypeMap.has(type)) {
+          cylinderTypeMap.set(type, { typeName: null, capacity: null });
+        }
+      });
+    }
+
+    // Generate PDF with cylinder type mapping
+    const doc = await generatePDF(transaction, transaction.customer, cylinderTypeMap);
     const pdfBlob = doc.output('blob');
     const pdfBuffer = Buffer.from(await pdfBlob.arrayBuffer());
 
