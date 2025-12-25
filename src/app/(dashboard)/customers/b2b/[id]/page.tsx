@@ -1429,7 +1429,7 @@ export default function B2BCustomerDetailPage() {
                     <PlusIcon className="w-5 h-5 text-white" />
                   </div>
                   New Transaction
-                </h3>
+              </h3>
                 <p className="text-sm text-gray-500 mt-1">Fill in the sections that apply to this transaction</p>
               </div>
               <button
@@ -1444,27 +1444,27 @@ export default function B2BCustomerDetailPage() {
             <form onSubmit={handleTransactionSubmit} className="space-y-4">
               {/* Date and Time Row */}
               <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
-                <div>
+                  <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                  <Input
-                    type="date"
-                    value={transactionDate}
-                    onChange={(e) => setTransactionDate(e.target.value)}
-                    required
+                    <Input
+                      type="date"
+                      value={transactionDate}
+                      onChange={(e) => setTransactionDate(e.target.value)}
+                      required
                     className="bg-white"
-                  />
-                </div>
-                <div>
+                    />
+                  </div>
+                  <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
-                  <Input
-                    type="time"
-                    value={transactionTime}
-                    onChange={(e) => setTransactionTime(e.target.value)}
-                    required
+                    <Input
+                      type="time"
+                      value={transactionTime}
+                      onChange={(e) => setTransactionTime(e.target.value)}
+                      required
                     className="bg-white"
-                  />
+                    />
+                  </div>
                 </div>
-              </div>
 
               {/* ========== SECTION 1: CYLINDERS DELIVERED ========== */}
               <div className={`border rounded-xl overflow-hidden transition-all ${deliveryExpanded ? 'border-green-200 bg-green-50/30' : 'border-gray-200'}`}>
@@ -1476,7 +1476,7 @@ export default function B2BCustomerDetailPage() {
                   <div className="flex items-center gap-3">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${deliveryExpanded ? 'bg-green-600' : 'bg-gray-300'}`}>
                       <CubeIcon className="w-4 h-4 text-white" />
-                    </div>
+                        </div>
                     <div>
                       <span className="font-semibold text-gray-900">Cylinders Delivered</span>
                       {gasItems.some(item => item.delivered > 0) && (
@@ -1484,8 +1484,8 @@ export default function B2BCustomerDetailPage() {
                           {gasItems.reduce((sum, item) => sum + item.delivered, 0)} cylinders
                         </Badge>
                       )}
-                    </div>
-                  </div>
+                        </div>
+                        </div>
                   <svg className={`w-5 h-5 text-gray-500 transition-transform ${deliveryExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
@@ -1496,99 +1496,96 @@ export default function B2BCustomerDetailPage() {
                     {/* Pricing Info Banner */}
                     {pricingInfo && (
                       <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between">
                           <div className="text-sm">
                             <span className="font-medium text-blue-900">Auto-Pricing: </span>
                             <span className="text-blue-700">
                               {pricingInfo.category?.name} | Margin: Rs {pricingInfo.category?.marginPerKg}/kg
                             </span>
-                          </div>
-                          <Button 
-                            type="button" 
-                            onClick={applyCalculatedPrices} 
-                            variant="outline" 
-                            size="sm"
+                            </div>
+                            <Button 
+                              type="button" 
+                              onClick={applyCalculatedPrices} 
+                              variant="outline" 
+                              size="sm"
                             className="bg-white text-blue-700 border-blue-200 text-xs"
-                          >
+                            >
                             <CalculatorIcon className="w-3 h-3 mr-1" />
                             Apply Prices
-                          </Button>
+                            </Button>
                         </div>
                       </div>
                     )}
                     
-                    <table className="w-full">
-                      <thead>
+                    <table className="w-full table-fixed">
+                          <thead>
                         <tr className="border-b border-gray-200 text-xs text-gray-500 uppercase tracking-wider">
-                          <th className="text-left py-2 px-2 font-medium">Cylinder Type</th>
-                          <th className="text-left py-2 px-2 font-medium">Quantity</th>
-                          <th className="text-left py-2 px-2 font-medium">Price/Unit</th>
-                          <th className="text-left py-2 px-2 font-medium">Total</th>
-                          <th className="text-center py-2 px-2 font-medium w-16"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {gasItems.map((item, index) => {
-                          const fullStockCount = getFullStockCount(item.cylinderType);
-                          const isExceedingStock = item.delivered > 0 && fullStockCount > 0 && item.delivered > fullStockCount;
-                          
-                          return (
+                          <th className="text-left py-2 px-2 font-medium w-[35%]">Cylinder Type</th>
+                          <th className="text-left py-2 px-2 font-medium w-[15%]">Quantity</th>
+                          <th className="text-left py-2 px-2 font-medium w-[20%]">Price/Unit</th>
+                          <th className="text-left py-2 px-2 font-medium w-[20%]">Total</th>
+                          <th className="text-center py-2 px-2 font-medium w-[10%]"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {gasItems.map((item, index) => {
+                              const fullStockCount = getFullStockCount(item.cylinderType);
+                              const isExceedingStock = item.delivered > 0 && fullStockCount > 0 && item.delivered > fullStockCount;
+                              
+                              return (
                             <tr key={index} id={`cylinder-item-${index}`} className="border-b border-gray-100">
-                              <td className="py-2 px-2">
+                              <td className="py-2 px-2 align-top">
                                 <div className="relative">
-                                  <select
-                                    value={item.cylinderType || ''}
+                                            <select
+                                              value={item.cylinderType || ''}
                                     onChange={(e) => updateGasItem(index, 'cylinderType', e.target.value)}
-                                    className="w-full h-10 pl-3 pr-8 text-sm border border-gray-300 rounded-lg bg-white appearance-none cursor-pointer focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
                                   >
                                     <option value="">Select type...</option>
                                     {availableCylinderTypes.map((stat, i) => (
                                       <option key={`${stat.typeEnum}-${i}`} value={stat.typeEnum}>{stat.type}</option>
-                                    ))}
-                                  </select>
-                                  <svg className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                  </svg>
-                                </div>
-                                {item.cylinderType && (
+                                              ))}
+                                            </select>
+                                      </div>
+                                      {item.cylinderType && (
                                   <div className="text-xs text-gray-500 mt-1">Stock: {fullStockCount} units</div>
-                                )}
-                              </td>
-                              <td className="py-2 px-2">
-                                <Input
-                                  type="number"
-                                  min="0"
+                                      )}
+                                  </td>
+                              <td className="py-2 px-2 align-top">
+                                        <Input
+                                          type="number"
+                                          min="0"
                                   value={item.delivered || ''}
-                                  onChange={(e) => updateGasItem(index, 'delivered', parseInt(e.target.value) || 0)}
-                                  disabled={!item.cylinderType}
-                                  className={`w-20 h-10 ${isExceedingStock ? 'border-red-500 bg-red-50' : ''} ${!item.cylinderType ? 'bg-gray-100' : ''}`}
+                                          onChange={(e) => updateGasItem(index, 'delivered', parseInt(e.target.value) || 0)}
+                                          disabled={!item.cylinderType}
+                                  className={`w-full h-10 ${isExceedingStock ? 'border-red-500 bg-red-50' : ''} ${!item.cylinderType ? 'bg-gray-100' : ''}`}
                                   placeholder="0"
                                 />
                                 {isExceedingStock && <div className="text-xs text-red-600 mt-1">Exceeds stock!</div>}
-                              </td>
-                              <td className="py-2 px-2">
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
+                                    </td>
+                              <td className="py-2 px-2 align-top">
+                                      <Input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
                                   value={item.pricePerItem || ''}
-                                  onChange={(e) => updateGasItem(index, 'pricePerItem', parseFloat(e.target.value) || 0)}
-                                  disabled={!item.cylinderType}
-                                  className={`w-28 h-10 ${!item.cylinderType ? 'bg-gray-100' : ''}`}
+                                        onChange={(e) => updateGasItem(index, 'pricePerItem', parseFloat(e.target.value) || 0)}
+                                        disabled={!item.cylinderType}
+                                  className={`w-full h-10 ${!item.cylinderType ? 'bg-gray-100' : ''}`}
                                   placeholder="0.00"
-                                />
-                              </td>
-                              <td className="py-2 px-2">
-                                <div className="text-sm font-semibold text-gray-900">
-                                  {formatCurrency(item.delivered * item.pricePerItem)}
-                                </div>
-                              </td>
-                              <td className="py-2 px-2 text-center">
+                                      />
+                                    </td>
+                              <td className="py-2 px-2 align-top">
+                                <div className="text-sm font-semibold text-gray-900 h-10 flex items-center">
+                                        {formatCurrency(item.delivered * item.pricePerItem)}
+                                      </div>
+                                    </td>
+                              <td className="py-2 px-2 text-center align-top">
                                 {gasItems.length > 1 && (
                                   <button
                                     type="button"
                                     onClick={() => removeGasItemRow(index)}
-                                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded mt-2"
                                   >
                                     <XMarkIcon className="w-4 h-4" />
                                   </button>
@@ -1678,86 +1675,86 @@ export default function B2BCustomerDetailPage() {
                               </div>
                             </td>
                             <td className="py-2 px-2">
-                              <Input
-                                type="number"
-                                min="0"
+                                    <Input
+                                      type="number"
+                                      min="0"
                                 value={item.emptyReturned || ''}
                                 onChange={(e) => updateReturnItem(index, 'emptyReturned', parseInt(e.target.value) || 0)}
                                 disabled={!item.cylinderType}
                                 className={`w-16 h-10 ${!item.cylinderType ? 'bg-gray-100' : ''}`}
                                 placeholder="0"
-                              />
-                            </td>
+                                    />
+                                  </td>
                             <td className="py-2 px-2">
-                              <Input
-                                type="number"
-                                min="0"
+                                      <Input
+                                        type="number"
+                                        min="0"
                                 value={item.buybackQuantity || ''}
                                 onChange={(e) => updateReturnItem(index, 'buybackQuantity', parseInt(e.target.value) || 0)}
                                 disabled={!item.cylinderType}
                                 className={`w-16 h-10 ${!item.cylinderType ? 'bg-gray-100' : ''}`}
                                 placeholder="0"
-                              />
-                            </td>
+                                      />
+                                    </td>
                             <td className="py-2 px-2">
-                              <Input
-                                type="number"
-                                min="0"
+                                      <Input
+                                        type="number"
+                                        min="0"
                                 step="0.1"
                                 value={item.remainingKg || ''}
                                 onChange={(e) => updateReturnItem(index, 'remainingKg', parseFloat(e.target.value) || 0)}
                                 disabled={!item.cylinderType || item.buybackQuantity === 0}
                                 className={`w-20 h-10 ${(!item.cylinderType || item.buybackQuantity === 0) ? 'bg-gray-100' : ''}`}
                                 placeholder="0"
-                              />
-                            </td>
+                                      />
+                                    </td>
                             <td className="py-2 px-2">
                               <div className="flex items-center gap-1">
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  max="100"
-                                  value={item.buybackRate ? (item.buybackRate * 100) : 60}
+                                        <Input
+                                          type="number"
+                                          min="0"
+                                          max="100"
+                                          value={item.buybackRate ? (item.buybackRate * 100) : 60}
                                   onChange={(e) => updateReturnItem(index, 'buybackRate', (parseFloat(e.target.value) || 60) / 100)}
                                   disabled={!item.cylinderType || item.buybackQuantity === 0}
                                   className={`w-16 h-10 text-center ${(!item.cylinderType || item.buybackQuantity === 0) ? 'bg-gray-100' : ''}`}
                                 />
                                 <span className="text-xs text-gray-500">%</span>
-                              </div>
-                            </td>
+                                      </div>
+                                    </td>
                             <td className="py-2 px-2">
                               <div className={`text-sm font-semibold ${item.buybackCredit > 0 ? 'text-green-600' : 'text-gray-400'}`}>
                                 {formatCurrency(item.buybackCredit)}
-                              </div>
-                            </td>
+                                      </div>
+                                    </td>
                             <td className="py-2 px-2 text-center">
                               {returnItems.length > 1 && (
-                                <button
-                                  type="button"
+                                      <button
+                                        type="button"
                                   onClick={() => removeReturnItemRow(index)}
                                   className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                                >
+                                      >
                                   <XMarkIcon className="w-4 h-4" />
-                                </button>
-                              )}
-                            </td>
-                          </tr>
+                                      </button>
+                                    )}
+                                </td>
+                              </tr>
                         ))}
-                      </tbody>
-                    </table>
-                    <Button
-                      type="button"
+                          </tbody>
+                        </table>
+                          <Button
+                            type="button"
                       onClick={addReturnItemRow}
-                      variant="outline"
-                      size="sm"
+                            variant="outline"
+                            size="sm"
                       className="mt-3 text-orange-700 border-orange-300 hover:bg-orange-50"
-                    >
+                          >
                       <PlusIcon className="w-4 h-4 mr-1" />
                       Add Return
-                    </Button>
-                  </div>
+                          </Button>
+                        </div>
                 )}
-              </div>
+                      </div>
 
               {/* ========== SECTION 3: ACCESSORIES ========== */}
               <div className={`border rounded-xl overflow-hidden transition-all ${accessoriesExpanded ? 'border-purple-200 bg-purple-50/30' : 'border-gray-200'}`}>
@@ -1786,16 +1783,16 @@ export default function B2BCustomerDetailPage() {
                 
                 {accessoriesExpanded && (
                   <div className="p-4 border-t border-purple-200">
-                    <ProfessionalAccessorySelector
-                      accessoryItems={accessoryItems}
-                      setAccessoryItems={setAccessoryItems}
-                      onValidationChange={setHasAccessoryErrors}
-                      onInventoryValidationChange={handleInventoryValidationChange}
-                    />
+                      <ProfessionalAccessorySelector
+                        accessoryItems={accessoryItems}
+                        setAccessoryItems={setAccessoryItems}
+                        onValidationChange={setHasAccessoryErrors}
+                        onInventoryValidationChange={handleInventoryValidationChange}
+                      />
                   </div>
                 )}
-              </div>
-
+                    </div>
+                    
               {/* ========== SECTION 4: PAYMENT ========== */}
               <div className={`border rounded-xl overflow-hidden transition-all ${paymentExpanded ? 'border-blue-200 bg-blue-50/30' : 'border-gray-200'}`}>
                 <button
@@ -1815,7 +1812,7 @@ export default function B2BCustomerDetailPage() {
                         </Badge>
                       )}
                     </div>
-                  </div>
+                    </div>
                   <svg className={`w-5 h-5 text-gray-500 transition-transform ${paymentExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
@@ -1824,33 +1821,33 @@ export default function B2BCustomerDetailPage() {
                 {paymentExpanded && (
                   <div className="p-4 border-t border-blue-200">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
+                        <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Amount (PKR)</label>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={salePaymentAmount || ''}
-                          onChange={(e) => setSalePaymentAmount(parseFloat(e.target.value) || 0)}
-                          placeholder="0.00"
-                          className="text-lg [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
-                          onWheel={(e) => e.currentTarget.blur()}
-                        />
-                      </div>
-                      <div>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={salePaymentAmount || ''}
+                            onChange={(e) => setSalePaymentAmount(parseFloat(e.target.value) || 0)}
+                            placeholder="0.00"
+                            className="text-lg [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                            onWheel={(e) => e.currentTarget.blur()}
+                          />
+                        </div>
+                        <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Method</label>
-                        <select
-                          value={salePaymentMethod}
-                          onChange={(e) => setSalePaymentMethod(e.target.value)}
+                          <select
+                            value={salePaymentMethod}
+                            onChange={(e) => setSalePaymentMethod(e.target.value)}
                           className="w-full h-10 px-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          <option value="CASH">Cash</option>
-                          <option value="BANK_TRANSFER">Bank Transfer</option>
-                          <option value="CHECK">Check</option>
-                          <option value="CREDIT_CARD">Credit Card</option>
-                          <option value="DEBIT_CARD">Debit Card</option>
-                        </select>
-                      </div>
+                          >
+                            <option value="CASH">Cash</option>
+                            <option value="BANK_TRANSFER">Bank Transfer</option>
+                            <option value="CHECK">Check</option>
+                            <option value="CREDIT_CARD">Credit Card</option>
+                            <option value="DEBIT_CARD">Debit Card</option>
+                          </select>
+                        </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Reference (Optional)</label>
                         <Input
@@ -1920,7 +1917,7 @@ export default function B2BCustomerDetailPage() {
                           <div className="text-xs text-gray-500 uppercase tracking-wider">Empty Returns</div>
                           <div className="text-lg font-bold text-gray-600">{summary.totalEmptyReturned}</div>
                           <div className="text-xs text-gray-500">No credit</div>
-                        </div>
+                      </div>
                       )}
                     </div>
                     
@@ -1943,8 +1940,8 @@ export default function B2BCustomerDetailPage() {
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-600">Payment Received:</span>
                           <span className="font-medium text-blue-600">-{formatCurrency(summary.paymentReceived)}</span>
-                        </div>
-                      )}
+                    </div>
+                  )}
                       <div className={`flex justify-between text-lg font-bold border-t border-slate-300 pt-2 ${
                         summary.balanceImpact > 0 ? 'text-red-600' : summary.balanceImpact < 0 ? 'text-green-600' : 'text-gray-900'
                       }`}>
@@ -1967,31 +1964,31 @@ export default function B2BCustomerDetailPage() {
                           <span className="font-semibold ml-2">
                             (Net: {summary.totalDelivered - summary.totalReturned >= 0 ? '+' : ''}{summary.totalDelivered - summary.totalReturned})
                           </span>
-                        </div>
-                      )}
                     </div>
+                  )}
+                </div>
                   </div>
                 );
               })()}
 
-              {/* Form Actions */}
+                {/* Form Actions */}
               <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowTransactionForm(false)}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowTransactionForm(false)}
                   className="px-6"
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  type="submit" 
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="submit" 
                   className="px-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
-                >
-                  Create Transaction
-                </Button>
-              </div>
-            </form>
+                  >
+                    Create Transaction
+                  </Button>
+                </div>
+              </form>
           </div>
         </div>
       )}
@@ -2317,26 +2314,26 @@ export default function B2BCustomerDetailPage() {
                             {transaction.voided && <Badge variant="destructive">VOIDED</Badge>}
                             
                             {/* Payment status for SALE transactions */}
-                            {transaction.transactionType === 'SALE' && transaction.paymentStatus && (
-                              <Badge 
-                                variant={
-                                  transaction.paymentStatus === 'FULLY_PAID' ? 'success' :
-                                  transaction.paymentStatus === 'PARTIAL' ? 'warning' :
-                                  'destructive'
-                                }
-                                className="text-xs"
-                              >
-                                {transaction.paymentStatus === 'FULLY_PAID' ? 'Paid' :
-                                 transaction.paymentStatus === 'PARTIAL' ? 'Partial' :
-                                 'Unpaid'}
+                        {transaction.transactionType === 'SALE' && transaction.paymentStatus && (
+                          <Badge 
+                            variant={
+                              transaction.paymentStatus === 'FULLY_PAID' ? 'success' :
+                              transaction.paymentStatus === 'PARTIAL' ? 'warning' :
+                              'destructive'
+                            }
+                            className="text-xs"
+                          >
+                            {transaction.paymentStatus === 'FULLY_PAID' ? 'Paid' :
+                             transaction.paymentStatus === 'PARTIAL' ? 'Partial' :
+                             'Unpaid'}
                                 {transaction.paidAmount && transaction.paymentStatus !== 'UNPAID' && (
-                                  <span className="ml-1">
-                                    ({formatCurrency(Number(transaction.paidAmount))})
-                                  </span>
-                                )}
-                              </Badge>
+                              <span className="ml-1">
+                                ({formatCurrency(Number(transaction.paidAmount))})
+                              </span>
                             )}
-                          </div>
+                          </Badge>
+                        )}
+                      </div>
                         );
                       })()}
                     </td>
@@ -2361,9 +2358,9 @@ export default function B2BCustomerDetailPage() {
                                 <span className="text-xs font-semibold text-green-700 bg-green-50 px-1 rounded">Sold:</span>
                                 {saleItems.map((item: any, index: number) => (
                                   <span key={`sale-${index}`} className="text-xs text-gray-700 ml-1">
-                                    {getTransactionItemDisplayName(item)} x{item.quantity}
+                            {getTransactionItemDisplayName(item)} x{item.quantity}
                                     {index < saleItems.length - 1 ? ', ' : ''}
-                                  </span>
+                              </span>
                                 ))}
                               </div>
                             )}
@@ -2377,11 +2374,11 @@ export default function B2BCustomerDetailPage() {
                                     {getTransactionItemDisplayName(item)} x{item.quantity}
                                     <span className="text-gray-500">
                                       ({item.remainingKg}kg, {((item.buybackRate || 0) * 100).toFixed(0)}%)
-                                    </span>
+                              </span>
                                     {index < buybackItems.length - 1 ? ', ' : ''}
                                   </span>
                                 ))}
-                              </div>
+                          </div>
                             )}
                             
                             {/* EMPTY RETURN ITEMS */}
@@ -2393,8 +2390,8 @@ export default function B2BCustomerDetailPage() {
                                     {getTransactionItemDisplayName(item)} x{item.quantity}
                                     {index < emptyReturnItems.length - 1 ? ', ' : ''}
                                   </span>
-                                ))}
-                              </div>
+                        ))}
+                      </div>
                             )}
                             
                             {/* PAYMENT-ONLY transactions */}
@@ -2777,20 +2774,20 @@ export default function B2BCustomerDetailPage() {
                               )}
                               {selectedTransaction.voided && <Badge variant="destructive">VOIDED</Badge>}
                               
-                              {selectedTransaction.transactionType === 'SALE' && selectedTransaction.paymentStatus && (
-                                <Badge 
-                                  variant={
-                                    (selectedTransaction.paymentStatus === 'FULLY_PAID' ? 'success' :
-                                    selectedTransaction.paymentStatus === 'PARTIAL' ? 'warning' :
-                                    'destructive') as 'success' | 'warning' | 'destructive'
-                                  }
+                        {selectedTransaction.transactionType === 'SALE' && selectedTransaction.paymentStatus && (
+                          <Badge 
+                            variant={
+                              (selectedTransaction.paymentStatus === 'FULLY_PAID' ? 'success' :
+                              selectedTransaction.paymentStatus === 'PARTIAL' ? 'warning' :
+                              'destructive') as 'success' | 'warning' | 'destructive'
+                            }
                                   className="text-xs"
-                                >
-                                  {selectedTransaction.paymentStatus === 'FULLY_PAID' ? 'Paid' :
-                                   selectedTransaction.paymentStatus === 'PARTIAL' ? 'Partial' :
-                                   'Unpaid'}
-                                </Badge>
-                              )}
+                          >
+                            {selectedTransaction.paymentStatus === 'FULLY_PAID' ? 'Paid' :
+                             selectedTransaction.paymentStatus === 'PARTIAL' ? 'Partial' :
+                             'Unpaid'}
+                          </Badge>
+                        )}
                             </div>
                           );
                         })()}
@@ -2884,16 +2881,16 @@ export default function B2BCustomerDetailPage() {
                                     <span className="text-sm font-medium text-gray-700">{saleItems.length} item(s)</span>
                                   </div>
                                   <div className="overflow-x-auto border border-green-200 rounded-lg">
-                                    <table className="w-full border-collapse">
-                                      <thead>
+                          <table className="w-full border-collapse">
+                            <thead>
                                         <tr className="bg-green-50">
                                           <th className="px-4 py-2 text-left text-xs font-semibold text-green-700 uppercase">Item</th>
                                           <th className="px-4 py-2 text-left text-xs font-semibold text-green-700 uppercase">Qty</th>
                                           <th className="px-4 py-2 text-left text-xs font-semibold text-green-700 uppercase">Price/Unit</th>
                                           <th className="px-4 py-2 text-left text-xs font-semibold text-green-700 uppercase">Total</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
+                              </tr>
+                            </thead>
+                            <tbody>
                                         {saleItems.map((item: any, index: number) => (
                                           <tr key={`sale-${index}`} className="border-t border-green-100">
                                             <td className="px-4 py-2 text-sm text-gray-900">{getTransactionItemDisplayName(item)}</td>
@@ -2939,15 +2936,15 @@ export default function B2BCustomerDetailPage() {
                                             <td className="px-4 py-2 text-sm text-gray-700">{Number(item.remainingKg)} kg</td>
                                             <td className="px-4 py-2 text-sm text-gray-700">{((item.buybackRate || 0) * 100).toFixed(0)}%</td>
                                             <td className="px-4 py-2 text-sm font-semibold text-orange-600">{formatCurrency(Number(item.totalPrice))}</td>
-                                          </tr>
-                                        ))}
+                                </tr>
+                              ))}
                                         <tr className="bg-orange-50 font-semibold">
                                           <td colSpan={4} className="px-4 py-2 text-right text-sm text-orange-800">Total Credit:</td>
                                           <td className="px-4 py-2 text-sm text-orange-800">{formatCurrency(buybackTotal)}</td>
-                                        </tr>
-                                      </tbody>
-                                    </table>
-                                  </div>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
                                 </div>
                               )}
                               
