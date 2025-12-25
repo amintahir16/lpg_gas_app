@@ -328,24 +328,27 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
       // Calculate actual sale amount from sale items
       const saleTotal = saleItems.reduce((sum: number, item: any) => sum + (Number(item.totalPrice) || 0), 0);
       
-      // Show actual sale amount in debit (if we have sale items)
-      if (saleTotal > 0) {
+      // Calculate buyback credit
+      const buybackCredit = buybackItems.reduce((sum: number, item: any) => sum + (Number(item.totalPrice) || 0), 0);
+      
+      // Net Transaction Amount = Sale Total - Buyback Credit (shown in Debit)
+      const netTransactionAmount = saleTotal - buybackCredit;
+      
+      if (netTransactionAmount > 0) {
+        debit = formatCurrencyRsRounded(netTransactionAmount);
+      } else if (saleTotal > 0) {
+        // Fallback to sale total if no buyback
         debit = formatCurrencyRsRounded(saleTotal);
       } else {
         // Fallback to totalAmount if no items breakdown
         debit = formatCurrencyRsRounded(totalAmount);
       }
       
-      // Calculate buyback credit
-      const buybackCredit = buybackItems.reduce((sum: number, item: any) => sum + (Number(item.totalPrice) || 0), 0);
-      
-      // Add any payment received
+      // Credit shows only paid amount (buyback credit is already deducted from debit)
       const paidAmount = transaction.paidAmount ? Number(transaction.paidAmount) : 0;
       
-      const totalCredit = buybackCredit + paidAmount;
-      
-      if (totalCredit > 0) {
-        credit = formatCurrencyRsRounded(totalCredit);
+      if (paidAmount > 0) {
+        credit = formatCurrencyRsRounded(paidAmount);
       }
     } else if (['PAYMENT', 'ADJUSTMENT', 'CREDIT_NOTE'].includes(transaction.transactionType)) {
       credit = formatCurrencyRsRounded(totalAmount);
@@ -371,15 +374,17 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
     ];
   });
   
-  // Add total row - calculate actual sale totals and credits
+  // Add total row - calculate Net Transaction Amounts (Debit) and Paid Amounts (Credit)
   const totalOut = sortedTransactions.reduce((sum, t) => {
     if (t.transactionType === 'SALE') {
-      // Calculate actual sale amount from sale items
-      const { saleItems } = categorizeItems(t.items || []);
+      // Calculate Net Transaction Amount = Sale Total - Buyback Credit
+      const { saleItems, buybackItems } = categorizeItems(t.items || []);
       const saleTotal = saleItems.reduce((sSum: number, item: any) => sSum + (Number(item.totalPrice) || 0), 0);
+      const buybackCredit = buybackItems.reduce((bSum: number, item: any) => bSum + (Number(item.totalPrice) || 0), 0);
+      const netTransactionAmount = saleTotal - buybackCredit;
       
-      // If we have sale items, use that total; otherwise fallback to totalAmount
-      return sum + (saleTotal > 0 ? saleTotal : Number(t.totalAmount));
+      // If we have sale items, use net amount; otherwise fallback to totalAmount
+      return sum + (saleTotal > 0 ? netTransactionAmount : Number(t.totalAmount));
     }
     return sum;
   }, 0);
@@ -393,12 +398,10 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
     if (t.transactionType === 'BUYBACK') {
       return sum + Number(t.totalAmount);
     }
-    // SALE transactions - add buyback credits + payments
+    // SALE transactions - add only paid amounts (buyback credit is already deducted from debit)
     if (t.transactionType === 'SALE') {
-      const { buybackItems } = categorizeItems(t.items || []);
-      const buybackCredit = buybackItems.reduce((bSum: number, item: any) => bSum + (Number(item.totalPrice) || 0), 0);
       const paidAmount = t.paidAmount ? Number(t.paidAmount) : 0;
-      return sum + buybackCredit + paidAmount;
+      return sum + paidAmount;
     }
     return sum;
   }, 0);

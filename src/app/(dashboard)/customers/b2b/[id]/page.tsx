@@ -1016,7 +1016,7 @@ export default function B2BCustomerDetailPage() {
       if (!hasAnyData) {
         setError('Please add at least one item or action before creating a transaction.');
         return;
-      }
+        }
 
       // Prepare gas items for delivery (sales)
       const deliveryGasItems = gasItems.filter(item => item.delivered > 0).map(item => ({
@@ -1085,7 +1085,7 @@ export default function B2BCustomerDetailPage() {
           effectiveTransactionType = 'PAYMENT';
         }
       }
-
+      
       // Calculate total amount based on what's in the transaction
       const totalAmount = effectiveTransactionType === 'PAYMENT' 
         ? salePaymentAmount 
@@ -1540,7 +1540,7 @@ export default function B2BCustomerDetailPage() {
                                               value={item.cylinderType || ''}
                                     onChange={(e) => updateGasItem(index, 'cylinderType', e.target.value)}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                                  >
+                                            >
                                     <option value="">Select type...</option>
                                     {availableCylinderTypes.map((stat, i) => (
                                       <option key={`${stat.typeEnum}-${i}`} value={stat.typeEnum}>{stat.type}</option>
@@ -1560,7 +1560,7 @@ export default function B2BCustomerDetailPage() {
                                           disabled={!item.cylinderType}
                                   className={`w-full h-10 ${isExceedingStock ? 'border-red-500 bg-red-50' : ''} ${!item.cylinderType ? 'bg-gray-100' : ''}`}
                                   placeholder="0"
-                                />
+                                        />
                                 {isExceedingStock && <div className="text-xs text-red-600 mt-1">Exceeds stock!</div>}
                                     </td>
                               <td className="py-2 px-2 align-top">
@@ -1718,7 +1718,7 @@ export default function B2BCustomerDetailPage() {
                                   onChange={(e) => updateReturnItem(index, 'buybackRate', (parseFloat(e.target.value) || 60) / 100)}
                                   disabled={!item.cylinderType || item.buybackQuantity === 0}
                                   className={`w-16 h-10 text-center ${(!item.cylinderType || item.buybackQuantity === 0) ? 'bg-gray-100' : ''}`}
-                                />
+                                        />
                                 <span className="text-xs text-gray-500">%</span>
                                       </div>
                                     </td>
@@ -1799,7 +1799,7 @@ export default function B2BCustomerDetailPage() {
                   type="button"
                   onClick={() => setPaymentExpanded(!paymentExpanded)}
                   className={`w-full flex items-center justify-between p-4 text-left transition-colors ${paymentExpanded ? 'bg-blue-100/50' : 'hover:bg-gray-50'}`}
-                >
+                      >
                   <div className="flex items-center gap-3">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${paymentExpanded ? 'bg-blue-600' : 'bg-gray-300'}`}>
                       <CreditCardIcon className="w-4 h-4 text-white" />
@@ -2405,24 +2405,40 @@ export default function B2BCustomerDetailPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-medium">
                       {(() => {
                         if (transaction.transactionType === 'SALE') {
-                          // Calculate actual sale amount from items (items with positive price)
-                          const saleTotal = transaction.items?.reduce((sum: number, item: B2BTransactionItem) => {
-                            const hasPrice = item.pricePerItem && Number(item.pricePerItem) > 0;
-                            const hasBuybackData = item.remainingKg && Number(item.remainingKg) > 0;
-                            // Only count items that are sales (have price and no buyback data)
-                            if (hasPrice && !hasBuybackData && !item.buybackRate) {
-                              return sum + (Number(item.totalPrice) || 0);
-                            }
-                            return sum;
-                          }, 0) || 0;
+                          // Categorize items using the same logic as the report
+                          const saleItems = transaction.items?.filter((item: B2BTransactionItem) => {
+                            const hasRegularPrice = item.pricePerItem && Number(item.pricePerItem) > 0;
+                            const hasBuybackRateSet = item.buybackRate !== null && item.buybackRate !== undefined;
+                            return hasRegularPrice && !hasBuybackRateSet;
+                          }) || [];
                           
-                          // If we have sale items, show the sale total
-                          if (saleTotal > 0) {
+                          const buybackItems = transaction.items?.filter((item: B2BTransactionItem) => {
+                            const hasBuybackRateSet = item.buybackRate !== null && item.buybackRate !== undefined;
+                            return hasBuybackRateSet;
+                          }) || [];
+                          
+                          // Calculate sale total
+                          const saleTotal = saleItems.reduce((sum: number, item: B2BTransactionItem) => {
+                            return sum + (Number(item.totalPrice) || 0);
+                          }, 0);
+                          
+                          // Calculate buyback credit
+                          const buybackCredit = buybackItems.reduce((sum: number, item: B2BTransactionItem) => {
+                            return sum + (Number(item.totalPrice) || 0);
+                          }, 0);
+                          
+                          // Net Transaction Amount = Sale Total - Buyback Credit
+                          const netTransactionAmount = saleTotal - buybackCredit;
+                          
+                          if (netTransactionAmount > 0) {
+                            return formatCurrency(netTransactionAmount);
+                          } else if (saleTotal > 0) {
+                            // Fallback to sale total if no buyback
                             return formatCurrency(saleTotal);
+                          } else {
+                            // Fallback to totalAmount if no items breakdown
+                            return formatCurrency(transaction.totalAmount);
                           }
-                          
-                          // Fallback to totalAmount if no items breakdown
-                          return formatCurrency(transaction.totalAmount);
                         }
                         return '-';
                       })()}
@@ -2439,28 +2455,10 @@ export default function B2BCustomerDetailPage() {
                           return formatCurrency(transaction.totalAmount);
                         }
                         
-                        // For SALE transactions, calculate buyback credit + payment
+                        // For SALE transactions, show only paid amount (buyback credit is already deducted from debit)
                         if (transaction.transactionType === 'SALE') {
-                          // Calculate buyback credit from items
-                          // Only count items that are ACTUAL buybacks (have remaining gas > 0 AND no regular sale price)
-                          const buybackCredit = transaction.items?.reduce((sum: number, item: B2BTransactionItem) => {
-                            const hasBuybackData = item.remainingKg && Number(item.remainingKg) > 0;
-                            const hasRegularPrice = item.pricePerItem && Number(item.pricePerItem) > 0;
-                            
-                            // Only count as buyback if it has buyback data AND no regular sale price
-                            // This prevents sale items from being counted as buyback
-                            if (hasBuybackData && !hasRegularPrice) {
-                              return sum + (Number(item.totalPrice) || 0);
-                            }
-                            return sum;
-                          }, 0) || 0;
-                          
-                          // Add any payment received
                           const paidAmount = transaction.paidAmount ? Number(transaction.paidAmount) : 0;
-                          
-                          const totalCredit = buybackCredit + paidAmount;
-                          
-                          return totalCredit > 0 ? formatCurrency(totalCredit) : '-';
+                          return paidAmount > 0 ? formatCurrency(paidAmount) : '-';
                         }
                         
                         return '-';
