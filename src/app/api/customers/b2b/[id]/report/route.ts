@@ -28,7 +28,7 @@ function formatDate(dateString: string | Date): string {
 // Helper function to get cylinder type display name - uses dynamic utility
 function getCylinderTypeDisplay(type: string, cylinderTypeMap?: Map<string, { typeName: string | null, capacity: number | null }>): string {
   if (!type) return 'N/A';
-  
+
   // If we have a type map with proper typeName, use it
   if (cylinderTypeMap && cylinderTypeMap.has(type)) {
     const cylinderInfo = cylinderTypeMap.get(type)!;
@@ -39,7 +39,7 @@ function getCylinderTypeDisplay(type: string, cylinderTypeMap?: Map<string, { ty
       return `Cylinder (${cylinderInfo.capacity}kg)`;
     }
   }
-  
+
   // Fallback to dynamic utility function
   return getCylinderTypeDisplayName(type);
 }
@@ -53,13 +53,13 @@ function categorizeItems(items: any[]): {
   const saleItems: any[] = [];
   const buybackItems: any[] = [];
   const returnItems: any[] = [];
-  
+
   items.forEach(item => {
     const hasRegularPrice = item.pricePerItem && Number(item.pricePerItem) > 0;
     const hasBuybackData = item.remainingKg && Number(item.remainingKg) > 0;
     // Key check: buybackRate being SET (even if 0) indicates this is a buyback item
     const hasBuybackRateSet = item.buybackRate !== null && item.buybackRate !== undefined;
-    
+
     // BUYBACK items: have buybackRate set (including 0%) - this is the definitive indicator
     // A buyback with 0% rate still has buybackRate = 0, while sales have buybackRate = null
     if (hasBuybackRateSet) {
@@ -82,36 +82,35 @@ function categorizeItems(items: any[]): {
       returnItems.push(item);
     }
   });
-  
+
   return { saleItems, buybackItems, returnItems };
 }
 
 // Get transaction type display text with unified transaction support
 function getTransactionTypeText(transaction: any, cylinderTypeMap?: Map<string, { typeName: string | null, capacity: number | null }>): string {
   const { saleItems, buybackItems, returnItems } = categorizeItems(transaction.items || []);
-  
+
   const types: string[] = [];
-  
+
   if (saleItems.length > 0 && saleItems.some((item: any) => item.pricePerItem && Number(item.pricePerItem) > 0)) {
     if (transaction.paymentStatus === 'FULLY_PAID') {
       types.push('Sale (Paid)');
     } else if (transaction.paymentStatus === 'PARTIAL') {
       types.push('Sale (Partial)');
-    } else if (transaction.paymentStatus === 'UNPAID') {
-      types.push('Sale (Unpaid)');
     } else {
-      types.push('Sale');
+      // Default to Unpaid for explicit UNPAID or null/undefined (legacy/credit)
+      types.push('Sale (Unpaid)');
     }
   }
-  
+
   if (buybackItems.length > 0) {
     types.push('Buyback');
   }
-  
+
   if (returnItems.length > 0) {
     types.push('Return');
   }
-  
+
   // If only payment transaction
   if (types.length === 0) {
     if (transaction.transactionType === 'PAYMENT') {
@@ -119,16 +118,16 @@ function getTransactionTypeText(transaction: any, cylinderTypeMap?: Map<string, 
     }
     return transaction.transactionType;
   }
-  
+
   return types.join(' + ');
 }
 
 // Build items description with proper categorization
 function buildItemsDescription(transaction: any, cylinderTypeMap?: Map<string, { typeName: string | null, capacity: number | null }>): string {
   const { saleItems, buybackItems, returnItems } = categorizeItems(transaction.items || []);
-  
+
   const parts: string[] = [];
-  
+
   // Sale items
   if (saleItems.length > 0) {
     const saleDescriptions = saleItems.map((item: any) => {
@@ -139,12 +138,12 @@ function buildItemsDescription(transaction: any, cylinderTypeMap?: Map<string, {
       }
       return '';
     }).filter(Boolean);
-    
+
     if (saleDescriptions.length > 0) {
       parts.push(`Sold: ${saleDescriptions.join(', ')}`);
     }
   }
-  
+
   // Buyback items
   if (buybackItems.length > 0) {
     const buybackDescriptions = buybackItems.map((item: any) => {
@@ -159,25 +158,25 @@ function buildItemsDescription(transaction: any, cylinderTypeMap?: Map<string, {
       const detailsStr = details.length > 0 ? ` (${details.join(', ')})` : '';
       return `${name} x${item.quantity || 0}${detailsStr}`;
     });
-    
+
     parts.push(`Buyback: ${buybackDescriptions.join(', ')}`);
   }
-  
+
   // Return items
   if (returnItems.length > 0) {
     const returnDescriptions = returnItems.map((item: any) => {
       const name = item.cylinderType ? getCylinderTypeDisplay(item.cylinderType, cylinderTypeMap) : 'Item';
       return `${name} x${item.quantity || 0}`;
     });
-    
+
     parts.push(`Returned: ${returnDescriptions.join(', ')}`);
   }
-  
+
   // Payment only transaction
   if (parts.length === 0 && transaction.transactionType === 'PAYMENT') {
     return 'Payment Received';
   }
-  
+
   return parts.join(' | ') || '-';
 }
 
@@ -186,18 +185,18 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
   // Import jsPDF and jspdf-autotable
   const jsPDFModule = await import('jspdf');
   const autoTableModule = await import('jspdf-autotable');
-  
+
   const jsPDF = jsPDFModule.default;
   const autoTable = autoTableModule.default;
   const doc = new jsPDF();
-  
+
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  
+
   // Professional Header with Company Branding
   doc.setFillColor(41, 128, 185);
   doc.rect(0, 0, pageWidth, 35, 'F');
-  
+
   // Company Logo Area (placeholder)
   doc.setFillColor(255, 255, 255);
   doc.circle(25, 18, 8, 'F');
@@ -205,18 +204,18 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
   doc.setTextColor(41, 128, 185);
   doc.setFont('helvetica', 'bold');
   doc.text('Flamora', 25, 20, { align: 'center' });
-  
+
   // Report Title
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(24);
   doc.setFont('helvetica', 'bold');
   doc.text('B2B TRANSACTION REPORT', pageWidth / 2, 22, { align: 'center' });
-  
+
   // Report Details
   doc.setFontSize(12);
   doc.setFont('helvetica', 'normal');
   doc.text(`Customer: ${customer.name}`, pageWidth / 2, 30, { align: 'center' });
-  
+
   if (startDate && endDate) {
     doc.text(`Period: ${formatDate(startDate)} - ${formatDate(endDate)}`, pageWidth / 2, 35, { align: 'center' });
   } else if (startDate) {
@@ -226,29 +225,29 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
   } else {
     doc.text(`Period: All Time`, pageWidth / 2, 35, { align: 'center' });
   }
-  
+
   // Reset colors
   doc.setTextColor(0, 0, 0);
-  
+
   // Report Info Box
   doc.setFillColor(248, 249, 250);
   doc.rect(15, 45, pageWidth - 30, 25, 'F');
   doc.setDrawColor(200, 200, 200);
   doc.rect(15, 45, pageWidth - 30, 25, 'S');
-  
+
   doc.setFontSize(10);
   doc.setTextColor(100, 100, 100);
-  doc.text(`Generated: ${new Date().toLocaleDateString('en-PK', { 
-    year: 'numeric', 
-    month: 'long', 
+  doc.text(`Generated: ${new Date().toLocaleDateString('en-PK', {
+    year: 'numeric',
+    month: 'long',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit'
   })}`, 20, 55);
-  
+
   doc.text(`Report ID: RPT-${Date.now().toString().slice(-6)}`, 20, 60);
   doc.text(`Total Transactions: ${transactions.length}`, pageWidth - 50, 55);
-  
+
   // Customer Information Section
   let yPosition = 80;
   doc.setFillColor(52, 73, 94);
@@ -257,9 +256,9 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.text('CUSTOMER INFORMATION', 20, yPosition + 6);
-  
+
   yPosition += 15;
-  
+
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
@@ -274,24 +273,24 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
     doc.text(`Address: ${customer.address}`, 20, yPosition + (customer.email ? 21 : 14));
     yPosition += 7;
   }
-  
+
   yPosition += (customer.email && customer.address ? 28 : customer.email || customer.address ? 21 : 14);
-  
+
   // Transaction History Section
   if (yPosition > pageHeight - 100) {
     doc.addPage();
     yPosition = 20;
   }
-  
+
   doc.setFillColor(52, 73, 94);
   doc.rect(15, yPosition, pageWidth - 30, 8, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.text('TRANSACTION HISTORY', 20, yPosition + 6);
-  
+
   yPosition += 15;
-  
+
   // Prepare table data - sort by date descending (newest first)
   const sortedTransactions = [...transactions].sort((a, b) => {
     const dateA = new Date(a.date).getTime();
@@ -304,36 +303,36 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
     const timeB = new Date(b.createdAt || b.date).getTime();
     return timeB - timeA;
   });
-  
+
   const tableData = sortedTransactions.map((transaction, index) => {
     const date = formatDate(transaction.date);
-    const time = transaction.time ? new Date(transaction.time).toLocaleTimeString('en-PK', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
+    const time = transaction.time ? new Date(transaction.time).toLocaleTimeString('en-PK', {
+      hour: '2-digit',
+      minute: '2-digit'
     }) : '-';
-    
+
     // Build items description with categorization
     const itemsText = buildItemsDescription(transaction, cylinderTypeMap);
-    
+
     const totalAmount = Number(transaction.totalAmount);
-    
+
     // Categorize items for proper debit/credit calculation
     const { saleItems, buybackItems } = categorizeItems(transaction.items || []);
-    
+
     // Calculate debit (Out) and credit (In)
     let debit = '';
     let credit = '';
-    
+
     if (transaction.transactionType === 'SALE') {
       // Calculate actual sale amount from sale items
       const saleTotal = saleItems.reduce((sum: number, item: any) => sum + (Number(item.totalPrice) || 0), 0);
-      
+
       // Calculate buyback credit
       const buybackCredit = buybackItems.reduce((sum: number, item: any) => sum + (Number(item.totalPrice) || 0), 0);
-      
+
       // Net Transaction Amount = Sale Total - Buyback Credit (shown in Debit)
       const netTransactionAmount = saleTotal - buybackCredit;
-      
+
       if (netTransactionAmount > 0) {
         debit = formatCurrencyRsRounded(netTransactionAmount);
       } else if (saleTotal > 0) {
@@ -343,10 +342,10 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
         // Fallback to totalAmount if no items breakdown
         debit = formatCurrencyRsRounded(totalAmount);
       }
-      
+
       // Credit shows only paid amount (buyback credit is already deducted from debit)
       const paidAmount = transaction.paidAmount ? Number(transaction.paidAmount) : 0;
-      
+
       if (paidAmount > 0) {
         credit = formatCurrencyRsRounded(paidAmount);
       }
@@ -355,12 +354,12 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
     } else if (transaction.transactionType === 'BUYBACK') {
       credit = formatCurrencyRsRounded(totalAmount);
     }
-    
+
     const netBalance = -(transaction.runningBalance || 0);
-    
+
     // Get transaction type text with unified support
     const transactionTypeText = getTransactionTypeText(transaction, cylinderTypeMap);
-    
+
     return [
       index + 1,
       date,
@@ -373,7 +372,7 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
       formatCurrencyRsRounded(netBalance)
     ];
   });
-  
+
   // Add total row - calculate Net Transaction Amounts (Debit) and Paid Amounts (Credit)
   const totalOut = sortedTransactions.reduce((sum, t) => {
     if (t.transactionType === 'SALE') {
@@ -382,13 +381,13 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
       const saleTotal = saleItems.reduce((sSum: number, item: any) => sSum + (Number(item.totalPrice) || 0), 0);
       const buybackCredit = buybackItems.reduce((bSum: number, item: any) => bSum + (Number(item.totalPrice) || 0), 0);
       const netTransactionAmount = saleTotal - buybackCredit;
-      
+
       // If we have sale items, use net amount; otherwise fallback to totalAmount
       return sum + (saleTotal > 0 ? netTransactionAmount : Number(t.totalAmount));
     }
     return sum;
   }, 0);
-  
+
   const totalIn = sortedTransactions.reduce((sum, t) => {
     // Payment transactions
     if (['PAYMENT', 'ADJUSTMENT', 'CREDIT_NOTE'].includes(t.transactionType)) {
@@ -405,7 +404,7 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
     }
     return sum;
   }, 0);
-  
+
   tableData.push([
     '',
     '',
@@ -417,28 +416,28 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
     formatCurrencyRsRounded(totalIn),
     ''
   ]);
-  
+
   // Add table
   autoTable(doc, {
     head: [['#', 'Date', 'Time', 'Bill No.', 'Type', 'Details', 'Out (-)', 'In (+)', 'Balance']],
     body: tableData,
     startY: yPosition,
     tableWidth: pageWidth - 30,
-    styles: { 
+    styles: {
       fontSize: 7,
       cellPadding: 2,
       lineColor: [200, 200, 200],
       lineWidth: 0.5,
       overflow: 'linebreak'
     },
-    headStyles: { 
+    headStyles: {
       fillColor: [41, 128, 185],
       textColor: [255, 255, 255],
       fontStyle: 'bold',
       fontSize: 8
     },
-    alternateRowStyles: { 
-      fillColor: [248, 249, 250] 
+    alternateRowStyles: {
+      fillColor: [248, 249, 250]
     },
     columnStyles: {
       0: { halign: 'center', cellWidth: 8 },       // #
@@ -453,17 +452,17 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
     },
     margin: { left: 15, right: 15 }
   });
-  
+
   // Financial Summary Section
   const finalY = (doc as any).lastAutoTable?.finalY || yPosition;
-  
+
   if (finalY > pageHeight - 100) {
     doc.addPage();
     yPosition = 20;
   } else {
     yPosition = finalY + 15;
   }
-  
+
   // Summary Header
   doc.setFillColor(155, 89, 182);
   doc.rect(15, yPosition, pageWidth - 30, 8, 'F');
@@ -471,41 +470,41 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.text('FINANCIAL SUMMARY', 20, yPosition + 6);
-  
+
   yPosition += 20;
-  
+
   // Summary Box
   doc.setFillColor(248, 249, 250);
   doc.rect(15, yPosition, pageWidth - 30, 65, 'F');
   doc.setDrawColor(200, 200, 200);
   doc.rect(15, yPosition, pageWidth - 30, 65, 'S');
-  
+
   // Date Range Info
   doc.setTextColor(100, 100, 100);
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  const dateRangeText = startDate && endDate 
+  const dateRangeText = startDate && endDate
     ? `Summary for Period: ${formatDate(startDate)} - ${formatDate(endDate)}`
     : 'Summary for All Time';
   doc.text(dateRangeText, 25, yPosition + 10);
-  
+
   // Summary Content
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
-  
+
   // Total Transactions
   doc.text('Total Transactions:', 25, yPosition + 22);
   doc.setFont('helvetica', 'normal');
   doc.text(`${transactions.length}`, pageWidth - 50, yPosition + 22, { align: 'right' });
-  
+
   // Total Out (Sales)
   doc.setFont('helvetica', 'bold');
   doc.text('Total Out (-):', 25, yPosition + 32);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(231, 76, 60); // Red color
   doc.text(formatCurrencyRsRounded(totalOut), pageWidth - 50, yPosition + 32, { align: 'right' });
-  
+
   // Total In (Payments + Buybacks)
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(0, 0, 0);
@@ -513,7 +512,7 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(39, 174, 96); // Green color
   doc.text(formatCurrencyRsRounded(totalIn), pageWidth - 50, yPosition + 42, { align: 'right' });
-  
+
   // Net Balance
   const netBalance = totalOut - totalIn;
   const displayBalance = netBalance;
@@ -524,18 +523,18 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
   doc.setTextColor(displayBalance > 0 ? 231 : 39, displayBalance > 0 ? 76 : 174, displayBalance > 0 ? 60 : 96);
   const balanceValueText = displayBalance > 0 ? `-${formatCurrencyRsRounded(displayBalance)}` : formatCurrencyRsRounded(Math.abs(displayBalance));
   doc.text(balanceValueText, pageWidth - 50, yPosition + 55, { align: 'right' });
-  
+
   // Balance Interpretation
   doc.setTextColor(100, 100, 100);
   doc.setFontSize(8);
   doc.setFont('helvetica', 'italic');
-  const balanceStatusText = displayBalance > 0 
+  const balanceStatusText = displayBalance > 0
     ? 'Customer owes you'
     : displayBalance < 0
-    ? 'Customer has credit'
-    : 'Balance settled';
+      ? 'Customer has credit'
+      : 'Balance settled';
   doc.text(balanceStatusText, 25, yPosition + 62);
-  
+
   // Footer
   yPosition += 75;
   doc.setTextColor(100, 100, 100);
@@ -553,7 +552,7 @@ export async function GET(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user || (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -603,14 +602,14 @@ export async function GET(
     });
 
     // Get filtered transactions if date filter is applied
-    const filteredTransactions = (startDate || endDate) 
+    const filteredTransactions = (startDate || endDate)
       ? await prisma.b2BTransaction.findMany({
-          where: transactionWhere,
-          include: {
-            items: true,
-          },
-          orderBy: { createdAt: 'asc' },
-        })
+        where: transactionWhere,
+        include: {
+          items: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      })
       : allTransactions;
 
     // Calculate running balance for all transactions
@@ -648,10 +647,10 @@ export async function GET(
     let startingBalance = 0;
     if (filteredTransactions.length > 0 && (startDate || endDate)) {
       const firstFilteredCreatedAt = filteredTransactions[0].createdAt;
-      const transactionsBeforeFilter = allTransactions.filter(t => 
+      const transactionsBeforeFilter = allTransactions.filter(t =>
         t.createdAt < firstFilteredCreatedAt
       );
-      
+
       transactionsBeforeFilter.forEach(transaction => {
         const totalAmount = parseFloat(transaction.totalAmount.toString());
         let balanceImpact = 0;
@@ -703,7 +702,7 @@ export async function GET(
           balanceImpact = 0;
       }
       currentBalance += balanceImpact;
-      
+
       return {
         ...transaction,
         runningBalance: currentBalance
@@ -721,7 +720,7 @@ export async function GET(
     });
 
     const cylinderTypeMap = new Map<string, { typeName: string | null, capacity: number | null }>();
-    
+
     if (uniqueCylinderTypes.size > 0) {
       const cylinders = await prisma.cylinder.findMany({
         where: {

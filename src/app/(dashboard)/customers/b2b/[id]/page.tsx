@@ -11,7 +11,7 @@ import { useInventoryValidation } from '@/hooks/useInventoryValidation';
 import { useCylinderStock } from '@/hooks/useCylinderStock';
 import { ProfessionalAccessorySelector } from '@/components/ui/ProfessionalAccessorySelector';
 import { getCylinderTypeDisplayName, getCapacityFromTypeString } from '@/lib/cylinder-utils';
-import { 
+import {
   ArrowLeftIcon,
   DocumentTextIcon,
   CreditCardIcon,
@@ -111,7 +111,7 @@ export default function B2BCustomerDetailPage() {
   const router = useRouter();
   const params = useParams();
   const customerId = params.id as string;
-  
+
   const [customer, setCustomer] = useState<B2BCustomer | null>(null);
   const [transactions, setTransactions] = useState<B2BTransaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -148,28 +148,28 @@ export default function B2BCustomerDetailPage() {
   const [transactionType, setTransactionType] = useState<'SALE' | 'PAYMENT' | 'BUYBACK' | 'RETURN_EMPTY' | 'UNIFIED'>('UNIFIED');
   const [transactionDate, setTransactionDate] = useState(new Date().toISOString().split('T')[0]);
   const [transactionTime, setTransactionTime] = useState(new Date().toTimeString().slice(0, 5));
-  
+
   // Unified form section collapse states
   const [deliveryExpanded, setDeliveryExpanded] = useState(true);
   const [returnsExpanded, setReturnsExpanded] = useState(false);
   const [accessoriesExpanded, setAccessoriesExpanded] = useState(false);
   const [paymentExpanded, setPaymentExpanded] = useState(false);
-  
+
   // Return items for unified form (separate from delivery gasItems concept)
   const [returnItems, setReturnItems] = useState([
     { cylinderType: '', emptyReturned: 0, buybackQuantity: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackCredit: 0 }
   ]);
-  
+
   // Transaction detail modal states
   const [selectedTransaction, setSelectedTransaction] = useState<B2BTransaction | null>(null);
   const [showTransactionDetail, setShowTransactionDetail] = useState(false);
   const [loadingTransaction, setLoadingTransaction] = useState(false);
   const [undoingTransaction, setUndoingTransaction] = useState(false);
-  
+
   // Payment form states (for separate PAYMENT transactions)
   const [paymentAgainst, setPaymentAgainst] = useState('');
   const [paymentQuantity, setPaymentQuantity] = useState(0);
-  
+
   // Payment states for SALE form (payment on sale)
   const [salePaymentAmount, setSalePaymentAmount] = useState(0);
   const [salePaymentMethod, setSalePaymentMethod] = useState('CASH');
@@ -179,7 +179,7 @@ export default function B2BCustomerDetailPage() {
   const [gasItems, setGasItems] = useState([
     { cylinderType: '', delivered: 0, pricePerItem: 0, emptyReturned: 0, remainingDue: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackPricePerItem: 0, buybackTotal: 0 }
   ]);
-  
+
   // Available cylinder types from inventory
   const [availableCylinderTypes, setAvailableCylinderTypes] = useState<Array<{
     type: string;
@@ -189,7 +189,7 @@ export default function B2BCustomerDetailPage() {
     total: number;
   }>>([]);
   const [loadingCylinderTypes, setLoadingCylinderTypes] = useState(true);
-  
+
   // Pricing information
   const [pricingInfo, setPricingInfo] = useState<any>(null);
 
@@ -203,16 +203,16 @@ export default function B2BCustomerDetailPage() {
 
   // Inventory validation
   const { validateInventory, isFieldValid, hasAnyErrors, clearValidationError, clearAllValidationErrors } = useInventoryValidation();
-  
+
   // Cylinder stock information
   const { cylinders: cylinderStock, loading: stockLoading, getCylinderStock } = useCylinderStock();
-  
+
   // Accessory validation state
   const [hasAccessoryErrors, setHasAccessoryErrors] = useState(false);
-  
+
   // Enhanced validation state for auto-scroll
   const [hasInventoryErrors, setHasInventoryErrors] = useState(false);
-  const [firstInvalidInventoryItem, setFirstInvalidInventoryItem] = useState<{category: string, index: number} | null>(null);
+  const [firstInvalidInventoryItem, setFirstInvalidInventoryItem] = useState<{ category: string, index: number } | null>(null);
   const [firstInvalidCylinderIndex, setFirstInvalidCylinderIndex] = useState<number | null>(null);
 
   // Margin category editing
@@ -309,7 +309,7 @@ export default function B2BCustomerDetailPage() {
   useEffect(() => {
     const fetchCylinderDues = async () => {
       if (!customerId) return;
-      
+
       try {
         setLoadingCylinderDues(true);
         const response = await fetch(`/api/customers/b2b/${customerId}/cylinder-dues`);
@@ -335,7 +335,7 @@ export default function B2BCustomerDetailPage() {
   // Update gas items with current cylinder dues when customer data loads
   useEffect(() => {
     if (customer) {
-      setGasItems(prevItems => 
+      setGasItems(prevItems =>
         prevItems.map(item => ({
           ...item,
           remainingDue: getCurrentCylinderDue(item.cylinderType)
@@ -350,11 +350,11 @@ export default function B2BCustomerDetailPage() {
   // Update remaining due calculation when transaction type changes
   useEffect(() => {
     if (customer) {
-      setGasItems(prevItems => 
+      setGasItems(prevItems =>
         prevItems.map(item => {
           const currentDue = getCurrentCylinderDue(item.cylinderType);
           let newRemainingDue = currentDue;
-          
+
           if (transactionType === 'SALE') {
             // For sales: add delivered cylinders to current due
             newRemainingDue = currentDue + (item.delivered || 0);
@@ -362,7 +362,7 @@ export default function B2BCustomerDetailPage() {
             // For returns: subtract returned cylinders from current due
             newRemainingDue = Math.max(0, currentDue - (item.emptyReturned || 0));
           }
-          
+
           return {
             ...item,
             remainingDue: newRemainingDue
@@ -382,25 +382,25 @@ export default function B2BCustomerDetailPage() {
     try {
       setLoading(true);
       console.log('Fetching customer ledger for customer:', customerId);
-      
+
       const params = new URLSearchParams({
         page: pagination.page.toString(),
         limit: pagination.limit.toString()
       });
-      
+
       if (dateFilter.startDate) {
         params.append('startDate', dateFilter.startDate);
       }
       if (dateFilter.endDate) {
         params.append('endDate', dateFilter.endDate);
       }
-      
+
       const response = await fetch(`/api/customers/b2b/${customerId}/ledger?${params.toString()}`);
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch customer ledger');
       }
-      
+
       const data: CustomerLedgerResponse = await response.json();
       console.log('Customer ledger data:', data);
       console.log('Customer ledger balance:', data.customer.ledgerBalance);
@@ -408,7 +408,7 @@ export default function B2BCustomerDetailPage() {
       setCustomer(data.customer);
       setTransactions(data.transactions);
       setPagination(data.pagination);
-      
+
       // Set summary if available, otherwise calculate from customer balance
       if (data.summary) {
         setSummary(data.summary);
@@ -421,7 +421,7 @@ export default function B2BCustomerDetailPage() {
           totalOut: 0
         });
       }
-      
+
       // Fetch calculated prices for this customer
       await fetchCalculatedPrices();
     } catch (err) {
@@ -435,7 +435,7 @@ export default function B2BCustomerDetailPage() {
   const fetchCalculatedPrices = async () => {
     try {
       const response = await fetch(`/api/pricing/calculate?customerId=${customerId}&customerType=B2B`);
-      
+
       if (response.ok) {
         const pricingData = await response.json();
         setPricingInfo(pricingData);
@@ -447,7 +447,7 @@ export default function B2BCustomerDetailPage() {
 
   const handleDownloadReport = async () => {
     if (!customer) return;
-    
+
     setDownloadingReport(true);
     try {
       const params = new URLSearchParams();
@@ -459,7 +459,7 @@ export default function B2BCustomerDetailPage() {
       }
 
       const response = await fetch(`/api/customers/b2b/${customerId}/report?${params.toString()}`);
-      
+
       if (!response.ok) {
         throw new Error('Failed to generate report');
       }
@@ -473,7 +473,7 @@ export default function B2BCustomerDetailPage() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      
+
       setShowReportDateFilter(false);
     } catch (error) {
       console.error('Error downloading report:', error);
@@ -491,7 +491,7 @@ export default function B2BCustomerDetailPage() {
 
     try {
       setUpdatingCategory(true);
-      
+
       const response = await fetch(`/api/customers/b2b/${customerId}`, {
         method: 'PUT',
         headers: {
@@ -513,7 +513,7 @@ export default function B2BCustomerDetailPage() {
         fetchCustomerLedger(),
         fetchCalculatedPrices()
       ]);
-      
+
       setShowCategoryEdit(false);
       setSelectedCategoryId('');
       alert('Customer margin category updated successfully!');
@@ -544,9 +544,9 @@ export default function B2BCustomerDetailPage() {
   };
 
   const formatTime = (timeString: string) => {
-    return new Date(timeString).toLocaleTimeString('en-PK', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
+    return new Date(timeString).toLocaleTimeString('en-PK', {
+      hour: '2-digit',
+      minute: '2-digit'
     });
   };
 
@@ -589,17 +589,17 @@ export default function B2BCustomerDetailPage() {
 
   // Add a new gas item row
   const addGasItemRow = () => {
-    setGasItems([...gasItems, { 
-      cylinderType: '', 
-      delivered: 0, 
-      pricePerItem: 0, 
-      emptyReturned: 0, 
-      remainingDue: 0, 
-      remainingKg: 0, 
-      originalSoldPrice: 0, 
-      buybackRate: 0.6, 
-      buybackPricePerItem: 0, 
-      buybackTotal: 0 
+    setGasItems([...gasItems, {
+      cylinderType: '',
+      delivered: 0,
+      pricePerItem: 0,
+      emptyReturned: 0,
+      remainingDue: 0,
+      remainingKg: 0,
+      originalSoldPrice: 0,
+      buybackRate: 0.6,
+      buybackPricePerItem: 0,
+      buybackTotal: 0
     }]);
   };
 
@@ -620,12 +620,12 @@ export default function B2BCustomerDetailPage() {
     const newItems = [...gasItems];
     const oldItem = newItems[index];
     newItems[index] = { ...newItems[index], [field]: value };
-    
+
     // Reset delivered quantity when cylinder type changes
     if (field === 'cylinderType' && value !== oldItem.cylinderType && oldItem.cylinderType !== '') {
       newItems[index].delivered = 0;
     }
-    
+
     // Auto-calculate price when cylinder type is selected (based on customer's margin category)
     if (field === 'cylinderType' && value && pricingInfo && pricingInfo.calculation?.endPricePerKg) {
       const cylinderCapacity = getCapacityFromTypeString(value);
@@ -640,7 +640,7 @@ export default function B2BCustomerDetailPage() {
         }
       }
     }
-    
+
     // Auto-apply calculated price when delivered quantity is set (fallback for old logic)
     if (field === 'delivered' && value > 0 && pricingInfo && !newItems[index].pricePerItem) {
       const cylinderType = newItems[index].cylinderType;
@@ -652,7 +652,7 @@ export default function B2BCustomerDetailPage() {
         }
       }
     }
-    
+
     // Calculate buyback if it's a buyback transaction
     if (transactionType === 'BUYBACK') {
       const buybackRate = newItems[index].buybackRate || 0.6; // Default to 60% if not set
@@ -673,12 +673,12 @@ export default function B2BCustomerDetailPage() {
         newItems[index].buybackTotal = 0;
       }
     }
-    
+
     // Calculate remaining cylinders due based on transaction type
     if (customer) {
       const currentDue = getCurrentCylinderDue(newItems[index].cylinderType);
       let newRemainingDue = currentDue;
-      
+
       if (transactionType === 'SALE') {
         // For sales: add delivered cylinders to current due
         newRemainingDue = currentDue + (newItems[index].delivered || 0);
@@ -686,10 +686,10 @@ export default function B2BCustomerDetailPage() {
         // For returns: subtract returned cylinders from current due
         newRemainingDue = Math.max(0, currentDue - (newItems[index].emptyReturned || 0));
       }
-      
+
       newItems[index].remainingDue = newRemainingDue;
     }
-    
+
     setGasItems(newItems);
 
     // Validate inventory when quantity changes
@@ -700,21 +700,21 @@ export default function B2BCustomerDetailPage() {
           cylinderType: item.cylinderType,
           requested: item.delivered
         }));
-      
+
       const accessories = accessoryItems
         .filter(item => item.quantity > 0)
         .map(item => ({
           itemName: item.category,
-          itemType: item.category === 'Stove' ? 'stove' : 
-                   item.category.includes('Regulator') ? 'regulator' :
-                   item.category.includes('Pipe') ? 'gasPipe' : 'product',
+          itemType: item.category === 'Stove' ? 'stove' :
+            item.category.includes('Regulator') ? 'regulator' :
+              item.category.includes('Pipe') ? 'gasPipe' : 'product',
           quality: item.itemType || '',
           requested: item.quantity
         }));
 
       validateInventory(cylinders, accessories);
     }
-    
+
     // Check if we need to clear validation errors for reduced quantities
     if (field === 'delivered') {
       // Trigger validation to check if the new quantity is valid
@@ -725,14 +725,14 @@ export default function B2BCustomerDetailPage() {
             cylinderType: item.cylinderType,
             requested: item.delivered
           }));
-        
+
         const accessories = accessoryItems
           .filter(item => item.quantity > 0)
           .map(item => ({
             itemName: item.category,
-            itemType: item.category === 'Stove' ? 'stove' : 
-                     item.category.includes('Regulator') ? 'regulator' :
-                     item.category.includes('Pipe') ? 'gasPipe' : 'product',
+            itemType: item.category === 'Stove' ? 'stove' :
+              item.category.includes('Regulator') ? 'regulator' :
+                item.category.includes('Pipe') ? 'gasPipe' : 'product',
             quality: item.itemType || '',
             requested: item.quantity
           }));
@@ -743,7 +743,7 @@ export default function B2BCustomerDetailPage() {
   };
 
   // Handle inventory validation changes from CategoryAccessorySelector
-  const handleInventoryValidationChange = (hasErrors: boolean, firstInvalidItem?: {category: string, index: number}) => {
+  const handleInventoryValidationChange = (hasErrors: boolean, firstInvalidItem?: { category: string, index: number }) => {
     setHasInventoryErrors(hasErrors);
     setFirstInvalidInventoryItem(firstInvalidItem || null);
   };
@@ -778,17 +778,17 @@ export default function B2BCustomerDetailPage() {
     if (firstInvalidCylinderIndex !== null) {
       const elementId = `cylinder-item-${firstInvalidCylinderIndex}`;
       const element = document.getElementById(elementId);
-      
+
       if (element) {
         // Smooth scroll to the element
-        element.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'center' 
+        element.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center'
         });
-        
+
         // Add a temporary highlight effect
         element.classList.add('ring-2', 'ring-red-500', 'ring-opacity-75');
-        
+
         // Focus on the quantity input within that cylinder item
         const quantityInput = element.querySelector('input[type="number"]') as HTMLInputElement;
         if (quantityInput) {
@@ -797,7 +797,7 @@ export default function B2BCustomerDetailPage() {
             quantityInput.select(); // Select the text for easy editing
           }, 500); // Wait for scroll to complete
         }
-        
+
         // Remove highlight after 3 seconds
         setTimeout(() => {
           element.classList.remove('ring-2', 'ring-red-500', 'ring-opacity-75');
@@ -812,17 +812,17 @@ export default function B2BCustomerDetailPage() {
       const { category, index } = firstInvalidInventoryItem;
       const elementId = `inventory-item-${category}-${index}`;
       const element = document.getElementById(elementId);
-      
+
       if (element) {
         // Smooth scroll to the element
-        element.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'center' 
+        element.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center'
         });
-        
+
         // Add a temporary highlight effect
         element.classList.add('ring-2', 'ring-red-500', 'ring-opacity-75');
-        
+
         // Focus on the quantity input within that inventory item
         const quantityInput = element.querySelector('input[type="number"]') as HTMLInputElement;
         if (quantityInput) {
@@ -831,7 +831,7 @@ export default function B2BCustomerDetailPage() {
             quantityInput.select(); // Select the text for easy editing
           }, 500); // Wait for scroll to complete
         }
-        
+
         // Remove highlight after 3 seconds
         setTimeout(() => {
           element.classList.remove('ring-2', 'ring-red-500', 'ring-opacity-75');
@@ -842,10 +842,10 @@ export default function B2BCustomerDetailPage() {
 
   const applyCalculatedPrices = () => {
     if (!pricingInfo) return;
-    
+
     const updatedItems = gasItems.map(item => {
       let calculatedPrice = 0;
-      
+
       switch (item.cylinderType) {
         case 'DOMESTIC_11_8KG':
           calculatedPrice = pricingInfo.finalPrices.domestic118kg;
@@ -857,36 +857,36 @@ export default function B2BCustomerDetailPage() {
           calculatedPrice = pricingInfo.finalPrices.commercial454kg;
           break;
       }
-      
+
       return {
         ...item,
         pricePerItem: calculatedPrice > 0 ? calculatedPrice : item.pricePerItem
       };
     });
-    
+
     setGasItems(updatedItems);
   };
 
   const getCurrentCylinderDue = (cylinderType: string) => {
     if (!cylinderType) return 0;
-    
+
     // Use dynamic cylinder dues from API
     const due = cylinderDues.find(d => d.cylinderType === cylinderType);
     return due ? due.count : 0;
   };
 
   // ========== UNIFIED TRANSACTION HELPERS ==========
-  
+
   // Add a new return item row
   const addReturnItemRow = () => {
-    setReturnItems([...returnItems, { 
-      cylinderType: '', 
-      emptyReturned: 0, 
-      buybackQuantity: 0, 
-      remainingKg: 0, 
-      originalSoldPrice: 0, 
-      buybackRate: 0.6, 
-      buybackCredit: 0 
+    setReturnItems([...returnItems, {
+      cylinderType: '',
+      emptyReturned: 0,
+      buybackQuantity: 0,
+      remainingKg: 0,
+      originalSoldPrice: 0,
+      buybackRate: 0.6,
+      buybackCredit: 0
     }]);
   };
 
@@ -902,7 +902,7 @@ export default function B2BCustomerDetailPage() {
   const updateReturnItem = (index: number, field: string, value: any) => {
     const newItems = [...returnItems];
     newItems[index] = { ...newItems[index], [field]: value };
-    
+
     // Auto-set original price when cylinder type is selected
     if (field === 'cylinderType' && value && pricingInfo && pricingInfo.calculation?.endPricePerKg) {
       const cylinderCapacity = getCapacityFromTypeString(value);
@@ -911,7 +911,7 @@ export default function B2BCustomerDetailPage() {
         newItems[index].originalSoldPrice = calculatedPrice;
       }
     }
-    
+
     // Calculate buyback credit
     const item = newItems[index];
     if (item.buybackQuantity > 0 && item.remainingKg > 0 && item.originalSoldPrice > 0 && item.cylinderType) {
@@ -925,7 +925,7 @@ export default function B2BCustomerDetailPage() {
     } else {
       newItems[index].buybackCredit = 0;
     }
-    
+
     setReturnItems(newItems);
   };
 
@@ -934,27 +934,27 @@ export default function B2BCustomerDetailPage() {
     // Delivery totals
     const deliveryTotal = gasItems.reduce((sum, item) => sum + (item.delivered * item.pricePerItem), 0);
     const accessoryTotal = accessoryItems.reduce((sum, item) => sum + item.totalPrice, 0);
-    
+
     // Return totals
     const totalEmptyReturned = returnItems.reduce((sum, item) => sum + item.emptyReturned, 0);
     const totalBuybackQuantity = returnItems.reduce((sum, item) => sum + item.buybackQuantity, 0);
     const totalBuybackCredit = returnItems.reduce((sum, item) => sum + item.buybackCredit, 0);
-    
+
     // Cylinder counts
     const totalDelivered = gasItems.reduce((sum, item) => sum + item.delivered, 0);
     const totalReturned = totalEmptyReturned + totalBuybackQuantity;
-    
+
     // Net calculations
     const grossSaleAmount = deliveryTotal + accessoryTotal;
     const netAmount = grossSaleAmount - totalBuybackCredit;
     const balanceImpact = netAmount - salePaymentAmount; // Positive = customer owes, negative = overpaid
-    
+
     // Check what sections have data
     const hasDelivery = gasItems.some(item => item.delivered > 0);
     const hasAccessories = accessoryItems.some(item => item.quantity > 0);
     const hasReturns = returnItems.some(item => item.emptyReturned > 0 || item.buybackQuantity > 0);
     const hasPayment = salePaymentAmount > 0;
-    
+
     return {
       deliveryTotal,
       accessoryTotal,
@@ -993,7 +993,7 @@ export default function B2BCustomerDetailPage() {
 
   const handleTransactionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
       // Check for cylinder validation errors and scroll to first invalid item
       if (firstInvalidCylinderIndex !== null) {
@@ -1009,14 +1009,14 @@ export default function B2BCustomerDetailPage() {
 
       // Get the unified transaction summary
       const summary = getUnifiedTransactionSummary();
-      
+
       // Validate that there is at least something in the transaction
       const hasAnyData = summary.hasDelivery || summary.hasAccessories || summary.hasReturns || summary.hasPayment;
-      
+
       if (!hasAnyData) {
         setError('Please add at least one item or action before creating a transaction.');
         return;
-        }
+      }
 
       // Prepare gas items for delivery (sales)
       const deliveryGasItems = gasItems.filter(item => item.delivered > 0).map(item => ({
@@ -1029,11 +1029,11 @@ export default function B2BCustomerDetailPage() {
       // Prepare return items - SEPARATE items for empty returns and buyback
       // This ensures proper tracking: empty returns have no credit, buyback has credit
       const returnGasItems: any[] = [];
-      
+
       // Validate return items have cylinder type selected
       for (let index = 0; index < returnItems.length; index++) {
         const item = returnItems[index];
-        
+
         // Check for empty return without cylinder type
         if (item.emptyReturned > 0 && (!item.cylinderType || item.cylinderType.trim() === '')) {
           setError(`Please select a cylinder type for return item ${index + 1} in the Cylinders Returned section.`);
@@ -1048,7 +1048,7 @@ export default function B2BCustomerDetailPage() {
           }, 100);
           return;
         }
-        
+
         // Check for buyback without cylinder type
         if (item.buybackQuantity > 0 && (!item.cylinderType || item.cylinderType.trim() === '')) {
           setError(`Please select a cylinder type for buyback item ${index + 1} in the Cylinders buyback section.`);
@@ -1063,12 +1063,12 @@ export default function B2BCustomerDetailPage() {
           }, 100);
           return;
         }
-        
+
         // Skip items without cylinder type or quantity
         if (!item.cylinderType || item.cylinderType.trim() === '') {
           continue;
         }
-        
+
         // Add EMPTY RETURN item (no remaining gas, no credit)
         if (item.emptyReturned > 0) {
           returnGasItems.push({
@@ -1084,7 +1084,7 @@ export default function B2BCustomerDetailPage() {
             isBuyback: false,
           });
         }
-        
+
         // Add BUYBACK item (has remaining gas and credit)
         if (item.buybackQuantity > 0) {
           returnGasItems.push({
@@ -1123,13 +1123,13 @@ export default function B2BCustomerDetailPage() {
           effectiveTransactionType = 'PAYMENT';
         }
       }
-      
+
       // Calculate total amount based on what's in the transaction
-      const totalAmount = effectiveTransactionType === 'PAYMENT' 
-        ? salePaymentAmount 
+      const totalAmount = effectiveTransactionType === 'PAYMENT'
+        ? salePaymentAmount
         : effectiveTransactionType === 'BUYBACK'
-        ? summary.totalBuybackCredit
-        : summary.netAmount;
+          ? summary.totalBuybackCredit
+          : summary.netAmount;
 
       // Check if this is a fully paid transaction
       const isFullyPaid = salePaymentAmount > 0 && Math.abs(salePaymentAmount - summary.netAmount) < 0.01;
@@ -1200,14 +1200,14 @@ export default function B2BCustomerDetailPage() {
 
       const result = await response.json();
       console.log('Transaction created successfully:', result);
-      
+
       // Reset form and refresh data
       setShowTransactionForm(false);
       resetUnifiedForm();
-      
+
       // Refresh customer data
       await fetchCustomerLedger();
-      
+
       // Refresh cylinder dues after transaction
       const duesResponse = await fetch(`/api/customers/b2b/${customerId}/cylinder-dues`);
       if (duesResponse.ok) {
@@ -1216,13 +1216,13 @@ export default function B2BCustomerDetailPage() {
           setCylinderDues(duesData.cylinderDues);
         }
       }
-      
+
       // Force refresh after short delay
       setTimeout(async () => {
         console.log('Force refreshing customer data...');
         await fetchCustomerLedger();
       }, 1000);
-      
+
       alert('Transaction created successfully!');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create transaction');
@@ -1245,7 +1245,7 @@ export default function B2BCustomerDetailPage() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
         <div className="text-center">
           <p className="text-gray-600 font-medium">Customer not found</p>
-          <Button 
+          <Button
             onClick={() => router.push('/customers/b2b')}
             className="mt-4"
           >
@@ -1288,9 +1288,9 @@ export default function B2BCustomerDetailPage() {
                 <span className="text-white text-xs font-bold">!</span>
               </div>
               <p className="text-red-700 font-medium">{error}</p>
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setError(null)}
                 className="ml-auto"
               >
@@ -1339,8 +1339,8 @@ export default function B2BCustomerDetailPage() {
               <div>
                 <p className="text-sm font-medium text-gray-500">Margin Category</p>
                 <p className="text-lg font-semibold text-gray-900">
-                  {customer.marginCategory ? 
-                    `${customer.marginCategory.name} (Rs ${customer.marginCategory.marginPerKg}/kg)` : 
+                  {customer.marginCategory ?
+                    `${customer.marginCategory.name} (Rs ${customer.marginCategory.marginPerKg}/kg)` :
                     'Not assigned'
                   }
                 </p>
@@ -1375,18 +1375,17 @@ export default function B2BCustomerDetailPage() {
                     const netBalance = summary ? summary.netBalance : -(customer.ledgerBalance || 0);
                     return (
                       <>
-               <p className={`text-3xl font-bold flex items-center justify-center ${
-                           netBalance < 0 ? 'text-red-600' : 
-                           netBalance > 0 ? 'text-green-600' : 'text-gray-900'
-               }`}>
-                <CurrencyDollarIcon className="w-6 h-6 mr-2" />
+                        <p className={`text-3xl font-bold flex items-center justify-center ${netBalance < 0 ? 'text-red-600' :
+                          netBalance > 0 ? 'text-green-600' : 'text-gray-900'
+                          }`}>
+                          <CurrencyDollarIcon className="w-6 h-6 mr-2" />
                           {formatCurrency(netBalance)}
                         </p>
-                         <p className="text-xs text-gray-500 mt-1">
-                           {netBalance < 0 ? 'Customer owes you' : 
-                            netBalance > 0 ? 'Customer has credit' : 
-                            'Balance settled'}
-                         </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {netBalance < 0 ? 'Customer owes you' :
+                            netBalance > 0 ? 'Customer has credit' :
+                              'Balance settled'}
+                        </p>
                       </>
                     );
                   })()}
@@ -1467,7 +1466,7 @@ export default function B2BCustomerDetailPage() {
                     <PlusIcon className="w-5 h-5 text-white" />
                   </div>
                   New Transaction
-              </h3>
+                </h3>
                 <p className="text-sm text-gray-500 mt-1">Fill in the sections that apply to this transaction</p>
               </div>
               <button
@@ -1478,7 +1477,7 @@ export default function B2BCustomerDetailPage() {
                 <XMarkIcon className="w-6 h-6" />
               </button>
             </div>
-            
+
             {/* Error Display in Form */}
             {error && (
               <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg">
@@ -1503,31 +1502,31 @@ export default function B2BCustomerDetailPage() {
                 </div>
               </div>
             )}
-            
+
             <form onSubmit={handleTransactionSubmit} className="space-y-4">
               {/* Date and Time Row */}
               <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
-                  <div>
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                    <Input
-                      type="date"
-                      value={transactionDate}
-                      onChange={(e) => setTransactionDate(e.target.value)}
-                      required
+                  <Input
+                    type="date"
+                    value={transactionDate}
+                    onChange={(e) => setTransactionDate(e.target.value)}
+                    required
                     className="bg-white"
-                    />
-                  </div>
-                  <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
-                    <Input
-                      type="time"
-                      value={transactionTime}
-                      onChange={(e) => setTransactionTime(e.target.value)}
-                      required
-                    className="bg-white"
-                    />
-                  </div>
+                  />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
+                  <Input
+                    type="time"
+                    value={transactionTime}
+                    onChange={(e) => setTransactionTime(e.target.value)}
+                    required
+                    className="bg-white"
+                  />
+                </div>
+              </div>
 
               {/* ========== SECTION 1: CYLINDERS DELIVERED ========== */}
               <div className={`border rounded-xl overflow-hidden transition-all ${deliveryExpanded ? 'border-green-200 bg-green-50/30' : 'border-gray-200'}`}>
@@ -1539,7 +1538,7 @@ export default function B2BCustomerDetailPage() {
                   <div className="flex items-center gap-3">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${deliveryExpanded ? 'bg-green-600' : 'bg-gray-300'}`}>
                       <CubeIcon className="w-4 h-4 text-white" />
-                        </div>
+                    </div>
                     <div>
                       <span className="font-semibold text-gray-900">Cylinders Delivered</span>
                       {gasItems.some(item => item.delivered > 0) && (
@@ -1547,102 +1546,102 @@ export default function B2BCustomerDetailPage() {
                           {gasItems.reduce((sum, item) => sum + item.delivered, 0)} cylinders
                         </Badge>
                       )}
-                        </div>
-                        </div>
+                    </div>
+                  </div>
                   <svg className={`w-5 h-5 text-gray-500 transition-transform ${deliveryExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
-                
+
                 {deliveryExpanded && (
                   <div className="p-4 border-t border-green-200">
                     {/* Pricing Info Banner */}
                     {pricingInfo && (
                       <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                          <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between">
                           <div className="text-sm">
                             <span className="font-medium text-blue-900">Auto-Pricing: </span>
                             <span className="text-blue-700">
                               {pricingInfo.category?.name} | Margin: Rs {pricingInfo.category?.marginPerKg}/kg
                             </span>
-                            </div>
-                            <Button 
-                              type="button" 
-                              onClick={applyCalculatedPrices} 
-                              variant="outline" 
-                              size="sm"
+                          </div>
+                          <Button
+                            type="button"
+                            onClick={applyCalculatedPrices}
+                            variant="outline"
+                            size="sm"
                             className="bg-white text-blue-700 border-blue-200 text-xs"
-                            >
+                          >
                             <CalculatorIcon className="w-3 h-3 mr-1" />
                             Apply Prices
-                            </Button>
+                          </Button>
                         </div>
                       </div>
                     )}
-                    
+
                     <table className="w-full table-fixed">
-                          <thead>
+                      <thead>
                         <tr className="border-b border-gray-200 text-xs text-gray-500 uppercase tracking-wider">
                           <th className="text-left py-2 px-2 font-medium w-[35%]">Cylinder Type</th>
                           <th className="text-left py-2 px-2 font-medium w-[15%]">Quantity</th>
                           <th className="text-left py-2 px-2 font-medium w-[20%]">Price/Unit</th>
                           <th className="text-left py-2 px-2 font-medium w-[20%]">Total</th>
                           <th className="text-center py-2 px-2 font-medium w-[10%]"></th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {gasItems.map((item, index) => {
-                              const fullStockCount = getFullStockCount(item.cylinderType);
-                              const isExceedingStock = item.delivered > 0 && fullStockCount > 0 && item.delivered > fullStockCount;
-                              
-                              return (
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {gasItems.map((item, index) => {
+                          const fullStockCount = getFullStockCount(item.cylinderType);
+                          const isExceedingStock = item.delivered > 0 && fullStockCount > 0 && item.delivered > fullStockCount;
+
+                          return (
                             <tr key={index} id={`cylinder-item-${index}`} className="border-b border-gray-100">
                               <td className="py-2 px-2 align-top">
                                 <div className="relative">
-                                            <select
-                                              value={item.cylinderType || ''}
+                                  <select
+                                    value={item.cylinderType || ''}
                                     onChange={(e) => updateGasItem(index, 'cylinderType', e.target.value)}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                                            >
+                                  >
                                     <option value="">Select type...</option>
                                     {availableCylinderTypes.map((stat, i) => (
                                       <option key={`${stat.typeEnum}-${i}`} value={stat.typeEnum}>{stat.type}</option>
-                                              ))}
-                                            </select>
-                                      </div>
-                                      {item.cylinderType && (
+                                    ))}
+                                  </select>
+                                </div>
+                                {item.cylinderType && (
                                   <div className="text-xs text-gray-500 mt-1">Stock: {fullStockCount} units</div>
-                                      )}
-                                  </td>
+                                )}
+                              </td>
                               <td className="py-2 px-2 align-top">
-                                        <Input
-                                          type="number"
-                                          min="0"
+                                <Input
+                                  type="number"
+                                  min="0"
                                   value={item.delivered || ''}
-                                          onChange={(e) => updateGasItem(index, 'delivered', parseInt(e.target.value) || 0)}
-                                          disabled={!item.cylinderType}
+                                  onChange={(e) => updateGasItem(index, 'delivered', parseInt(e.target.value) || 0)}
+                                  disabled={!item.cylinderType}
                                   className={`w-full px-3 py-2 text-sm border border-gray-300 rounded-md ${isExceedingStock ? 'border-red-500 bg-red-50' : 'bg-white'} ${!item.cylinderType ? 'bg-gray-100' : ''} focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500`}
                                   placeholder="0"
-                                        />
+                                />
                                 {isExceedingStock && <div className="text-xs text-red-600 mt-1">Exceeds stock!</div>}
-                                    </td>
+                              </td>
                               <td className="py-2 px-2 align-top">
-                                      <Input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
                                   value={item.pricePerItem || ''}
-                                        onChange={(e) => updateGasItem(index, 'pricePerItem', parseFloat(e.target.value) || 0)}
-                                        disabled={!item.cylinderType}
+                                  onChange={(e) => updateGasItem(index, 'pricePerItem', parseFloat(e.target.value) || 0)}
+                                  disabled={!item.cylinderType}
                                   className={`w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white ${!item.cylinderType ? 'bg-gray-100' : ''} focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500`}
                                   placeholder="0.00"
-                                      />
-                                    </td>
+                                />
+                              </td>
                               <td className="py-2 px-2 align-top">
                                 <div className="w-full px-3 py-2 text-sm font-semibold text-gray-900 flex items-center">
-                                        {formatCurrency(item.delivered * item.pricePerItem)}
-                                      </div>
-                                    </td>
+                                  {formatCurrency(item.delivered * item.pricePerItem)}
+                                </div>
+                              </td>
                               <td className="py-2 px-2 text-center align-top">
                                 {gasItems.length > 1 && (
                                   <button
@@ -1698,13 +1697,13 @@ export default function B2BCustomerDetailPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
-                
+
                 {returnsExpanded && (
                   <div className="p-4 border-t border-orange-200">
                     <div className="mb-3 p-3 bg-orange-50 border border-orange-200 rounded-lg text-sm text-orange-800">
                       <strong>Empty Return:</strong> No credit • <strong>Buyback:</strong> Customer gets credit for remaining gas
                     </div>
-                    
+
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-gray-200 text-xs text-gray-500 uppercase tracking-wider">
@@ -1728,9 +1727,11 @@ export default function B2BCustomerDetailPage() {
                                   className="w-full px-3 py-2 text-sm cursor-pointer border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                                 >
                                   <option value="">Select type...</option>
-                                  {availableCylinderTypes.map((stat, i) => (
-                                    <option key={`ret-${stat.typeEnum}-${i}`} value={stat.typeEnum}>{stat.type}</option>
-                                  ))}
+                                  {availableCylinderTypes
+                                    .filter(stat => cylinderDues.some(due => due.cylinderType === stat.typeEnum && due.count > 0))
+                                    .map((stat, i) => (
+                                      <option key={`ret-${stat.typeEnum}-${i}`} value={stat.typeEnum}>{stat.type}</option>
+                                    ))}
                                 </select>
                               </div>
                               {item.cylinderType && (
@@ -1738,86 +1739,86 @@ export default function B2BCustomerDetailPage() {
                               )}
                             </td>
                             <td className="py-2 px-2 align-top">
-                                    <Input
-                                      type="number"
-                                      min="0"
+                              <Input
+                                type="number"
+                                min="0"
                                 value={item.emptyReturned || ''}
                                 onChange={(e) => updateReturnItem(index, 'emptyReturned', parseInt(e.target.value) || 0)}
                                 disabled={!item.cylinderType}
                                 className={`w-16 px-3 py-2 text-sm border border-gray-300 rounded-md ${!item.cylinderType ? 'bg-gray-100' : 'bg-white'} focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500`}
                                 placeholder="0"
-                                    />
-                                  </td>
+                              />
+                            </td>
                             <td className="py-2 px-2 align-top">
-                                      <Input
-                                        type="number"
-                                        min="0"
+                              <Input
+                                type="number"
+                                min="0"
                                 value={item.buybackQuantity || ''}
                                 onChange={(e) => updateReturnItem(index, 'buybackQuantity', parseInt(e.target.value) || 0)}
                                 disabled={!item.cylinderType}
                                 className={`w-16 px-3 py-2 text-sm border border-gray-300 rounded-md ${!item.cylinderType ? 'bg-gray-100' : 'bg-white'} focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500`}
                                 placeholder="0"
-                                      />
-                                    </td>
+                              />
+                            </td>
                             <td className="py-2 px-2 align-top">
-                                      <Input
-                                        type="number"
-                                        min="0"
+                              <Input
+                                type="number"
+                                min="0"
                                 step="0.1"
                                 value={item.remainingKg || ''}
                                 onChange={(e) => updateReturnItem(index, 'remainingKg', parseFloat(e.target.value) || 0)}
                                 disabled={!item.cylinderType || item.buybackQuantity === 0}
                                 className={`w-20 px-3 py-2 text-sm border border-gray-300 rounded-md ${(!item.cylinderType || item.buybackQuantity === 0) ? 'bg-gray-100' : 'bg-white'} focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500`}
                                 placeholder="0"
-                                      />
-                                    </td>
+                              />
+                            </td>
                             <td className="py-2 px-2 align-top">
                               <div className="flex items-center gap-1">
-                                        <Input
-                                          type="number"
-                                          min="0"
-                                          max="100"
-                                          value={item.buybackRate ? (item.buybackRate * 100) : 60}
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  value={item.buybackRate ? (item.buybackRate * 100) : 60}
                                   onChange={(e) => updateReturnItem(index, 'buybackRate', (parseFloat(e.target.value) || 60) / 100)}
                                   disabled={!item.cylinderType || item.buybackQuantity === 0}
                                   className={`w-16 px-3 py-2 text-sm text-center border border-gray-300 rounded-md ${(!item.cylinderType || item.buybackQuantity === 0) ? 'bg-gray-100' : 'bg-white'} focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500`}
-                                        />
+                                />
                                 <span className="text-xs text-gray-500">%</span>
-                                      </div>
-                                    </td>
+                              </div>
+                            </td>
                             <td className="py-2 px-2 align-top">
                               <div className={`w-full px-3 py-2 text-sm font-semibold ${item.buybackCredit > 0 ? 'text-green-600' : 'text-gray-400'}`}>
                                 {formatCurrency(item.buybackCredit)}
-                                      </div>
-                                    </td>
+                              </div>
+                            </td>
                             <td className="py-2 px-2 text-center align-top">
                               {returnItems.length > 1 && (
-                                      <button
-                                        type="button"
+                                <button
+                                  type="button"
                                   onClick={() => removeReturnItemRow(index)}
                                   className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                                      >
+                                >
                                   <XMarkIcon className="w-4 h-4" />
-                                      </button>
-                                    )}
-                                </td>
-                              </tr>
+                                </button>
+                              )}
+                            </td>
+                          </tr>
                         ))}
-                          </tbody>
-                        </table>
-                          <Button
-                            type="button"
+                      </tbody>
+                    </table>
+                    <Button
+                      type="button"
                       onClick={addReturnItemRow}
-                            variant="outline"
-                            size="sm"
+                      variant="outline"
+                      size="sm"
                       className="mt-3 text-orange-700 border-orange-300 hover:bg-orange-50"
-                          >
+                    >
                       <PlusIcon className="w-4 h-4 mr-1" />
                       Add Return
-                          </Button>
-                        </div>
+                    </Button>
+                  </div>
                 )}
-                      </div>
+              </div>
 
               {/* ========== SECTION 3: ACCESSORIES ========== */}
               <div className={`border rounded-xl overflow-hidden transition-all ${accessoriesExpanded ? 'border-purple-200 bg-purple-50/30' : 'border-gray-200'}`}>
@@ -1843,26 +1844,26 @@ export default function B2BCustomerDetailPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
-                
+
                 {accessoriesExpanded && (
                   <div className="p-4 border-t border-purple-200">
-                      <ProfessionalAccessorySelector
-                        accessoryItems={accessoryItems}
-                        setAccessoryItems={setAccessoryItems}
-                        onValidationChange={setHasAccessoryErrors}
-                        onInventoryValidationChange={handleInventoryValidationChange}
-                      />
+                    <ProfessionalAccessorySelector
+                      accessoryItems={accessoryItems}
+                      setAccessoryItems={setAccessoryItems}
+                      onValidationChange={setHasAccessoryErrors}
+                      onInventoryValidationChange={handleInventoryValidationChange}
+                    />
                   </div>
                 )}
-                    </div>
-                    
+              </div>
+
               {/* ========== SECTION 4: PAYMENT ========== */}
               <div className={`border rounded-xl overflow-hidden transition-all ${paymentExpanded ? 'border-blue-200 bg-blue-50/30' : 'border-gray-200'}`}>
                 <button
                   type="button"
                   onClick={() => setPaymentExpanded(!paymentExpanded)}
                   className={`w-full flex items-center justify-between p-4 text-left transition-colors ${paymentExpanded ? 'bg-blue-100/50' : 'hover:bg-gray-50'}`}
-                      >
+                >
                   <div className="flex items-center gap-3">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${paymentExpanded ? 'bg-blue-600' : 'bg-gray-300'}`}>
                       <CreditCardIcon className="w-4 h-4 text-white" />
@@ -1875,42 +1876,42 @@ export default function B2BCustomerDetailPage() {
                         </Badge>
                       )}
                     </div>
-                    </div>
+                  </div>
                   <svg className={`w-5 h-5 text-gray-500 transition-transform ${paymentExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
-                
+
                 {paymentExpanded && (
                   <div className="p-4 border-t border-blue-200">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
+                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Amount (PKR)</label>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={salePaymentAmount || ''}
-                            onChange={(e) => setSalePaymentAmount(parseFloat(e.target.value) || 0)}
-                            placeholder="0.00"
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
-                            onWheel={(e) => e.currentTarget.blur()}
-                          />
-                        </div>
-                        <div>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={salePaymentAmount || ''}
+                          onChange={(e) => setSalePaymentAmount(parseFloat(e.target.value) || 0)}
+                          placeholder="0.00"
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                          onWheel={(e) => e.currentTarget.blur()}
+                        />
+                      </div>
+                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Method</label>
-                          <select
-                            value={salePaymentMethod}
-                            onChange={(e) => setSalePaymentMethod(e.target.value)}
+                        <select
+                          value={salePaymentMethod}
+                          onChange={(e) => setSalePaymentMethod(e.target.value)}
                           className="w-full px-3 py-2 text-sm cursor-pointer border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          >
-                            <option value="CASH">Cash</option>
-                            <option value="BANK_TRANSFER">Bank Transfer</option>
-                            <option value="CHECK">Check</option>
-                            <option value="CREDIT_CARD">Credit Card</option>
-                            <option value="DEBIT_CARD">Debit Card</option>
-                          </select>
-                        </div>
+                        >
+                          <option value="CASH">Cash</option>
+                          <option value="BANK_TRANSFER">Bank Transfer</option>
+                          <option value="CHECK">Check</option>
+                          <option value="CREDIT_CARD">Credit Card</option>
+                          <option value="DEBIT_CARD">Debit Card</option>
+                        </select>
+                      </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Reference (Optional)</label>
                         <Input
@@ -1921,7 +1922,7 @@ export default function B2BCustomerDetailPage() {
                         />
                       </div>
                     </div>
-                    
+
                     {/* Quick Pay Button */}
                     {(() => {
                       const summary = getUnifiedTransactionSummary();
@@ -1945,16 +1946,16 @@ export default function B2BCustomerDetailPage() {
               {(() => {
                 const summary = getUnifiedTransactionSummary();
                 const hasAnyData = summary.hasDelivery || summary.hasAccessories || summary.hasReturns || summary.hasPayment;
-                
+
                 if (!hasAnyData) return null;
-                
+
                 return (
                   <div className="p-4 bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200 rounded-xl">
                     <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                       <CalculatorIcon className="w-5 h-5 text-slate-600" />
                       Transaction Summary
                     </h4>
-                    
+
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                       {summary.hasDelivery && (
                         <div className="bg-white p-3 rounded-lg border border-gray-200">
@@ -1981,10 +1982,10 @@ export default function B2BCustomerDetailPage() {
                           <div className="text-xs text-gray-500 uppercase tracking-wider">Empty Returns</div>
                           <div className="text-lg font-bold text-gray-600">{summary.totalEmptyReturned}</div>
                           <div className="text-xs text-gray-500">No credit</div>
-                      </div>
+                        </div>
                       )}
                     </div>
-                    
+
                     <div className="border-t border-slate-300 pt-3 space-y-2">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Gross Amount:</span>
@@ -2004,11 +2005,10 @@ export default function B2BCustomerDetailPage() {
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-600">Payment Received:</span>
                           <span className="font-medium text-blue-600">-{formatCurrency(summary.paymentReceived)}</span>
-                    </div>
-                  )}
-                      <div className={`flex justify-between text-lg font-bold border-t border-slate-300 pt-2 ${
-                        summary.balanceImpact > 0 ? 'text-red-600' : summary.balanceImpact < 0 ? 'text-green-600' : 'text-gray-900'
-                      }`}>
+                        </div>
+                      )}
+                      <div className={`flex justify-between text-lg font-bold border-t border-slate-300 pt-2 ${summary.balanceImpact > 0 ? 'text-red-600' : summary.balanceImpact < 0 ? 'text-green-600' : 'text-gray-900'
+                        }`}>
                         <span>Balance Impact:</span>
                         <span>
                           {summary.balanceImpact > 0 ? '+' : ''}{formatCurrency(summary.balanceImpact)}
@@ -2017,7 +2017,7 @@ export default function B2BCustomerDetailPage() {
                           </span>
                         </span>
                       </div>
-                      
+
                       {/* Cylinder Summary */}
                       {(summary.totalDelivered > 0 || summary.totalReturned > 0) && (
                         <div className="text-sm text-gray-600 pt-2 border-t border-slate-200">
@@ -2028,31 +2028,31 @@ export default function B2BCustomerDetailPage() {
                           <span className="font-semibold ml-2">
                             (Net: {summary.totalDelivered - summary.totalReturned >= 0 ? '+' : ''}{summary.totalDelivered - summary.totalReturned})
                           </span>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
                   </div>
                 );
               })()}
 
-                {/* Form Actions */}
+              {/* Form Actions */}
               <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setShowTransactionForm(false)}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowTransactionForm(false)}
                   className="px-6"
-                  >
-                    Cancel
-                  </Button>
-                  <Button 
-                    type="submit" 
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
                   className="px-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
-                  >
-                    Create Transaction
-                  </Button>
-                </div>
-              </form>
+                >
+                  Create Transaction
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -2062,10 +2062,10 @@ export default function B2BCustomerDetailPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-          <CardTitle className="text-lg font-semibold text-gray-900">Transaction Ledger</CardTitle>
-          <CardDescription className="text-gray-600 font-medium">
-            Complete transaction history with running balance
-          </CardDescription>
+              <CardTitle className="text-lg font-semibold text-gray-900">Transaction Ledger</CardTitle>
+              <CardDescription className="text-gray-600 font-medium">
+                Complete transaction history with running balance
+              </CardDescription>
             </div>
             <div className="flex items-center gap-3">
               {/* Date Filter Button */}
@@ -2084,7 +2084,7 @@ export default function B2BCustomerDetailPage() {
                     </span>
                   )}
                 </Button>
-                
+
                 {/* Date Filter Dropdown */}
                 {showDateFilter && (
                   <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4 date-filter-container">
@@ -2100,7 +2100,7 @@ export default function B2BCustomerDetailPage() {
                         <XMarkIcon className="w-5 h-5" />
                       </button>
                     </div>
-                    
+
                     <div className="space-y-3">
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1.5">
@@ -2114,7 +2114,7 @@ export default function B2BCustomerDetailPage() {
                           max={dateFilter.endDate || new Date().toISOString().split('T')[0]}
                         />
                       </div>
-                      
+
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1.5">
                           End Date
@@ -2128,7 +2128,7 @@ export default function B2BCustomerDetailPage() {
                           max={new Date().toISOString().split('T')[0]}
                         />
                       </div>
-                      
+
                       <div className="flex gap-2 pt-2 border-t border-gray-200">
                         <Button
                           variant="outline"
@@ -2152,7 +2152,7 @@ export default function B2BCustomerDetailPage() {
                           Apply Filter
                         </Button>
                       </div>
-                      
+
                       {(dateFilter.startDate || dateFilter.endDate) && (
                         <div className="pt-2 border-t border-gray-200">
                           <p className="text-xs text-gray-600">
@@ -2176,7 +2176,7 @@ export default function B2BCustomerDetailPage() {
                   </div>
                 )}
               </div>
-              
+
               {/* Trans Report Button */}
               <div className="relative report-date-filter-container">
                 <Button
@@ -2192,7 +2192,7 @@ export default function B2BCustomerDetailPage() {
                     <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600 ml-1"></div>
                   )}
                 </Button>
-                
+
                 {/* Report Date Filter Dropdown */}
                 {showReportDateFilter && (
                   <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4 report-date-filter-container">
@@ -2208,7 +2208,7 @@ export default function B2BCustomerDetailPage() {
                         <XMarkIcon className="w-5 h-5" />
                       </button>
                     </div>
-                    
+
                     <div className="space-y-3">
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1.5">
@@ -2222,7 +2222,7 @@ export default function B2BCustomerDetailPage() {
                           max={reportDateFilter.endDate || new Date().toISOString().split('T')[0]}
                         />
                       </div>
-                      
+
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1.5">
                           End Date
@@ -2236,7 +2236,7 @@ export default function B2BCustomerDetailPage() {
                           max={new Date().toISOString().split('T')[0]}
                         />
                       </div>
-                      
+
                       <div className="flex gap-2 pt-2 border-t border-gray-200">
                         <Button
                           variant="outline"
@@ -2264,7 +2264,7 @@ export default function B2BCustomerDetailPage() {
                           )}
                         </Button>
                       </div>
-                      
+
                       {(reportDateFilter.startDate || reportDateFilter.endDate) && (
                         <div className="pt-2 border-t border-gray-200">
                           <p className="text-xs text-gray-600">
@@ -2340,20 +2340,20 @@ export default function B2BCustomerDetailPage() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       {(() => {
                         // Categorize items to show appropriate badges
-                        const saleItems = transaction.items.filter((item: any) => 
+                        const saleItems = transaction.items.filter((item: any) =>
                           item.pricePerItem > 0 && !item.returnedCondition
                         );
-                        const buybackItems = transaction.items.filter((item: any) => 
+                        const buybackItems = transaction.items.filter((item: any) =>
                           item.returnedCondition === 'EMPTY' && item.remainingKg && Number(item.remainingKg) > 0
                         );
-                        const emptyReturnItems = transaction.items.filter((item: any) => 
+                        const emptyReturnItems = transaction.items.filter((item: any) =>
                           item.returnedCondition === 'EMPTY' && (!item.remainingKg || Number(item.remainingKg) === 0)
                         );
-                        
+
                         const hasSales = saleItems.length > 0;
                         const hasBuyback = buybackItems.length > 0;
                         const hasEmptyReturns = emptyReturnItems.length > 0;
-                        
+
                         return (
                           <div className="flex flex-wrap gap-1">
                             {/* Primary transaction type badge */}
@@ -2376,44 +2376,44 @@ export default function B2BCustomerDetailPage() {
                               <Badge variant="secondary">{transaction.transactionType}</Badge>
                             )}
                             {transaction.voided && <Badge variant="destructive">VOIDED</Badge>}
-                            
+
                             {/* Payment status for SALE transactions */}
-                        {transaction.transactionType === 'SALE' && transaction.paymentStatus && (
-                          <Badge 
-                            variant={
-                              transaction.paymentStatus === 'FULLY_PAID' ? 'success' :
-                              transaction.paymentStatus === 'PARTIAL' ? 'warning' :
-                              'destructive'
-                            }
-                            className="text-xs"
-                          >
-                            {transaction.paymentStatus === 'FULLY_PAID' ? 'Paid' :
-                             transaction.paymentStatus === 'PARTIAL' ? 'Partial' :
-                             'Unpaid'}
+                            {transaction.transactionType === 'SALE' && transaction.paymentStatus && (
+                              <Badge
+                                variant={
+                                  transaction.paymentStatus === 'FULLY_PAID' ? 'success' :
+                                    transaction.paymentStatus === 'PARTIAL' ? 'warning' :
+                                      'destructive'
+                                }
+                                className="text-xs"
+                              >
+                                {transaction.paymentStatus === 'FULLY_PAID' ? 'Paid' :
+                                  transaction.paymentStatus === 'PARTIAL' ? 'Partial' :
+                                    'Unpaid'}
                                 {transaction.paidAmount && transaction.paymentStatus !== 'UNPAID' && (
-                              <span className="ml-1">
-                                ({formatCurrency(Number(transaction.paidAmount))})
-                              </span>
+                                  <span className="ml-1">
+                                    ({formatCurrency(Number(transaction.paidAmount))})
+                                  </span>
+                                )}
+                              </Badge>
                             )}
-                          </Badge>
-                        )}
-                      </div>
+                          </div>
                         );
                       })()}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-700">
                       {(() => {
                         // Categorize items for grouped display
-                        const saleItems = transaction.items.filter((item: any) => 
+                        const saleItems = transaction.items.filter((item: any) =>
                           item.pricePerItem > 0 && !item.returnedCondition
                         );
-                        const buybackItems = transaction.items.filter((item: any) => 
+                        const buybackItems = transaction.items.filter((item: any) =>
                           item.returnedCondition === 'EMPTY' && item.remainingKg && Number(item.remainingKg) > 0
                         );
-                        const emptyReturnItems = transaction.items.filter((item: any) => 
+                        const emptyReturnItems = transaction.items.filter((item: any) =>
                           item.returnedCondition === 'EMPTY' && (!item.remainingKg || Number(item.remainingKg) === 0)
                         );
-                        
+
                         return (
                           <div className="max-w-md space-y-1">
                             {/* SALE ITEMS */}
@@ -2422,13 +2422,13 @@ export default function B2BCustomerDetailPage() {
                                 <span className="text-xs font-semibold text-green-700 bg-green-50 px-1 rounded">Sold:</span>
                                 {saleItems.map((item: any, index: number) => (
                                   <span key={`sale-${index}`} className="text-xs text-gray-700 ml-1">
-                            {getTransactionItemDisplayName(item)} x{item.quantity}
+                                    {getTransactionItemDisplayName(item)} x{item.quantity}
                                     {index < saleItems.length - 1 ? ', ' : ''}
-                              </span>
+                                  </span>
                                 ))}
                               </div>
                             )}
-                            
+
                             {/* BUYBACK ITEMS */}
                             {buybackItems.length > 0 && (
                               <div>
@@ -2438,13 +2438,13 @@ export default function B2BCustomerDetailPage() {
                                     {getTransactionItemDisplayName(item)} x{item.quantity}
                                     <span className="text-gray-500">
                                       ({item.remainingKg}kg, {((item.buybackRate || 0) * 100).toFixed(0)}%)
-                              </span>
+                                    </span>
                                     {index < buybackItems.length - 1 ? ', ' : ''}
                                   </span>
                                 ))}
-                          </div>
+                              </div>
                             )}
-                            
+
                             {/* EMPTY RETURN ITEMS */}
                             {emptyReturnItems.length > 0 && (
                               <div>
@@ -2454,10 +2454,10 @@ export default function B2BCustomerDetailPage() {
                                     {getTransactionItemDisplayName(item)} x{item.quantity}
                                     {index < emptyReturnItems.length - 1 ? ', ' : ''}
                                   </span>
-                        ))}
-                      </div>
+                                ))}
+                              </div>
                             )}
-                            
+
                             {/* PAYMENT-ONLY transactions */}
                             {transaction.transactionType === 'PAYMENT' && transaction.items.length === 0 && (
                               <span className="text-xs text-gray-500 italic">Payment received</span>
@@ -2475,25 +2475,25 @@ export default function B2BCustomerDetailPage() {
                             const hasBuybackRateSet = item.buybackRate !== null && item.buybackRate !== undefined;
                             return hasRegularPrice && !hasBuybackRateSet;
                           }) || [];
-                          
+
                           const buybackItems = transaction.items?.filter((item: B2BTransactionItem) => {
                             const hasBuybackRateSet = item.buybackRate !== null && item.buybackRate !== undefined;
                             return hasBuybackRateSet;
                           }) || [];
-                          
+
                           // Calculate sale total
                           const saleTotal = saleItems.reduce((sum: number, item: B2BTransactionItem) => {
                             return sum + (Number(item.totalPrice) || 0);
                           }, 0);
-                          
+
                           // Calculate buyback credit
                           const buybackCredit = buybackItems.reduce((sum: number, item: B2BTransactionItem) => {
                             return sum + (Number(item.totalPrice) || 0);
                           }, 0);
-                          
+
                           // Net Transaction Amount = Sale Total - Buyback Credit
                           const netTransactionAmount = saleTotal - buybackCredit;
-                          
+
                           if (netTransactionAmount > 0) {
                             return formatCurrency(netTransactionAmount);
                           } else if (saleTotal > 0) {
@@ -2513,31 +2513,30 @@ export default function B2BCustomerDetailPage() {
                         if (['PAYMENT', 'ADJUSTMENT', 'CREDIT_NOTE'].includes(transaction.transactionType)) {
                           return formatCurrency(transaction.totalAmount);
                         }
-                        
+
                         // For pure BUYBACK transactions
                         if (transaction.transactionType === 'BUYBACK') {
                           return formatCurrency(transaction.totalAmount);
                         }
-                        
+
                         // For SALE transactions, show only paid amount (buyback credit is already deducted from debit)
                         if (transaction.transactionType === 'SALE') {
                           const paidAmount = transaction.paidAmount ? Number(transaction.paidAmount) : 0;
                           return paidAmount > 0 ? formatCurrency(paidAmount) : '-';
                         }
-                        
+
                         return '-';
                       })()}
                     </td>
-                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${
-                      (() => {
-                        // runningBalance from API is positive when customer owes (Sales - Payments)
-                        // We negate it for display, so negative = customer owes (red)
-                        const netBalance = -(transaction.runningBalance || 0);
-                        if (netBalance < 0) return 'text-red-600'; // Customer owes you
-                        if (netBalance > 0) return 'text-green-600'; // Customer has credit
-                        return 'text-gray-900'; // Balance settled (black)
-                      })()
-                    }`}>
+                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${(() => {
+                      // runningBalance from API is positive when customer owes (Sales - Payments)
+                      // We negate it for display, so negative = customer owes (red)
+                      const netBalance = -(transaction.runningBalance || 0);
+                      if (netBalance < 0) return 'text-red-600'; // Customer owes you
+                      if (netBalance > 0) return 'text-green-600'; // Customer has credit
+                      return 'text-gray-900'; // Balance settled (black)
+                    })()
+                      }`}>
                       {formatCurrency(-(transaction.runningBalance || 0))}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
@@ -2611,7 +2610,7 @@ export default function B2BCustomerDetailPage() {
               <p className="text-sm text-gray-600 mb-4">
                 Select a new margin category for <strong>{customer?.name}</strong>. This will affect pricing for all future transactions.
               </p>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2619,14 +2618,14 @@ export default function B2BCustomerDetailPage() {
                   </label>
                   <div className="p-3 bg-gray-50 rounded-md border">
                     <p className="text-sm font-medium text-gray-900">
-                      {customer?.marginCategory ? 
-                        `${customer.marginCategory.name} (Rs ${customer.marginCategory.marginPerKg}/kg)` : 
+                      {customer?.marginCategory ?
+                        `${customer.marginCategory.name} (Rs ${customer.marginCategory.marginPerKg}/kg)` :
                         'Not assigned'
                       }
                     </p>
                   </div>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     New Category *
@@ -2650,7 +2649,7 @@ export default function B2BCustomerDetailPage() {
                   </p>
                 </div>
               </div>
-              
+
               <div className="flex justify-end space-x-3 mt-6">
                 <Button
                   variant="outline"
@@ -2729,11 +2728,11 @@ export default function B2BCustomerDetailPage() {
                         `Amount: ${formatCurrency(selectedTransaction.totalAmount)}\n\n` +
                         `This action cannot be undone.`
                       );
-                      
+
                       if (!confirmed) return;
-                      
+
                       const reason = prompt('Please provide a reason for undoing this transaction (optional):') || undefined;
-                      
+
                       try {
                         setUndoingTransaction(true);
                         const response = await fetch(`/api/customers/b2b/transactions/${selectedTransaction.id}/undo`, {
@@ -2743,7 +2742,7 @@ export default function B2BCustomerDetailPage() {
                           },
                           body: JSON.stringify({ reason })
                         });
-                        
+
                         if (response.ok) {
                           alert('Transaction successfully undone. All changes have been reversed.');
                           setShowTransactionDetail(false);
@@ -2762,9 +2761,8 @@ export default function B2BCustomerDetailPage() {
                       }
                     }}
                     disabled={selectedTransaction.voided || undoingTransaction}
-                    className={`flex items-center gap-2 ${
-                      selectedTransaction.voided ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-50 hover:border-red-300 hover:text-red-600'
-                    }`}
+                    className={`flex items-center gap-2 ${selectedTransaction.voided ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-50 hover:border-red-300 hover:text-red-600'
+                      }`}
                   >
                     <ArrowPathIcon className="w-4 h-4" />
                     {undoingTransaction ? 'Undoing...' : 'Undo Transaction'}
@@ -2803,20 +2801,20 @@ export default function B2BCustomerDetailPage() {
                         <p className="text-sm text-gray-600">Transaction Type</p>
                         {(() => {
                           // Categorize items to show appropriate badges
-                          const saleItems = selectedTransaction.items?.filter((item: any) => 
+                          const saleItems = selectedTransaction.items?.filter((item: any) =>
                             item.pricePerItem > 0 && !item.returnedCondition
                           ) || [];
-                          const buybackItems = selectedTransaction.items?.filter((item: any) => 
+                          const buybackItems = selectedTransaction.items?.filter((item: any) =>
                             item.returnedCondition === 'EMPTY' && item.remainingKg && Number(item.remainingKg) > 0
                           ) || [];
-                          const emptyReturnItems = selectedTransaction.items?.filter((item: any) => 
+                          const emptyReturnItems = selectedTransaction.items?.filter((item: any) =>
                             item.returnedCondition === 'EMPTY' && (!item.remainingKg || Number(item.remainingKg) === 0)
                           ) || [];
-                          
+
                           const hasSales = saleItems.length > 0;
                           const hasBuyback = buybackItems.length > 0;
                           const hasEmptyReturns = emptyReturnItems.length > 0;
-                          
+
                           return (
                             <div className="flex flex-wrap gap-1 mt-1">
                               {selectedTransaction.transactionType === 'SALE' && hasSales && (
@@ -2835,21 +2833,21 @@ export default function B2BCustomerDetailPage() {
                                 <Badge variant="secondary">{selectedTransaction.transactionType}</Badge>
                               )}
                               {selectedTransaction.voided && <Badge variant="destructive">VOIDED</Badge>}
-                              
-                        {selectedTransaction.transactionType === 'SALE' && selectedTransaction.paymentStatus && (
-                          <Badge 
-                            variant={
-                              (selectedTransaction.paymentStatus === 'FULLY_PAID' ? 'success' :
-                              selectedTransaction.paymentStatus === 'PARTIAL' ? 'warning' :
-                              'destructive') as 'success' | 'warning' | 'destructive'
-                            }
+
+                              {selectedTransaction.transactionType === 'SALE' && selectedTransaction.paymentStatus && (
+                                <Badge
+                                  variant={
+                                    (selectedTransaction.paymentStatus === 'FULLY_PAID' ? 'success' :
+                                      selectedTransaction.paymentStatus === 'PARTIAL' ? 'warning' :
+                                        'destructive') as 'success' | 'warning' | 'destructive'
+                                  }
                                   className="text-xs"
-                          >
-                            {selectedTransaction.paymentStatus === 'FULLY_PAID' ? 'Paid' :
-                             selectedTransaction.paymentStatus === 'PARTIAL' ? 'Partial' :
-                             'Unpaid'}
-                          </Badge>
-                        )}
+                                >
+                                  {selectedTransaction.paymentStatus === 'FULLY_PAID' ? 'Paid' :
+                                    selectedTransaction.paymentStatus === 'PARTIAL' ? 'Partial' :
+                                      'Unpaid'}
+                                </Badge>
+                              )}
                             </div>
                           );
                         })()}
@@ -2870,18 +2868,25 @@ export default function B2BCustomerDetailPage() {
                         <p className="text-sm text-gray-600">Total Amount</p>
                         <p className="font-semibold text-gray-900">{formatCurrency(selectedTransaction.totalAmount)}</p>
                       </div>
-                      {selectedTransaction.transactionType === 'SALE' && selectedTransaction.paidAmount && (
+                      {selectedTransaction.transactionType === 'SALE' && (
                         <>
                           <div>
                             <p className="text-sm text-gray-600">Paid Amount</p>
-                            <p className="font-semibold text-green-600">{formatCurrency(Number(selectedTransaction.paidAmount))}</p>
+                            <p className="font-semibold text-green-600">{formatCurrency(Number(selectedTransaction.paidAmount || 0))}</p>
                           </div>
-                          {selectedTransaction.unpaidAmount && Number(selectedTransaction.unpaidAmount) > 0 && (
-                            <div>
-                              <p className="text-sm text-gray-600">Unpaid Amount</p>
-                              <p className="font-semibold text-red-600">{formatCurrency(Number(selectedTransaction.unpaidAmount))}</p>
-                            </div>
-                          )}
+                          {(() => {
+                            const paid = Number(selectedTransaction.paidAmount || 0);
+                            const unpaid = selectedTransaction.unpaidAmount !== null && selectedTransaction.unpaidAmount !== undefined
+                              ? Number(selectedTransaction.unpaidAmount)
+                              : selectedTransaction.totalAmount - paid;
+
+                            return unpaid > 0 && (
+                              <div>
+                                <p className="text-sm text-gray-600">Unpaid Amount</p>
+                                <p className="font-semibold text-red-600">{formatCurrency(unpaid)}</p>
+                              </div>
+                            );
+                          })()}
                           {selectedTransaction.paymentMethod && (
                             <div>
                               <p className="text-sm text-gray-600">Payment Method</p>
@@ -2920,19 +2925,19 @@ export default function B2BCustomerDetailPage() {
                       {selectedTransaction.items && selectedTransaction.items.length > 0 ? (
                         (() => {
                           // Categorize items
-                          const saleItems = selectedTransaction.items.filter((item: any) => 
+                          const saleItems = selectedTransaction.items.filter((item: any) =>
                             item.pricePerItem > 0 && !item.returnedCondition
                           );
-                          const buybackItems = selectedTransaction.items.filter((item: any) => 
+                          const buybackItems = selectedTransaction.items.filter((item: any) =>
                             item.returnedCondition === 'EMPTY' && item.remainingKg && Number(item.remainingKg) > 0
                           );
-                          const emptyReturnItems = selectedTransaction.items.filter((item: any) => 
+                          const emptyReturnItems = selectedTransaction.items.filter((item: any) =>
                             item.returnedCondition === 'EMPTY' && (!item.remainingKg || Number(item.remainingKg) === 0)
                           );
-                          
+
                           const saleTotal = saleItems.reduce((sum: number, item: any) => sum + Number(item.totalPrice || 0), 0);
                           const buybackTotal = buybackItems.reduce((sum: number, item: any) => sum + Number(item.totalPrice || 0), 0);
-                          
+
                           return (
                             <div className="space-y-4">
                               {/* SALE ITEMS */}
@@ -2943,16 +2948,16 @@ export default function B2BCustomerDetailPage() {
                                     <span className="text-sm font-medium text-gray-700">{saleItems.length} item(s)</span>
                                   </div>
                                   <div className="overflow-x-auto border border-green-200 rounded-lg">
-                          <table className="w-full border-collapse">
-                            <thead>
+                                    <table className="w-full border-collapse">
+                                      <thead>
                                         <tr className="bg-green-50">
                                           <th className="px-4 py-2 text-left text-xs font-semibold text-green-700 uppercase">Item</th>
                                           <th className="px-4 py-2 text-left text-xs font-semibold text-green-700 uppercase">Qty</th>
                                           <th className="px-4 py-2 text-left text-xs font-semibold text-green-700 uppercase">Price/Unit</th>
                                           <th className="px-4 py-2 text-left text-xs font-semibold text-green-700 uppercase">Total</th>
-                              </tr>
-                            </thead>
-                            <tbody>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
                                         {saleItems.map((item: any, index: number) => (
                                           <tr key={`sale-${index}`} className="border-t border-green-100">
                                             <td className="px-4 py-2 text-sm text-gray-900">{getTransactionItemDisplayName(item)}</td>
@@ -2970,7 +2975,7 @@ export default function B2BCustomerDetailPage() {
                                   </div>
                                 </div>
                               )}
-                              
+
                               {/* BUYBACK ITEMS */}
                               {buybackItems.length > 0 && (
                                 <div>
@@ -2998,18 +3003,18 @@ export default function B2BCustomerDetailPage() {
                                             <td className="px-4 py-2 text-sm text-gray-700">{Number(item.remainingKg)} kg</td>
                                             <td className="px-4 py-2 text-sm text-gray-700">{((item.buybackRate || 0) * 100).toFixed(0)}%</td>
                                             <td className="px-4 py-2 text-sm font-semibold text-orange-600">{formatCurrency(Number(item.totalPrice))}</td>
-                                </tr>
-                              ))}
+                                          </tr>
+                                        ))}
                                         <tr className="bg-orange-50 font-semibold">
                                           <td colSpan={4} className="px-4 py-2 text-right text-sm text-orange-800">Total Credit:</td>
                                           <td className="px-4 py-2 text-sm text-orange-800">{formatCurrency(buybackTotal)}</td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
+                                        </tr>
+                                      </tbody>
+                                    </table>
+                                  </div>
                                 </div>
                               )}
-                              
+
                               {/* EMPTY RETURN ITEMS */}
                               {emptyReturnItems.length > 0 && (
                                 <div>
@@ -3040,7 +3045,7 @@ export default function B2BCustomerDetailPage() {
                                   </div>
                                 </div>
                               )}
-                              
+
                               {/* GRAND TOTAL */}
                               <div className="border-t-2 border-gray-300 pt-3 mt-4">
                                 <div className="flex justify-between items-center text-lg font-bold">
