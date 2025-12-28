@@ -598,25 +598,7 @@ export function ProfessionalAccessorySelector({
         </div>
       )}
 
-      {/* Total Amount */}
-      {accessoryItems.length > 0 && (
-        <Card className="bg-blue-50 border-blue-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <CurrencyDollarIcon className="w-6 h-6 text-blue-600 mr-2" />
-                <span className="text-lg font-semibold text-blue-900">Total Accessories Amount:</span>
-              </div>
-              <span className="text-2xl font-bold text-blue-900">
-                {formatCurrency(getTotalAmount())}
-              </span>
-            </div>
-            <div className="text-sm text-blue-700 mt-1">
-              {accessoryItems.length} item(s) selected • {globalMarkup}% markup applied
-            </div>
-          </CardContent>
-        </Card>
-      )}
+
     </div>
   );
 }

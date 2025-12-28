@@ -628,12 +628,34 @@ export default function B2BCustomerDetailPage() {
     }
 
     // Auto-calculate price when cylinder type is selected (based on customer's margin category)
-    if (field === 'cylinderType' && value && pricingInfo && pricingInfo.calculation?.endPricePerKg) {
-      const cylinderCapacity = getCapacityFromTypeString(value);
-      if (cylinderCapacity > 0) {
-        // Calculate price: (costPerKg + marginPerKg) × cylinderCapacity
-        const calculatedPrice = Math.round(pricingInfo.calculation.endPricePerKg * cylinderCapacity);
-        if (transactionType === 'SALE') {
+    if (field === 'cylinderType' && value && pricingInfo) {
+      let calculatedPrice = 0;
+
+      // Try to get precise price from finalPrices first
+      if (pricingInfo.finalPrices) {
+        switch (value) {
+          case 'DOMESTIC_11_8KG':
+            calculatedPrice = pricingInfo.finalPrices.domestic118kg;
+            break;
+          case 'STANDARD_15KG':
+            calculatedPrice = pricingInfo.finalPrices.standard15kg;
+            break;
+          case 'COMMERCIAL_45_4KG':
+            calculatedPrice = pricingInfo.finalPrices.commercial454kg;
+            break;
+        }
+      }
+
+      // Fallback to calculation if finalPrices not available or didn't match
+      if (!calculatedPrice && pricingInfo.calculation?.endPricePerKg) {
+        const cylinderCapacity = getCapacityFromTypeString(value);
+        if (cylinderCapacity > 0) {
+          calculatedPrice = Math.round(pricingInfo.calculation.endPricePerKg * cylinderCapacity);
+        }
+      }
+
+      if (calculatedPrice > 0) {
+        if (transactionType === 'SALE' || transactionType === 'UNIFIED') {
           newItems[index].pricePerItem = calculatedPrice;
         } else if (transactionType === 'BUYBACK') {
           // For buyback, set originalSoldPrice (the price the cylinder was originally sold at)
@@ -1556,29 +1578,7 @@ export default function B2BCustomerDetailPage() {
 
                 {deliveryExpanded && (
                   <div className="p-4 border-t border-green-200">
-                    {/* Pricing Info Banner */}
-                    {pricingInfo && (
-                      <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <div className="flex items-center justify-between">
-                          <div className="text-sm">
-                            <span className="font-medium text-blue-900">Auto-Pricing: </span>
-                            <span className="text-blue-700">
-                              {pricingInfo.category?.name} | Margin: Rs {pricingInfo.category?.marginPerKg}/kg
-                            </span>
-                          </div>
-                          <Button
-                            type="button"
-                            onClick={applyCalculatedPrices}
-                            variant="outline"
-                            size="sm"
-                            className="bg-white text-blue-700 border-blue-200 text-xs"
-                          >
-                            <CalculatorIcon className="w-3 h-3 mr-1" />
-                            Apply Prices
-                          </Button>
-                        </div>
-                      </div>
-                    )}
+
 
                     <table className="w-full table-fixed">
                       <thead>
