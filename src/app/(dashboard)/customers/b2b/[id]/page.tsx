@@ -1824,7 +1824,24 @@ export default function B2BCustomerDetailPage() {
               <div className={`border rounded-xl overflow-hidden transition-all ${accessoriesExpanded ? 'border-purple-200 bg-purple-50/30' : 'border-gray-200'}`}>
                 <button
                   type="button"
-                  onClick={() => setAccessoriesExpanded(!accessoriesExpanded)}
+                  onClick={() => {
+                    if (!accessoriesExpanded && accessoryItems.length === 0) {
+                      setAccessoryItems([{
+                        id: `item-${Date.now()}`,
+                        category: '',
+                        itemType: '',
+                        quantity: 0,
+                        costPerPiece: 0,
+                        pricePerItem: 0,
+                        totalPrice: 0,
+                        availableStock: 0,
+                        isVaporizer: false,
+                        usagePrice: 0,
+                        sellingPrice: 0
+                      }]);
+                    }
+                    setAccessoriesExpanded(!accessoriesExpanded);
+                  }}
                   className={`w-full flex items-center justify-between p-4 text-left transition-colors ${accessoriesExpanded ? 'bg-purple-100/50' : 'hover:bg-gray-50'}`}
                 >
                   <div className="flex items-center gap-3">

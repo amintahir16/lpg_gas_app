@@ -6,8 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { 
-  PlusIcon, 
+import {
+  PlusIcon,
   TrashIcon,
   CurrencyDollarIcon,
   CubeIcon
@@ -32,7 +32,7 @@ interface ProfessionalAccessorySelectorProps {
   accessoryItems: AccessoryItem[];
   setAccessoryItems: (items: AccessoryItem[]) => void;
   onValidationChange?: (hasErrors: boolean) => void;
-  onInventoryValidationChange?: (hasErrors: boolean, firstInvalidItem?: {category: string, index: number}) => void;
+  onInventoryValidationChange?: (hasErrors: boolean, firstInvalidItem?: { category: string, index: number }) => void;
 }
 
 interface InventoryCategory {
@@ -44,11 +44,11 @@ interface InventoryCategory {
   }>;
 }
 
-export function ProfessionalAccessorySelector({ 
-  accessoryItems, 
-  setAccessoryItems, 
-  onValidationChange, 
-  onInventoryValidationChange 
+export function ProfessionalAccessorySelector({
+  accessoryItems,
+  setAccessoryItems,
+  onValidationChange,
+  onInventoryValidationChange
 }: ProfessionalAccessorySelectorProps) {
   const [inventoryCategories, setInventoryCategories] = useState<InventoryCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,12 +65,12 @@ export function ProfessionalAccessorySelector({
       try {
         setLoading(true);
         setError(null);
-        
+
         const response = await fetch('/api/inventory/categories');
         if (!response.ok) {
           throw new Error(`Failed to fetch inventory categories: ${response.status} ${response.statusText}`);
         }
-        
+
         const data = await response.json();
         setInventoryCategories(data.categories || []);
       } catch (err) {
@@ -99,7 +99,7 @@ export function ProfessionalAccessorySelector({
       usagePrice: 0,
       sellingPrice: 0
     };
-    
+
     setAccessoryItems([...accessoryItems, newItem]);
   };
 
@@ -113,24 +113,24 @@ export function ProfessionalAccessorySelector({
     const updatedItems = accessoryItems.map(item => {
       if (item.id === id) {
         const updatedItem = { ...item, [field]: value };
-        
+
         // Auto-calculate price when quantity or pricing changes
         if (field === 'quantity' || field === 'costPerPiece' || field === 'usagePrice' || field === 'sellingPrice') {
           const quantity = field === 'quantity' ? value : updatedItem.quantity;
           const costPerPiece = field === 'costPerPiece' ? value : updatedItem.costPerPiece;
           const usagePrice = field === 'usagePrice' ? value : (updatedItem.usagePrice || 0);
           const sellingPrice = field === 'sellingPrice' ? value : (updatedItem.sellingPrice || 0);
-          
+
           let finalPricePerItem = 0;
           let totalPrice = 0;
-          
+
           // For vaporizers, handle usage vs selling pricing
           if (updatedItem.isVaporizer) {
             // Calculate total based on usage price + selling price
             const usageTotal = quantity * usagePrice;
             const sellingTotal = quantity * sellingPrice;
             totalPrice = usageTotal + sellingTotal;
-            
+
             // Set pricePerItem to the total per item for display
             finalPricePerItem = usagePrice + sellingPrice;
           } else {
@@ -138,16 +138,16 @@ export function ProfessionalAccessorySelector({
             finalPricePerItem = costPerPiece * 1.2;
             totalPrice = quantity * finalPricePerItem;
           }
-          
+
           updatedItem.pricePerItem = finalPricePerItem;
           updatedItem.totalPrice = totalPrice;
         }
-        
+
         return updatedItem;
       }
       return item;
     });
-    
+
     setAccessoryItems(updatedItems);
     checkValidationErrors(updatedItems);
   };
@@ -155,7 +155,7 @@ export function ProfessionalAccessorySelector({
   // Handle category selection
   const handleCategoryChange = (id: string, category: string) => {
     const categoryData = inventoryCategories.find(cat => cat.name === category);
-    
+
     if (categoryData) {
       // Update all fields in a single state update to avoid race conditions
       const updatedItems = accessoryItems.map(item => {
@@ -177,7 +177,7 @@ export function ProfessionalAccessorySelector({
         }
         return item;
       });
-      
+
       setAccessoryItems(updatedItems);
       checkValidationErrors(updatedItems);
     }
@@ -186,13 +186,13 @@ export function ProfessionalAccessorySelector({
   // Handle item type selection
   const handleItemTypeChange = (id: string, itemType: string) => {
     const item = accessoryItems.find(item => item.id === id);
-    
+
     if (item && item.category) {
       const categoryData = inventoryCategories.find(cat => cat.name === item.category);
-      
+
       if (categoryData) {
         const selectedItem = categoryData.items.find(i => i.type === itemType);
-        
+
         if (selectedItem) {
           // Update all fields in a single state update
           const updatedItems = accessoryItems.map(accessoryItem => {
@@ -203,7 +203,7 @@ export function ProfessionalAccessorySelector({
               if (!accessoryItem.isVaporizer) {
                 pricePerItem = selectedItem.costPerPiece * 1.2; // 20% markup for regular accessories
               }
-              
+
               return {
                 ...accessoryItem,
                 itemType: itemType,
@@ -217,7 +217,7 @@ export function ProfessionalAccessorySelector({
             }
             return accessoryItem;
           });
-          
+
           setAccessoryItems(updatedItems);
           checkValidationErrors(updatedItems);
         }
@@ -228,7 +228,7 @@ export function ProfessionalAccessorySelector({
   // Check validation errors
   const checkValidationErrors = (items: AccessoryItem[] = accessoryItems) => {
     let hasErrors = false;
-    let firstInvalidItem: {category: string, index: number} | null = null;
+    let firstInvalidItem: { category: string, index: number } | null = null;
 
     items.forEach((item, index) => {
       if (item.quantity > item.availableStock) {
@@ -242,7 +242,7 @@ export function ProfessionalAccessorySelector({
     if (onValidationChange) {
       onValidationChange(hasErrors);
     }
-    
+
     if (onInventoryValidationChange) {
       onInventoryValidationChange(hasErrors, firstInvalidItem || undefined);
     }
@@ -297,20 +297,10 @@ export function ProfessionalAccessorySelector({
 
   return (
     <div className="space-y-4">
-      {/* Header with Add Item Button */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900">Accessories</h3>
-          <p className="text-sm text-gray-600">Select categories and items from inventory</p>
-        </div>
-        <Button
-          type="button"
-          onClick={addAccessoryItem}
-          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold"
-        >
-          <PlusIcon className="w-4 h-4 mr-2" />
-          Add Item
-        </Button>
+      {/* Header */}
+      <div>
+        <h3 className="text-lg font-semibold text-gray-900">Accessories</h3>
+        <p className="text-sm text-gray-600">Select categories and items from inventory</p>
       </div>
 
       {/* Accessories Table */}
@@ -345,9 +335,9 @@ export function ProfessionalAccessorySelector({
               {accessoryItems.map((item, index) => {
                 const categoryData = inventoryCategories.find(cat => cat.name === item.category);
                 const availableItemTypes = categoryData?.items || [];
-                
+
                 return (
-                  <tr 
+                  <tr
                     key={item.id}
                     className="border-b hover:bg-gray-50 transition-colors"
                   >
@@ -408,11 +398,10 @@ export function ProfessionalAccessorySelector({
                             max={item.availableStock}
                             value={item.quantity}
                             onChange={(e) => updateAccessoryItem(item.id, 'quantity', parseInt(e.target.value) || 0)}
-                            className={`w-20 px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm ${
-                              item.quantity > item.availableStock
-                                ? 'border-red-500 bg-red-50 text-red-700'
-                                : 'border-gray-300 bg-white'
-                            }`}
+                            className={`w-20 px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm ${item.quantity > item.availableStock
+                              ? 'border-red-500 bg-red-50 text-red-700'
+                              : 'border-gray-300 bg-white'
+                              }`}
                             disabled={!item.itemType}
                           />
                         </div>
@@ -519,6 +508,18 @@ export function ProfessionalAccessorySelector({
           </table>
         </div>
       )}
+
+      {/* Add Item Button */}
+      <Button
+        type="button"
+        onClick={addAccessoryItem}
+        variant="outline"
+        size="sm"
+        className="mt-2 text-purple-700 border-purple-300 hover:bg-purple-50"
+      >
+        <PlusIcon className="w-4 h-4 mr-1" />
+        Add Item
+      </Button>
 
       {/* Vaporizer Pricing Information */}
       {accessoryItems.some(item => item.isVaporizer && item.category) && (
