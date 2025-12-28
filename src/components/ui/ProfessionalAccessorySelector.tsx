@@ -26,6 +26,7 @@ interface AccessoryItem {
   // Vaporizer-specific pricing
   usagePrice: number; // Cost Price - for charging usage (not deducted from inventory)
   sellingPrice: number; // Selling Price - for selling vaporizer (deducted from inventory)
+  markup: number;
 }
 
 interface ProfessionalAccessorySelectorProps {
@@ -53,6 +54,7 @@ export function ProfessionalAccessorySelector({
   const [inventoryCategories, setInventoryCategories] = useState<InventoryCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [globalMarkup, setGlobalMarkup] = useState(20);
 
   // Vaporizer detection utility
   const isVaporizer = (category: string) => {
@@ -84,6 +86,30 @@ export function ProfessionalAccessorySelector({
     fetchInventoryData();
   }, []);
 
+  // Handle global markup change
+  const handleGlobalMarkupChange = (newMarkup: number) => {
+    setGlobalMarkup(newMarkup);
+
+    // Update all non-vaporizer items with new markup
+    const updatedItems = accessoryItems.map(item => {
+      if (!item.isVaporizer) {
+        // Calculate new price
+        const pricePerItem = item.costPerPiece * (1 + newMarkup / 100);
+        const totalPrice = item.quantity * pricePerItem;
+
+        return {
+          ...item,
+          markup: newMarkup,
+          pricePerItem,
+          totalPrice
+        };
+      }
+      return item;
+    });
+
+    setAccessoryItems(updatedItems);
+  };
+
   // Add new accessory item
   const addAccessoryItem = () => {
     const newItem: AccessoryItem = {
@@ -97,7 +123,8 @@ export function ProfessionalAccessorySelector({
       availableStock: 0,
       isVaporizer: false,
       usagePrice: 0,
-      sellingPrice: 0
+      sellingPrice: 0,
+      markup: globalMarkup
     };
 
     setAccessoryItems([...accessoryItems, newItem]);
@@ -134,8 +161,9 @@ export function ProfessionalAccessorySelector({
             // Set pricePerItem to the total per item for display
             finalPricePerItem = usagePrice + sellingPrice;
           } else {
-            // For regular accessories, use 20% markup
-            finalPricePerItem = costPerPiece * 1.2;
+            // For regular accessories, use dynamic markup
+            const markup = updatedItem.markup ?? globalMarkup;
+            finalPricePerItem = costPerPiece * (1 + markup / 100);
             totalPrice = quantity * finalPricePerItem;
           }
 
@@ -201,7 +229,8 @@ export function ProfessionalAccessorySelector({
               // For regular accessories, use 20% markup
               let pricePerItem = 0;
               if (!accessoryItem.isVaporizer) {
-                pricePerItem = selectedItem.costPerPiece * 1.2; // 20% markup for regular accessories
+                const markup = accessoryItem.markup ?? 20;
+                pricePerItem = selectedItem.costPerPiece * (1 + markup / 100);
               }
 
               return {
@@ -298,9 +327,30 @@ export function ProfessionalAccessorySelector({
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div>
-        <h3 className="text-lg font-semibold text-gray-900">Accessories</h3>
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <p className="text-sm text-gray-600">Select categories and items from inventory</p>
+        <div className="flex items-center space-x-2 bg-purple-50 px-3 py-1.5 rounded-lg border border-purple-100">
+          <span className="text-sm font-medium text-purple-700">Markup:</span>
+          <div className="relative">
+            <input
+              type="number"
+              min="0"
+              max="100"
+              value={globalMarkup}
+              onChange={(e) => {
+                let val = parseFloat(e.target.value);
+                if (isNaN(val)) val = 0;
+                if (val > 100) val = 100;
+                if (val < 0) val = 0;
+                handleGlobalMarkupChange(val);
+              }}
+              className="w-12 px-1 py-0.5 text-sm text-center border-b border-purple-300 bg-transparent focus:outline-none focus:border-purple-500 font-semibold text-purple-900"
+            />
+            <span className="absolute right-0 top-0.5 text-transparent select-none pointer-events-none">%</span>
+          </div>
+          <span className="text-sm text-purple-700">%</span>
+        </div>
       </div>
 
       {/* Accessories Table */}
@@ -463,12 +513,11 @@ export function ProfessionalAccessorySelector({
                             </div>
                           ) : (
                             <>
-                              <span className="text-sm font-medium text-green-700">
-                                {formatCurrency(item.pricePerItem)}
-                              </span>
-                              <Badge variant="secondary" className="ml-2 text-xs">
-                                +20%
-                              </Badge>
+                              <>
+                                <span className="text-sm font-medium text-green-700">
+                                  {formatCurrency(item.pricePerItem)}
+                                </span>
+                              </>
                             </>
                           )}
                         </div>
@@ -563,7 +612,7 @@ export function ProfessionalAccessorySelector({
               </span>
             </div>
             <div className="text-sm text-blue-700 mt-1">
-              {accessoryItems.length} item(s) selected • 20% markup applied
+              {accessoryItems.length} item(s) selected • {globalMarkup}% markup applied
             </div>
           </CardContent>
         </Card>

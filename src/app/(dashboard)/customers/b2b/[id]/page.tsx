@@ -236,6 +236,7 @@ export default function B2BCustomerDetailPage() {
     isVaporizer: boolean;
     usagePrice: number; // Cost Price - for charging usage (not deducted from inventory)
     sellingPrice: number; // Selling Price - for selling vaporizer (deducted from inventory)
+    markup: number; // Markup percentage for regular accessories (0-100)
   }>>([]);
 
   useEffect(() => {
@@ -1776,10 +1777,20 @@ export default function B2BCustomerDetailPage() {
                               <div className="flex items-center gap-1">
                                 <Input
                                   type="number"
-                                  min="0"
+                                  min="50"
                                   max="100"
-                                  value={item.buybackRate ? (item.buybackRate * 100) : 60}
-                                  onChange={(e) => updateReturnItem(index, 'buybackRate', (parseFloat(e.target.value) || 60) / 100)}
+                                  value={item.buybackRate !== undefined ? Number((item.buybackRate * 100).toFixed(2)) : 60}
+                                  onChange={(e) => {
+                                    const val = parseFloat(e.target.value) || 0;
+                                    const clamped = Math.min(100, val);
+                                    updateReturnItem(index, 'buybackRate', clamped / 100);
+                                  }}
+                                  onBlur={(e) => {
+                                    const val = parseFloat(e.target.value) || 0;
+                                    if (val < 50) {
+                                      updateReturnItem(index, 'buybackRate', 0.5);
+                                    }
+                                  }}
                                   disabled={!item.cylinderType || item.buybackQuantity === 0}
                                   className={`w-16 px-3 py-2 text-sm text-center border border-gray-300 rounded-md ${(!item.cylinderType || item.buybackQuantity === 0) ? 'bg-gray-100' : 'bg-white'} focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500`}
                                 />
@@ -1837,7 +1848,8 @@ export default function B2BCustomerDetailPage() {
                         availableStock: 0,
                         isVaporizer: false,
                         usagePrice: 0,
-                        sellingPrice: 0
+                        sellingPrice: 0,
+                        markup: 20
                       }]);
                     }
                     setAccessoriesExpanded(!accessoriesExpanded);
