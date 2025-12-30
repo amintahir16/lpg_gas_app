@@ -73,8 +73,9 @@ function categorizeItems(items: any[]): {
     else if (item.cylinderType && !hasRegularPrice && !hasBuybackRateSet && !hasBuybackData) {
       returnItems.push(item);
     }
-    // Non-cylinder items (accessories) with price
-    else if (item.productName && hasRegularPrice) {
+    // Professional Accessories (Vaporizers, etc.) - Catch all non-cylinder items
+    // This includes charged items (price > 0) AND free items (price = 0)
+    else if (!item.cylinderType) {
       saleItems.push(item);
     }
     // Default to return items for cylinders
@@ -134,7 +135,34 @@ function buildItemsDescription(transaction: any, cylinderTypeMap?: Map<string, {
       if (item.cylinderType) {
         return `${getCylinderTypeDisplay(item.cylinderType, cylinderTypeMap)} x${item.quantity || 0}`;
       } else if (item.productName) {
-        return `${item.productName} x${item.quantity || 0}`;
+        let name = item.productName;
+
+        // Check if this is a vaporizer
+        const isVaporizer = item.category && item.category.toLowerCase().includes('vaporizer');
+
+        if (!isVaporizer) {
+          return `${name} x${item.quantity || 0}`;
+        }
+
+        // Add details for split pricing (Usage vs Selling)
+        const costPrice = item.costPrice ? Number(item.costPrice) : 0;
+        const sellingPrice = item.sellingPrice ? Number(item.sellingPrice) : 0;
+        const pricePerItem = Number(item.pricePerItem || 0);
+
+        if (pricePerItem > 0) {
+          if (costPrice > 0 && sellingPrice === 0) {
+            name += ` (Charged: ${formatCurrencyRsRounded(costPrice)})`;
+          } else if (costPrice === 0 && sellingPrice > 0) {
+            name += ` (Sold: ${formatCurrencyRsRounded(sellingPrice)})`;
+          } else if (costPrice > 0 && sellingPrice > 0) {
+            name += ` (Charged: ${formatCurrencyRsRounded(costPrice)}, Sold: ${formatCurrencyRsRounded(sellingPrice)})`;
+          }
+        } else {
+          // Free item
+          name += ' (Not Charged)';
+        }
+
+        return `${name} x${item.quantity || 0}`;
       }
       return '';
     }).filter(Boolean);

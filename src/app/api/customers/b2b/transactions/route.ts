@@ -9,7 +9,7 @@ import { getCapacityFromTypeString } from '@/lib/cylinder-utils';
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user || (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -31,9 +31,9 @@ export async function POST(request: NextRequest) {
 
     // Validate and format date/time
     console.log('Received date/time data:', { date, time, dateType: typeof date, timeType: typeof time });
-    
+
     const transactionDate = new Date(date);
-    
+
     // Handle time parsing - if time is just HH:MM, combine with date
     let transactionTime;
     if (time) {
@@ -53,21 +53,21 @@ export async function POST(request: NextRequest) {
     } else {
       transactionTime = new Date();
     }
-    
-    console.log('Parsed dates:', { 
-      transactionDate: transactionDate.toISOString(), 
+
+    console.log('Parsed dates:', {
+      transactionDate: transactionDate.toISOString(),
       transactionTime: transactionTime.toISOString(),
       dateValid: !isNaN(transactionDate.getTime()),
       timeValid: !isNaN(transactionTime.getTime())
     });
-    
+
     if (isNaN(transactionDate.getTime())) {
       return NextResponse.json(
         { error: 'Invalid date format', receivedDate: date },
         { status: 400 }
       );
     }
-    
+
     if (isNaN(transactionTime.getTime())) {
       return NextResponse.json(
         { error: 'Invalid time format', receivedTime: time },
@@ -79,14 +79,14 @@ export async function POST(request: NextRequest) {
     let paidAmountValue: number | null = null;
     let unpaidAmountValue: number | null = null;
     let paymentStatus: string | null = null;
-    
+
     if (transactionType === 'SALE' && paidAmount !== undefined) {
       const total = parseFloat(totalAmount);
       const paid = parseFloat(paidAmount) || 0;
-      
+
       paidAmountValue = paid;
       unpaidAmountValue = Math.max(0, total - paid);
-      
+
       // Determine payment status
       if (paid <= 0) {
         paymentStatus = 'UNPAID';
@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
         select: { billSno: true },
         orderBy: { createdAt: 'desc' }
       });
-      
+
       // Find the highest numeric bill number
       let maxBillNo = 0;
       for (const t of existingTransactions) {
@@ -115,11 +115,11 @@ export async function POST(request: NextRequest) {
           maxBillNo = num;
         }
       }
-      
+
       // Next bill number is max + 1
       const nextBillNo = maxBillNo + 1;
       const billSno = String(nextBillNo);
-      
+
       // Update customer's billSequence to keep it in sync
       await tx.customer.update({
         where: { id: customerId },
@@ -146,8 +146,8 @@ export async function POST(request: NextRequest) {
       });
 
       // Create transaction items
-      const allItems = [...gasItems, ...accessoryItems].filter(item => 
-        (item.delivered && item.delivered > 0) || 
+      const allItems = [...gasItems, ...accessoryItems].filter(item =>
+        (item.delivered && item.delivered > 0) ||
         (item.quantity && item.quantity > 0) ||
         (item.emptyReturned && item.emptyReturned > 0)
       );
@@ -163,7 +163,7 @@ export async function POST(request: NextRequest) {
             let buybackTotal = 0;
             const buybackRate = item.buybackRate || 0.6; // Use provided rate or default to 60%
             const isBuybackItem = transactionType === 'BUYBACK' || item.isBuyback === true || (item.remainingKg && item.remainingKg > 0);
-            
+
             if (isBuybackItem && item.remainingKg > 0 && item.originalSoldPrice > 0) {
               // Get capacity dynamically from cylinder type - fully flexible
               const totalKg = getCapacityFromTypeString(item.cylinderType);
@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
               buybackAmount = item.originalSoldPrice * remainingPercentage * buybackRate;
               buybackTotal = buybackAmount * (item.emptyReturned || 1);
             }
-            
+
             // Use pre-calculated buyback total from frontend if available
             if (item.buybackTotal && item.buybackTotal > 0) {
               buybackTotal = item.buybackTotal;
@@ -199,6 +199,10 @@ export async function POST(request: NextRequest) {
               buybackRate: isBuybackItem && item.remainingKg > 0 ? buybackRate : null,
               buybackPricePerItem: isBuybackItem && buybackAmount > 0 ? buybackAmount : null,
               buybackTotal: isBuybackItem && buybackTotal > 0 ? buybackTotal : null,
+              // Store new fields
+              category: item.category || null,
+              costPrice: (item.usagePrice !== undefined && item.usagePrice !== null) ? parseFloat(item.usagePrice) : (item.costPerPiece ? parseFloat(item.costPerPiece) : 0),
+              sellingPrice: (item.sellingPrice !== undefined && item.sellingPrice !== null) ? parseFloat(item.sellingPrice) : (item.pricePerItem ? parseFloat(item.pricePerItem) : 0),
             };
           }),
         });
@@ -217,14 +221,14 @@ export async function POST(request: NextRequest) {
       let newDomestic118kgDue = customer.domestic118kgDue || 0;
       let newStandard15kgDue = customer.standard15kgDue || 0;
       let newCommercial454kgDue = customer.commercial454kgDue || 0;
-      
+
       console.log(`Processing transaction type: ${transactionType}, amount: ${totalAmount}`);
       console.log(`Current ledger balance: ${newLedgerBalance}, Type: ${typeof newLedgerBalance}`);
-      
+
       // Check if this is a unified transaction with buyback credit
       const isUnifiedTransaction = body.isUnifiedTransaction === true;
       const unifiedSummary = body.unifiedSummary;
-      
+
       // Calculate total buyback credit from return items
       let totalBuybackCredit = 0;
       if (isUnifiedTransaction && unifiedSummary) {
@@ -233,25 +237,25 @@ export async function POST(request: NextRequest) {
         // Legacy: calculate from gasItems
         totalBuybackCredit = gasItems.reduce((sum: number, item: any) => sum + (item.buybackTotal || 0), 0);
       }
-      
+
       switch (transactionType) {
         case 'SALE':
           // For SALE transactions, calculate net amount including buyback credit
           const saleAmount = parseFloat(totalAmount);
           const buybackCreditAmount = totalBuybackCredit;
-          
+
           // Net sale amount = sale total - buyback credit
           const netSaleAmount = saleAmount - buybackCreditAmount;
-          
+
           // Unpaid = net amount - payment received
-          const unpaid = unpaidAmountValue !== null 
+          const unpaid = unpaidAmountValue !== null
             ? Math.max(0, netSaleAmount - (paidAmountValue || 0))
             : netSaleAmount;
-          
+
           console.log(`SALE transaction: total=${saleAmount}, buybackCredit=${buybackCreditAmount}, netSale=${netSaleAmount}`);
           console.log(`SALE transaction: paid=${paidAmountValue || 0}, unpaid=${unpaid}`);
           console.log(`SALE transaction: adding unpaid amount ${unpaid} to ledger balance`);
-          
+
           // For unified transactions, use the balance impact directly if available
           if (isUnifiedTransaction && unifiedSummary && unifiedSummary.balanceImpact !== undefined) {
             newLedgerBalance += unifiedSummary.balanceImpact;
@@ -259,9 +263,9 @@ export async function POST(request: NextRequest) {
           } else {
             newLedgerBalance += unpaid;
           }
-          
+
           console.log(`New ledger balance after calculation: ${newLedgerBalance}`);
-          
+
           // Update cylinder due counts for sales - ONLY if delivered > 0
           gasItems.forEach((item: any) => {
             if (item.delivered > 0) {
@@ -399,7 +403,7 @@ export async function POST(request: NextRequest) {
       // Update inventory for accessories using professional deduction service
       if (transactionType === 'SALE' && accessoryItems.length > 0) {
         console.log('🔄 Processing accessories inventory deduction...');
-        
+
         // Convert accessory items to the format expected by InventoryDeductionService
         const accessorySaleItems = accessoryItems
           .filter((item: any) => item.quantity > 0)
@@ -415,27 +419,27 @@ export async function POST(request: NextRequest) {
             sellingPrice: item.sellingPrice || 0,
             costPerPiece: item.costPerPiece || 0
           }));
-        
+
         if (accessorySaleItems.length > 0) {
           // Log vaporizer pricing information
           const vaporizerItems = accessorySaleItems.filter((item: any) => item.isVaporizer);
           if (vaporizerItems.length > 0) {
             console.log('🌫️ Processing vaporizer items:');
             vaporizerItems.forEach((item: any) => {
-            console.log(`  - ${item.category} - ${item.itemType}: ${item.quantity} units`);
-            console.log(`    Usage Price: ${item.usagePrice}`);
-            console.log(`    Selling Price: ${item.sellingPrice}`);
-            console.log(`    Cost Per Piece: ${item.costPerPiece}`);
-            console.log(`    Total Price: ${item.totalPrice}`);
+              console.log(`  - ${item.category} - ${item.itemType}: ${item.quantity} units`);
+              console.log(`    Usage Price: ${item.usagePrice}`);
+              console.log(`    Selling Price: ${item.sellingPrice}`);
+              console.log(`    Cost Per Piece: ${item.costPerPiece}`);
+              console.log(`    Total Price: ${item.totalPrice}`);
             });
           }
-          
+
           // Validate inventory availability first
           const validation = await InventoryDeductionService.validateInventoryAvailability(accessorySaleItems);
           if (!validation.isValid) {
             throw new Error(`Inventory validation failed: ${validation.errors.join(', ')}`);
           }
-          
+
           // Deduct from inventory
           await InventoryDeductionService.deductAccessoriesFromInventory(accessorySaleItems);
           console.log('✅ Accessories inventory deduction completed successfully');
@@ -451,10 +455,10 @@ export async function POST(request: NextRequest) {
           if (gasItem.emptyReturned > 0) {
             const quantity = parseInt(gasItem.emptyReturned);
             const cylinderType = gasItem.cylinderType;
-            
+
             if (quantity > 0 && cylinderType) {
               console.log(`Processing return: ${quantity} x ${cylinderType}`);
-              
+
               // Find cylinders that are currently with this customer
               const cylindersWithCustomer = await tx.cylinder.findMany({
                 where: {
@@ -521,7 +525,7 @@ export async function POST(request: NextRequest) {
     console.error('Error creating B2B transaction:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to create B2B transaction',
         details: errorMessage,
         stack: error instanceof Error ? error.stack : undefined

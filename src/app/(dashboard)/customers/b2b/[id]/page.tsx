@@ -174,6 +174,7 @@ export default function B2BCustomerDetailPage() {
   const [salePaymentAmount, setSalePaymentAmount] = useState(0);
   const [salePaymentMethod, setSalePaymentMethod] = useState('CASH');
   const [salePaymentReference, setSalePaymentReference] = useState('');
+  const [isAutoPayment, setIsAutoPayment] = useState(false); // Track if payment should auto-sync with net amount
 
   // Gas transaction form data - now supports dynamic rows
   const [gasItems, setGasItems] = useState([
@@ -304,7 +305,7 @@ export default function B2BCustomerDetailPage() {
     };
 
     fetchAvailableCylinderTypes();
-  }, []);
+  }, [showTransactionForm]);
 
   // Fetch cylinder dues dynamically
   useEffect(() => {
@@ -620,7 +621,15 @@ export default function B2BCustomerDetailPage() {
   const updateGasItem = (index: number, field: string, value: any) => {
     const newItems = [...gasItems];
     const oldItem = newItems[index];
-    newItems[index] = { ...newItems[index], [field]: value };
+    // Clamp delivered quantity to available stock
+    if (field === 'delivered') {
+      const maxStock = getFullStockCount(newItems[index].cylinderType);
+      // Ensure positive and typically not exceeding stock (though 0 stock with >0 delivered is possible if they force it, but better to clamp)
+      const clampedValue = Math.max(0, Math.min(value, maxStock));
+      newItems[index] = { ...newItems[index], [field]: clampedValue };
+    } else {
+      newItems[index] = { ...newItems[index], [field]: value };
+    }
 
     // Reset delivered quantity when cylinder type changes
     if (field === 'cylinderType' && value !== oldItem.cylinderType && oldItem.cylinderType !== '') {
@@ -924,7 +933,28 @@ export default function B2BCustomerDetailPage() {
   // Update return item
   const updateReturnItem = (index: number, field: string, value: any) => {
     const newItems = [...returnItems];
-    newItems[index] = { ...newItems[index], [field]: value };
+
+    // Clamp values to ensure total return (empty + buyback) <= due
+    if (field === 'emptyReturned' || field === 'buybackQuantity') {
+      const item = newItems[index];
+      const maxDue = getCurrentCylinderDue(item.cylinderType);
+
+      if (field === 'emptyReturned') {
+        // Max allowed for empty is (Due - Buyback)
+        const currentBuyback = item.buybackQuantity || 0;
+        const maxAllowed = Math.max(0, maxDue - currentBuyback);
+        const clampedValue = Math.max(0, Math.min(value, maxAllowed));
+        newItems[index] = { ...newItems[index], [field]: clampedValue };
+      } else {
+        // Max allowed for buyback is (Due - Empty)
+        const currentEmpty = item.emptyReturned || 0;
+        const maxAllowed = Math.max(0, maxDue - currentEmpty);
+        const clampedValue = Math.max(0, Math.min(value, maxAllowed));
+        newItems[index] = { ...newItems[index], [field]: clampedValue };
+      }
+    } else {
+      newItems[index] = { ...newItems[index], [field]: value };
+    }
 
     // Auto-set original price when cylinder type is selected
     if (field === 'cylinderType' && value && pricingInfo && pricingInfo.calculation?.endPricePerKg) {
@@ -969,7 +999,7 @@ export default function B2BCustomerDetailPage() {
 
     // Net calculations
     const grossSaleAmount = deliveryTotal + accessoryTotal;
-    const netAmount = grossSaleAmount - totalBuybackCredit;
+    const netAmount = Math.round(grossSaleAmount - totalBuybackCredit); // Round to match integer payment constraint
     const balanceImpact = netAmount - salePaymentAmount; // Positive = customer owes, negative = overpaid
 
     // Check what sections have data
@@ -997,12 +1027,21 @@ export default function B2BCustomerDetailPage() {
     };
   };
 
+  // Auto-sync payment amount when transaction details change (if enabled)
+  useEffect(() => {
+    if (isAutoPayment) {
+      const summary = getUnifiedTransactionSummary();
+      setSalePaymentAmount(summary.netAmount);
+    }
+  }, [gasItems, returnItems, accessoryItems, isAutoPayment]);
+
   // Reset unified form
   const resetUnifiedForm = () => {
     setGasItems([{ cylinderType: '', delivered: 0, pricePerItem: 0, emptyReturned: 0, remainingDue: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackPricePerItem: 0, buybackTotal: 0 }]);
     setReturnItems([{ cylinderType: '', emptyReturned: 0, buybackQuantity: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackCredit: 0 }]);
     setAccessoryItems([]);
     setSalePaymentAmount(0);
+    setIsAutoPayment(false);
     setSalePaymentMethod('CASH');
     setSalePaymentReference('');
     setDeliveryExpanded(true);
@@ -1183,6 +1222,7 @@ export default function B2BCustomerDetailPage() {
         // Accessories
         accessoryItems: effectiveTransactionType === 'PAYMENT' ? [] : accessoryItems.filter(item => item.quantity > 0).map(item => ({
           productName: `${item.category} - ${item.itemType}`,
+          category: item.category,
           quantity: item.quantity,
           pricePerItem: item.pricePerItem,
           totalPrice: item.totalPrice,
@@ -1919,11 +1959,14 @@ export default function B2BCustomerDetailPage() {
                         <Input
                           type="number"
                           min="0"
-                          step="0.01"
+                          step="1"
                           value={salePaymentAmount || ''}
-                          onChange={(e) => setSalePaymentAmount(parseFloat(e.target.value) || 0)}
-                          placeholder="0.00"
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                          onChange={(e) => {
+                            setIsAutoPayment(false); // Disable auto-sync on manual input
+                            setSalePaymentAmount(Math.round(parseFloat(e.target.value) || 0));
+                          }}
+                          placeholder="0"
+                          className={`w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield] ${isAutoPayment ? 'border-blue-400 bg-blue-50 ring-2 ring-blue-100' : 'border-gray-300 bg-white'}`}
                           onWheel={(e) => e.currentTarget.blur()}
                         />
                       </div>
@@ -1953,17 +1996,21 @@ export default function B2BCustomerDetailPage() {
                     </div>
 
                     {/* Quick Pay Button */}
+                    {/* Quick Pay Button */}
                     {(() => {
                       const summary = getUnifiedTransactionSummary();
                       return summary.netAmount > 0 && (
                         <Button
                           type="button"
-                          onClick={() => setSalePaymentAmount(summary.netAmount)}
-                          variant="outline"
+                          onClick={() => {
+                            setIsAutoPayment(true); // Enable auto-sync
+                            setSalePaymentAmount(Math.round(summary.netAmount));
+                          }}
+                          variant={isAutoPayment ? "default" : "outline"}
                           size="sm"
-                          className="mt-3 text-blue-700 border-blue-300 hover:bg-blue-50"
+                          className={`mt-3 text-blue-700 border-blue-300 hover:bg-blue-50 ${isAutoPayment ? 'bg-blue-100 ring-2 ring-blue-400' : ''}`}
                         >
-                          Pay Full Amount ({formatCurrency(summary.netAmount)})
+                          {isAutoPayment ? '✓ Auto-Syncing' : `Pay Full Amount (${formatCurrency(summary.netAmount)})`}
                         </Button>
                       );
                     })()}
@@ -2370,7 +2417,7 @@ export default function B2BCustomerDetailPage() {
                       {(() => {
                         // Categorize items to show appropriate badges
                         const saleItems = transaction.items.filter((item: any) =>
-                          item.pricePerItem > 0 && !item.returnedCondition
+                          (item.pricePerItem > 0 || (item.category && item.category.toLowerCase().includes('vaporizer'))) && !item.returnedCondition
                         );
                         const buybackItems = transaction.items.filter((item: any) =>
                           item.returnedCondition === 'EMPTY' && item.remainingKg && Number(item.remainingKg) > 0
@@ -2434,7 +2481,7 @@ export default function B2BCustomerDetailPage() {
                       {(() => {
                         // Categorize items for grouped display
                         const saleItems = transaction.items.filter((item: any) =>
-                          item.pricePerItem > 0 && !item.returnedCondition
+                          (item.pricePerItem > 0 || (item.category && item.category.toLowerCase().includes('vaporizer'))) && !item.returnedCondition
                         );
                         const buybackItems = transaction.items.filter((item: any) =>
                           item.returnedCondition === 'EMPTY' && item.remainingKg && Number(item.remainingKg) > 0
@@ -2451,7 +2498,29 @@ export default function B2BCustomerDetailPage() {
                                 <span className="text-xs font-semibold text-green-700 bg-green-50 px-1 rounded">Sold:</span>
                                 {saleItems.map((item: any, index: number) => (
                                   <span key={`sale-${index}`} className="text-xs text-gray-700 ml-1">
-                                    {getTransactionItemDisplayName(item)} x{item.quantity}
+                                    {(() => {
+                                      let displayName = getTransactionItemDisplayName(item);
+                                      // Vaporizer specific logic
+                                      const isVaporizer = item.category && item.category.toLowerCase().includes('vaporizer');
+                                      if (isVaporizer) {
+                                        const costPrice = item.costPrice ? Number(item.costPrice) : 0;
+                                        const sellingPrice = item.sellingPrice ? Number(item.sellingPrice) : 0;
+                                        const pricePerItem = Number(item.pricePerItem || 0);
+
+                                        if (pricePerItem > 0) {
+                                          if (costPrice > 0 && sellingPrice === 0) {
+                                            displayName += ` (Charged: ${formatCurrency(costPrice)})`;
+                                          } else if (costPrice === 0 && sellingPrice > 0) {
+                                            displayName += ` (Sold: ${formatCurrency(sellingPrice)})`;
+                                          } else if (costPrice > 0 && sellingPrice > 0) {
+                                            displayName += ` (Charged: ${formatCurrency(costPrice)}, Sold: ${formatCurrency(sellingPrice)})`;
+                                          }
+                                        } else {
+                                          displayName += ' (Not Charged)';
+                                        }
+                                      }
+                                      return displayName;
+                                    })()} x{item.quantity}
                                     {index < saleItems.length - 1 ? ', ' : ''}
                                   </span>
                                 ))}
@@ -2501,8 +2570,9 @@ export default function B2BCustomerDetailPage() {
                           // Categorize items using the same logic as the report
                           const saleItems = transaction.items?.filter((item: B2BTransactionItem) => {
                             const hasRegularPrice = item.pricePerItem && Number(item.pricePerItem) > 0;
+                            const isVaporizer = item.category && item.category.toLowerCase().includes('vaporizer');
                             const hasBuybackRateSet = item.buybackRate !== null && item.buybackRate !== undefined;
-                            return hasRegularPrice && !hasBuybackRateSet;
+                            return (hasRegularPrice || isVaporizer) && !hasBuybackRateSet;
                           }) || [];
 
                           const buybackItems = transaction.items?.filter((item: B2BTransactionItem) => {
@@ -2831,7 +2901,7 @@ export default function B2BCustomerDetailPage() {
                         {(() => {
                           // Categorize items to show appropriate badges
                           const saleItems = selectedTransaction.items?.filter((item: any) =>
-                            item.pricePerItem > 0 && !item.returnedCondition
+                            (item.pricePerItem > 0 || (item.category && item.category.toLowerCase().includes('vaporizer'))) && !item.returnedCondition
                           ) || [];
                           const buybackItems = selectedTransaction.items?.filter((item: any) =>
                             item.returnedCondition === 'EMPTY' && item.remainingKg && Number(item.remainingKg) > 0
@@ -2955,7 +3025,7 @@ export default function B2BCustomerDetailPage() {
                         (() => {
                           // Categorize items
                           const saleItems = selectedTransaction.items.filter((item: any) =>
-                            item.pricePerItem > 0 && !item.returnedCondition
+                            (item.pricePerItem > 0 || (item.category && item.category.toLowerCase().includes('vaporizer'))) && !item.returnedCondition
                           );
                           const buybackItems = selectedTransaction.items.filter((item: any) =>
                             item.returnedCondition === 'EMPTY' && item.remainingKg && Number(item.remainingKg) > 0
@@ -2989,7 +3059,31 @@ export default function B2BCustomerDetailPage() {
                                       <tbody>
                                         {saleItems.map((item: any, index: number) => (
                                           <tr key={`sale-${index}`} className="border-t border-green-100">
-                                            <td className="px-4 py-2 text-sm text-gray-900">{getTransactionItemDisplayName(item)}</td>
+                                            <td className="px-4 py-2 text-sm text-gray-900">
+                                              {(() => {
+                                                let displayName = getTransactionItemDisplayName(item);
+                                                // Vaporizer specific logic
+                                                const isVaporizer = item.category && item.category.toLowerCase().includes('vaporizer');
+                                                if (isVaporizer) {
+                                                  const costPrice = item.costPrice ? Number(item.costPrice) : 0;
+                                                  const sellingPrice = item.sellingPrice ? Number(item.sellingPrice) : 0;
+                                                  const pricePerItem = Number(item.pricePerItem || 0);
+
+                                                  if (pricePerItem > 0) {
+                                                    if (costPrice > 0 && sellingPrice === 0) {
+                                                      displayName += ` (Charged: ${formatCurrency(costPrice)})`;
+                                                    } else if (costPrice === 0 && sellingPrice > 0) {
+                                                      displayName += ` (Sold: ${formatCurrency(sellingPrice)})`;
+                                                    } else if (costPrice > 0 && sellingPrice > 0) {
+                                                      displayName += ` (Charged: ${formatCurrency(costPrice)}, Sold: ${formatCurrency(sellingPrice)})`;
+                                                    }
+                                                  } else {
+                                                    displayName += ' (Not Charged)';
+                                                  }
+                                                }
+                                                return displayName;
+                                              })()}
+                                            </td>
                                             <td className="px-4 py-2 text-sm text-gray-700">{Number(item.quantity)}</td>
                                             <td className="px-4 py-2 text-sm text-gray-700">{formatCurrency(Number(item.pricePerItem))}</td>
                                             <td className="px-4 py-2 text-sm font-semibold text-gray-900">{formatCurrency(Number(item.totalPrice))}</td>

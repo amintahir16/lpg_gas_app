@@ -73,8 +73,9 @@ function categorizeItems(items: any[], transactionType: string): {
     else if (item.cylinderType && !hasRegularPrice && !hasBuybackRateSet && !hasBuybackData) {
       returnItems.push(item);
     }
-    // Non-cylinder items (accessories) with price
-    else if (item.productName && hasRegularPrice) {
+    // Professional Accessories (Vaporizers, etc.) - Catch all non-cylinder items
+    // This includes charged items (price > 0) AND free items (price = 0)
+    else if (!item.cylinderType) {
       saleItems.push(item);
     }
     // Default to return items for cylinders
@@ -335,9 +336,37 @@ async function generatePDF(transaction: any, customer: any, cylinderTypeMap: Map
     } else {
       headers = ['Item', 'Quantity', 'Price/Item', 'Total Price'];
       tableData = items.map(item => {
-        const itemName = item.cylinderType ? getCylinderTypeDisplay(item.cylinderType, cylinderTypeMap) : (item.productName || 'N/A');
-        const pricePerItem = item.pricePerItem ? formatCurrencyRs(Number(item.pricePerItem)) : 'Rs 0';
-        const totalPrice = item.totalPrice ? formatCurrencyRs(Number(item.totalPrice)) : 'Rs 0';
+        let itemName = item.cylinderType ? getCylinderTypeDisplay(item.cylinderType, cylinderTypeMap) : (item.productName || 'N/A');
+
+        // Check if this is a vaporizer to apply special pricing logic
+        const isVaporizer = item.category && item.category.toLowerCase().includes('vaporizer');
+
+        if (!isVaporizer) {
+          const pricePerItem = item.pricePerItem && Number(item.pricePerItem) > 0 ? formatCurrencyRs(Number(item.pricePerItem)) : 'Rs 0';
+          const totalPrice = item.totalPrice && Number(item.totalPrice) > 0 ? formatCurrencyRs(Number(item.totalPrice)) : 'Rs 0';
+          return [itemName, item.quantity, pricePerItem, totalPrice];
+        }
+
+        // Vaporizer logic
+        const costPrice = item.costPrice ? Number(item.costPrice) : 0;
+        const sellingPrice = item.sellingPrice ? Number(item.sellingPrice) : 0;
+        const pricePerItemVal = Number(item.pricePerItem || 0);
+
+        if (pricePerItemVal > 0) {
+          if (costPrice > 0 && sellingPrice === 0) {
+            itemName += ` (Charged: ${formatCurrencyRs(costPrice)})`;
+          } else if (costPrice === 0 && sellingPrice > 0) {
+            itemName += ` (Sold: ${formatCurrencyRs(sellingPrice)})`;
+          } else if (costPrice > 0 && sellingPrice > 0) {
+            itemName += ` (Charged: ${formatCurrencyRs(costPrice)}, Sold: ${formatCurrencyRs(sellingPrice)})`;
+          }
+        } else {
+          // Free item
+          itemName += ' (Not Charged)';
+        }
+
+        const pricePerItem = pricePerItemVal > 0 ? formatCurrencyRs(pricePerItemVal) : 'Rs 0';
+        const totalPrice = item.totalPrice && Number(item.totalPrice) > 0 ? formatCurrencyRs(Number(item.totalPrice)) : 'Rs 0';
         return [itemName, item.quantity, pricePerItem, totalPrice];
       });
       columnStyles = {

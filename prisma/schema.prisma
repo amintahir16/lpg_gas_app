@@ -585,6 +585,10 @@ model B2BTransactionItem {
   buybackRate         Decimal?         @db.Decimal(3, 2)
   buybackPricePerItem Decimal?         @db.Decimal(10, 2)
   buybackTotal        Decimal?         @db.Decimal(10, 2)
+  // New fields for professional accessories / vaporizers
+  category            String?
+  costPrice           Decimal?         @default(0) @db.Decimal(10, 2) // Usage Price / Cost Price
+  sellingPrice        Decimal?         @default(0) @db.Decimal(10, 2) // Selling Price
   products            Product?         @relation(fields: [productId], references: [id])
   transaction         B2BTransaction   @relation(fields: [transactionId], references: [id])
 
