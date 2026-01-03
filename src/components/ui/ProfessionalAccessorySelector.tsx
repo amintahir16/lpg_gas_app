@@ -225,12 +225,33 @@ export function ProfessionalAccessorySelector({
           // Update all fields in a single state update
           const updatedItems = accessoryItems.map(accessoryItem => {
             if (accessoryItem.id === id) {
-              // For vaporizers, don't auto-calculate price - let user input manually
-              // For regular accessories, use 20% markup
+              const markup = accessoryItem.markup ?? globalMarkup;
+              // Calculate price with markup for both regular and vaporizer items
+              // Use the item's specific markup or fallback to global
+              const calculatedSellingPrice = selectedItem.costPerPiece * (1 + markup / 100);
+
               let pricePerItem = 0;
-              if (!accessoryItem.isVaporizer) {
-                const markup = accessoryItem.markup ?? 20;
-                pricePerItem = selectedItem.costPerPiece * (1 + markup / 100);
+              let totalPrice = 0;
+              let usagePrice = 0;
+              let sellingPrice = 0;
+
+              if (accessoryItem.isVaporizer) {
+                // For vaporizers:
+                // Selling Price = Calculated Price (Cost + Markup)
+                sellingPrice = calculatedSellingPrice;
+                // Preserve existing usage price if any, or default to 0
+                usagePrice = accessoryItem.usagePrice || 0;
+
+                // Recalculate totals for vaporizer
+                // pricePerItem for vaporizer is (usage + selling)
+                pricePerItem = usagePrice + sellingPrice;
+                const quantity = accessoryItem.quantity || 0;
+                totalPrice = quantity * pricePerItem;
+              } else {
+                // For regular accessories
+                pricePerItem = calculatedSellingPrice;
+                const quantity = accessoryItem.quantity || 0;
+                totalPrice = quantity * pricePerItem;
               }
 
               return {
@@ -239,9 +260,10 @@ export function ProfessionalAccessorySelector({
                 costPerPiece: selectedItem.costPerPiece,
                 availableStock: selectedItem.quantity,
                 pricePerItem: pricePerItem,
-                totalPrice: accessoryItem.quantity * pricePerItem,
-                usagePrice: accessoryItem.isVaporizer ? (accessoryItem.usagePrice || 0) : 0,
-                sellingPrice: accessoryItem.isVaporizer ? (accessoryItem.sellingPrice || 0) : 0
+                totalPrice: totalPrice,
+                usagePrice: usagePrice,
+                sellingPrice: sellingPrice,
+                markup: markup
               };
             }
             return accessoryItem;
