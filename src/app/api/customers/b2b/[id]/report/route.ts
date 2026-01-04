@@ -281,7 +281,7 @@ async function generatePDF(
   })}`, 20, 55);
 
   doc.text(`Report ID: RPT-${Date.now().toString().slice(-6)}`, 20, 60);
-  doc.text(`Total Transactions: ${transactions.length}`, pageWidth - 50, 55);
+  doc.text(`Total Transactions: ${transactions.length}`, pageWidth - 25, 55, { align: 'right' });
 
   // Customer Information Section
   let yPosition = 80;
