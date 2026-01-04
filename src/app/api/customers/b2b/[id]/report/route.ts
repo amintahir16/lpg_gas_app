@@ -209,7 +209,14 @@ function buildItemsDescription(transaction: any, cylinderTypeMap?: Map<string, {
 }
 
 // Dynamic import to ensure proper loading in Next.js API routes
-async function generatePDF(customer: any, transactions: any[], startDate: string | null, endDate: string | null, cylinderTypeMap?: Map<string, { typeName: string | null, capacity: number | null }>) {
+async function generatePDF(
+  customer: any,
+  transactions: any[],
+  startDate: string | null,
+  endDate: string | null,
+  cylinderTypeMap?: Map<string, { typeName: string | null, capacity: number | null }>,
+  cylinderStats?: Map<string, { delivered: number, returned: number, buyback: number, held: number }>
+) {
   // Import jsPDF and jspdf-autotable
   const jsPDFModule = await import('jspdf');
   const autoTableModule = await import('jspdf-autotable');
@@ -317,7 +324,7 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
   doc.setFont('helvetica', 'bold');
   doc.text('TRANSACTION HISTORY', 20, yPosition + 6);
 
-  yPosition += 15;
+  yPosition += 10;
 
   // Prepare table data - sort by date descending (newest first)
   const sortedTransactions = [...transactions].sort((a, b) => {
@@ -473,7 +480,7 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
       2: { cellWidth: 12 },                         // Time
       3: { cellWidth: 20 },                         // Bill No.
       4: { cellWidth: 22 },                         // Type
-      5: { cellWidth: 50 },                         // Details (wider for categorized items)
+      5: { cellWidth: 52 },                         // Details (wider for categorized items)
       6: { halign: 'right', cellWidth: 16 },        // Out (-)
       7: { halign: 'right', cellWidth: 16 },        // In (+)
       8: { halign: 'right', cellWidth: 18 }         // Balance
@@ -481,14 +488,85 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
     margin: { left: 15, right: 15 }
   });
 
-  // Financial Summary Section
-  const finalY = (doc as any).lastAutoTable?.finalY || yPosition;
 
-  if (finalY > pageHeight - 100) {
+
+  // Cylinder History Section
+  const historyY = (doc as any).lastAutoTable?.finalY || yPosition;
+
+  if (cylinderStats && cylinderStats.size > 0) {
+    if (historyY > pageHeight - 50) {
+      doc.addPage();
+      yPosition = 20;
+    } else {
+      yPosition = historyY + 5;
+    }
+
+    // Section Header
+    doc.setFillColor(52, 73, 94);
+    doc.rect(15, yPosition, pageWidth - 30, 8, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('CYLINDER HISTORY', 20, yPosition + 6);
+
+    yPosition += 10;
+
+    // Prepare table data
+    const historyData: any[] = [];
+    cylinderStats.forEach((stats, type) => {
+      if (stats.delivered > 0 || stats.returned > 0 || stats.buyback > 0 || stats.held !== 0) {
+        const typeName = getCylinderTypeDisplay(type, cylinderTypeMap);
+        historyData.push([
+          typeName,
+          stats.delivered,
+          stats.returned,
+          stats.buyback,
+          stats.held
+        ]);
+      }
+    });
+
+    if (historyData.length > 0) {
+      autoTable(doc, {
+        head: [['Type', 'Delivered', 'Returned Empty', 'Bought Back', 'Holding Qty']],
+        body: historyData,
+        startY: yPosition,
+        tableWidth: pageWidth - 30,
+        styles: {
+          fontSize: 9,
+          cellPadding: 3,
+          lineColor: [200, 200, 200],
+          lineWidth: 0.5,
+          overflow: 'linebreak',
+          halign: 'center'
+        },
+        headStyles: {
+          fillColor: [52, 73, 94], // Matching Transaction History Header
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 10
+        },
+        alternateRowStyles: {
+          fillColor: [248, 249, 250]
+        },
+        columnStyles: {
+          0: { halign: 'left' },
+          4: { fontStyle: 'bold' } // Emphasize Holding Qty
+        },
+        margin: { left: 15, right: 15 }
+      });
+
+      yPosition = (doc as any).lastAutoTable?.finalY + 5;
+    }
+  } else {
+    yPosition = historyY + 5;
+  }
+
+  // Financial Summary Section check page break
+  // Height of financial summary is ~85 (Header 8 + Gap 12 + Box 65)
+  if (yPosition > pageHeight - 85) {
     doc.addPage();
     yPosition = 20;
-  } else {
-    yPosition = finalY + 15;
   }
 
   // Summary Header
@@ -499,13 +577,14 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
   doc.setFont('helvetica', 'bold');
   doc.text('FINANCIAL SUMMARY', 20, yPosition + 6);
 
-  yPosition += 20;
+  yPosition += 10;
 
-  // Summary Box
+  // Summary Box - Financial
   doc.setFillColor(248, 249, 250);
   doc.rect(15, yPosition, pageWidth - 30, 65, 'F');
   doc.setDrawColor(200, 200, 200);
   doc.rect(15, yPosition, pageWidth - 30, 65, 'S');
+
 
   // Date Range Info
   doc.setTextColor(100, 100, 100);
@@ -524,14 +603,14 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
   // Total Transactions
   doc.text('Total Transactions:', 25, yPosition + 22);
   doc.setFont('helvetica', 'normal');
-  doc.text(`${transactions.length}`, pageWidth - 50, yPosition + 22, { align: 'right' });
+  doc.text(`${transactions.length}`, pageWidth - 25, yPosition + 22, { align: 'right' });
 
   // Total Out (Sales)
   doc.setFont('helvetica', 'bold');
   doc.text('Total Out (-):', 25, yPosition + 32);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(231, 76, 60); // Red color
-  doc.text(formatCurrencyRsRounded(totalOut), pageWidth - 50, yPosition + 32, { align: 'right' });
+  doc.text(formatCurrencyRsRounded(totalOut), pageWidth - 25, yPosition + 32, { align: 'right' });
 
   // Total In (Payments + Buybacks)
   doc.setFont('helvetica', 'bold');
@@ -539,7 +618,7 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
   doc.text('Total In (+):', 25, yPosition + 42);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(39, 174, 96); // Green color
-  doc.text(formatCurrencyRsRounded(totalIn), pageWidth - 50, yPosition + 42, { align: 'right' });
+  doc.text(formatCurrencyRsRounded(totalIn), pageWidth - 25, yPosition + 42, { align: 'right' });
 
   // Net Balance
   const netBalance = totalOut - totalIn;
@@ -550,7 +629,7 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
   doc.text('Net Balance:', 25, yPosition + 55);
   doc.setTextColor(displayBalance > 0 ? 231 : 39, displayBalance > 0 ? 76 : 174, displayBalance > 0 ? 60 : 96);
   const balanceValueText = displayBalance > 0 ? `-${formatCurrencyRsRounded(displayBalance)}` : formatCurrencyRsRounded(Math.abs(displayBalance));
-  doc.text(balanceValueText, pageWidth - 50, yPosition + 55, { align: 'right' });
+  doc.text(balanceValueText, pageWidth - 25, yPosition + 55, { align: 'right' });
 
   // Balance Interpretation
   doc.setTextColor(100, 100, 100);
@@ -563,13 +642,19 @@ async function generatePDF(customer: any, transactions: any[], startDate: string
       : 'Balance settled';
   doc.text(balanceStatusText, 25, yPosition + 62);
 
-  // Footer
-  yPosition += 75;
-  doc.setTextColor(100, 100, 100);
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
-  doc.text('This report was generated automatically by Flamora Gas Management System', pageWidth / 2, yPosition, { align: 'center' });
-  doc.text(`Page 1 of 1 | Confidential Document`, pageWidth / 2, yPosition + 5, { align: 'center' });
+  // Add Footer to All Pages
+  const pageCount = doc.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    const footerY = pageHeight - 10;
+
+    doc.setTextColor(100, 100, 100);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+
+    doc.text('This report was generated automatically by Flamora Gas Management System', pageWidth / 2, footerY - 5, { align: 'center' });
+    doc.text(`Page ${i} of ${pageCount} | Confidential Document`, pageWidth / 2, footerY, { align: 'center' });
+  }
 
   return doc;
 }
@@ -739,7 +824,8 @@ export async function GET(
 
     // Build cylinder type mapping for proper display names
     const uniqueCylinderTypes = new Set<string>();
-    transactionsWithBalance.forEach(transaction => {
+    // Use allTransactions to ensure we capture types for historical holdings as well
+    allTransactions.forEach(transaction => {
       transaction.items?.forEach((item: any) => {
         if (item.cylinderType) {
           uniqueCylinderTypes.add(item.cylinderType);
@@ -777,8 +863,54 @@ export async function GET(
       });
     }
 
+    // Calculate Dynamic Cylinder Statistics
+    // Iterate through all transactions UP TO the end date (or all if no end date)
+    const cylinderStats = new Map<string, { delivered: number, returned: number, buyback: number, held: number }>();
+
+    const holdingCalculationTransactions = endDate
+      ? allTransactions.filter(t => new Date(t.date).getTime() <= new Date(endDate).setHours(23, 59, 59, 999))
+      : allTransactions;
+
+    holdingCalculationTransactions.forEach(transaction => {
+      const items = transaction.items || [];
+      const { saleItems, buybackItems, returnItems } = categorizeItems(items);
+
+      // Sale Items (Deliveries) -> ADD to delivered and held
+      saleItems.forEach((item: any) => {
+        if (item.cylinderType) {
+          const current = cylinderStats.get(item.cylinderType) || { delivered: 0, returned: 0, buyback: 0, held: 0 };
+          const qty = item.quantity ? Number(item.quantity) : 0;
+          current.delivered += qty;
+          current.held += qty;
+          cylinderStats.set(item.cylinderType, current);
+        }
+      });
+
+      // Buyback Items (Returns with value) -> ADD to buyback, SUBTRACT from held
+      buybackItems.forEach((item: any) => {
+        if (item.cylinderType) {
+          const current = cylinderStats.get(item.cylinderType) || { delivered: 0, returned: 0, buyback: 0, held: 0 };
+          const qty = item.quantity ? Number(item.quantity) : 0;
+          current.buyback += qty;
+          current.held -= qty;
+          cylinderStats.set(item.cylinderType, current);
+        }
+      });
+
+      // Return Items (Empty Returns) -> ADD to returned, SUBTRACT from held
+      returnItems.forEach((item: any) => {
+        if (item.cylinderType) {
+          const current = cylinderStats.get(item.cylinderType) || { delivered: 0, returned: 0, buyback: 0, held: 0 };
+          const qty = item.quantity ? Number(item.quantity) : 0;
+          current.returned += qty;
+          current.held -= qty;
+          cylinderStats.set(item.cylinderType, current);
+        }
+      });
+    });
+
     // Generate PDF
-    const doc = await generatePDF(customer, transactionsWithBalance, startDate, endDate, cylinderTypeMap);
+    const doc = await generatePDF(customer, transactionsWithBalance, startDate, endDate, cylinderTypeMap, cylinderStats);
 
     // Generate PDF buffer
     const pdfBlob = doc.output('blob');
