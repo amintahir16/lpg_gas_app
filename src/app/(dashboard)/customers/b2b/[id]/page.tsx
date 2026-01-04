@@ -88,6 +88,9 @@ interface B2BTransactionItem {
   buybackRate: number | null;
   buybackPricePerItem: number | null;
   buybackTotal: number | null;
+  category?: string | null;
+  costPrice?: number | null;
+  sellingPrice?: number | null;
 }
 
 interface CustomerLedgerResponse {

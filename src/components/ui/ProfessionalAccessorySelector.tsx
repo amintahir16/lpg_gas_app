@@ -90,11 +90,14 @@ export function ProfessionalAccessorySelector({
   const handleGlobalMarkupChange = (newMarkup: number) => {
     setGlobalMarkup(newMarkup);
 
-    // Update all non-vaporizer items with new markup
+    // Update all items with new markup
     const updatedItems = accessoryItems.map(item => {
+      // Calculate new price based on markup
+      const calculatedSellingPrice = item.costPerPiece * (1 + newMarkup / 100);
+
       if (!item.isVaporizer) {
-        // Calculate new price
-        const pricePerItem = item.costPerPiece * (1 + newMarkup / 100);
+        // Regular accessories
+        const pricePerItem = calculatedSellingPrice;
         const totalPrice = item.quantity * pricePerItem;
 
         return {
@@ -103,8 +106,24 @@ export function ProfessionalAccessorySelector({
           pricePerItem,
           totalPrice
         };
+      } else {
+        // Vaporizers: Update Selling Price as well
+        // Selling Price = Cost + Markup
+        const sellingPrice = calculatedSellingPrice;
+        const usagePrice = item.usagePrice || 0;
+
+        // Final price per item = Selling + Usage
+        const pricePerItem = sellingPrice + usagePrice;
+        const totalPrice = item.quantity * pricePerItem;
+
+        return {
+          ...item,
+          markup: newMarkup,
+          sellingPrice,
+          pricePerItem,
+          totalPrice
+        };
       }
-      return item;
     });
 
     setAccessoryItems(updatedItems);
