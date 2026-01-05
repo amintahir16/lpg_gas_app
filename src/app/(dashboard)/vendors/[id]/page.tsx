@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
-import { 
+import {
   ArrowLeftIcon,
   PlusIcon,
   CurrencyDollarIcon,
@@ -102,7 +102,7 @@ interface DirectPayment {
 // Utility function to normalize category names for case sensitivity
 const normalizeCategoryName = (category: string): string => {
   const normalized = category.toLowerCase().trim();
-  
+
   // Handle common variations
   if (normalized === 'stove' || normalized === 'stoves') {
     return 'Stoves';
@@ -122,7 +122,7 @@ export default function VendorDetailPage() {
   const params = useParams();
   const router = useRouter();
   const vendorId = params?.id as string;
-  
+
   const [vendor, setVendor] = useState<Vendor | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'purchases' | 'items' | 'financial'>('purchases');
@@ -130,10 +130,10 @@ export default function VendorDetailPage() {
   // Financial report state
   const [reportPeriod, setReportPeriod] = useState('all');
   const [financialReport, setFinancialReport] = useState<any>(null);
-  
+
   // Purchase entries filter state
   const [purchaseFilter, setPurchaseFilter] = useState('all');
-  
+
   // Payment modal state
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedInvoiceNumber, setSelectedInvoiceNumber] = useState<string | null>(null);
@@ -142,7 +142,7 @@ export default function VendorDetailPage() {
   const [directPayments, setDirectPayments] = useState<DirectPayment[]>([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmationName, setDeleteConfirmationName] = useState('');
-  
+
   // Edit vendor state
   const [showEditModal, setShowEditModal] = useState(false);
   const [editFormData, setEditFormData] = useState({
@@ -152,7 +152,7 @@ export default function VendorDetailPage() {
     email: '',
     address: ''
   });
-  
+
   // Edit vendor item state
   const [showEditItemModal, setShowEditItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
@@ -164,10 +164,10 @@ export default function VendorDetailPage() {
 
   // Purchase form state
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
-  
+
   // Gas purchase state
   // Dynamic cylinder types - handles any cylinder type from the database
-  const [emptyCylinders, setEmptyCylinders] = useState<Record<string, Array<{id: string, code: string, cylinderType: string}>>>({});
+  const [emptyCylinders, setEmptyCylinders] = useState<Record<string, Array<{ id: string, code: string, cylinderType: string }>>>({});
   const [selectedCylinders, setSelectedCylinders] = useState<{
     domestic: string[];
     standard: string[];
@@ -177,23 +177,23 @@ export default function VendorDetailPage() {
     standard: [],
     commercial: []
   });
-  
+
   // Smart category detection for cylinder purchase
   const isCylinderPurchaseCategory = (categorySlug: string, categoryName: string) => {
     // Normalize both slug and name for comparison
     const normalizedSlug = categorySlug?.toLowerCase().replace(/[_-]/g, '') || '';
     const normalizedName = categoryName?.toLowerCase().replace(/[_-]/g, '') || '';
-    
+
     // Check for various cylinder purchase patterns
     const cylinderPatterns = [
       'cylinderpurchase',
-      'cylinderspurchase', 
+      'cylinderspurchase',
       'cylinderpurchases',
       'cylinderspurchases'
     ];
-    
-    return cylinderPatterns.some(pattern => 
-      normalizedSlug.includes(pattern) || 
+
+    return cylinderPatterns.some(pattern =>
+      normalizedSlug.includes(pattern) ||
       normalizedName.includes(pattern)
     );
   };
@@ -203,7 +203,7 @@ export default function VendorDetailPage() {
     // Normalize both slug and name for comparison
     const normalizedSlug = categorySlug?.toLowerCase().replace(/[_-]/g, '') || '';
     const normalizedName = categoryName?.toLowerCase().replace(/[_-]/g, '') || '';
-    
+
     // Check for various gas purchase patterns
     const gasPatterns = [
       'gaspurchase',
@@ -211,9 +211,9 @@ export default function VendorDetailPage() {
       'gasrefill',
       'gasrefilling'
     ];
-    
-    return gasPatterns.some(pattern => 
-      normalizedSlug.includes(pattern) || 
+
+    return gasPatterns.some(pattern =>
+      normalizedSlug.includes(pattern) ||
       normalizedName.includes(pattern)
     );
   };
@@ -246,7 +246,7 @@ export default function VendorDetailPage() {
   ];
 
   const [purchaseItems, setPurchaseItems] = useState<any[]>([]);
-  
+
 
   // Helper function to get items for display
   const getDisplayItems = () => {
@@ -254,34 +254,34 @@ export default function VendorDetailPage() {
     if (purchaseItems.length > 0) {
       return purchaseItems;
     }
-    
+
     // For accessories purchase, use empty items (don't use vendor inventory)
     if (vendor?.category?.slug === 'accessories_purchase') {
       return [{ itemName: '', category: '', quantity: 0, unitPrice: 0, totalPrice: 0, cylinderCodes: '' }];
     }
-    
+
     // For gas purchase, always start with one empty item row
     if (vendor?.category?.slug === 'gas_purchase') {
       return [{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '' }];
     }
-    
+
     // For cylinder purchase, always start with one empty item row (matching gas purchase behavior)
     if (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
       return [{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '', status: 'EMPTY' }];
     }
-    
+
     // For vaporizer purchase, start with one empty item row (matching cylinder purchase behavior)
     if (vendor?.category?.slug === 'vaporizer_purchase') {
       return [{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0 }];
     }
-    
+
     // For other categories (valves, etc.), start with one empty item row
     // Users can add items via the "Add Item" button or select from dropdown
     // Final fallback - one empty item row for generic form
     return [{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0 }];
   };
-  
-  const [vendorItems, setVendorItems] = useState<Array<{id: string, name: string, category: string, description?: string}>>([]);
+
+  const [vendorItems, setVendorItems] = useState<Array<{ id: string, name: string, category: string, description?: string }>>([]);
   const [purchaseFormData, setPurchaseFormData] = useState({
     invoiceNumber: '',
     notes: '',
@@ -294,11 +294,11 @@ export default function VendorDetailPage() {
   // Calculate unit price based on price per 11.8kg and cylinder capacity
   const calculateUnitPriceFromBase = (itemName: string, basePrice: number): number => {
     if (!itemName || !basePrice || basePrice <= 0) return 0;
-    
+
     const name = itemName.toLowerCase();
     // Extract capacity from item name (handles patterns like "6kg", "11.8kg", "15kg", "30kg", "45.4kg", etc.)
     const weightMatch = name.match(/(\d+\.?\d*)\s*kg/i);
-    
+
     if (weightMatch) {
       const capacity = parseFloat(weightMatch[1]);
       if (!isNaN(capacity) && capacity > 0) {
@@ -308,7 +308,7 @@ export default function VendorDetailPage() {
         return Math.round(calculatedPrice);
       }
     }
-    
+
     return 0;
   };
 
@@ -317,7 +317,7 @@ export default function VendorDetailPage() {
     if (!isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
       return;
     }
-    
+
     const updatedItems = purchaseItems.map(item => {
       if (item.itemName && item.itemName.trim()) {
         const calculatedPrice = calculateUnitPriceFromBase(item.itemName, basePrice);
@@ -329,7 +329,7 @@ export default function VendorDetailPage() {
       }
       return item;
     });
-    
+
     setPurchaseItems(updatedItems);
   };
   const [usedCodes, setUsedCodes] = useState<Set<string>>(new Set());
@@ -371,7 +371,7 @@ export default function VendorDetailPage() {
     if (!vendor) {
       return;
     }
-    
+
     // For gas purchase, always start with one empty row
     // This allows users to select from vendor items dynamically
     if (vendor?.category?.slug === 'gas_purchase') {
@@ -414,11 +414,11 @@ export default function VendorDetailPage() {
     if (vendor && purchaseItems.length === 0) {
       if (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
         setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '', status: 'EMPTY' }]);
-                        } else if (vendor?.category?.slug === 'gas_purchase') {
-                          setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '' }]);
-                          // Reset price per 11.8kg
-                          setPricePer11_8kg(0);
-                        } else if (vendor?.category?.slug === 'vaporizer_purchase') {
+      } else if (vendor?.category?.slug === 'gas_purchase') {
+        setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '' }]);
+        // Reset price per 11.8kg
+        setPricePer11_8kg(0);
+      } else if (vendor?.category?.slug === 'vaporizer_purchase') {
         // Start with one empty item row (matching cylinder purchase behavior)
         setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0 }]);
       } else if (vendor?.category?.slug === 'accessories_purchase') {
@@ -508,11 +508,11 @@ export default function VendorDetailPage() {
   // Group purchase entries by invoice number
   const getGroupedPurchaseEntries = () => {
     if (!vendor?.purchase_entries) return [];
-    
+
     const now = new Date();
     const filtered = vendor.purchase_entries.filter(entry => {
       const entryDate = new Date(entry.purchaseDate);
-      
+
       switch (purchaseFilter) {
         case 'today':
           return entryDate.toDateString() === now.toDateString();
@@ -538,7 +538,7 @@ export default function VendorDetailPage() {
           return true;
       }
     });
-    
+
     // Group entries by invoice number
     const grouped = filtered.reduce((acc, entry) => {
       const invoiceNumber = entry.invoiceNumber || `no-invoice-${entry.id}`;
@@ -567,24 +567,24 @@ export default function VendorDetailPage() {
       }
       return acc;
     }, {} as Record<string, any>);
-    
+
     // Convert to array and sort by date (newest first)
-    return Object.values(grouped).sort((a: any, b: any) => 
+    return Object.values(grouped).sort((a: any, b: any) =>
       new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime()
     );
   };
-  
+
   // Keep the old function name for backward compatibility
   const getFilteredPurchaseEntries = getGroupedPurchaseEntries;
 
   // Filter payment history based on selected report period
   const getFilteredPaymentHistory = () => {
     if (!directPayments) return [];
-    
+
     const now = new Date();
     const filtered = directPayments.filter(payment => {
       const paymentDate = new Date(payment.paymentDate);
-      
+
       switch (reportPeriod) {
         case 'daily':
           return paymentDate.toDateString() === now.toDateString();
@@ -610,7 +610,7 @@ export default function VendorDetailPage() {
           return true;
       }
     });
-    
+
     return filtered;
   };
 
@@ -624,7 +624,7 @@ export default function VendorDetailPage() {
 
   const handleEditVendor = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
       const response = await fetch(`/api/vendors/${vendorId}`, {
         method: 'PUT',
@@ -645,10 +645,10 @@ export default function VendorDetailPage() {
 
       // Refresh vendor data
       await fetchVendor();
-      
+
       // Close modal
       setShowEditModal(false);
-      
+
       alert('Vendor updated successfully!');
     } catch (error) {
       console.error('Error updating vendor:', error);
@@ -659,7 +659,7 @@ export default function VendorDetailPage() {
   const handleDeleteVendor = async () => {
     // Get the vendor name to match
     const vendorName = vendor?.name || vendor?.companyName || '';
-    
+
     // Validate that the confirmation name matches
     if (deleteConfirmationName.trim() !== vendorName.trim()) {
       alert('Vendor name does not match. Please type the exact vendor name to confirm deletion.');
@@ -701,7 +701,7 @@ export default function VendorDetailPage() {
 
   const handleUpdateItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
       const response = await fetch(`/api/vendors/${vendorId}/items/${editingItem.id}`, {
         method: 'PUT',
@@ -716,7 +716,7 @@ export default function VendorDetailPage() {
 
       // Refresh vendor data
       await fetchVendor();
-      
+
       // Close modal
       setShowEditItemModal(false);
       setEditingItem(null);
@@ -730,7 +730,7 @@ export default function VendorDetailPage() {
     if (!confirm('Are you sure you want to delete this item?')) {
       return;
     }
-    
+
     try {
       const response = await fetch(`/api/vendors/${vendorId}/items/${itemId}`, {
         method: 'DELETE'
@@ -766,7 +766,7 @@ export default function VendorDetailPage() {
         console.error('Invoice generation failed:', response.status, response.statusText);
         throw new Error('Failed to generate invoice number');
       }
-      
+
       const data = await response.json();
       console.log('Generated invoice number:', data.invoiceNumber);
       return data.invoiceNumber;
@@ -775,10 +775,10 @@ export default function VendorDetailPage() {
       // Fallback to timestamp-based generation
       const timestamp = Date.now().toString().slice(-8);
       const prefix = vendor?.category?.slug === 'cylinder_purchase' ? 'CYL' :
-                    vendor?.category?.slug === 'gas_purchase' ? 'GAS' :
-                    vendor?.category?.slug === 'vaporizer_purchase' ? 'VAP' :
-                    vendor?.category?.slug === 'accessories_purchase' ? 'ACC' :
-                    vendor?.category?.slug === 'valves_purchase' ? 'VAL' : 'VEN';
+        vendor?.category?.slug === 'gas_purchase' ? 'GAS' :
+          vendor?.category?.slug === 'vaporizer_purchase' ? 'VAP' :
+            vendor?.category?.slug === 'accessories_purchase' ? 'ACC' :
+              vendor?.category?.slug === 'valves_purchase' ? 'VAL' : 'VEN';
       const fallbackInvoice = `${prefix}-${timestamp}`;
       console.log('Using fallback invoice number:', fallbackInvoice);
       return fallbackInvoice;
@@ -794,7 +794,7 @@ export default function VendorDetailPage() {
       paymentMethod: 'CASH'
     });
     setUsedCodes(new Set()); // Reset used codes for new form
-    
+
     // Initialize with one empty item for gas purchase, or reset to trigger auto-population for others
     if (vendor?.category?.slug === 'gas_purchase') {
       setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0, category: '', cylinderCodes: '' }]);
@@ -808,7 +808,7 @@ export default function VendorDetailPage() {
       // Reset purchase items to trigger auto-population
       setPurchaseItems([]);
     }
-    
+
     setShowPurchaseForm(true);
   };
 
@@ -837,62 +837,75 @@ export default function VendorDetailPage() {
 
   const handlePurchaseItemChange = (index: number, field: string, value: any) => {
     const newItems = [...purchaseItems];
-    
+
     // Note: Quantity validation for gas purchases is handled after fetchEmptyCylinders()
-    
+
     // Normalize category name for case sensitivity (only for accessories purchase)
     if (field === 'category' && vendor?.category?.slug === 'accessories_purchase') {
       value = normalizeCategoryName(value);
     }
-    
+
+    // If item doesn't exist (editing a phantom item), initialize it with defaults
+    if (!newItems[index]) {
+      newItems[index] = {
+        itemName: '',
+        quantity: 0,
+        unitPrice: 0,
+        totalPrice: 0,
+        category: '',
+        cylinderCodes: '',
+        status: 'EMPTY'
+      };
+    }
+
     newItems[index] = {
       ...newItems[index],
       [field]: value
     };
-    
+
     // Reset itemName when category changes
     if (field === 'category') {
       newItems[index].itemName = '';
     }
-    
+
     // Auto-calculate total price
     if (field === 'quantity' || field === 'unitPrice') {
-      newItems[index].totalPrice = 
+      newItems[index].totalPrice =
         Number(newItems[index].quantity) * Number(newItems[index].unitPrice);
     }
 
-      // For gas purchase, fetch empty cylinders when item is selected or quantity changes
-      if (isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
-        if (field === 'itemName' && value) {
-          // Fetch empty cylinders when item is selected and wait for it to complete
-          fetchEmptyCylinders().then((cylinders) => {
-            if (cylinders) {
-              // Auto-calculate unit price if base price is set
-              if (pricePer11_8kg > 0) {
-                const calculatedPrice = calculateUnitPriceFromBase(value, pricePer11_8kg);
-                newItems[index].unitPrice = calculatedPrice;
-                newItems[index].totalPrice = Number(newItems[index].quantity) * calculatedPrice;
-              }
-              // Update items to trigger re-render and show max quantity
-              setPurchaseItems([...newItems]);
+    // For gas purchase, fetch empty cylinders when item is selected or quantity changes
+    if (isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
+      if (field === 'itemName' && value) {
+        // Fetch empty cylinders when item is selected and wait for it to complete
+        fetchEmptyCylinders().then((cylinders) => {
+          if (cylinders) {
+            // Auto-calculate unit price if base price is set
+            if (pricePer11_8kg > 0) {
+              const calculatedPrice = calculateUnitPriceFromBase(value, pricePer11_8kg);
+              newItems[index].unitPrice = calculatedPrice;
+              newItems[index].totalPrice = Number(newItems[index].quantity) * calculatedPrice;
             }
-          });
-        } else if (field === 'quantity' && value > 0 && newItems[index].itemName) {
+            // Update items to trigger re-render and show max quantity
+            setPurchaseItems([...newItems]);
+          }
+        });
+      } else if (field === 'quantity' && value > 0 && newItems[index].itemName) {
         // Fetch empty cylinders first, then validate quantity
         fetchEmptyCylinders().then((cylinders) => {
           if (cylinders) {
             const itemName = newItems[index].itemName;
             const cylinderType = getCylinderTypeFromItemName(itemName);
             let maxQuantity = 0;
-            
+
             // Dynamically get count for any cylinder type
             if (cylinderType && cylinders[cylinderType]) {
               maxQuantity = cylinders[cylinderType].length;
             }
-            
+
             console.log(`🔍 Validation: ${itemName}, Cylinder Type: ${cylinderType}, Requested: ${value}, Available: ${maxQuantity}`);
             console.log(`🔍 Available cylinder types:`, Object.keys(cylinders));
-            
+
             // If quantity exceeds available, automatically clamp to max (no alert, just enforce)
             if (maxQuantity > 0 && Number(value) > maxQuantity) {
               newItems[index].quantity = maxQuantity;
@@ -903,7 +916,7 @@ export default function VendorDetailPage() {
         });
       }
     }
-    
+
     setPurchaseItems(newItems);
   };
 
@@ -912,33 +925,33 @@ export default function VendorDetailPage() {
   // Dynamically matches any weight pattern (6kg, 11.8kg, 15kg, 30kg, 45.4kg, etc.)
   const getCylinderTypeFromItemName = (itemName: string): string | null => {
     if (!itemName) return null;
-    
+
     const name = itemName.toLowerCase();
-    
+
     // Extract weight/capacity from item name (handles patterns like "6kg", "11.8kg", "15kg", "30kg", "45.4kg", etc.)
     // Also handles formats like "Commercial (45.4kg) Gas", "commercial 45.4kg", etc.
     const weightMatch = name.match(/(\d+\.?\d*)\s*kg/i);
-    
+
     if (weightMatch) {
       const capacity = parseFloat(weightMatch[1]);
-      
+
       // Validate capacity
       if (isNaN(capacity) || capacity <= 0) {
         console.log(`⚠️ Invalid capacity extracted from item name: ${itemName} (capacity: ${capacity})`);
         return null;
       }
-      
+
       // Use the same utility function as backend for consistency
       // This generates enum like: CYLINDER_45_4KG, CYLINDER_11_8KG, etc.
       const generatedType = generateCylinderTypeFromCapacity(capacity);
-      
+
       console.log(`🔍 Extracted capacity: ${capacity}kg from "${itemName}" -> Generated type: "${generatedType}"`);
-      
+
       // Check if this generated type exists in emptyCylinders
       if (emptyCylinders[generatedType]) {
         return generatedType;
       }
-      
+
       // Also check for legacy enum formats (DOMESTIC_11_8KG, STANDARD_15KG, COMMERCIAL_45_4KG)
       // Map common weights to legacy types for backward compatibility
       if (Math.abs(capacity - 11.8) < 0.1 || name.includes('domestic')) {
@@ -969,19 +982,19 @@ export default function VendorDetailPage() {
             const wholePart = parseFloat(typeWeightMatch[1]);
             const decimalPart = typeWeightMatch[2] ? parseFloat(typeWeightMatch[2]) / 10 : 0;
             const typeWeight = wholePart + decimalPart;
-            
+
             if (Math.abs(typeWeight - capacity) < 0.1) {
               console.log(`✅ Found matching type in inventory: "${type}" (weight: ${typeWeight})`);
               return type;
             }
           }
         }
-        
+
         // Return generated type even if not found (will be used by backend)
         return generatedType;
       }
     }
-    
+
     // Fallback to keyword matching if no weight found
     if (name.includes('domestic') || name.includes('11.8')) {
       return 'DOMESTIC_11_8KG';
@@ -994,7 +1007,7 @@ export default function VendorDetailPage() {
     } else if (name.includes('30kg') || name.includes('30 kg')) {
       return 'CYLINDER_30KG';
     }
-    
+
     console.log(`⚠️ Could not extract cylinder type from item name: ${itemName}`);
     return null;
   };
@@ -1003,27 +1016,27 @@ export default function VendorDetailPage() {
     if (!isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
       return null;
     }
-    
+
     if (!itemName || !itemName.trim()) {
       return null;
     }
-    
+
     const cylinderType = getCylinderTypeFromItemName(itemName);
-    
+
     if (!cylinderType) {
       console.log(`⚠️ Could not determine cylinder type for: ${itemName}`);
       return null;
     }
-    
+
     // Debug logging
     console.log(`🔍 getMaxQuantity - Item: "${itemName}", Extracted Type: "${cylinderType}"`);
     console.log(`🔍 Available types in emptyCylinders:`, Object.keys(emptyCylinders));
     console.log(`🔍 emptyCylinders object:`, emptyCylinders);
-    
+
     // Dynamically get count for any cylinder type
     // Try exact match first
     let cylinders = emptyCylinders[cylinderType];
-    
+
     // If not found, try case-insensitive match
     if (!cylinders && Object.keys(emptyCylinders).length > 0) {
       const matchingKey = Object.keys(emptyCylinders).find(
@@ -1034,7 +1047,7 @@ export default function VendorDetailPage() {
         console.log(`✅ Found case-insensitive match: "${matchingKey}" for "${cylinderType}"`);
       }
     }
-    
+
     // If still not found, try to match by extracting weight from both
     if (!cylinders && Object.keys(emptyCylinders).length > 0) {
       const itemWeightMatch = itemName.match(/(\d+\.?\d*)\s*kg/i);
@@ -1053,10 +1066,10 @@ export default function VendorDetailPage() {
         }
       }
     }
-    
+
     const count = cylinders ? cylinders.length : 0;
     console.log(`🔍 Max quantity for "${itemName}" (type: "${cylinderType}"): ${count}`);
-    
+
     return count;
   };
 
@@ -1094,7 +1107,7 @@ export default function VendorDetailPage() {
             alert(`Quantity for "${item.itemName}" exceeds available empty cylinders. Maximum available: ${maxQty}`);
             return;
           }
-          
+
           // Check if cylinder type exists in inventory
           const cylinderType = getCylinderTypeFromItemName(item.itemName);
           if (cylinderType && (!emptyCylinders[cylinderType] || emptyCylinders[cylinderType].length === 0)) {
@@ -1106,7 +1119,7 @@ export default function VendorDetailPage() {
     }
 
     // Filter items that have quantity > 0
-    const validItems = purchaseItems.filter(item => 
+    const validItems = purchaseItems.filter(item =>
       item.itemName.trim() && item.quantity > 0 && item.unitPrice > 0
     );
 
@@ -1149,7 +1162,7 @@ export default function VendorDetailPage() {
 
       // Reset form
       setShowPurchaseForm(false);
-      
+
       // Reset to initial state based on category
       if (vendor?.category?.slug === 'gas_purchase') {
         // Start with one empty item for gas purchase
@@ -1169,7 +1182,7 @@ export default function VendorDetailPage() {
         // Generic form (valves, etc.) - start with one empty item row
         setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0 }]);
       }
-      
+
       setPurchaseFormData({ invoiceNumber: '', notes: '', paidAmount: 0, paymentMethod: 'CASH' });
       fetchVendor();
     } catch (error) {
@@ -1258,7 +1271,7 @@ export default function VendorDetailPage() {
         >
           <ArrowLeftIcon className="w-4 h-4 mr-2" />
           Back to {vendor.category.name}
-          </Link>
+        </Link>
 
         <div className="flex justify-between items-start">
           <div>
@@ -1314,16 +1327,16 @@ export default function VendorDetailPage() {
                 </div>
               )}
               {vendor.phone && (
-              <div>
+                <div>
                   <span className="text-gray-500">Phone:</span>
                   <span className="ml-2 font-medium">{vendor.phone}</span>
-              </div>
+                </div>
               )}
               {vendor.email && (
                 <div>
                   <span className="text-gray-500">Email:</span>
                   <span className="ml-2 font-medium">{vendor.email}</span>
-            </div>
+                </div>
               )}
               {vendor.address && (
                 <div>
@@ -1375,9 +1388,8 @@ export default function VendorDetailPage() {
             <div className="flex items-center justify-between mb-3">
               <div className="flex-1">
                 <p className="text-sm text-gray-500 mb-1">Net Balance (Outstanding)</p>
-                <p className={`text-2xl font-bold ${
-                  vendor.financialSummary.netBalance > 0 ? 'text-green-600' : 'text-red-600'
-                }`}>
+                <p className={`text-2xl font-bold ${vendor.financialSummary.netBalance > 0 ? 'text-green-600' : 'text-red-600'
+                  }`}>
                   {formatCurrency(Math.round(vendor.financialSummary.netBalance))}
                 </p>
                 {vendor.financialSummary.netBalance > 0 && (
@@ -1391,12 +1403,10 @@ export default function VendorDetailPage() {
                   </p>
                 )}
               </div>
-              <div className={`p-3 rounded-lg ${
-                vendor.financialSummary.netBalance > 0 ? 'bg-yellow-100' : 'bg-gray-100'
-              }`}>
-                <CurrencyDollarIcon className={`w-8 h-8 ${
-                  vendor.financialSummary.netBalance > 0 ? 'text-yellow-600' : 'text-gray-600'
-                }`} />
+              <div className={`p-3 rounded-lg ${vendor.financialSummary.netBalance > 0 ? 'bg-yellow-100' : 'bg-gray-100'
+                }`}>
+                <CurrencyDollarIcon className={`w-8 h-8 ${vendor.financialSummary.netBalance > 0 ? 'text-yellow-600' : 'text-gray-600'
+                  }`} />
               </div>
             </div>
             {vendor.financialSummary.outstandingBalance < 0 && (
@@ -1422,24 +1432,21 @@ export default function VendorDetailPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Credit Balance</p>
-                  <p className={`text-2xl font-bold ${
-                    vendor.creditBalance > 0 ? 'text-green-600' : 'text-red-600'
-                  }`}>
+                  <p className={`text-2xl font-bold ${vendor.creditBalance > 0 ? 'text-green-600' : 'text-red-600'
+                    }`}>
                     {vendor.creditBalance > 0 ? '+' : ''}{formatCurrency(Math.abs(vendor.creditBalance))}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
-                    {vendor.creditBalance > 0 
-                      ? 'Vendor owes you money' 
+                    {vendor.creditBalance > 0
+                      ? 'Vendor owes you money'
                       : 'You owe vendor money'
                     }
                   </p>
                 </div>
-                <div className={`p-3 rounded-lg ${
-                  vendor.creditBalance > 0 ? 'bg-green-100' : 'bg-red-100'
-                }`}>
-                  <CurrencyDollarIcon className={`w-8 h-8 ${
-                    vendor.creditBalance > 0 ? 'text-green-600' : 'text-red-600'
-                  }`} />
+                <div className={`p-3 rounded-lg ${vendor.creditBalance > 0 ? 'bg-green-100' : 'bg-red-100'
+                  }`}>
+                  <CurrencyDollarIcon className={`w-8 h-8 ${vendor.creditBalance > 0 ? 'text-green-600' : 'text-red-600'
+                    }`} />
                 </div>
               </div>
             </CardContent>
@@ -1453,31 +1460,28 @@ export default function VendorDetailPage() {
           <nav className="-mb-px flex space-x-8">
             <button
               onClick={() => setActiveTab('purchases')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'purchases'
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'purchases'
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+                }`}
             >
               Entries
             </button>
             <button
               onClick={() => setActiveTab('items')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'items'
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'items'
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+                }`}
             >
               Items ({vendor.inventories?.length || 0})
             </button>
             <button
               onClick={() => setActiveTab('financial')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'financial'
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'financial'
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+                }`}
             >
               Financial Report
             </button>
@@ -1595,17 +1599,17 @@ export default function VendorDetailPage() {
                           <label className="text-lg font-semibold text-gray-900">
                             {vendor.category.name}
                           </label>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={handleAddPurchaseItem}
-                            >
-                              <PlusIcon className="w-4 h-4 mr-1" />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleAddPurchaseItem}
+                          >
+                            <PlusIcon className="w-4 h-4 mr-1" />
                             Add Item
-                            </Button>
+                          </Button>
                         </div>
-                        
+
                         <div className="overflow-x-auto">
                           <table className="w-full border-collapse border border-gray-300" style={{ tableLayout: 'fixed' }}>
                             <colgroup>
@@ -1743,7 +1747,7 @@ export default function VendorDetailPage() {
                             Add Item
                           </Button>
                         </div>
-                        
+
                         <div className="overflow-x-auto">
                           <table className="w-full border-collapse border border-gray-300" style={{ tableLayout: 'fixed' }}>
                             <colgroup>
@@ -1803,41 +1807,41 @@ export default function VendorDetailPage() {
                                   </td>
                                   <td className="border border-gray-300 px-4 py-2">
                                     <div className="space-y-1">
-                                    <Input
-                                      type="number"
-                                      value={item.quantity}
-                                      onChange={(e) => {
-                                        const maxQty = getMaxQuantity(item.itemName);
-                                        const parsedValue = e.target.value === '' ? 0 : parseInt(e.target.value) || 0;
-                                        let inputValue: number = parsedValue;
-                                        
-                                        // Enforce max quantity if available (prevent exceeding max)
-                                        if (maxQty !== null && maxQty !== undefined && maxQty > 0 && inputValue > maxQty) {
-                                          inputValue = maxQty;
-                                        }
-                                        
-                                        // Don't allow negative values
-                                        if (inputValue < 0) {
-                                          inputValue = 0;
-                                        }
-                                        
-                                        handlePurchaseItemChange(index, 'quantity', inputValue);
-                                      }}
-                                      onBlur={(e) => {
-                                        const maxQty = getMaxQuantity(item.itemName);
-                                        const currentValue = parseInt(e.target.value) || 0;
-                                        
-                                        // Clamp to max on blur if exceeded
-                                        if (maxQty !== null && maxQty !== undefined && maxQty > 0 && currentValue > maxQty) {
-                                          handlePurchaseItemChange(index, 'quantity', maxQty);
-                                        }
-                                      }}
-                                      placeholder="Enter quantity"
-                                      min="0"
-                                      step="1"
-                                      max={getMaxQuantity(item.itemName) || undefined}
-                                      className="text-center border-0 focus:ring-1 bg-transparent"
-                                    />
+                                      <Input
+                                        type="number"
+                                        value={item.quantity}
+                                        onChange={(e) => {
+                                          const maxQty = getMaxQuantity(item.itemName);
+                                          const parsedValue = e.target.value === '' ? 0 : parseInt(e.target.value) || 0;
+                                          let inputValue: number = parsedValue;
+
+                                          // Enforce max quantity if available (prevent exceeding max)
+                                          if (maxQty !== null && maxQty !== undefined && maxQty > 0 && inputValue > maxQty) {
+                                            inputValue = maxQty;
+                                          }
+
+                                          // Don't allow negative values
+                                          if (inputValue < 0) {
+                                            inputValue = 0;
+                                          }
+
+                                          handlePurchaseItemChange(index, 'quantity', inputValue);
+                                        }}
+                                        onBlur={(e) => {
+                                          const maxQty = getMaxQuantity(item.itemName);
+                                          const currentValue = parseInt(e.target.value) || 0;
+
+                                          // Clamp to max on blur if exceeded
+                                          if (maxQty !== null && maxQty !== undefined && maxQty > 0 && currentValue > maxQty) {
+                                            handlePurchaseItemChange(index, 'quantity', maxQty);
+                                          }
+                                        }}
+                                        placeholder="Enter quantity"
+                                        min="0"
+                                        step="1"
+                                        max={getMaxQuantity(item.itemName) || undefined}
+                                        className="text-center border-0 focus:ring-1 bg-transparent"
+                                      />
                                       {(() => {
                                         const maxQty = getMaxQuantity(item.itemName);
                                         return maxQty !== null && maxQty !== undefined && maxQty > 0 && (
@@ -1932,7 +1936,7 @@ export default function VendorDetailPage() {
                             Add Item
                           </Button>
                         </div>
-                        
+
                         <div className="overflow-x-auto">
                           <table className="w-full border-collapse border border-gray-300" style={{ tableLayout: 'fixed' }}>
                             <colgroup>
@@ -1992,20 +1996,20 @@ export default function VendorDetailPage() {
                                   </td>
                                   <td className="border border-gray-300 px-4 py-2">
                                     <div className="space-y-1">
-                                    <Input
-                                      type="number"
-                                      value={item.quantity}
-                                      onChange={(e) => handlePurchaseItemChange(
-                                        index,
-                                        'quantity',
-                                        e.target.value
-                                      )}
-                                      placeholder="Enter quantity"
-                                      min="0"
-                                      step="1"
-                                      max={getMaxQuantity(item.itemName) || undefined}
-                                      className="text-center border-0 focus:ring-1 bg-transparent"
-                                    />
+                                      <Input
+                                        type="number"
+                                        value={item.quantity}
+                                        onChange={(e) => handlePurchaseItemChange(
+                                          index,
+                                          'quantity',
+                                          e.target.value
+                                        )}
+                                        placeholder="Enter quantity"
+                                        min="0"
+                                        step="1"
+                                        max={getMaxQuantity(item.itemName) || undefined}
+                                        className="text-center border-0 focus:ring-1 bg-transparent"
+                                      />
                                       {(() => {
                                         const maxQty = getMaxQuantity(item.itemName);
                                         return maxQty !== null && maxQty !== undefined && maxQty > 0 && (
@@ -2088,7 +2092,7 @@ export default function VendorDetailPage() {
                             Add Item
                           </Button>
                         </div>
-                        
+
                         <div className="overflow-x-auto">
                           <table className="w-full border-collapse border border-gray-300" style={{ tableLayout: 'fixed' }}>
                             <colgroup>
@@ -2352,10 +2356,13 @@ export default function VendorDetailPage() {
                       <Input
                         type="number"
                         value={purchaseFormData.paidAmount}
-                        onChange={(e) => setPurchaseFormData({
-                          ...purchaseFormData,
-                          paidAmount: Number(e.target.value)
-                        })}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          setPurchaseFormData({
+                            ...purchaseFormData,
+                            paidAmount: isNaN(val) ? 0 : val
+                          });
+                        }}
                         placeholder="Amount paid now"
                         min="0"
                         step="1"
@@ -2394,7 +2401,7 @@ export default function VendorDetailPage() {
                       variant="outline"
                       onClick={() => {
                         setShowPurchaseForm(false);
-                        
+
                         // Reset to default items based on vendor category
                         if (isCylinderPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
                           // Reset to one empty item for cylinder purchase (matching gas purchase behavior)
@@ -2411,7 +2418,7 @@ export default function VendorDetailPage() {
                         } else {
                           setPurchaseItems([{ itemName: '', quantity: 1, unitPrice: 0, totalPrice: 0 }]);
                         }
-                        
+
                         setPurchaseFormData({ invoiceNumber: '', notes: '', paidAmount: 0, paymentMethod: 'CASH' });
                         setUsedCodes(new Set()); // Reset used codes
                       }}
@@ -2473,13 +2480,12 @@ export default function VendorDetailPage() {
                           </Button>
                         )}
                         <span
-                          className={`px-3 py-1 text-sm font-medium rounded-full ${
-                            purchase.status === 'PAID'
+                          className={`px-3 py-1 text-sm font-medium rounded-full ${purchase.status === 'PAID'
                               ? 'bg-green-100 text-green-700'
                               : purchase.status === 'PARTIAL'
-                              ? 'bg-yellow-100 text-yellow-700'
-                              : 'bg-red-100 text-red-700'
-                          }`}
+                                ? 'bg-yellow-100 text-yellow-700'
+                                : 'bg-red-100 text-red-700'
+                            }`}
                         >
                           {purchase.status}
                         </span>
@@ -2528,7 +2534,7 @@ export default function VendorDetailPage() {
                                 categoryDisplay = item.itemDescription;
                               }
                             }
-                            
+
                             return (
                               <tr key={itemIndex} className="border-t border-gray-200">
                                 {vendor?.category?.slug === 'accessories_purchase' && (
@@ -2564,77 +2570,76 @@ export default function VendorDetailPage() {
                           {formatCurrency(Math.round(Number(purchase.totalPrice || purchase.items?.reduce((sum: number, item: any) => sum + Number(item.totalPrice), 0) || 0)))}
                         </div>
                       </div>
-                      
+
                       {/* Recent Payment Total */}
                       <div>
                         <div className="text-xs text-gray-500 mb-1">Recent Payment Total</div>
                         <div className="text-lg font-semibold text-green-600">
                           {(() => {
                             // Calculate total payments for this specific purchase
-                            const purchasePayments = vendor.payments?.filter(payment => 
+                            const purchasePayments = vendor.payments?.filter(payment =>
                               payment.description?.includes(purchase.invoiceNumber || '')
                             ) || [];
-                            
+
                             // Debug logging
                             console.log('Purchase invoice:', purchase.invoiceNumber);
                             console.log('All payments:', vendor.payments);
                             console.log('Filtered payments:', purchasePayments);
-                            
-                            const totalPaid = purchasePayments.reduce((sum, payment) => 
+
+                            const totalPaid = purchasePayments.reduce((sum, payment) =>
                               sum + Number(payment.amount), 0
                             );
                             return formatCurrency(Math.round(totalPaid));
                           })()}
                         </div>
                       </div>
-                      
+
                       {/* Net Running Balance */}
                       <div>
                         <div className="text-xs text-gray-500 mb-1">Net Running Balance</div>
-                        <div className={`text-lg font-semibold ${
-                          (() => {
+                        <div className={`text-lg font-semibold ${(() => {
                             // Calculate running balance up to this transaction
                             // Find the index of the first entry with this invoice number
                             const firstEntryId = purchase.items?.[0]?.id || purchase.id;
                             const currentIndex = vendor.purchase_entries?.findIndex(p => p.id === firstEntryId) || 0;
                             const transactionsUpToThis = vendor.purchase_entries?.slice(currentIndex) || [];
-                            
+
                             // Calculate total purchases up to this point
                             const totalPurchasesUpToThis = transactionsUpToThis.reduce(
                               (sum, p) => sum + Number(p.totalPrice), 0
                             );
-                            
+
                             // Calculate total payments up to this point
                             const totalPaymentsUpToThis = vendor.payments?.reduce(
                               (sum, payment) => sum + Number(payment.amount), 0
                             ) || 0;
-                            
+
                             // Running balance = payments - purchases
                             const runningBalance = totalPaymentsUpToThis - totalPurchasesUpToThis;
-                            
+
                             return runningBalance < 0 ? 'text-red-600' : 'text-green-600';
                           })()
-                        }`}>
+                          }`}>
                           {(() => {
                             // Calculate running balance up to this transaction
                             // Find the index of the first entry with this invoice number
                             const firstEntryId = purchase.items?.[0]?.id || purchase.id;
                             const currentIndex = vendor.purchase_entries?.findIndex(p => p.id === firstEntryId) || 0;
                             const transactionsUpToThis = vendor.purchase_entries?.slice(currentIndex) || [];
-                            
+
                             // Calculate total purchases up to this point
                             const totalPurchasesUpToThis = transactionsUpToThis.reduce(
                               (sum, p) => sum + Number(p.totalPrice), 0
                             );
-                            
+
                             // Calculate total payments up to this point
                             const totalPaymentsUpToThis = vendor.payments?.reduce(
                               (sum, payment) => sum + Number(payment.amount), 0
                             ) || 0;
-                            
+
                             // Running balance = payments - purchases
                             const runningBalance = totalPaymentsUpToThis - totalPurchasesUpToThis;
-                            
+
                             return formatCurrency(Math.round(runningBalance));
                           })()}
                         </div>
@@ -2653,10 +2658,10 @@ export default function VendorDetailPage() {
 
                     {/* Payments - Show payments specific to this purchase entry */}
                     {(() => {
-                      const purchasePayments = vendor.payments?.filter(payment => 
+                      const purchasePayments = vendor.payments?.filter(payment =>
                         payment.description?.includes(purchase.invoiceNumber || '')
                       ) || [];
-                      
+
                       return purchasePayments.length > 0 && (
                         <div className="mt-4 pt-4 border-t border-gray-200">
                           <h4 className="text-sm font-medium text-gray-700 mb-2">
@@ -2763,7 +2768,7 @@ export default function VendorDetailPage() {
                     >
                       Cancel
                     </Button>
-                </div>
+                  </div>
                 </form>
               </CardContent>
             </Card>
@@ -2887,14 +2892,13 @@ export default function VendorDetailPage() {
                       Total Payments
                     </p>
                   </CardContent>
-        </Card>
+                </Card>
 
                 <Card>
                   <CardContent className="p-6">
                     <p className="text-sm text-gray-500 mb-1">Net Balance</p>
-                    <p className={`text-2xl font-bold ${
-                      financialReport.netBalance > 0 ? 'text-green-600' : financialReport.netBalance < 0 ? 'text-red-600' : 'text-gray-900'
-                    }`}>
+                    <p className={`text-2xl font-bold ${financialReport.netBalance > 0 ? 'text-green-600' : financialReport.netBalance < 0 ? 'text-red-600' : 'text-gray-900'
+                      }`}>
                       {formatCurrency(Math.round(financialReport.netBalance))}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">
@@ -2916,7 +2920,7 @@ export default function VendorDetailPage() {
                       <span className="font-medium">
                         {reportPeriod === 'all' && 'All Time'}
                         {reportPeriod === 'daily' && formatDate(financialReport.startDate)}
-                        {reportPeriod === 'monthly' && 
+                        {reportPeriod === 'monthly' &&
                           `${formatDate(financialReport.startDate)} - ${formatDate(financialReport.endDate)}`}
                         {reportPeriod === 'yearly' &&
                           new Date(financialReport.startDate).getFullYear()}
@@ -2952,9 +2956,8 @@ export default function VendorDetailPage() {
                     )}
                     <div className="flex justify-between py-2">
                       <span className="text-gray-700 font-semibold">Outstanding Balance:</span>
-                      <span className={`font-bold text-lg ${
-                        financialReport.outstandingBalance > 0 ? 'text-red-600' : 'text-gray-900'
-                      }`}>
+                      <span className={`font-bold text-lg ${financialReport.outstandingBalance > 0 ? 'text-red-600' : 'text-gray-900'
+                        }`}>
                         {formatCurrency(Math.round(financialReport.outstandingBalance))}
                       </span>
                     </div>
@@ -2987,26 +2990,25 @@ export default function VendorDetailPage() {
                                   <h4 className="text-xl font-bold text-gray-900">
                                     {formatCurrency(Math.round(Number(payment.amount)))}
                                   </h4>
-                                  <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
-                                    payment.status === 'COMPLETED' 
-                                      ? 'bg-green-100 text-green-800 border border-green-200' 
+                                  <span className={`px-3 py-1 text-xs font-semibold rounded-full ${payment.status === 'COMPLETED'
+                                      ? 'bg-green-100 text-green-800 border border-green-200'
                                       : 'bg-yellow-100 text-yellow-800 border border-yellow-200'
-                                  }`}>
+                                    }`}>
                                     {payment.status}
                                   </span>
                                 </div>
-                                
+
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                                   <div className="flex items-center gap-2">
                                     <span className="text-gray-500 font-medium">Date:</span>
                                     <span className="text-gray-700 font-semibold">{formatDate(payment.paymentDate)}</span>
                                   </div>
-                                  
+
                                   <div className="flex items-center gap-2">
                                     <span className="text-gray-500 font-medium">Method:</span>
                                     <span className="text-gray-700 font-semibold">{payment.method}</span>
                                   </div>
-                                  
+
                                   {payment.reference && (
                                     <div className="flex items-center gap-2">
                                       <span className="text-gray-500 font-medium">Reference:</span>
@@ -3015,7 +3017,7 @@ export default function VendorDetailPage() {
                                       </span>
                                     </div>
                                   )}
-                                  
+
                                   <div className="flex items-center gap-2">
                                     <span className="text-gray-500 font-medium">Transaction ID:</span>
                                     <span className="text-gray-600 font-mono text-xs bg-gray-100 px-2 py-1 rounded">
@@ -3023,7 +3025,7 @@ export default function VendorDetailPage() {
                                     </span>
                                   </div>
                                 </div>
-                                
+
                                 {payment.description && (
                                   <div className="mt-3 p-3 bg-white rounded-lg border border-gray-100">
                                     <p className="text-sm text-gray-600">
@@ -3033,7 +3035,7 @@ export default function VendorDetailPage() {
                                 )}
                               </div>
                             </div>
-                            
+
                             <div className="flex flex-col items-end gap-2">
                               <div className="text-xs text-gray-400 font-medium">
                                 #{index + 1}
@@ -3096,7 +3098,7 @@ export default function VendorDetailPage() {
                   </svg>
                 </button>
               </div>
-              
+
               <form onSubmit={handleEditVendor} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -3105,7 +3107,7 @@ export default function VendorDetailPage() {
                     </label>
                     <Input
                       value={editFormData.name}
-                      onChange={(e) => setEditFormData({...editFormData, name: e.target.value})}
+                      onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
                       placeholder="e.g., Khattak Plant, Ali Dealer"
                       required
                     />
@@ -3116,7 +3118,7 @@ export default function VendorDetailPage() {
                     </label>
                     <Input
                       value={editFormData.contactPerson}
-                      onChange={(e) => setEditFormData({...editFormData, contactPerson: e.target.value})}
+                      onChange={(e) => setEditFormData({ ...editFormData, contactPerson: e.target.value })}
                       placeholder="Contact person name"
                     />
                   </div>
@@ -3126,7 +3128,7 @@ export default function VendorDetailPage() {
                     </label>
                     <Input
                       value={editFormData.phone}
-                      onChange={(e) => setEditFormData({...editFormData, phone: e.target.value})}
+                      onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
                       placeholder="Phone number"
                     />
                   </div>
@@ -3137,7 +3139,7 @@ export default function VendorDetailPage() {
                     <Input
                       type="email"
                       value={editFormData.email}
-                      onChange={(e) => setEditFormData({...editFormData, email: e.target.value})}
+                      onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
                       placeholder="Email address"
                     />
                   </div>
@@ -3148,7 +3150,7 @@ export default function VendorDetailPage() {
                   </label>
                   <Input
                     value={editFormData.address}
-                    onChange={(e) => setEditFormData({...editFormData, address: e.target.value})}
+                    onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })}
                     placeholder="Full address"
                   />
                 </div>
@@ -3189,7 +3191,7 @@ export default function VendorDetailPage() {
                   </svg>
                 </button>
               </div>
-              
+
               <form onSubmit={handleUpdateItem} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -3197,34 +3199,34 @@ export default function VendorDetailPage() {
                   </label>
                   <Input
                     value={editItemFormData.name}
-                    onChange={(e) => setEditItemFormData({...editItemFormData, name: e.target.value})}
+                    onChange={(e) => setEditItemFormData({ ...editItemFormData, name: e.target.value })}
                     placeholder="Enter item name"
                     required
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Category
                   </label>
                   <Input
                     value={editItemFormData.category}
-                    onChange={(e) => setEditItemFormData({...editItemFormData, category: e.target.value})}
+                    onChange={(e) => setEditItemFormData({ ...editItemFormData, category: e.target.value })}
                     placeholder="Enter category"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Description
                   </label>
                   <Input
                     value={editItemFormData.description}
-                    onChange={(e) => setEditItemFormData({...editItemFormData, description: e.target.value})}
+                    onChange={(e) => setEditItemFormData({ ...editItemFormData, description: e.target.value })}
                     placeholder="Enter description"
                   />
                 </div>
-                
+
                 <div className="flex gap-3">
                   <Button type="submit">Update Item</Button>
                   <Button
@@ -3283,12 +3285,12 @@ export default function VendorDetailPage() {
                     className="w-full"
                     autoFocus
                   />
-                  {deleteConfirmationName.trim() !== '' && 
-                   deleteConfirmationName.trim() !== (vendor.name || vendor.companyName || '').trim() && (
-                    <p className="mt-2 text-sm text-red-600">
-                      The name does not match. Please type the exact vendor name.
-                    </p>
-                  )}
+                  {deleteConfirmationName.trim() !== '' &&
+                    deleteConfirmationName.trim() !== (vendor.name || vendor.companyName || '').trim() && (
+                      <p className="mt-2 text-sm text-red-600">
+                        The name does not match. Please type the exact vendor name.
+                      </p>
+                    )}
                 </div>
                 <div className="flex justify-center space-x-3">
                   <Button

@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db';
-import { 
-  createNotification, 
+import {
+  createNotification,
   createCylinderAddedNotification,
   createCylinderUpdatedNotification,
   createCylinderDeletedNotification,
@@ -31,7 +31,7 @@ export class NotificationService {
   private maxRetries: number = 3;
   private retryDelay: number = 5000; // 5 seconds
 
-  private constructor() {}
+  private constructor() { }
 
   public static getInstance(): NotificationService {
     if (!NotificationService.instance) {
@@ -50,7 +50,7 @@ export class NotificationService {
     try {
       this.isRunning = true;
       this.errorCount = 0;
-      
+
       if (this.checkInterval) {
         clearInterval(this.checkInterval);
       }
@@ -97,40 +97,40 @@ export class NotificationService {
   private async checkForChanges() {
     try {
       const now = new Date();
-      
+
       // Check for new cylinders added
       await this.retryOperation(() => this.checkNewCylinders());
-      
+
       // Check for cylinder status changes
       await this.retryOperation(() => this.checkCylinderStatusChanges());
-      
+
       // Check for new vendors
       await this.retryOperation(() => this.checkNewVendors());
-      
+
       // Check for new customers
       await this.retryOperation(() => this.checkNewCustomers());
-      
+
       // Check for new expenses
       await this.retryOperation(() => this.checkNewExpenses());
-      
+
       // Check for low inventory
       await this.retryOperation(() => this.checkLowInventory());
-      
+
       // Check for maintenance due
       await this.retryOperation(() => this.checkMaintenanceDue());
-      
+
       // Check for new rentals
       await this.retryOperation(() => this.checkNewRentals());
-      
+
       // Check for completed rentals
       await this.retryOperation(() => this.checkCompletedRentals());
-      
+
       this.lastCheckTime = now;
       this.errorCount = 0; // Reset error count on successful check
     } catch (error) {
       this.errorCount++;
       console.error(`Error checking for changes (attempt ${this.errorCount}):`, error);
-      
+
       // If too many errors, stop the service
       if (this.errorCount >= this.maxRetries) {
         console.error('Too many errors, stopping notification service');
@@ -146,23 +146,23 @@ export class NotificationService {
     baseDelay: number = 1000
   ): Promise<T> {
     let lastError: Error;
-    
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         return await operation();
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
-        
+
         if (attempt === maxRetries) {
           throw lastError;
         }
-        
+
         // Exponential backoff
         const delay = baseDelay * Math.pow(2, attempt - 1);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
-    
+
     throw lastError!;
   }
 
@@ -265,18 +265,17 @@ export class NotificationService {
         },
         select: {
           id: true,
-          firstName: true,
-          lastName: true,
-          code: true,
+          name: true,
+          phone: true,
           createdAt: true
         }
       });
 
       for (const customer of newCustomers) {
         await createCustomerAddedNotification(
-          `${customer.firstName} ${customer.lastName}`,
+          customer.name,
           'system@lpg-gas.com',
-          customer.code
+          customer.phone,
         );
       }
     } catch (error) {
@@ -323,7 +322,7 @@ export class NotificationService {
       // Check for cylinders with low availability
       const lowInventoryCylinders = await prisma.cylinder.findMany({
         where: {
-          currentStatus: 'AVAILABLE'
+          currentStatus: 'FULL'
         },
         select: {
           id: true,
@@ -391,8 +390,7 @@ export class NotificationService {
           id: true,
           customer: {
             select: {
-              firstName: true,
-              lastName: true
+              name: true
             }
           },
           cylinder: {
@@ -406,7 +404,7 @@ export class NotificationService {
 
       for (const rental of newRentals) {
         await createRentalCreatedNotification(
-          `${rental.customer.firstName} ${rental.customer.lastName}`,
+          rental.customer.name,
           rental.cylinder.code,
           'system@lpg-gas.com'
         );
@@ -431,8 +429,7 @@ export class NotificationService {
           id: true,
           customer: {
             select: {
-              firstName: true,
-              lastName: true
+              name: true
             }
           },
           cylinder: {
@@ -446,7 +443,7 @@ export class NotificationService {
 
       for (const rental of completedRentals) {
         await createRentalCompletedNotification(
-          `${rental.customer.firstName} ${rental.customer.lastName}`,
+          rental.customer.name,
           rental.cylinder.code,
           'system@lpg-gas.com'
         );
@@ -492,7 +489,7 @@ export class NotificationService {
   }>) {
     try {
       const createdNotifications = [];
-      
+
       for (const notification of notifications) {
         const created = await this.createManualNotification(
           notification.type,
@@ -504,7 +501,7 @@ export class NotificationService {
         );
         createdNotifications.push(created);
       }
-      
+
       return createdNotifications;
     } catch (error) {
       console.error('Error creating bulk notifications:', error);
@@ -541,11 +538,11 @@ export class NotificationService {
       const [total, unread, urgent] = await Promise.all([
         prisma.notification.count(),
         prisma.notification.count({ where: { isRead: false } }),
-        prisma.notification.count({ 
-          where: { 
+        prisma.notification.count({
+          where: {
             isRead: false,
             priority: 'URGENT'
-          } 
+          }
         })
       ]);
 
