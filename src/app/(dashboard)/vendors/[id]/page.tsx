@@ -292,21 +292,24 @@ export default function VendorDetailPage() {
   const [pricePer11_8kg, setPricePer11_8kg] = useState<number>(0);
 
   // Calculate unit price based on price per 11.8kg and cylinder capacity
+  // Helper to extract capacity from item name
+  const getCapacityFromItemName = (itemName: string): number => {
+    if (!itemName) return 0;
+    const match = itemName.toLowerCase().match(/(\d+\.?\d*)\s*kg/i);
+    return match ? parseFloat(match[1]) : 0;
+  };
+
+  // Calculate unit price based on price per 11.8kg and cylinder capacity
   const calculateUnitPriceFromBase = (itemName: string, basePrice: number): number => {
     if (!itemName || !basePrice || basePrice <= 0) return 0;
 
-    const name = itemName.toLowerCase();
-    // Extract capacity from item name (handles patterns like "6kg", "11.8kg", "15kg", "30kg", "45.4kg", etc.)
-    const weightMatch = name.match(/(\d+\.?\d*)\s*kg/i);
+    const capacity = getCapacityFromItemName(itemName);
 
-    if (weightMatch) {
-      const capacity = parseFloat(weightMatch[1]);
-      if (!isNaN(capacity) && capacity > 0) {
-        // Calculate proportional price: (capacity / 11.8) * basePrice
-        const calculatedPrice = (capacity / 11.8) * basePrice;
-        // Round off decimals to whole number
-        return Math.round(calculatedPrice);
-      }
+    if (capacity > 0) {
+      // Calculate proportional price: (capacity / 11.8) * basePrice
+      const calculatedPrice = (capacity / 11.8) * basePrice;
+      // Round off decimals to whole number
+      return Math.round(calculatedPrice);
     }
 
     return 0;
@@ -321,10 +324,16 @@ export default function VendorDetailPage() {
     const updatedItems = purchaseItems.map(item => {
       if (item.itemName && item.itemName.trim()) {
         const calculatedPrice = calculateUnitPriceFromBase(item.itemName, basePrice);
+        const capacity = getCapacityFromItemName(item.itemName);
+        // For gas purchase, price per item = (quantity * unitPrice * capacity)
+        const totalPrice = capacity > 0
+          ? Math.round(Number(item.quantity) * calculatedPrice * capacity)
+          : Math.round(Number(item.quantity) * calculatedPrice);
+
         return {
           ...item,
           unitPrice: calculatedPrice,
-          totalPrice: Number(item.quantity) * calculatedPrice
+          totalPrice: totalPrice
         };
       }
       return item;
@@ -870,8 +879,17 @@ export default function VendorDetailPage() {
 
     // Auto-calculate total price
     if (field === 'quantity' || field === 'unitPrice') {
-      newItems[index].totalPrice =
-        Number(newItems[index].quantity) * Number(newItems[index].unitPrice);
+      let totalPrice = Number(newItems[index].quantity) * Number(newItems[index].unitPrice);
+
+      // For gas purchase, apply capacity multiplier
+      if (isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
+        const capacity = getCapacityFromItemName(newItems[index].itemName);
+        if (capacity > 0) {
+          totalPrice = Number(newItems[index].quantity) * Number(newItems[index].unitPrice) * capacity;
+        }
+      }
+
+      newItems[index].totalPrice = Math.round(totalPrice);
     }
 
     // For gas purchase, fetch empty cylinders when item is selected or quantity changes
@@ -884,7 +902,12 @@ export default function VendorDetailPage() {
             if (pricePer11_8kg > 0) {
               const calculatedPrice = calculateUnitPriceFromBase(value, pricePer11_8kg);
               newItems[index].unitPrice = calculatedPrice;
-              newItems[index].totalPrice = Number(newItems[index].quantity) * calculatedPrice;
+              const capacity = getCapacityFromItemName(value);
+              if (capacity > 0) {
+                newItems[index].totalPrice = Math.round(Number(newItems[index].quantity) * calculatedPrice * capacity);
+              } else {
+                newItems[index].totalPrice = Math.round(Number(newItems[index].quantity) * calculatedPrice);
+              }
             }
             // Update items to trigger re-render and show max quantity
             setPurchaseItems([...newItems]);
@@ -909,7 +932,12 @@ export default function VendorDetailPage() {
             // If quantity exceeds available, automatically clamp to max (no alert, just enforce)
             if (maxQuantity > 0 && Number(value) > maxQuantity) {
               newItems[index].quantity = maxQuantity;
-              newItems[index].totalPrice = maxQuantity * Number(newItems[index].unitPrice);
+              const capacity = getCapacityFromItemName(newItems[index].itemName);
+              if (capacity > 0) {
+                newItems[index].totalPrice = Math.round(maxQuantity * Number(newItems[index].unitPrice) * capacity);
+              } else {
+                newItems[index].totalPrice = Math.round(maxQuantity * Number(newItems[index].unitPrice));
+              }
               setPurchaseItems([...newItems]);
             }
           }
@@ -1461,8 +1489,8 @@ export default function VendorDetailPage() {
             <button
               onClick={() => setActiveTab('purchases')}
               className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'purchases'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
             >
               Entries
@@ -1470,8 +1498,8 @@ export default function VendorDetailPage() {
             <button
               onClick={() => setActiveTab('items')}
               className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'items'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
             >
               Items ({vendor.inventories?.length || 0})
@@ -1479,8 +1507,8 @@ export default function VendorDetailPage() {
             <button
               onClick={() => setActiveTab('financial')}
               className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'financial'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
             >
               Financial Report
@@ -2481,10 +2509,10 @@ export default function VendorDetailPage() {
                         )}
                         <span
                           className={`px-3 py-1 text-sm font-medium rounded-full ${purchase.status === 'PAID'
-                              ? 'bg-green-100 text-green-700'
-                              : purchase.status === 'PARTIAL'
-                                ? 'bg-yellow-100 text-yellow-700'
-                                : 'bg-red-100 text-red-700'
+                            ? 'bg-green-100 text-green-700'
+                            : purchase.status === 'PARTIAL'
+                              ? 'bg-yellow-100 text-yellow-700'
+                              : 'bg-red-100 text-red-700'
                             }`}
                         >
                           {purchase.status}
@@ -2598,27 +2626,27 @@ export default function VendorDetailPage() {
                       <div>
                         <div className="text-xs text-gray-500 mb-1">Net Running Balance</div>
                         <div className={`text-lg font-semibold ${(() => {
-                            // Calculate running balance up to this transaction
-                            // Find the index of the first entry with this invoice number
-                            const firstEntryId = purchase.items?.[0]?.id || purchase.id;
-                            const currentIndex = vendor.purchase_entries?.findIndex(p => p.id === firstEntryId) || 0;
-                            const transactionsUpToThis = vendor.purchase_entries?.slice(currentIndex) || [];
+                          // Calculate running balance up to this transaction
+                          // Find the index of the first entry with this invoice number
+                          const firstEntryId = purchase.items?.[0]?.id || purchase.id;
+                          const currentIndex = vendor.purchase_entries?.findIndex(p => p.id === firstEntryId) || 0;
+                          const transactionsUpToThis = vendor.purchase_entries?.slice(currentIndex) || [];
 
-                            // Calculate total purchases up to this point
-                            const totalPurchasesUpToThis = transactionsUpToThis.reduce(
-                              (sum, p) => sum + Number(p.totalPrice), 0
-                            );
+                          // Calculate total purchases up to this point
+                          const totalPurchasesUpToThis = transactionsUpToThis.reduce(
+                            (sum, p) => sum + Number(p.totalPrice), 0
+                          );
 
-                            // Calculate total payments up to this point
-                            const totalPaymentsUpToThis = vendor.payments?.reduce(
-                              (sum, payment) => sum + Number(payment.amount), 0
-                            ) || 0;
+                          // Calculate total payments up to this point
+                          const totalPaymentsUpToThis = vendor.payments?.reduce(
+                            (sum, payment) => sum + Number(payment.amount), 0
+                          ) || 0;
 
-                            // Running balance = payments - purchases
-                            const runningBalance = totalPaymentsUpToThis - totalPurchasesUpToThis;
+                          // Running balance = payments - purchases
+                          const runningBalance = totalPaymentsUpToThis - totalPurchasesUpToThis;
 
-                            return runningBalance < 0 ? 'text-red-600' : 'text-green-600';
-                          })()
+                          return runningBalance < 0 ? 'text-red-600' : 'text-green-600';
+                        })()
                           }`}>
                           {(() => {
                             // Calculate running balance up to this transaction
@@ -2991,8 +3019,8 @@ export default function VendorDetailPage() {
                                     {formatCurrency(Math.round(Number(payment.amount)))}
                                   </h4>
                                   <span className={`px-3 py-1 text-xs font-semibold rounded-full ${payment.status === 'COMPLETED'
-                                      ? 'bg-green-100 text-green-800 border border-green-200'
-                                      : 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                                    ? 'bg-green-100 text-green-800 border border-green-200'
+                                    : 'bg-yellow-100 text-yellow-800 border border-yellow-200'
                                     }`}>
                                     {payment.status}
                                   </span>

@@ -30,7 +30,7 @@ export async function GET(
 
     // Build date filter
     const dateWhere: any = { customerId };
-    
+
     if (startDate || endDate) {
       dateWhere.date = {};
       if (startDate) {
@@ -55,28 +55,28 @@ export async function GET(
     });
 
     // Get filtered transactions if date filter is applied
-    const filteredTransactions = (startDate || endDate) 
+    const filteredTransactions = (startDate || endDate)
       ? await prisma.b2BTransaction.findMany({
-          where: dateWhere,
-          include: {
-            items: true,
-          },
-          orderBy: { createdAt: 'asc' },
-        })
+        where: dateWhere,
+        include: {
+          items: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      })
       : allTransactions;
 
     // Calculate running balance for each transaction (chronological order)
     // We need to calculate balance based on ALL transactions, but only display filtered ones
     // Net Balance = Total Out - Total In (negative when customer owes)
     let runningBalance = 0;
-    
+
     const allTransactionsWithBalance = allTransactions.map((transaction) => {
       // Convert Decimal to number properly
       const totalAmount = parseFloat(transaction.totalAmount.toString());
-      
+
       // Calculate the balance impact of this transaction
       let balanceImpact = 0;
-      
+
       switch (transaction.transactionType) {
         case 'SALE':
           // For SALE transactions, only unpaid amount affects balance
@@ -101,10 +101,10 @@ export async function GET(
         default:
           balanceImpact = 0;
       }
-      
+
       // Update running balance (negative when customer owes)
       runningBalance += balanceImpact;
-      
+
       return {
         ...transaction,
         runningBalance: runningBalance, // This is positive (Sales - Payments), we'll negate for display
@@ -119,10 +119,10 @@ export async function GET(
       // Use balance impacts already calculated in allTransactionsWithBalance
       // They already use the correct unpaidAmount logic
       const firstFilteredCreatedAt = filteredTransactions[0].createdAt;
-      const transactionsBeforeFilterWithBalance = allTransactionsWithBalance.filter(t => 
+      const transactionsBeforeFilterWithBalance = allTransactionsWithBalance.filter(t =>
         t.createdAt < firstFilteredCreatedAt
       );
-      
+
       // Sum up the balance impacts (already calculated correctly with unpaidAmount logic)
       startingBalance = transactionsBeforeFilterWithBalance.reduce((sum, t) => sum + (t.balanceImpact || 0), 0);
     }
@@ -133,7 +133,7 @@ export async function GET(
     const filteredTransactionsWithBalance = filteredTransactions.map((transaction) => {
       const totalAmount = parseFloat(transaction.totalAmount.toString());
       let balanceImpact = 0;
-      
+
       switch (transaction.transactionType) {
         case 'SALE':
           // For SALE transactions, only unpaid amount affects balance
@@ -152,9 +152,9 @@ export async function GET(
           balanceImpact = -totalAmount; // Decreases what customer owes
           break;
       }
-      
+
       currentBalance += balanceImpact;
-      
+
       return {
         ...transaction,
         runningBalance: currentBalance, // Positive (Sales - Payments), frontend will negate
@@ -165,24 +165,25 @@ export async function GET(
     // For display, we want newest first, so reverse
     const reversedTransactions = filteredTransactionsWithBalance.reverse();
     let displayBalance = currentBalance; // Start with the final balance
-    
+
     const displayTransactions = reversedTransactions.map((transaction) => {
       // Move to the balance before this transaction first
       displayBalance -= transaction.balanceImpact;
-      
+
       // The running balance for this transaction is the balance AFTER it
       const result = {
         ...transaction,
         runningBalance: displayBalance + transaction.balanceImpact
       };
-      
+
       return result;
     });
 
-    // Calculate Total In and Total Out for ALL transactions (not just filtered)
+    // Calculate Total In, Total Out, and Total Profit for ALL transactions
     let totalIn = 0; // Payments received (reduces what customer owes)
     let totalOut = 0; // Sales made (increases what customer owes)
-    
+    let totalProfit = 0; // Total profit from all sales
+
     allTransactions.forEach(transaction => {
       const totalAmount = parseFloat(transaction.totalAmount.toString());
       switch (transaction.transactionType) {
@@ -192,6 +193,55 @@ export async function GET(
           if (transaction.paidAmount) {
             const paidAmount = parseFloat(transaction.paidAmount.toString());
             totalIn += paidAmount;
+          }
+
+          // Calculate Profit for this transaction
+          if (transaction.items && transaction.items.length > 0) {
+            transaction.items.forEach(item => {
+              // 1. Gas Profit Calculation
+              if (item.cylinderType) {
+                // Profit = Margin Per Kg * Cylinder Capacity * Quantity
+                // Note: We use the customer's CURRENT margin category as historical margin isn't stored on items
+                // This is a known limitation accepted in the plan
+                if (customer.marginCategory) {
+                  const marginPerKg = parseFloat(customer.marginCategory.marginPerKg.toString());
+                  // Helper function logic inlined/adapted since we can't easily import generic utils in API route without potential path issues
+                  // But we can try to use the cylinder-utils if available, or regex parse
+                  let capacity = 15; // Default fallback
+
+                  // Extract capacity from cylinderType string (e.g. DOMESTIC_11_8KG -> 11.8)
+                  const match = item.cylinderType.match(/(\d+)(?:_(\d+))?/);
+                  if (match) {
+                    const whole = match[1];
+                    const decimal = match[2];
+                    capacity = decimal ? parseFloat(`${whole}.${decimal}`) : parseFloat(whole);
+                  }
+
+                  const quantity = parseFloat(item.quantity.toString());
+                  const itemProfit = marginPerKg * capacity * quantity;
+                  totalProfit += itemProfit;
+                }
+              }
+              // 2. Accessory Profit Calculation
+              else {
+                // Profit = (Selling Price - Cost Price) * Quantity
+                const sellingPrice = parseFloat(item.pricePerItem.toString()) || 0; // pricePerItem is selling price
+                // Use costPrice field if available, otherwise check regular cost logic
+                let costPrice = item.costPrice ? parseFloat(item.costPrice.toString()) : 0;
+
+                // If cost price is 0 (missing), assume 20% default margin
+                if (costPrice === 0 && sellingPrice > 0) {
+                  // Default 20% margin means Profit = 20% of Selling Price
+                  const itemProfit = sellingPrice * 0.20 * parseFloat(item.quantity.toString());
+                  totalProfit += itemProfit;
+                } else {
+                  // Standard profit calculation
+                  const profitPerItem = sellingPrice - costPrice;
+                  const itemProfit = profitPerItem * parseFloat(item.quantity.toString());
+                  totalProfit += itemProfit;
+                }
+              }
+            });
           }
           break;
         case 'PAYMENT':
@@ -219,6 +269,7 @@ export async function GET(
         netBalance, // Negative when customer owes, positive when customer has credit
         totalIn, // Payments received
         totalOut, // Sales made
+        totalProfit, // Total profit calcualted
         ledgerBalance: customer.ledgerBalance.toNumber() // Keep original for internal calculations
       },
       pagination: {

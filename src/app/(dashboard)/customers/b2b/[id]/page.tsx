@@ -100,6 +100,7 @@ interface CustomerLedgerResponse {
     netBalance: number; // Negative when customer owes, positive when customer has credit
     totalIn: number; // Payments received
     totalOut: number; // Sales made
+    totalProfit?: number; // Total profit from all sales
     ledgerBalance: number; // Original for internal calculations
   };
   pagination: {
@@ -123,6 +124,7 @@ export default function B2BCustomerDetailPage() {
     netBalance: number;
     totalIn: number;
     totalOut: number;
+    totalProfit?: number;
   } | null>(null);
   const [pagination, setPagination] = useState({
     page: 1,
@@ -1459,6 +1461,7 @@ export default function B2BCustomerDetailPage() {
               )}
             </div>
 
+
             {/* Total In & Total Out */}
             {summary && summary.totalIn !== undefined && summary.totalOut !== undefined && (
               <div className="space-y-3 pt-2 border-t border-gray-200">
@@ -1474,6 +1477,14 @@ export default function B2BCustomerDetailPage() {
                     {formatCurrency(summary.totalOut)}
                   </span>
                 </div>
+                {summary.totalProfit !== undefined && (
+                  <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+                    <span className="text-sm font-medium text-green-600">Total profit</span>
+                    <span className="text-sm font-semibold text-green-600">
+                      {formatCurrency(summary.totalProfit)}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
