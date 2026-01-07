@@ -9,7 +9,7 @@ export async function GET(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -44,7 +44,7 @@ export async function PUT(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user || (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -61,6 +61,7 @@ export async function PUT(
       paymentTermsDays,
       notes,
       isActive,
+      customerType,
       marginCategoryId
     } = body;
 
@@ -75,7 +76,7 @@ export async function PUT(
     // Check if another customer with same phone already exists (only if phone is being updated)
     if (phone) {
       const existingCustomer = await prisma.customer.findFirst({
-        where: { 
+        where: {
           phone,
           id: { not: customerId }
         }
@@ -91,7 +92,7 @@ export async function PUT(
 
     // Build update data object with only provided fields
     const updateData: any = {};
-    
+
     if (name !== undefined) updateData.name = name;
     if (contactPerson !== undefined) updateData.contactPerson = contactPerson;
     if (email !== undefined) updateData.email = email || null;
@@ -99,7 +100,29 @@ export async function PUT(
     if (address !== undefined) updateData.address = address || null;
     if (creditLimit !== undefined) updateData.creditLimit = creditLimit ? parseFloat(creditLimit) : 0;
     if (paymentTermsDays !== undefined) updateData.paymentTermsDays = paymentTermsDays ? parseInt(paymentTermsDays) : 30;
-    if (notes !== undefined) updateData.notes = notes || null;
+    if (notes !== undefined || customerType !== undefined) {
+      // If either notes or customerType changes, we need to reconstruct the full notes
+      const currentNotes = notes !== undefined ? notes : ""; // This might need carefully handling if we want to preserve existing notes when only type changes. 
+      // Actually, simplified approach: we expect the frontend to send both or we handle the reconstruction here.
+      // Let's assume frontend sends the "clean" notes (without prefix) in `body.notes`. 
+      // But we also need to handle if ONLY one of them is updated?
+      // The safest bet based on the plan is that the API receives the "new state" for these.
+
+      // However, we should check if they are provided. 
+      // If `notes` is provided, use it. If not provided, we might lose it if we just use ""? 
+      // The update logic in the plan implies we simply reconstruct.
+      // Let's fetch the existing customer if we need to merge, BUT the `update` below doesn't fetch first.
+      // Wait, we can't easily merge without fetching first if they are optional.
+      // But our `handleUpdateCustomer` in frontend sends ALL fields from the form.
+      // So `notes` and `customerType` will be present in the body.
+
+      const combinedNotes = customerType ?
+        `Customer Type: ${customerType}${notes ? ` | ${notes}` : ''}` :
+        notes;
+
+      updateData.notes = combinedNotes || null;
+    }
+
     if (isActive !== undefined) updateData.isActive = isActive;
     if (marginCategoryId !== undefined) updateData.marginCategoryId = marginCategoryId || null;
 
@@ -125,52 +148,105 @@ export async function DELETE(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user || (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { id: customerId } = await params;
 
-    // Check if customer has any transactions
-    const transactionCount = await prisma.b2BTransaction.count({
+    // Delete related B2B Transactions and their items
+    // First, we need to find all transactions to delete their items (if the relation is not cascade in schema, which it isn't explicit in file view)
+    // Actually, prisma deleteMany on transactions will fail if transaction items exist pointing to them unless we delete items first.
+    // Let's check relation: B2BTransactionItem -> B2BTransaction
+
+    // Step 1: Find all transaction IDs
+    const transactions = await prisma.b2BTransaction.findMany({
+      where: { customerId },
+      select: { id: true }
+    });
+
+    const transactionIds = transactions.map(t => t.id);
+
+    if (transactionIds.length > 0) {
+      // Step 2: Delete transaction items
+      await prisma.b2BTransactionItem.deleteMany({
+        where: { transactionId: { in: transactionIds } }
+      });
+
+      // Step 3: Delete transactions
+      await prisma.b2BTransaction.deleteMany({
+        where: { customerId }
+      });
+    }
+
+    // Step 4: Delete Customer Ledger entries
+    await prisma.customerLedger.deleteMany({
       where: { customerId }
     });
 
-    if (transactionCount > 0) {
-      return NextResponse.json(
-        { error: 'Cannot delete customer with existing transactions. Please void transactions first.' },
-        { status: 400 }
-      );
-    }
-
-    // Check if customer has any cylinder holdings
-    const cylinderCount = await prisma.cylinder.count({
-      where: { 
-        currentStatus: 'WITH_CUSTOMER',
-        location: {
-          contains: customerId
-        }
-      }
+    // Step 5: Delete Support Requests
+    await prisma.supportRequest.deleteMany({
+      where: { customerId }
     });
 
-    if (cylinderCount > 0) {
-      return NextResponse.json(
-        { error: 'Cannot delete customer with active cylinder holdings. Please return cylinders first.' },
-        { status: 400 }
-      );
-    }
-
-    // Soft delete by setting isActive to false
-    const customer = await prisma.customer.update({
+    // Step 5.5: Check for remaining cylinders due
+    // We check if the customer has any cylinders due in their counters OR any active assigned cylinders.
+    // The user requested: "if that customer has Remaining Cylinders Due, it shows Return cylinders first"
+    const customerRecord = await prisma.customer.findUnique({
       where: { id: customerId },
-      data: {
-        isActive: false,
-        updatedAt: new Date()
+      select: {
+        domestic118kgDue: true,
+        standard15kgDue: true,
+        commercial454kgDue: true
       }
     });
 
-    return NextResponse.json({ 
+    const hasDueCounters =
+      (customerRecord?.domestic118kgDue ?? 0) > 0 ||
+      (customerRecord?.standard15kgDue ?? 0) > 0 ||
+      (customerRecord?.commercial454kgDue ?? 0) > 0;
+
+    // Also check physical cylinder records to be safe/consistent
+    const assignedCylindersCount = await prisma.cylinder.count({
+      where: {
+        currentStatus: 'WITH_CUSTOMER',
+        OR: [
+          {
+            cylinderRentals: {
+              some: {
+                customerId: customerId,
+                status: 'ACTIVE'
+              }
+            }
+          },
+          {
+            location: {
+              contains: customerId
+            }
+          }
+        ]
+      }
+    });
+
+    if (hasDueCounters || assignedCylindersCount > 0) {
+      return NextResponse.json(
+        { error: 'Cannot delete customer with remaining cylinders due. Please return cylinders first.' },
+        { status: 400 }
+      );
+    }
+
+    // Step 6: Delete Cylinder Rentals
+    await prisma.cylinderRental.deleteMany({
+      where: { customerId }
+    });
+
+    // Step 7: Delete the customer
+    const customer = await prisma.customer.delete({
+      where: { id: customerId }
+    });
+
+    return NextResponse.json({
       message: 'Customer deleted successfully',
       customer: {
         id: customer.id,

@@ -8,9 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select } from '@/components/ui/select';
-import { 
-  PlusIcon, 
-  MagnifyingGlassIcon, 
+import {
+  PlusIcon,
+  MagnifyingGlassIcon,
   BuildingOfficeIcon,
   CurrencyDollarIcon,
   CubeIcon,
@@ -19,6 +19,7 @@ import {
   PencilIcon,
   TrashIcon
 } from '@heroicons/react/24/outline';
+import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
 
 interface B2BCustomer {
   id: string;
@@ -37,6 +38,7 @@ interface B2BCustomer {
   isActive: boolean;
   createdAt: string;
   marginCategoryId: string | null;
+  holdings?: Record<string, number>;
 }
 
 interface B2BCustomersResponse {
@@ -68,7 +70,9 @@ export default function B2BCustomersPage() {
   const [showEditForm, setShowEditForm] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<B2BCustomer | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleteConfirmationName, setDeleteConfirmationName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [cylinderTypes, setCylinderTypes] = useState<string[]>([]);
 
   // Margin categories for B2B customers
   const [marginCategories, setMarginCategories] = useState<any[]>([]);
@@ -127,7 +131,7 @@ export default function B2BCustomersPage() {
     try {
       setLoading(true);
       setError(null); // Clear any previous errors
-      
+
       const params = new URLSearchParams({
         search: debouncedSearchTerm,
         page: pagination.page.toString(),
@@ -137,18 +141,23 @@ export default function B2BCustomersPage() {
 
       console.log('Fetching B2B customers with params:', params.toString());
       const response = await fetch(`/api/customers/b2b?${params}`);
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error('API Error:', response.status, errorText);
         throw new Error(`Failed to fetch B2B customers: ${response.status}`);
       }
-      
+
       const data: B2BCustomersResponse = await response.json();
       console.log('Fetched B2B customers:', data);
-      
+
       setCustomers(data.customers || []);
       setPagination(data.pagination || { page: 1, limit: 10, total: 0, pages: 0 });
+
+      // Update cylinder types if provided (casting as any because we just added the property to response)
+      if ((data as any).cylinderTypes) {
+        setCylinderTypes((data as any).cylinderTypes);
+      }
     } catch (err) {
       console.error('Error fetching B2B customers:', err);
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -174,7 +183,7 @@ export default function B2BCustomersPage() {
   const handleAddCustomer = async (formData: any) => {
     try {
       setError(null); // Clear any previous errors
-      
+
       const response = await fetch('/api/customers/b2b', {
         method: 'POST',
         headers: {
@@ -196,13 +205,13 @@ export default function B2BCustomersPage() {
 
       // Close the form first
       setShowAddForm(false);
-      
+
       // Reset pagination to page 1 to see the new customer
       setPagination(prev => ({ ...prev, page: 1 }));
-      
+
       // Refresh the customers list
       await fetchB2BCustomers();
-      
+
     } catch (err) {
       console.error('Error creating customer:', err);
       setError(err instanceof Error ? err.message : 'Failed to create customer');
@@ -214,13 +223,38 @@ export default function B2BCustomersPage() {
     setShowEditForm(true);
   };
 
+  // Helper to extract customer type from notes
+  const getCustomerTypeFromNotes = (notes: string | null) => {
+    if (!notes) return '';
+    if (notes.includes('Customer Type:')) {
+      const typePart = notes.split('Customer Type: ')[1];
+      if (typePart) {
+        return typePart.split(' |')[0].trim();
+      }
+    }
+    return '';
+  };
+
+  // Helper to extract actual notes (without type prefix)
+  const getCleanNotes = (notes: string | null) => {
+    if (!notes) return '';
+    if (notes.includes('Customer Type:')) {
+      const parts = notes.split('|');
+      if (parts.length > 1) {
+        return parts.slice(1).join('|').trim();
+      }
+      return '';
+    }
+    return notes;
+  };
+
   const handleUpdateCustomer = async (formData: any) => {
     if (!editingCustomer) return;
-    
+
     try {
       setIsLoading(true);
       setError(null);
-      
+
       const response = await fetch(`/api/customers/b2b/${editingCustomer.id}`, {
         method: 'PUT',
         headers: {
@@ -240,10 +274,10 @@ export default function B2BCustomersPage() {
       // Close the form
       setShowEditForm(false);
       setEditingCustomer(null);
-      
+
       // Refresh the customers list
       await fetchB2BCustomers();
-      
+
     } catch (err) {
       console.error('Error updating customer:', err);
       setError(err instanceof Error ? err.message : 'Failed to update customer');
@@ -253,10 +287,19 @@ export default function B2BCustomersPage() {
   };
 
   const handleDeleteCustomer = async (customerId: string) => {
+    const customer = customers.find(c => c.id === customerId);
+    if (!customer) return;
+
+    // Verify name matches
+    if (deleteConfirmationName !== customer.name) {
+      alert('Customer name does not match. Please type the exact customer name to confirm deletion.');
+      return;
+    }
+
     try {
       setIsLoading(true);
       setError(null);
-      
+
       const response = await fetch(`/api/customers/b2b/${customerId}`, {
         method: 'DELETE',
       });
@@ -267,13 +310,14 @@ export default function B2BCustomersPage() {
       }
 
       console.log('Customer deleted successfully');
-      
+
       // Close the confirmation dialog
       setDeleteConfirm(null);
-      
+      setDeleteConfirmationName('');
+
       // Refresh the customers list
       await fetchB2BCustomers();
-      
+
     } catch (err) {
       console.error('Error deleting customer:', err);
       setError(err instanceof Error ? err.message : 'Failed to delete customer');
@@ -319,7 +363,7 @@ export default function B2BCustomersPage() {
           </p>
         </div>
         <div className="mt-4 sm:mt-0 flex space-x-3">
-          <Button 
+          <Button
             onClick={fetchB2BCustomers}
             variant="outline"
             disabled={loading}
@@ -328,7 +372,7 @@ export default function B2BCustomersPage() {
             <MagnifyingGlassIcon className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-          <Button 
+          <Button
             onClick={() => setShowAddForm(true)}
             className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-lg"
           >
@@ -374,9 +418,9 @@ export default function B2BCustomersPage() {
                 <span className="text-white text-xs font-bold">!</span>
               </div>
               <p className="text-red-700 font-medium">{error}</p>
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setError(null)}
                 className="ml-auto"
               >
@@ -409,13 +453,13 @@ export default function B2BCustomersPage() {
                 <BuildingOfficeIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">No B2B Customers Found</h3>
                 <p className="text-gray-600 mb-4">
-                  {debouncedSearchTerm 
-                    ? `No customers found matching "${debouncedSearchTerm}"` 
+                  {debouncedSearchTerm
+                    ? `No customers found matching "${debouncedSearchTerm}"`
                     : 'Start by adding your first B2B customer'
                   }
                 </p>
                 {!debouncedSearchTerm && (
-                  <Button 
+                  <Button
                     onClick={() => setShowAddForm(true)}
                     className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold"
                   >
@@ -432,9 +476,19 @@ export default function B2BCustomersPage() {
                   <TableHead className="font-semibold text-gray-700">Customer</TableHead>
                   <TableHead className="font-semibold text-gray-700">Contact</TableHead>
                   <TableHead className="font-semibold text-gray-700">Type</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Cylinder 11.8kg</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Cylinder 15kg</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Cylinder 45.4kg</TableHead>
+                  {cylinderTypes.length > 0 ? (
+                    cylinderTypes.map(type => (
+                      <TableHead key={type} className="text-center font-semibold text-gray-700">
+                        {getCylinderTypeDisplayName(type)}
+                      </TableHead>
+                    ))
+                  ) : (
+                    <>
+                      <TableHead className="font-semibold text-gray-700">Cylinder 11.8kg</TableHead>
+                      <TableHead className="font-semibold text-gray-700">Cylinder 15kg</TableHead>
+                      <TableHead className="font-semibold text-gray-700">Cylinder 45.4kg</TableHead>
+                    </>
+                  )}
                   <TableHead className="font-semibold text-gray-700">Total Due</TableHead>
                   <TableHead className="font-semibold text-gray-700">Account Receivables</TableHead>
                   <TableHead className="font-semibold text-gray-700">Status</TableHead>
@@ -443,122 +497,130 @@ export default function B2BCustomersPage() {
               </TableHeader>
               <TableBody>
                 {customers.map((customer) => (
-                <TableRow 
-                  key={customer.id} 
-                  className="cursor-pointer hover:bg-gray-50"
-                  onClick={() => router.push(`/customers/b2b/${customer.id}`)}
-                >
-                  <TableCell>
-                    <div>
-                      <p className="font-semibold text-gray-900">{customer.name}</p>
-                      <p className="text-sm text-gray-500">{customer.contactPerson}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      <p className="text-gray-700">{customer.phone}</p>
-                      {customer.email && (
-                        <p className="text-sm text-gray-500">{customer.email}</p>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge 
-                      variant="outline"
-                      className="font-semibold"
-                    >
-                      {customer.notes && customer.notes.includes('Customer Type:') 
-                        ? customer.notes.split('Customer Type: ')[1]?.split(' |')[0] || 'B2B'
-                        : 'B2B'
-                      }
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge 
-                      variant={customer.domestic118kgDue > 0 ? 'destructive' : 'secondary'}
-                      className="font-semibold"
-                    >
-                      {customer.domestic118kgDue}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge 
-                      variant={customer.standard15kgDue > 0 ? 'destructive' : 'secondary'}
-                      className="font-semibold"
-                    >
-                      {customer.standard15kgDue}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge 
-                      variant={customer.commercial454kgDue > 0 ? 'destructive' : 'secondary'}
-                      className="font-semibold"
-                    >
-                      {customer.commercial454kgDue}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center">
-                      <CubeIcon className="w-4 h-4 mr-1 text-gray-500" />
-                      <span className="font-semibold text-gray-900">
-                        {getTotalCylindersDue(customer)}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center">
-                      <CurrencyDollarIcon className="w-4 h-4 mr-1 text-gray-500" />
-                      <span className={`font-semibold ${
-                        customer.ledgerBalance > 0 ? 'text-red-600' : 
-                        customer.ledgerBalance < 0 ? 'text-green-600' : 'text-gray-600'
-                      }`}>
-                        {formatCurrency(customer.ledgerBalance)}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={customer.isActive ? 'success' : 'destructive'} className="font-semibold">
-                      {customer.isActive ? 'Active' : 'Inactive'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex space-x-2">
-                      <Button
+                  <TableRow
+                    key={customer.id}
+                    className="cursor-pointer hover:bg-gray-50"
+                    onClick={() => router.push(`/customers/b2b/${customer.id}`)}
+                  >
+                    <TableCell>
+                      <div>
+                        <p className="font-semibold text-gray-900">{customer.name}</p>
+                        <p className="text-sm text-gray-500">{customer.contactPerson}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div>
+                        <p className="text-gray-700">{customer.phone}</p>
+                        {customer.email && (
+                          <p className="text-sm text-gray-500">{customer.email}</p>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
                         variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          router.push(`/customers/b2b/${customer.id}`);
-                        }}
-                        className="font-medium"
+                        className="font-semibold"
                       >
-                        View Details
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditCustomer(customer);
-                        }}
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        <PencilIcon className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDeleteConfirm(customer.id);
-                        }}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
+                        {customer.notes && customer.notes.includes('Customer Type:')
+                          ? customer.notes.split('Customer Type: ')[1]?.split(' |')[0] || 'B2B'
+                          : 'B2B'
+                        }
+                      </Badge>
+                    </TableCell>
+                    {/* Dynamic Cylinder Cells */}
+                    {cylinderTypes.length > 0 ? (
+                      cylinderTypes.map(type => {
+                        const count = customer.holdings?.[type] || 0;
+                        return (
+                          <TableCell key={type} className="text-center">
+                            <Badge
+                              variant={count > 0 ? 'destructive' : 'secondary'}
+                              className="font-semibold"
+                            >
+                              {count}
+                            </Badge>
+                          </TableCell>
+                        );
+                      })
+                    ) : (
+                      <>
+                        <TableCell>
+                          <Badge
+                            variant={customer.domestic118kgDue > 0 ? 'destructive' : 'secondary'}
+                            className="font-semibold"
+                          >
+                            {customer.domestic118kgDue}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={customer.standard15kgDue > 0 ? 'destructive' : 'secondary'}
+                            className="font-semibold"
+                          >
+                            {customer.standard15kgDue}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={customer.commercial454kgDue > 0 ? 'destructive' : 'secondary'}
+                            className="font-semibold"
+                          >
+                            {customer.commercial454kgDue}
+                          </Badge>
+                        </TableCell>
+                      </>
+                    )}
+                    <TableCell>
+                      <div className="flex items-center">
+                        <CubeIcon className="w-4 h-4 mr-1 text-gray-500" />
+                        <span className="font-semibold text-gray-900">
+                          {getTotalCylindersDue(customer)}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center">
+                        <CurrencyDollarIcon className="w-4 h-4 mr-1 text-gray-500" />
+                        <span className={`font-semibold ${customer.ledgerBalance > 0 ? 'text-red-600' :
+                          customer.ledgerBalance < 0 ? 'text-green-600' : 'text-gray-600'
+                          }`}>
+                          {formatCurrency(customer.ledgerBalance)}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={customer.isActive ? 'success' : 'destructive'} className="font-semibold">
+                        {customer.isActive ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex space-x-2">
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditCustomer(customer);
+                          }}
+                          className="text-blue-600 hover:text-blue-800"
+                        >
+                          <PencilIcon className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteConfirm(customer.id);
+                          }}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
                 ))}
               </TableBody>
             </Table>
@@ -623,8 +685,8 @@ export default function B2BCustomersPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Customer Type</label>
-                  <select 
-                    name="customerType" 
+                  <select
+                    name="customerType"
                     required
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
@@ -718,6 +780,7 @@ export default function B2BCustomersPage() {
                   creditLimit: formData.get('creditLimit'),
                   paymentTermsDays: formData.get('paymentTermsDays'),
                   notes: formData.get('notes'),
+                  customerType: formData.get('customerType'),
                   isActive: formData.get('isActive') === 'true',
                   marginCategoryId: formData.get('marginCategoryId')
                 });
@@ -725,6 +788,18 @@ export default function B2BCustomersPage() {
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Company Name</label>
                   <Input name="name" type="text" defaultValue={editingCustomer.name} required />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Customer Type</label>
+                  <select
+                    name="customerType"
+                    defaultValue={getCustomerTypeFromNotes(editingCustomer.notes) || 'INDUSTRIAL'}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="INDUSTRIAL">Industrial</option>
+                    <option value="RESTAURANT">Restaurant</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -770,12 +845,12 @@ export default function B2BCustomersPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Notes</label>
-                  <Input name="notes" type="text" defaultValue={editingCustomer.notes || ''} />
+                  <Input name="notes" type="text" defaultValue={getCleanNotes(editingCustomer.notes) || ''} />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
-                  <select 
-                    name="isActive" 
+                  <select
+                    name="isActive"
                     defaultValue={editingCustomer.isActive ? 'true' : 'false'}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
@@ -811,16 +886,34 @@ export default function B2BCustomersPage() {
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
           <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
             <div className="mt-3">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Delete Customer</h3>
-              <p className="text-gray-600 mb-6">
-                Are you sure you want to delete this customer? This action cannot be undone.
-                The customer will be marked as inactive instead of being permanently deleted.
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Delete Component</h3>
+              <p className="text-gray-600 mb-4">
+                Are you sure you want to delete <span className="font-bold text-gray-900">{customers.find(c => c.id === deleteConfirm)?.name}</span>?
+                This action cannot be undone. The customer will be marked as inactive.
               </p>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  To confirm, type "<span className="font-bold select-all">{customers.find(c => c.id === deleteConfirm)?.name}</span>" below:
+                </label>
+                <Input
+                  type="text"
+                  value={deleteConfirmationName}
+                  onChange={(e) => setDeleteConfirmationName(e.target.value)}
+                  placeholder="Type customer name to confirm"
+                  className="w-full border-red-300 focus:border-red-500 focus:ring-red-500"
+                  autoFocus
+                />
+              </div>
+
               <div className="flex justify-end space-x-3">
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setDeleteConfirm(null)}
+                  onClick={() => {
+                    setDeleteConfirm(null);
+                    setDeleteConfirmationName('');
+                  }}
                   className="font-medium"
                   disabled={isLoading}
                 >
@@ -831,7 +924,7 @@ export default function B2BCustomersPage() {
                   variant="destructive"
                   onClick={() => handleDeleteCustomer(deleteConfirm)}
                   className="font-medium"
-                  disabled={isLoading}
+                  disabled={isLoading || deleteConfirmationName !== customers.find(c => c.id === deleteConfirm)?.name}
                 >
                   {isLoading ? 'Deleting...' : 'Delete Customer'}
                 </Button>
