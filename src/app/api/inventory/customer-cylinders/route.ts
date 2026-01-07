@@ -17,12 +17,18 @@ export async function GET(request: NextRequest) {
       where.OR = [
         { code: { contains: search, mode: 'insensitive' } },
         { location: { contains: search, mode: 'insensitive' } },
-        { cylinderRentals: { some: { customer: { 
-          OR: [
-            { name: { contains: search, mode: 'insensitive' } },
-            { contactPerson: { contains: search, mode: 'insensitive' } }
-          ]
-        }}}}
+        {
+          cylinderRentals: {
+            some: {
+              customer: {
+                OR: [
+                  { name: { contains: search, mode: 'insensitive' } },
+                  { contactPerson: { contains: search, mode: 'insensitive' } }
+                ]
+              }
+            }
+          }
+        }
       ];
     }
 
@@ -73,13 +79,13 @@ export async function GET(request: NextRequest) {
 
     // Batch fetch all customers
     const customerMap = new Map<string, any>();
-    
+
     if (customerNames.size > 0) {
       const [b2bCustomers, b2cCustomers] = await Promise.all([
         prisma.customer.findMany({
           where: {
-            OR: Array.from(customerNames).map(name => ({ 
-              name: { contains: name, mode: 'insensitive' } 
+            OR: Array.from(customerNames).map(name => ({
+              name: { contains: name, mode: 'insensitive' }
             }))
           },
           select: {
@@ -93,8 +99,8 @@ export async function GET(request: NextRequest) {
         }),
         prisma.b2CCustomer.findMany({
           where: {
-            OR: Array.from(customerNames).map(name => ({ 
-              name: { contains: name, mode: 'insensitive' } 
+            OR: Array.from(customerNames).map(name => ({
+              name: { contains: name, mode: 'insensitive' }
             }))
           },
           select: {
@@ -130,6 +136,7 @@ export async function GET(request: NextRequest) {
           id: cylinder.id,
           code: cylinder.code,
           cylinderType: cylinder.cylinderType,
+          typeName: cylinder.typeName,
           currentStatus: cylinder.currentStatus,
           customer: cylinder.cylinderRentals[0].customer,
           rental: {
@@ -146,7 +153,7 @@ export async function GET(request: NextRequest) {
         // B2C cylinder - parse customer name from location
         const location = cylinder.location || '';
         let customerName = '';
-        
+
         // Extract customer name from location like "Customer: Restaurant Elite" or "B2C Customer: Sara Ali"
         if (location.includes('Customer:')) {
           customerName = location.split('Customer:')[1]?.trim() || '';
@@ -158,6 +165,7 @@ export async function GET(request: NextRequest) {
           id: cylinder.id,
           code: cylinder.code,
           cylinderType: cylinder.cylinderType,
+          typeName: cylinder.typeName,
           currentStatus: cylinder.currentStatus,
           customer: customerInfo || {
             id: '',
@@ -181,13 +189,13 @@ export async function GET(request: NextRequest) {
     });
 
     // Apply status filter (only for B2B rentals)
-    const filteredCylinders = status ? 
+    const filteredCylinders = status ?
       customerCylinders.filter(item => {
         if (item.isB2B) {
           return item.rental.status === status;
         }
         return status === 'ACTIVE'; // B2C cylinders are always considered active
-      }) : 
+      }) :
       customerCylinders;
 
     return NextResponse.json({

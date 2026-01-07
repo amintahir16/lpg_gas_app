@@ -19,7 +19,7 @@ export async function checkCylinderInventory(cylinderType: string, requested: nu
   try {
     // Try to map the string to the enum value dynamically
     mappedCylinderType = cylinderType as CylinderType;
-    
+
     // Validate that it's a valid enum value by checking if it exists in the enum
     if (!Object.values(CylinderType).includes(mappedCylinderType)) {
       return { cylinderType, requested, available: 0, isValid: false };
@@ -82,8 +82,12 @@ export async function checkAccessoryInventory(itemName: string, itemType: string
         break;
 
       case 'valve':
-        const valve = await prisma.valve.findFirst({
-          where: { type: itemName }
+        // Valves are stored in CustomItem with name='Valves' (category) and type=itemName
+        const valve = await prisma.customItem.findFirst({
+          where: {
+            name: 'Valves',
+            type: itemName
+          }
         });
         available = valve ? Number(valve.quantity) : 0;
         break;

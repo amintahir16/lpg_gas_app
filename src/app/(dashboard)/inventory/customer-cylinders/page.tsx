@@ -6,21 +6,22 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { 
-  UserGroupIcon, 
+import {
+  UserGroupIcon,
   ArrowLeftIcon,
   MagnifyingGlassIcon,
   PhoneIcon,
   MapPinIcon,
   CalendarIcon
 } from '@heroicons/react/24/outline';
-import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
+import { getCylinderTypeDisplayName, getCapacityFromTypeString } from '@/lib/cylinder-utils';
 import { getCylinderTypeOptions } from '@/lib/cylinder-types';
 
 interface CustomerCylinder {
   id: string;
   code: string;
   cylinderType: string;
+  typeName?: string | null;
   currentStatus: string;
   customer: {
     id: string;
@@ -42,6 +43,7 @@ interface CustomerCylinder {
 
 interface CustomerCylinderStats {
   type: string;
+  typeName?: string | null;
   count: number;
   totalValue: number;
 }
@@ -125,7 +127,7 @@ export default function CustomerCylindersPage() {
   };
 
   const cylinderTypeOptions = getCylinderTypeOptions();
-  
+
   const getTypeDisplayName = (type: string) => {
     return getCylinderTypeDisplayName(type);
   };
@@ -164,7 +166,7 @@ Phone: ${customer.phone}
 ${customer.email ? `Email: ${customer.email}` : ''}
 Address: ${customer.address || 'N/A'}
     `;
-    
+
     if (confirm(`${contactInfo}\n\nWould you like to call ${customer.phone}?`)) {
       window.open(`tel:${customer.phone}`);
     }
@@ -199,7 +201,9 @@ Address: ${customer.address || 'N/A'}
           <Card key={index} className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-semibold text-gray-600">
-                {getTypeDisplayName(stat.type)}
+                {stat.typeName
+                  ? `${stat.typeName} (${getCapacityFromTypeString(stat.type)}kg)`
+                  : getTypeDisplayName(stat.type)}
               </CardTitle>
               <UserGroupIcon className="w-5 h-5 text-blue-500" />
             </CardHeader>
@@ -303,7 +307,9 @@ Address: ${customer.address || 'N/A'}
                           <div className="text-sm font-semibold text-gray-900">{item.code}</div>
                           <div className="flex items-center space-x-2 mt-1">
                             <Badge variant="secondary" className="text-xs">
-                              {getTypeDisplayName(item.cylinderType)}
+                              {item.typeName
+                                ? `${item.typeName} (${getCapacityFromTypeString(item.cylinderType)}kg)`
+                                : getTypeDisplayName(item.cylinderType)}
                             </Badge>
                             <Badge variant={getCylinderStatusColor(item.currentStatus) as any} className="text-xs">
                               {item.currentStatus.replace('_', ' ')}
@@ -344,9 +350,8 @@ Address: ${customer.address || 'N/A'}
                             {new Date(item.rental.rentalDate).toLocaleDateString()}
                           </div>
                           {item.rental.expectedReturnDate && (
-                            <div className={`text-xs mt-1 ${
-                              isOverdue(item.rental.expectedReturnDate) ? 'text-red-600' : 'text-gray-500'
-                            }`}>
+                            <div className={`text-xs mt-1 ${isOverdue(item.rental.expectedReturnDate) ? 'text-red-600' : 'text-gray-500'
+                              }`}>
                               Due: {new Date(item.rental.expectedReturnDate).toLocaleDateString()}
                               {isOverdue(item.rental.expectedReturnDate) && ' (Overdue)'}
                             </div>
@@ -365,15 +370,15 @@ Address: ${customer.address || 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
-                          <Button 
-                            variant="outline" 
+                          <Button
+                            variant="outline"
                             size="sm"
                             onClick={() => handleViewDetails(item)}
                           >
                             View Details
                           </Button>
-                          <Button 
-                            variant="ghost" 
+                          <Button
+                            variant="ghost"
                             size="sm"
                             onClick={() => handleContactCustomer(item.customer)}
                           >

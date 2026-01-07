@@ -5,7 +5,7 @@ export async function GET(request: NextRequest) {
   try {
     // Get cylinders with customers by type
     const cylindersWithCustomers = await prisma.cylinder.groupBy({
-      by: ['cylinderType'],
+      by: ['cylinderType', 'typeName', 'capacity'],
       where: {
         currentStatus: 'WITH_CUSTOMER'
       },
@@ -20,9 +20,11 @@ export async function GET(request: NextRequest) {
     // Process the stats
     const stats = cylindersWithCustomers.map(stat => ({
       type: stat.cylinderType,
+      typeName: stat.typeName,
+      capacity: Number(stat.capacity),
       count: stat._count.id,
       totalValue: stat._sum.purchasePrice || 0
-    }));
+    })).sort((a, b) => a.capacity - b.capacity);
 
     return NextResponse.json({
       success: true,
