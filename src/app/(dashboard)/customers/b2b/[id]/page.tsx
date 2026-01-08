@@ -1396,10 +1396,7 @@ export default function B2BCustomerDetailPage() {
                 <p className="text-sm font-medium text-gray-500">Phone</p>
                 <p className="text-lg font-semibold text-gray-900">{customer.phone}</p>
               </div>
-              <div>
-                <p className="text-sm font-medium text-gray-500">Email</p>
-                <p className="text-lg font-semibold text-gray-900">{customer.email || '-'}</p>
-              </div>
+
               <div>
                 <p className="text-sm font-medium text-gray-500">Payment Terms</p>
                 <p className="text-lg font-semibold text-gray-900">{customer.paymentTermsDays} days</p>
@@ -2177,7 +2174,7 @@ export default function B2BCustomerDetailPage() {
 
                 {/* Date Filter Dropdown */}
                 {showDateFilter && (
-                  <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4 date-filter-container">
+                  <div className={`absolute right-0 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4 date-filter-container ${transactions.length < 5 ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                         <CalendarIcon className="w-4 h-4" />
@@ -2285,7 +2282,7 @@ export default function B2BCustomerDetailPage() {
 
                 {/* Report Date Filter Dropdown */}
                 {showReportDateFilter && (
-                  <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4 report-date-filter-container">
+                  <div className={`absolute right-0 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4 report-date-filter-container ${transactions.length < 5 ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                         <CalendarIcon className="w-4 h-4" />

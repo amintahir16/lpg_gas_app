@@ -76,11 +76,11 @@ export default function CustomersPage() {
       });
 
       const response = await fetch(`/api/customers/combined?${params}`);
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch customers');
       }
-      
+
       const data: CustomersResponse = await response.json();
       setCustomers(data.customers);
       setPagination(data.pagination);
@@ -119,14 +119,14 @@ export default function CustomersPage() {
           </p>
         </div>
         <div className="mt-4 sm:mt-0 flex space-x-3">
-          <Button 
+          <Button
             onClick={() => router.push('/customers/b2c')}
             variant="outline"
             className="font-semibold"
           >
             B2C Customers
           </Button>
-          <Button 
+          <Button
             onClick={() => router.push('/customers/b2b')}
             variant="outline"
             className="font-semibold"
@@ -182,9 +182,9 @@ export default function CustomersPage() {
                 <span className="text-white text-xs font-bold">!</span>
               </div>
               <p className="text-red-700 font-medium">{error}</p>
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setError(null)}
                 className="ml-auto"
               >
@@ -208,17 +208,16 @@ export default function CustomersPage() {
             <TableHeader>
               <TableRow>
                 <TableHead className="font-semibold text-gray-700">Name</TableHead>
-                <TableHead className="font-semibold text-gray-700">Contact Person</TableHead>
-                <TableHead className="font-semibold text-gray-700">Email</TableHead>
+
                 <TableHead className="font-semibold text-gray-700">Phone</TableHead>
                 <TableHead className="font-semibold text-gray-700">Type</TableHead>
                 <TableHead className="font-semibold text-gray-700">Credit Limit</TableHead>
-                <TableHead className="font-semibold text-gray-700">Status</TableHead>
+
               </TableRow>
             </TableHeader>
             <TableBody>
               {customers.map((customer) => (
-                <TableRow 
+                <TableRow
                   key={customer.id}
                   className="cursor-pointer hover:bg-gray-50"
                   onClick={() => {
@@ -230,8 +229,7 @@ export default function CustomersPage() {
                   }}
                 >
                   <TableCell className="font-semibold text-gray-900">{customer.name}</TableCell>
-                  <TableCell className="text-gray-700">{customer.contactPerson}</TableCell>
-                  <TableCell className="text-gray-700">{customer.email || '-'}</TableCell>
+
                   <TableCell className="text-gray-700">{customer.phone}</TableCell>
                   <TableCell>
                     <Badge variant={getCustomerTypeColor(customer.type) as any} className="font-semibold">
@@ -241,11 +239,7 @@ export default function CustomersPage() {
                   <TableCell className="font-semibold text-gray-900">
                     Rs {(Number(customer.creditLimit) || 0).toFixed(2)}
                   </TableCell>
-                  <TableCell>
-                    <Badge variant={customer.isActive ? 'success' : 'destructive'} className="font-semibold">
-                      {customer.isActive ? 'Active' : 'Inactive'}
-                    </Badge>
-                  </TableCell>
+
                 </TableRow>
               ))}
             </TableBody>

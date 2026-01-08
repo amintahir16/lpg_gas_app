@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
     // Get user info from headers (set by middleware)
     const userId = request.headers.get('x-user-id');
     const userRole = request.headers.get('x-user-role');
-    
+
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -61,10 +61,10 @@ export async function POST(request: NextRequest) {
   try {
     // Get user info from headers (set by middleware)
     const userId = request.headers.get('x-user-id');
-    const userRole = request.headers.get('x-user-role');
-    
+    const userRole = request.headers.get('x-user-role'); // Keep for potential future role checks, though currently unused locally
+
     console.log('Received userId from headers:', userId);
-    
+
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -77,79 +77,61 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       console.log('User not found in database:', userId);
-      console.log('Looking for any admin user to use instead...');
-      
-      // If user not found, try to find any admin user
+      // Try to find any admin user as fallback (legacy logic preserved)
       user = await prisma.user.findFirst({
         where: { role: 'ADMIN' },
         select: { id: true, email: true }
       });
-      
+
       if (!user) {
-        console.log('No admin users found in database');
         return NextResponse.json({ error: 'No valid user found' }, { status: 401 });
       }
-      
-      console.log('Using admin user instead:', user);
-    } else {
-      console.log('User found:', user);
     }
 
     const body = await request.json();
     const {
-      firstName,
-      lastName,
+      name,
+      contactPerson,
       email,
       phone,
       address,
-      city,
-      state,
-      postalCode,
-      customerType,
-      creditLimit
+      type = 'B2B',
+      creditLimit,
+      paymentTermsDays
     } = body;
 
-    // Generate unique customer code
-    const customerCount = await prisma.customer.count();
-    const code = `CUST${String(customerCount + 1).padStart(3, '0')}`;
+    // Validate required fields
+    if (!name || !contactPerson || !phone) {
+      return NextResponse.json(
+        { error: 'Missing required fields: name, contactPerson, phone' },
+        { status: 400 }
+      );
+    }
 
     const customer = await prisma.customer.create({
       data: {
-        code,
-        firstName,
-        lastName,
+        name,
+        contactPerson,
         email,
         phone,
         address,
-        city,
-        state,
-        postalCode,
-        customerType,
-        creditLimit: parseFloat(creditLimit) || 0,
-        userId: user.id
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
-        }
+        type, // Schema uses 'type', not 'customerType'
+        creditLimit: creditLimit ? parseFloat(creditLimit) : 0,
+        paymentTermsDays: paymentTermsDays ? parseInt(paymentTermsDays) : 30,
+        createdBy: user.id // Schema uses 'createdBy' String, not 'userId' relation
       }
     });
 
-    // Create notification for new customer
+    // Create notification
     try {
       const userEmail = request.headers.get('x-user-email') || 'Unknown User';
       await createCustomerAddedNotification(
-        `${firstName} ${lastName}`,
+        customer.name,
         userEmail,
-        code
+        customer.id // Using ID as code substitute since code field doesn't exist
       );
     } catch (notificationError) {
       console.error('Failed to create notification:', notificationError);
-      // Don't fail the main operation if notification fails
     }
 
     return NextResponse.json(customer, { status: 201 });

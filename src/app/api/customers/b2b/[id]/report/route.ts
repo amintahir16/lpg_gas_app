@@ -298,18 +298,18 @@ async function generatePDF(
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   doc.text(`Name: ${customer.name}`, 20, yPosition);
-  doc.text(`Contact Person: ${customer.contactPerson}`, 20, yPosition + 7);
-  doc.text(`Phone: ${customer.phone}`, 20, yPosition + 14);
-  if (customer.email) {
-    doc.text(`Email: ${customer.email}`, 20, yPosition + 21);
-    yPosition += 7;
-  }
+  yPosition += 7;
+  doc.text(`Contact Person: ${customer.contactPerson}`, 20, yPosition);
+  yPosition += 7;
+  doc.text(`Phone: ${customer.phone}`, 20, yPosition);
+  yPosition += 7;
+
   if (customer.address) {
-    doc.text(`Address: ${customer.address}`, 20, yPosition + (customer.email ? 21 : 14));
+    doc.text(`Address: ${customer.address}`, 20, yPosition);
     yPosition += 7;
   }
 
-  yPosition += (customer.email && customer.address ? 28 : customer.email || customer.address ? 21 : 14);
+  yPosition += 14;
 
   // Transaction History Section
   if (yPosition > pageHeight - 100) {
