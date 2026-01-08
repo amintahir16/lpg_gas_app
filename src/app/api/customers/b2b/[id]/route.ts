@@ -190,48 +190,32 @@ export async function DELETE(
       where: { customerId }
     });
 
-    // Step 5.5: Check for remaining cylinders due
-    // We check if the customer has any cylinders due in their counters OR any active assigned cylinders.
-    // The user requested: "if that customer has Remaining Cylinders Due, it shows Return cylinders first"
+    // Step 5.5: Check for active assigned cylinders (Physical Only)
+    // We strictly check physical records. Legacy counters are ignored.
     const customerRecord = await prisma.customer.findUnique({
       where: { id: customerId },
-      select: {
-        domestic118kgDue: true,
-        standard15kgDue: true,
-        commercial454kgDue: true
-      }
+      select: { name: true }
     });
 
-    const hasDueCounters =
-      (customerRecord?.domestic118kgDue ?? 0) > 0 ||
-      (customerRecord?.standard15kgDue ?? 0) > 0 ||
-      (customerRecord?.commercial454kgDue ?? 0) > 0;
+    if (!customerRecord) {
+      return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+    }
 
-    // Also check physical cylinder records to be safe/consistent
+    // Check physical cylinder records (Rentals OR Location Match by ID/Name)
     const assignedCylindersCount = await prisma.cylinder.count({
       where: {
         currentStatus: 'WITH_CUSTOMER',
         OR: [
-          {
-            cylinderRentals: {
-              some: {
-                customerId: customerId,
-                status: 'ACTIVE'
-              }
-            }
-          },
-          {
-            location: {
-              contains: customerId
-            }
-          }
+          { cylinderRentals: { some: { customerId: customerId, status: 'ACTIVE' } } },
+          { location: { contains: customerId } },
+          { location: { contains: customerRecord.name, mode: 'insensitive' } }
         ]
       }
     });
 
-    if (hasDueCounters || assignedCylindersCount > 0) {
+    if (assignedCylindersCount > 0) {
       return NextResponse.json(
-        { error: 'Cannot delete customer with remaining cylinders due. Please return cylinders first.' },
+        { error: 'Cannot delete customer with cylinders due. Please return cylinders first.' },
         { status: 400 }
       );
     }

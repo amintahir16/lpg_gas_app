@@ -11,129 +11,357 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '10');
     const type = searchParams.get('type') || 'B2B';
 
+    // New Filters
+    const filterStatus = searchParams.get('status') || 'ALL'; // 'ACTIVE' | 'INACTIVE' | 'ALL'
+    const filterType = searchParams.get('customerType') || 'ALL'; // 'INDUSTRIAL' | 'RESTAURANT' | 'ALL'
+
+    // Sorting
+    const sortBy = searchParams.get('sortBy') || 'createdAt'; // 'RECEIVABLES' | 'CYLINDERS' | 'NAME' | 'createdAt'
+    const sortOrder = (searchParams.get('sortOrder') || 'desc') as 'asc' | 'desc';
+
     const skip = (page - 1) * limit;
 
-    // Build where clause for search
-    const whereClause = {
+    // 1. Base Filter (Search & Type)
+    const whereClause: any = {
       type: type,
-      isActive: true,
-      ...(search && {
-        OR: [
-          { name: { contains: search, mode: 'insensitive' as const } },
-          { contactPerson: { contains: search, mode: 'insensitive' as const } },
-          { phone: { contains: search, mode: 'insensitive' as const } },
-          { email: { contains: search, mode: 'insensitive' as const } },
-        ],
-      }),
+
+      // isActive was previously filtered here, but that hides manually 'Inactive' customers.
+      // We now handle active/inactive logic via the complex filter below.
     };
 
-    // Get customers with pagination
-    const [customers, total] = await Promise.all([
-      prisma.customer.findMany({
-        where: whereClause,
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.customer.count({ where: whereClause }),
-    ]);
+    if (search) {
+      whereClause.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { contactPerson: { contains: search, mode: 'insensitive' } },
+        { phone: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+      ];
+    }
 
-    // Fetch dynamic cylinder holdings
-    // We need to know:
-    // 1. All unique cylinder types currently held by customers (to build table columns)
-    // 2. The counts per type for each customer in the current page
+    if (filterType !== 'ALL') {
+      whereClause.notes = {
+        contains: `Customer Type: ${filterType}`,
+      };
+    }
 
-    const customerIds = customers.map(c => c.id);
+    // 2. Fetch ALL matching customers first (needed for Active/Inactive filter which relies on relation)
+    // We have to fetch ID and some fields to determine status if filtering by status.
+    // Optimization: If NOT filtering by status, we can just paginate directly. 
+    // BUT we need summary stats for everything effectively. 
+    // To be robust, let's fetch essential data for filtering first.
 
-    // Fetch all cylinders currently assigned to these customers
-    const assignedCylinders = await prisma.cylinder.findMany({
-      where: {
-        currentStatus: 'WITH_CUSTOMER',
-        OR: [
-          {
-            cylinderRentals: {
-              some: {
-                customerId: { in: customerIds },
-                status: 'ACTIVE'
-              }
-            }
-          },
-          {
-            // For location based matching, we need to iterate or use specific query. 
-            // Since 'location' is a string that might contain the ID.
-            // Efficient way: Fetch all WITH_CUSTOMER cylinders, then process in JS? 
-            // Or rely on database? 'contains' on a list of IDs is tricky without iterate.
-            // But we can simplify: 
-            // Most valid assignments should be via CylinderRental. 
-            // The location fallback is for safety. 
-            // Let's rely on finding any cylinder where location contains ANY of the IDs.
-            // Using OR with many 'contains' might be slow but safe for small page size (10).
-            OR: customerIds.map(id => ({ location: { contains: id } }))
-          }
-        ]
-      },
+    let allMatchingCustomers = await prisma.customer.findMany({
+      where: whereClause,
       select: {
         id: true,
-        cylinderType: true,
-        location: true,
-        cylinderRentals: {
-          where: { status: 'ACTIVE' },
-          select: { customerId: true }
+        name: true,
+        contactPerson: true,
+        phone: true,
+        email: true,
+        notes: true,
+        ledgerBalance: true,
+        domestic118kgDue: true,
+        standard15kgDue: true,
+        commercial454kgDue: true,
+
+        address: true,
+        creditLimit: true,
+        paymentTermsDays: true,
+        marginCategoryId: true,
+        createdAt: true,
+        isActive: true,
+        // Fetch most recent transaction date for "Active" status check
+        b2bTransactions: {
+          take: 1,
+          orderBy: { date: 'desc' },
+          select: { date: true }
         }
-      }
+      },
+      orderBy: { createdAt: 'desc' } // Default sort for initial fetch
     });
 
-    // Process holdings
-    // Map: CustomerID -> { [Type]: Count }
-    const customerHoldingsMap: Record<string, Record<string, number>> = {};
-    const allTypesSet = new Set<string>();
+    // 3. Apply "Active/Inactive" Filter in Memory (Complex Relation Logic)
+    // Active = Last transaction within 7 days
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    assignedCylinders.forEach(cylinder => {
-      // Determine which customer holds this cylinder
-      let holderId: string | null = null;
+    const enrichedCustomers = allMatchingCustomers.map(c => {
+      const lastTxDate = c.b2bTransactions[0]?.date;
+      const recentActivity = lastTxDate ? new Date(lastTxDate) >= sevenDaysAgo : false;
+      // Customer is ACTIVE if they are manually set to active OR have recent activity
+      const isEffectivelyActive = c.isActive || recentActivity;
+      return { ...c, isEffectivelyActive };
+    });
 
-      // Check active rental first
-      const activeRental = cylinder.cylinderRentals.find(r => customerIds.includes(r.customerId));
-      if (activeRental) {
-        holderId = activeRental.customerId;
+    let filteredCustomers = enrichedCustomers;
+    if (filterStatus === 'ACTIVE') {
+      filteredCustomers = enrichedCustomers.filter(c => c.isEffectivelyActive);
+    } else if (filterStatus === 'INACTIVE') {
+      filteredCustomers = enrichedCustomers.filter(c => !c.isEffectivelyActive);
+    }
+
+    // 4. Calculate Summary Statistics (On Filtered Data)
+    const totalCustomers = filteredCustomers.length;
+
+    const totalReceivables = filteredCustomers.reduce((sum, c) => {
+      // Only count positive balance (Customer owes us)
+      return sum + (Number(c.ledgerBalance) > 0 ? Number(c.ledgerBalance) : 0);
+    }, 0);
+
+    // --- Helper for Holdings Calculation (Hoisted for Sorting) ---
+    const getHoldings = async (targetCustomers: { id: string, name: string }[]) => {
+      if (targetCustomers.length === 0) return { map: {}, types: new Set<string>() };
+
+      const customerIds = targetCustomers.map(c => c.id);
+
+      // Optimization: constructing OR clause for names might be heavy if list is huge, 
+      // but for PAGINATED (limit=10), it's fine.
+      const locationMatches = targetCustomers.map(c => ({
+        location: { contains: c.name, mode: 'insensitive' as const }
+      }));
+      const idMatches = customerIds.map(id => ({
+        location: { contains: id }
+      }));
+
+      const assignedCylinders = await prisma.cylinder.findMany({
+        where: {
+          currentStatus: 'WITH_CUSTOMER',
+          OR: [
+            { cylinderRentals: { some: { customerId: { in: customerIds }, status: 'ACTIVE' } } },
+            ...idMatches,
+            ...locationMatches
+          ]
+        },
+        select: {
+          cylinderType: true,
+          typeName: true,
+          capacity: true,
+          cylinderRentals: { where: { status: 'ACTIVE' }, select: { customerId: true } },
+          location: true
+        }
+      });
+
+      const map: Record<string, Record<string, number>> = {};
+      const types = new Set<string>();
+
+      assignedCylinders.forEach(cyl => {
+        // Determine Holder
+        let holderId = cyl.cylinderRentals[0]?.customerId;
+
+        if (!holderId) {
+          // Fallback to location matching
+          const foundCustomer = targetCustomers.find(c =>
+            (cyl.location && cyl.location.includes(c.id)) ||
+            (cyl.location && c.name && cyl.location.toLowerCase().includes(c.name.toLowerCase()))
+          );
+          if (foundCustomer) holderId = foundCustomer.id;
+        }
+
+        if (holderId) {
+          if (!map[holderId]) map[holderId] = {};
+
+          // Determine Key (Enum for Standard, Display Name for Custom)
+          let key = cyl.cylinderType;
+          const STANDARD_TYPES = ['DOMESTIC_11_8KG', 'STANDARD_15KG', 'COMMERCIAL_45_4KG'];
+
+          if (!STANDARD_TYPES.includes(cyl.cylinderType)) {
+            const typeName = cyl.typeName ? cyl.typeName.trim() : '';
+            const capacity = cyl.capacity;
+
+            if (typeName && typeName.toLowerCase() !== 'cylinder') {
+              key = `${typeName} (${capacity}kg)`;
+            } else if (capacity) {
+              key = `Cylinder (${capacity}kg)`;
+            }
+          }
+
+          map[holderId][key] = (map[holderId][key] || 0) + 1;
+          types.add(key);
+        }
+      });
+      return { map, types };
+    };
+
+    // 5. Apply Manual Sorting
+    if (sortBy === 'RECEIVABLES') {
+      filteredCustomers.sort((a, b) => {
+        const valA = Number(a.ledgerBalance);
+        const valB = Number(b.ledgerBalance);
+        return sortOrder === 'asc' ? valA - valB : valB - valA;
+      });
+    } else if (sortBy === 'CYLINDERS') {
+      // Fetch physical holdings for ALL filtered customers to sort correctly
+      // (Legacy due fields are obsolete, so we must count real cylinders)
+      const allHoldingsData = await getHoldings(filteredCustomers.map(c => ({ id: c.id, name: c.name })));
+
+      filteredCustomers.sort((a, b) => {
+        const holdingsA = allHoldingsData.map[a.id] || {};
+        const holdingsB = allHoldingsData.map[b.id] || {};
+
+        const totalA = Object.values(holdingsA).reduce((sum, count) => sum + count, 0);
+        const totalB = Object.values(holdingsB).reduce((sum, count) => sum + count, 0);
+
+        return sortOrder === 'asc' ? totalA - totalB : totalB - totalA;
+      });
+    } else if (sortBy === 'NAME') {
+      filteredCustomers.sort((a, b) => {
+        return sortOrder === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
+      });
+    } else {
+      // Default/createdAt sort
+      filteredCustomers.sort((a, b) => {
+        const dateA = new Date(a.createdAt).getTime();
+        const dateB = new Date(b.createdAt).getTime();
+        return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+      });
+    }
+
+    // 6. Pagination
+    const pages = Math.ceil(totalCustomers / limit);
+    const paginatedCustomers = filteredCustomers.slice(skip, skip + limit);
+
+    // 7. Fetch Dynamic Holdings for Paginated Customers AND Global Summary
+    // We need two things:
+    // A) Holdings for the current page (Table display)
+    // B) Total Cylinder Dues Summary (Top Cards) - This should be for ALL filtered customers, not just page.
+    // However, fetching holdings for ALL customers might be heavy. 
+    // The requirement says "Total Cylinders With Customers".
+    // For now, let's rely on the `due` columns for specific types if possible, BUT user stressed dynamic.
+    // We will do a separate aggregation for the Summary Card to be 100% accurate on dynamic types.
+
+    const pageCustomerIds = paginatedCustomers.map(c => c.id);
+    const allFilteredCustomerIds = filteredCustomers.map(c => c.id);
+
+    // Fetch Holdings logic was hoisted above for use in sorting
+
+    // Parallel fetch: Page Holdings (Details) & Total Summary Holdings (Aggregated)
+    // Total Summary Holdings: We just need Counts Grouped By Type for ALL filtered IDs.
+    const [pageHoldings, summaryCylinderStats] = await Promise.all([
+      getHoldings(paginatedCustomers.map(c => ({ id: c.id, name: c.name }))),
+      prisma.cylinder.findMany({
+        where: {
+          currentStatus: 'WITH_CUSTOMER',
+          OR: [
+            { cylinderRentals: { some: { customerId: { in: allFilteredCustomerIds }, status: 'ACTIVE' } } },
+            ...allFilteredCustomerIds.map(id => ({ location: { contains: id } })),
+            ...filteredCustomers.map(c => ({ location: { contains: c.name, mode: 'insensitive' as const } }))
+          ]
+        },
+        select: { cylinderType: true, typeName: true, capacity: true }
+      })
+    ]);
+
+    // Standard Cylinder Map (Enums to Legacy Fields)
+    const STANDARD_CYLINDER_MAP: Record<string, keyof typeof allMatchingCustomers[0]> = {
+      'DOMESTIC_11_8KG': 'domestic118kgDue',
+      'STANDARD_15KG': 'standard15kgDue',
+      'COMMERCIAL_45_4KG': 'commercial454kgDue'
+    };
+
+    // Calculate Global Cylinder Summary (Count by Type)
+    // Merge Physical Counts with Legacy Counts (use MAX for safety to avoid under-reporting)
+    const totalCylindersSummary: Record<string, number> = {};
+
+    // 1. Initialize with Legacy Totals - DISABLED as per user request (legacy data obsolete)
+    /*
+    filteredCustomers.forEach(c => {
+      Object.entries(STANDARD_CYLINDER_MAP).forEach(([type, field]) => {
+        const legacyVal = Number(c[field] || 0);
+        if (legacyVal > 0) {
+          totalCylindersSummary[type] = (totalCylindersSummary[type] || 0) + legacyVal;
+        }
+      });
+    });
+    */
+
+    // 2. Merge/Override with Physical Counts (Taking the greater of the aggregate legacy vs aggregate physical is risky but simple)
+    // BETTER: We should use the physical count if it exists for a type, else add legacy? NO.
+    // Ideally we want sum(max(physical, legacy)) per customer.
+    // But for global summary, we only have aggregate physical. 
+    // Let's rely on physical aggregate for non-standard types.
+    // For standard types, let's take the MAX of (Aggregate Legacy) vs (Aggregate Physical).
+
+    const physicalSummary: Record<string, number> = {};
+    summaryCylinderStats.forEach(cyl => {
+      let key = cyl.cylinderType;
+      // Temporarily hardcoded standard map for this scope
+      if (!['DOMESTIC_11_8KG', 'STANDARD_15KG', 'COMMERCIAL_45_4KG'].includes(cyl.cylinderType)) {
+        const typeName = cyl.typeName ? cyl.typeName.trim() : '';
+        const capacity = cyl.capacity;
+        if (typeName && typeName.toLowerCase() !== 'cylinder') {
+          key = `${typeName} (${capacity}kg)`;
+        } else if (capacity) {
+          key = `Cylinder (${capacity}kg)`;
+        }
+      }
+      physicalSummary[key] = (physicalSummary[key] || 0) + 1;
+    });
+
+    // Merge logic
+    Object.entries(physicalSummary).forEach(([type, count]) => {
+      if (STANDARD_CYLINDER_MAP[type]) {
+        // It's a standard type. Just use physical count. Legacy merge disabled.
+        totalCylindersSummary[type] = (totalCylindersSummary[type] || 0) + count;
       } else {
-        // Fallback to location check
-        holderId = customerIds.find(id => cylinder.location?.includes(id)) || null;
-      }
-
-      if (holderId) {
-        if (!customerHoldingsMap[holderId]) {
-          customerHoldingsMap[holderId] = {};
-        }
-
-        const type = cylinder.cylinderType;
-        customerHoldingsMap[holderId][type] = (customerHoldingsMap[holderId][type] || 0) + 1;
-
-        allTypesSet.add(type);
+        // It's a non-standard type. Just use physical.
+        totalCylindersSummary[type] = (totalCylindersSummary[type] || 0) + count;
       }
     });
 
-    const uniqueCylinderTypes = Array.from(allTypesSet).sort();
+    let totalCylindersCount = Object.values(totalCylindersSummary).reduce((a, b) => a + b, 0);
 
-    // Attach holdings to customer objects (or return separately)
-    // Since `customers` is Prisma object, let's return a separate map or enriched objects
-    const enrichedCustomers = customers.map(customer => ({
-      ...customer,
-      holdings: customerHoldingsMap[customer.id] || {}
-    }));
+    // Enrich Paginated Customers with Holdings
+    // For each customer, merge their specific physical holdings with their specific legacy dues
+    const finalCustomers = paginatedCustomers.map(c => {
+      const physicalHoldings = pageHoldings.map[c.id] || {};
+      const mergedHoldings: Record<string, number> = { ...physicalHoldings };
 
-    const pages = Math.ceil(total / limit);
+      Object.entries(STANDARD_CYLINDER_MAP).forEach(([type, field]) => {
+        // Legacy merge disabled
+        /*
+        const legacyVal = Number(c[field] || 0);
+        const physicalVal = mergedHoldings[type] || 0;
+        if (legacyVal > physicalVal) {
+          mergedHoldings[type] = legacyVal;
+        }
+        */
+      });
+
+      return {
+        ...c,
+        isActive: (c as any).isEffectivelyActive,
+        holdings: mergedHoldings
+      };
+    });
+
+    const uniqueCylinderTypes = Array.from(new Set([
+      ...pageHoldings.types,
+      // Removed forced standard keys
+      ...Object.keys(totalCylindersSummary)
+    ])).filter(t => {
+      // Always show types that are present in the current page's holdings
+      if (pageHoldings.types.has(t)) return true;
+      // Show others if they exist in the summary
+      return (totalCylindersSummary[t] || 0) > 0;
+    }).sort();
 
     return NextResponse.json({
-      customers: enrichedCustomers,
+      customers: finalCustomers,
       cylinderTypes: uniqueCylinderTypes,
       pagination: {
         page,
         limit,
-        total,
+        total: totalCustomers,
         pages,
       },
+      summary: {
+        totalCustomers,
+        totalReceivables,
+        totalCylinders: totalCylindersCount,
+        cylinderBreakdown: totalCylindersSummary
+      }
     });
+
   } catch (error) {
     console.error('Error fetching B2B customers:', error);
     return NextResponse.json(
