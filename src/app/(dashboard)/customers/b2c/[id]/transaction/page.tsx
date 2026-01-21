@@ -10,7 +10,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeftIcon, PlusIcon, TrashIcon, CalculatorIcon } from '@heroicons/react/24/outline';
 import { useInventoryValidation } from '@/hooks/useInventoryValidation';
 import { ProfessionalAccessorySelector } from '@/components/ui/ProfessionalAccessorySelector';
-import { getCylinderTypeOptionsWithSecurity } from '@/lib/cylinder-types';
 import { getCylinderWeight } from '@/lib/cylinder-utils';
 
 interface B2CCustomer {
@@ -63,7 +62,7 @@ interface AccessoryItem {
   sellingPrice: number; // Selling Price - for selling vaporizer (deducted from inventory)
 }
 
-const CYLINDER_TYPES = getCylinderTypeOptionsWithSecurity();
+// Note: CYLINDER_TYPES removed - using dynamic inventoryCylinderTypes instead
 
 // Note: ACCESSORY_OPTIONS removed - accessories are now loaded dynamically from inventory via ProfessionalAccessorySelector
 
@@ -90,23 +89,26 @@ export default function B2CTransactionPage() {
   const [securityItems, setSecurityItems] = useState<SecurityItem[]>([]);
   // Accessories transaction form data - now with professional structure matching B2B
   const [accessoryItems, setAccessoryItems] = useState<AccessoryItem[]>([]);
-  
+
   // Pricing information
   const [pricingInfo, setPricingInfo] = useState<any>(null);
 
+  // Dynamic cylinder types from inventory
+  const [inventoryCylinderTypes, setInventoryCylinderTypes] = useState<any[]>([]);
+
   // Inventory validation
   const { validateInventory, isFieldValid, hasAnyErrors, clearAllValidationErrors } = useInventoryValidation();
-  
+
   // Accessory validation state
   const [hasAccessoryErrors, setHasAccessoryErrors] = useState(false);
-  
+
   // Security return validation state
   const [hasSecurityReturnErrors, setHasSecurityReturnErrors] = useState(false);
   const [firstInvalidSecurityIndex, setFirstInvalidSecurityIndex] = useState<number | null>(null);
-  
+
   // Inventory validation state
   const [hasInventoryErrors, setHasInventoryErrors] = useState(false);
-  const [firstInvalidInventoryItem, setFirstInvalidInventoryItem] = useState<{category: string, index: number} | null>(null);
+  const [firstInvalidInventoryItem, setFirstInvalidInventoryItem] = useState<{ category: string, index: number } | null>(null);
 
   useEffect(() => {
     if (customerId) {
@@ -120,7 +122,7 @@ export default function B2CTransactionPage() {
   }, [securityItems, customer?.cylinderHoldings]);
 
   // Handle inventory validation changes from ProfessionalAccessorySelector
-  const handleInventoryValidationChange = (hasErrors: boolean, firstInvalidItem?: {category: string, index: number}) => {
+  const handleInventoryValidationChange = (hasErrors: boolean, firstInvalidItem?: { category: string, index: number }) => {
     setHasInventoryErrors(hasErrors);
     setFirstInvalidInventoryItem(firstInvalidItem || null);
   };
@@ -129,16 +131,19 @@ export default function B2CTransactionPage() {
     try {
       setLoading(true);
       const response = await fetch(`/api/customers/b2c/${customerId}`);
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch customer details');
       }
-      
+
       const data = await response.json();
       setCustomer(data);
-      
+
       // Fetch calculated prices for this customer
       await fetchCalculatedPrices();
+
+      // Fetch dynamic cylinder types
+      await fetchCylinderTypes();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -146,10 +151,24 @@ export default function B2CTransactionPage() {
     }
   };
 
+  const fetchCylinderTypes = async () => {
+    try {
+      const response = await fetch('/api/inventory/cylinder-types');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.types) {
+          setInventoryCylinderTypes(data.types);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching cylinder types:', error);
+    }
+  };
+
   const fetchCalculatedPrices = async () => {
     try {
       const response = await fetch(`/api/pricing/calculate?customerId=${customerId}&customerType=B2C`);
-      
+
       if (response.ok) {
         const pricingData = await response.json();
         setPricingInfo(pricingData);
@@ -170,7 +189,7 @@ export default function B2CTransactionPage() {
   const updateGasItem = (index: number, field: keyof GasItem, value: any) => {
     const updated = [...gasItems];
     updated[index] = { ...updated[index], [field]: value };
-    
+
     // Auto-apply calculated price when cylinder type is selected
     if (field === 'cylinderType' && pricingInfo) {
       const cylinderType = value;
@@ -178,34 +197,45 @@ export default function B2CTransactionPage() {
       // derive cost/kg from plant price (11.8kg basis)
       const plantPrice118 = Number(pricingInfo?.plantPrice?.price118kg) || 0;
       const costPerKg = plantPrice118 > 0 ? (plantPrice118 / 11.8) : 0;
-      
+
       // Get cylinder weight dynamically
-      const cylinderWeightForCost = getCylinderWeight(cylinderType) || 0;
-      
-      // Get calculated price based on cylinder type
-      // Note: Pricing API may need updates for new cylinder types
-      switch (cylinderType) {
-        case 'DOMESTIC_11_8KG':
-          calculatedPrice = pricingInfo.finalPrices.domestic118kg;
-          break;
-        case 'STANDARD_15KG':
-          calculatedPrice = pricingInfo.finalPrices.standard15kg;
-          break;
-        case 'COMMERCIAL_45_4KG':
-          calculatedPrice = pricingInfo.finalPrices.commercial454kg;
-          break;
-        case 'CYLINDER_6KG':
-        case 'CYLINDER_30KG':
-          // For new types, calculate price based on weight ratio
-          // Fallback: use cost-based calculation if pricing not available
-          if (pricingInfo.finalPrices.standard15kg && cylinderWeightForCost > 0) {
-            calculatedPrice = (pricingInfo.finalPrices.standard15kg / 15.0) * cylinderWeightForCost;
-          }
-          break;
+      let cylinderWeightForCost = getCylinderWeight(cylinderType) || 0;
+
+      // Try to find in dynamic inventory types first to get exact capacity
+      const inventoryType = inventoryCylinderTypes.find(t => t.cylinderType === cylinderType);
+      if (inventoryType) {
+        cylinderWeightForCost = inventoryType.capacity;
       }
-      
+
+      // Get calculated price based on cylinder type
+      // Check if we can calculate based on weight (Universal calculation)
+      if (pricingInfo.calculation && pricingInfo.calculation.endPricePerKg && cylinderWeightForCost > 0) {
+        calculatedPrice = pricingInfo.calculation.endPricePerKg * cylinderWeightForCost;
+      } else {
+        // Fallback to legacy switch case if calculation info missing
+        switch (cylinderType) {
+          case 'DOMESTIC_11_8KG':
+            calculatedPrice = pricingInfo.finalPrices.domestic118kg;
+            break;
+          case 'STANDARD_15KG':
+            calculatedPrice = pricingInfo.finalPrices.standard15kg;
+            break;
+          case 'COMMERCIAL_45_4KG':
+            calculatedPrice = pricingInfo.finalPrices.commercial454kg;
+            break;
+          case 'CYLINDER_6KG':
+          case 'CYLINDER_30KG':
+            // For new types, calculate price based on weight ratio
+            // Fallback: use cost-based calculation if pricing not available
+            if (pricingInfo.finalPrices.standard15kg && cylinderWeightForCost > 0) {
+              calculatedPrice = (pricingInfo.finalPrices.standard15kg / 15.0) * cylinderWeightForCost;
+            }
+            break;
+        }
+      }
+
       if (calculatedPrice > 0) {
-        updated[index].pricePerItem = calculatedPrice;
+        updated[index].pricePerItem = Math.round(calculatedPrice);
       }
 
       // Option 1: Auto-calculate Cost Price from Plant Price
@@ -215,7 +245,7 @@ export default function B2CTransactionPage() {
         updated[index].costPrice = Math.round(autoCost);
       }
     }
-    
+
     setGasItems(updated);
 
     // Validate inventory when gas quantity changes
@@ -227,11 +257,11 @@ export default function B2CTransactionPage() {
           cylinderType: item.cylinderType,
           requested: item.quantity
         }));
-      
+
       // Only validate cylinders - accessories are validated by ProfessionalAccessorySelector
       validateInventory(cylinders, []);
     }
-    
+
     // Check if we need to clear validation errors for reduced quantities
     if (field === 'quantity') {
       // Trigger validation to check if the new quantity is valid
@@ -242,7 +272,7 @@ export default function B2CTransactionPage() {
             cylinderType: item.cylinderType,
             requested: item.quantity
           }));
-        
+
         // Only validate cylinders - accessories are validated by ProfessionalAccessorySelector
         validateInventory(cylinders, []);
       }, 100);
@@ -251,43 +281,55 @@ export default function B2CTransactionPage() {
 
   const applyCalculatedPrices = () => {
     if (!pricingInfo) return;
-    
+
     const plantPrice118 = Number(pricingInfo?.plantPrice?.price118kg) || 0;
     const costPerKg = plantPrice118 > 0 ? (plantPrice118 / 11.8) : 0;
 
     const updatedItems = gasItems.map(item => {
       let calculatedPrice = 0;
-      const cylinderWeightForCost = getCylinderWeight(item.cylinderType) || 0;
-      
-      switch (item.cylinderType) {
-        case 'DOMESTIC_11_8KG':
-          calculatedPrice = pricingInfo.finalPrices.domestic118kg;
-          break;
-        case 'STANDARD_15KG':
-          calculatedPrice = pricingInfo.finalPrices.standard15kg;
-          break;
-        case 'COMMERCIAL_45_4KG':
-          calculatedPrice = pricingInfo.finalPrices.commercial454kg;
-          break;
-        case 'CYLINDER_6KG':
-        case 'CYLINDER_30KG':
-          // For new types, calculate price based on weight ratio
-          if (pricingInfo.finalPrices.standard15kg && cylinderWeightForCost > 0) {
-            calculatedPrice = (pricingInfo.finalPrices.standard15kg / 15.0) * cylinderWeightForCost;
-          }
-          break;
+      let cylinderWeightForCost = getCylinderWeight(item.cylinderType) || 0;
+
+      // Try to find in dynamic inventory types first to get exact capacity
+      const inventoryType = inventoryCylinderTypes.find(t => t.cylinderType === item.cylinderType);
+      if (inventoryType) {
+        cylinderWeightForCost = inventoryType.capacity;
       }
-      
+
+      // Calculate price based on weight (Universal calculation)
+      if (pricingInfo.calculation && pricingInfo.calculation.endPricePerKg && cylinderWeightForCost > 0) {
+        calculatedPrice = pricingInfo.calculation.endPricePerKg * cylinderWeightForCost;
+      } else {
+        // Fallback
+        switch (item.cylinderType) {
+          case 'DOMESTIC_11_8KG':
+            calculatedPrice = pricingInfo.finalPrices.domestic118kg;
+            break;
+          case 'STANDARD_15KG':
+            calculatedPrice = pricingInfo.finalPrices.standard15kg;
+            break;
+          case 'COMMERCIAL_45_4KG':
+            calculatedPrice = pricingInfo.finalPrices.commercial454kg;
+            break;
+          case 'CYLINDER_6KG':
+          case 'CYLINDER_30KG':
+            // For new types, calculate price based on weight ratio
+            if (pricingInfo.finalPrices.standard15kg && cylinderWeightForCost > 0) {
+              calculatedPrice = (pricingInfo.finalPrices.standard15kg / 15.0) * cylinderWeightForCost;
+            }
+            break;
+        }
+      }
+
       return {
         ...item,
-        pricePerItem: calculatedPrice > 0 ? calculatedPrice : item.pricePerItem,
+        pricePerItem: calculatedPrice > 0 ? Math.round(calculatedPrice) : item.pricePerItem,
         // Also apply Option 1 cost auto-calculation if possible
         costPrice: (costPerKg > 0 && cylinderWeightForCost > 0)
           ? Math.round(costPerKg * cylinderWeightForCost)
           : item.costPrice
       };
     });
-    
+
     setGasItems(updatedItems);
   };
 
@@ -301,31 +343,33 @@ export default function B2CTransactionPage() {
 
   // Get actual security amount from customer's holdings
   const getActualSecurityAmount = (cylinderType: string): number => {
-    if (!customer?.cylinderHoldings) {
-      // Fallback to hardcoded values if no holdings data
-      const cylinderTypeData = CYLINDER_TYPES.find(t => t.value === cylinderType);
-      return cylinderTypeData?.securityPrice || 0;
+    // 1. First check customer's active holdings (most accurate)
+    if (customer?.cylinderHoldings) {
+      // Find the most recent active holding for this cylinder type
+      const activeHoldings = customer.cylinderHoldings
+        .filter(holding => holding.cylinderType === cylinderType && !holding.isReturned)
+        .sort((a, b) => new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime());
+
+      if (activeHoldings.length > 0) {
+        // Return the actual security amount from the most recent holding
+        return Number(activeHoldings[0].securityAmount);
+      }
     }
 
-    // Find the most recent active holding for this cylinder type
-    const activeHoldings = customer.cylinderHoldings
-      .filter(holding => holding.cylinderType === cylinderType && !holding.isReturned)
-      .sort((a, b) => new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime());
-
-    if (activeHoldings.length > 0) {
-      // Return the actual security amount from the most recent holding
-      return Number(activeHoldings[0].securityAmount);
+    // 2. Fallback to dynamic inventory types (prices from API)
+    const inventoryType = inventoryCylinderTypes.find(t => t.cylinderType === cylinderType);
+    if (inventoryType && inventoryType.securityPrice) {
+      return inventoryType.securityPrice;
     }
 
-    // Fallback to hardcoded values if no active holdings found
-    const cylinderTypeData = CYLINDER_TYPES.find(t => t.value === cylinderType);
-    return cylinderTypeData?.securityPrice || 0;
+    // 3. Last resort fallback (should rarely be reached if API is working)
+    return 0;
   };
 
   // Get available holdings count for a cylinder type
   const getAvailableHoldings = (cylinderType: string): number => {
     if (!customer?.cylinderHoldings) return 0;
-    
+
     return customer.cylinderHoldings
       .filter(holding => holding.cylinderType === cylinderType && !holding.isReturned)
       .reduce((sum, holding) => sum + holding.quantity, 0);
@@ -362,17 +406,17 @@ export default function B2CTransactionPage() {
     if (firstInvalidSecurityIndex !== null) {
       const elementId = `security-item-${firstInvalidSecurityIndex}`;
       const element = document.getElementById(elementId);
-      
+
       if (element) {
         // Smooth scroll to the element
-        element.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'center' 
+        element.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center'
         });
-        
+
         // Add a temporary highlight effect
         element.classList.add('ring-2', 'ring-red-500', 'ring-opacity-75');
-        
+
         // Focus on the quantity input within that security item
         const quantityInput = element.querySelector('input[type="number"]') as HTMLInputElement;
         if (quantityInput) {
@@ -381,7 +425,7 @@ export default function B2CTransactionPage() {
             quantityInput.select(); // Select the text for easy editing
           }, 500); // Wait for scroll to complete
         }
-        
+
         // Remove highlight after 3 seconds
         setTimeout(() => {
           element.classList.remove('ring-2', 'ring-red-500', 'ring-opacity-75');
@@ -396,17 +440,17 @@ export default function B2CTransactionPage() {
       const { category, index } = firstInvalidInventoryItem;
       const elementId = `inventory-item-${category}-${index}`;
       const element = document.getElementById(elementId);
-      
+
       if (element) {
         // Smooth scroll to the element
-        element.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'center' 
+        element.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center'
         });
-        
+
         // Add a temporary highlight effect
         element.classList.add('ring-2', 'ring-red-500', 'ring-opacity-75');
-        
+
         // Focus on the quantity input within that inventory item
         const quantityInput = element.querySelector('input[type="number"]') as HTMLInputElement;
         if (quantityInput) {
@@ -415,7 +459,7 @@ export default function B2CTransactionPage() {
             quantityInput.select(); // Select the text for easy editing
           }, 500); // Wait for scroll to complete
         }
-        
+
         // Remove highlight after 3 seconds
         setTimeout(() => {
           element.classList.remove('ring-2', 'ring-red-500', 'ring-opacity-75');
@@ -427,25 +471,25 @@ export default function B2CTransactionPage() {
   const updateSecurityItem = (index: number, field: keyof SecurityItem, value: any) => {
     const updated = [...securityItems];
     updated[index] = { ...updated[index], [field]: value };
-    
+
     // Auto-fill security price when cylinder type is selected
     if (field === 'cylinderType') {
       const actualSecurityAmount = getActualSecurityAmount(value);
-      updated[index].pricePerItem = updated[index].isReturn 
+      updated[index].pricePerItem = updated[index].isReturn
         ? actualSecurityAmount * 0.75 // 25% deduction for returns
         : actualSecurityAmount;
     }
-    
+
     // Recalculate price when return status changes
     if (field === 'isReturn') {
       const actualSecurityAmount = getActualSecurityAmount(updated[index].cylinderType);
-      updated[index].pricePerItem = value 
+      updated[index].pricePerItem = value
         ? actualSecurityAmount * 0.75 // 25% deduction for returns
         : actualSecurityAmount;
     }
-    
+
     setSecurityItems(updated);
-    
+
     // Check for security return validation errors after update
     setTimeout(() => {
       checkSecurityReturnErrors();
@@ -472,7 +516,7 @@ export default function B2CTransactionPage() {
   const gasCost = calculateTotal(gasItems, 'costPrice', 'quantity');
   // Accessories: use costPerPiece * quantity
   const accessoryCost = accessoryItems.reduce((sum, item) => sum + (item.costPerPiece * item.quantity), 0);
-  
+
   // Calculate security return profit (25% deduction on returns)
   const securityReturnProfit = securityItems.reduce((sum, item) => {
     if (item.isReturn) {
@@ -483,27 +527,34 @@ export default function B2CTransactionPage() {
     }
     return sum;
   }, 0);
-  
+
   // Calculate profit margins
   const gasProfit = (() => {
     if (!pricingInfo) return gasTotal - gasCost; // Fallback to old calculation
-    
+
     // Calculate profit based on margin per kg for each gas item
     return gasItems.reduce((total, item) => {
       if (!item.cylinderType) return total;
-      
+
       // Get cylinder weight dynamically
-      const cylinderWeight = getCylinderWeight(item.cylinderType) || 0;
-      if (cylinderWeight === 0) {
-          cylinderWeight = 15.0;
+      let cylinderWeight = getCylinderWeight(item.cylinderType) || 0;
+
+      // Try to find in dynamic inventory types first to get exact capacity
+      const inventoryType = inventoryCylinderTypes.find(t => t.cylinderType === item.cylinderType);
+      if (inventoryType) {
+        cylinderWeight = inventoryType.capacity;
       }
-      
+
+      if (cylinderWeight === 0) {
+        cylinderWeight = 15.0;
+      }
+
       // Calculate profit based on margin per kg: marginPerKg × cylinderWeight × quantity
       const marginPerKg = pricingInfo.category.marginPerKg;
       return total + (marginPerKg * cylinderWeight * item.quantity);
     }, 0);
   })();
-  
+
   const accessoryProfit = accessoryTotal - accessoryCost;
   const deliveryProfit = Number(deliveryCharges) - Number(deliveryCost);
   const actualProfit = gasProfit + accessoryProfit + deliveryProfit + securityReturnProfit;
@@ -511,18 +562,18 @@ export default function B2CTransactionPage() {
   // Validate security returns against customer holdings
   const validateSecurityReturns = () => {
     if (!customer?.cylinderHoldings) return true; // Skip validation if no holdings data
-    
+
     for (const securityItem of securityItems) {
       if (securityItem.isReturn && securityItem.cylinderType) {
         const activeHoldings = customer.cylinderHoldings.filter(
           holding => holding.cylinderType === securityItem.cylinderType && !holding.isReturned
         );
-        
+
         if (activeHoldings.length === 0) {
           setError(`Cannot return ${securityItem.cylinderType} - customer has no active security holdings for this cylinder type`);
           return false;
         }
-        
+
         // Check if trying to return more than available
         const totalAvailable = activeHoldings.reduce((sum, holding) => sum + holding.quantity, 0);
         if (securityItem.quantity > totalAvailable) {
@@ -531,13 +582,13 @@ export default function B2CTransactionPage() {
         }
       }
     }
-    
+
     return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!gasItems.length && !securityItems.length && !accessoryItems.length) {
       setError('Please add at least one item to the transaction');
       return;
@@ -605,7 +656,7 @@ export default function B2CTransactionPage() {
       const result = await response.json();
       // Force a refresh of the customer data by redirecting with cache busting
       router.push(`/customers/b2c/${customerId}?refresh=${Date.now()}`);
-      
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -723,10 +774,10 @@ export default function B2CTransactionPage() {
               </div>
               <div className="flex gap-2">
                 {pricingInfo && (
-                  <Button 
-                    type="button" 
-                    onClick={applyCalculatedPrices} 
-                    variant="outline" 
+                  <Button
+                    type="button"
+                    onClick={applyCalculatedPrices}
+                    variant="outline"
                     size="sm"
                     className="bg-blue-50 text-blue-700 border-blue-200"
                   >
@@ -740,7 +791,7 @@ export default function B2CTransactionPage() {
                 </Button>
               </div>
             </div>
-            
+
             {/* Pricing Information Banner */}
             {pricingInfo && (
               <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -748,13 +799,13 @@ export default function B2CTransactionPage() {
                   <div>
                     <h4 className="font-semibold text-blue-900">Auto-Pricing Information</h4>
                     <p className="text-sm text-blue-700">
-                      Category: <strong>{pricingInfo.category.name}</strong> | 
-                      Plant Price: <strong>Rs {pricingInfo.plantPrice.price118kg}</strong> | 
+                      Category: <strong>{pricingInfo.category.name}</strong> |
+                      Plant Price: <strong>Rs {pricingInfo.plantPrice.price118kg}</strong> |
                       Margin: <strong>Rs {pricingInfo.category.marginPerKg}/kg</strong>
                     </p>
                     <p className="text-sm text-blue-600 mt-1">
-                      Calculated Prices: 11.8kg = Rs {pricingInfo.finalPrices.domestic118kg} | 
-                      15kg = Rs {pricingInfo.finalPrices.standard15kg} | 
+                      Calculated Prices: 11.8kg = Rs {pricingInfo.finalPrices.domestic118kg} |
+                      15kg = Rs {pricingInfo.finalPrices.standard15kg} |
                       45.4kg = Rs {pricingInfo.finalPrices.commercial454kg}
                     </p>
                   </div>
@@ -767,16 +818,21 @@ export default function B2CTransactionPage() {
               <div key={index} className="grid grid-cols-1 md:grid-cols-6 gap-4 p-4 bg-gray-50 rounded-lg mb-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Cylinder Type</label>
-                  <Select 
-                    value={item.cylinderType} 
+                  <Select
+                    value={item.cylinderType}
                     onChange={(e) => updateGasItem(index, 'cylinderType', e.target.value)}
                   >
                     <option value="">Select type</option>
-                    {CYLINDER_TYPES.map((type) => (
-                      <option key={type.value} value={type.value}>
-                        {type.label}
-                      </option>
-                    ))}
+                    {inventoryCylinderTypes.length > 0 ? (
+                      // Use dynamic types if available
+                      inventoryCylinderTypes.map((type) => (
+                        <option key={type.cylinderType} value={type.cylinderType}>
+                          {type.label}
+                        </option>
+                      ))
+                    ) : (
+                      <option disabled>Loading types...</option>
+                    )}
                   </Select>
                 </div>
                 <div>
@@ -823,10 +879,16 @@ export default function B2CTransactionPage() {
                     type="number"
                     value={(() => {
                       if (!pricingInfo || !item.cylinderType) return '0.00';
-                      
+
                       // Get cylinder weight dynamically
-                      const cylinderWeight = getCylinderWeight(item.cylinderType) || 0;
-                      
+                      let cylinderWeight = getCylinderWeight(item.cylinderType) || 0;
+
+                      // Try to find in dynamic inventory types first to get exact capacity
+                      const inventoryType = inventoryCylinderTypes.find(t => t.cylinderType === item.cylinderType);
+                      if (inventoryType) {
+                        cylinderWeight = inventoryType.capacity;
+                      }
+
                       // Calculate profit based on margin per kg: marginPerKg × cylinderWeight × quantity
                       const marginPerKg = pricingInfo.category.marginPerKg;
                       const profit = marginPerKg * cylinderWeight * item.quantity;
@@ -875,26 +937,30 @@ export default function B2CTransactionPage() {
           </CardHeader>
           <CardContent>
             {securityItems.map((item, index) => (
-              <div 
-                key={index} 
+              <div
+                key={index}
                 id={`security-item-${index}`}
                 className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 bg-gray-50 rounded-lg mb-4"
               >
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Cylinder Type</label>
-                  <Select 
-                    value={item.cylinderType} 
+                  <Select
+                    value={item.cylinderType}
                     onChange={(e) => updateSecurityItem(index, 'cylinderType', e.target.value)}
                   >
                     <option value="">Select type</option>
-                    {CYLINDER_TYPES.map((type) => {
-                      const available = getAvailableHoldings(type.value);
-                      return (
-                        <option key={type.value} value={type.value}>
-                          {type.label} {available > 0 && `(${available} available)`}
-                        </option>
-                      );
-                    })}
+                    {inventoryCylinderTypes.length > 0 ? (
+                      inventoryCylinderTypes.map((type) => {
+                        const available = getAvailableHoldings(type.cylinderType);
+                        return (
+                          <option key={type.cylinderType} value={type.cylinderType}>
+                            {type.label} {available > 0 && `(${available} available)`}
+                          </option>
+                        );
+                      })
+                    ) : (
+                      <option disabled>Loading types...</option>
+                    )}
                   </Select>
                   {item.cylinderType && item.isReturn && (
                     <p className="text-xs text-gray-500 mt-1">
@@ -934,8 +1000,8 @@ export default function B2CTransactionPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Return?</label>
-                  <Select 
-                    value={item.isReturn.toString()} 
+                  <Select
+                    value={item.isReturn.toString()}
                     onChange={(e) => updateSecurityItem(index, 'isReturn', e.target.value === 'true')}
                   >
                     <option value="false">New Deposit</option>

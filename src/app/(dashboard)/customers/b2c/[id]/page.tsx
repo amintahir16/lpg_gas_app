@@ -74,14 +74,14 @@ export default function B2CCustomerDetailPage() {
   const [customer, setCustomer] = useState<B2CCustomer | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Date filter states
   const [dateFilter, setDateFilter] = useState({
     startDate: '',
     endDate: ''
   });
   const [showDateFilter, setShowDateFilter] = useState(false);
-  
+
   // Report download states
   const [reportDateFilter, setReportDateFilter] = useState({
     startDate: '',
@@ -89,18 +89,25 @@ export default function B2CCustomerDetailPage() {
   });
   const [showReportDateFilter, setShowReportDateFilter] = useState(false);
   const [downloadingReport, setDownloadingReport] = useState(false);
-  
+
   // Transaction detail modal states
   const [selectedTransaction, setSelectedTransaction] = useState<any | null>(null);
   const [showTransactionDetail, setShowTransactionDetail] = useState(false);
   const [loadingTransaction, setLoadingTransaction] = useState(false);
   const [undoingTransaction, setUndoingTransaction] = useState(false);
 
+  // Dynamic cylinder types
+  const [inventoryCylinderTypes, setInventoryCylinderTypes] = useState<any[]>([]);
+
   useEffect(() => {
     if (customerId) {
       fetchCustomerDetails();
     }
   }, [customerId, dateFilter.startDate, dateFilter.endDate]);
+
+  useEffect(() => {
+    fetchCylinderTypes();
+  }, []);
 
   // Close date filter when clicking outside
   useEffect(() => {
@@ -123,7 +130,7 @@ export default function B2CCustomerDetailPage() {
   const fetchCustomerDetails = async () => {
     try {
       setLoading(true);
-      
+
       const params = new URLSearchParams();
       if (dateFilter.startDate) {
         params.append('startDate', dateFilter.startDate);
@@ -131,24 +138,38 @@ export default function B2CCustomerDetailPage() {
       if (dateFilter.endDate) {
         params.append('endDate', dateFilter.endDate);
       }
-      
+
       const queryString = params.toString();
       const url = `/api/customers/b2c/${customerId}${queryString ? `?${queryString}` : ''}`;
-      
+
       const response = await fetch(url, {
         cache: 'no-store' // Always fetch fresh data
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch customer details');
       }
-      
+
       const data = await response.json();
       setCustomer(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCylinderTypes = async () => {
+    try {
+      const response = await fetch('/api/inventory/cylinder-types');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.types) {
+          setInventoryCylinderTypes(data.types);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching cylinder types:', error);
     }
   };
 
@@ -180,7 +201,7 @@ export default function B2CCustomerDetailPage() {
 
   const handleDownloadReport = async () => {
     if (!customer) return;
-    
+
     setDownloadingReport(true);
     try {
       const params = new URLSearchParams();
@@ -192,7 +213,7 @@ export default function B2CCustomerDetailPage() {
       }
 
       const response = await fetch(`/api/customers/b2c/${customerId}/report?${params.toString()}`);
-      
+
       if (!response.ok) {
         throw new Error('Failed to generate report');
       }
@@ -206,7 +227,7 @@ export default function B2CCustomerDetailPage() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      
+
       setShowReportDateFilter(false);
     } catch (error) {
       console.error('Error downloading report:', error);
@@ -241,14 +262,23 @@ export default function B2CCustomerDetailPage() {
   };
 
   const formatTime = (timeString: string) => {
-    return new Date(timeString).toLocaleTimeString('en-PK', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
+    return new Date(timeString).toLocaleTimeString('en-PK', {
+      hour: '2-digit',
+      minute: '2-digit'
     });
   };
 
   const getCylinderTypeDisplay = (type: string | null) => {
     if (!type) return 'N/A';
+
+    // Try to find dynamic type first
+    if (inventoryCylinderTypes.length > 0) {
+      const dynamicType = inventoryCylinderTypes.find(t => t.cylinderType === type);
+      if (dynamicType) {
+        return dynamicType.label;
+      }
+    }
+
     return getCylinderTypeDisplayName(type);
   };
 
@@ -305,7 +335,7 @@ export default function B2CCustomerDetailPage() {
           </p>
         </div>
         <div className="mt-4 sm:mt-0 flex space-x-3">
-          <Button 
+          <Button
             onClick={() => router.push(`/customers/b2c/${customerId}/transaction`)}
             className="font-semibold"
           >
@@ -468,7 +498,7 @@ export default function B2CCustomerDetailPage() {
                     </span>
                   )}
                 </Button>
-                
+
                 {/* Date Filter Dropdown */}
                 {showDateFilter && (
                   <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4 date-filter-container">
@@ -484,7 +514,7 @@ export default function B2CCustomerDetailPage() {
                         <XMarkIcon className="w-5 h-5" />
                       </button>
                     </div>
-                    
+
                     <div className="space-y-3">
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1.5">
@@ -498,7 +528,7 @@ export default function B2CCustomerDetailPage() {
                           max={dateFilter.endDate || new Date().toISOString().split('T')[0]}
                         />
                       </div>
-                      
+
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1.5">
                           End Date
@@ -512,7 +542,7 @@ export default function B2CCustomerDetailPage() {
                           max={new Date().toISOString().split('T')[0]}
                         />
                       </div>
-                      
+
                       <div className="flex gap-2 pt-2 border-t border-gray-200">
                         <Button
                           variant="outline"
@@ -534,7 +564,7 @@ export default function B2CCustomerDetailPage() {
                           Apply Filter
                         </Button>
                       </div>
-                      
+
                       {(dateFilter.startDate || dateFilter.endDate) && (
                         <div className="pt-2 border-t border-gray-200">
                           <p className="text-xs text-gray-600">
@@ -558,7 +588,7 @@ export default function B2CCustomerDetailPage() {
                   </div>
                 )}
               </div>
-              
+
               {/* Trans Report Button */}
               <div className="relative report-date-filter-container">
                 <Button
@@ -574,7 +604,7 @@ export default function B2CCustomerDetailPage() {
                     <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600 ml-1"></div>
                   )}
                 </Button>
-                
+
                 {/* Report Date Filter Dropdown */}
                 {showReportDateFilter && (
                   <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4 report-date-filter-container">
@@ -590,7 +620,7 @@ export default function B2CCustomerDetailPage() {
                         <XMarkIcon className="w-5 h-5" />
                       </button>
                     </div>
-                    
+
                     <div className="space-y-3">
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1.5">
@@ -604,7 +634,7 @@ export default function B2CCustomerDetailPage() {
                           max={reportDateFilter.endDate || new Date().toISOString().split('T')[0]}
                         />
                       </div>
-                      
+
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1.5">
                           End Date
@@ -618,7 +648,7 @@ export default function B2CCustomerDetailPage() {
                           max={new Date().toISOString().split('T')[0]}
                         />
                       </div>
-                      
+
                       <div className="flex gap-2 pt-2 border-t border-gray-200">
                         <Button
                           variant="outline"
@@ -646,7 +676,7 @@ export default function B2CCustomerDetailPage() {
                           )}
                         </Button>
                       </div>
-                      
+
                       {(reportDateFilter.startDate || reportDateFilter.endDate) && (
                         <div className="pt-2 border-t border-gray-200">
                           <p className="text-xs text-gray-600">
@@ -687,7 +717,7 @@ export default function B2CCustomerDetailPage() {
               </TableHeader>
               <TableBody>
                 {customer.transactions.map((transaction) => (
-                  <TableRow 
+                  <TableRow
                     key={transaction.id}
                     className="hover:bg-gray-50 cursor-pointer"
                     onClick={() => router.push(`/customers/b2c/${customerId}/transactions/${transaction.id}`)}
@@ -772,7 +802,7 @@ export default function B2CCustomerDetailPage() {
               <CalendarIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No transactions yet</h3>
               <p className="text-gray-600 mb-4">This customer hasn't made any transactions yet</p>
-              <Button 
+              <Button
                 onClick={() => router.push(`/customers/b2c/${customerId}/transaction`)}
                 className="font-semibold"
               >
@@ -838,11 +868,11 @@ export default function B2CCustomerDetailPage() {
                         `Amount: ${formatCurrency(selectedTransaction.totalAmount)}\n\n` +
                         `This action cannot be undone.`
                       );
-                      
+
                       if (!confirmed) return;
-                      
+
                       const reason = prompt('Please provide a reason for undoing this transaction (optional):') || undefined;
-                      
+
                       try {
                         setUndoingTransaction(true);
                         const response = await fetch(`/api/customers/b2c/transactions/${selectedTransaction.id}/undo`, {
@@ -852,7 +882,7 @@ export default function B2CCustomerDetailPage() {
                           },
                           body: JSON.stringify({ reason })
                         });
-                        
+
                         if (response.ok) {
                           alert('Transaction successfully undone. All changes have been reversed.');
                           setShowTransactionDetail(false);
@@ -871,9 +901,8 @@ export default function B2CCustomerDetailPage() {
                       }
                     }}
                     disabled={selectedTransaction.voided || undoingTransaction}
-                    className={`flex items-center gap-2 ${
-                      selectedTransaction.voided ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-50 hover:border-red-300 hover:text-red-600'
-                    }`}
+                    className={`flex items-center gap-2 ${selectedTransaction.voided ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-50 hover:border-red-300 hover:text-red-600'
+                      }`}
                   >
                     <ArrowPathIcon className="w-4 h-4" />
                     {undoingTransaction ? 'Undoing...' : 'Undo Transaction'}
