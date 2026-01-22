@@ -13,7 +13,7 @@ import {
   CubeIcon
 } from '@heroicons/react/24/outline';
 
-interface AccessoryItem {
+export interface AccessoryItem {
   id: string;
   category: string;
   itemType: string;

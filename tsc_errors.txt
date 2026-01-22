@@ -1,0 +1,335 @@
+.next/types/app/api/admin/margin-categories/[id]/route.ts(49,7): error TS2344: Type '{ __tag__: "GET"; __param_position__: "second"; __param_type__: { params: { id: string; }; }; }' does not satisfy the constraint 'ParamCheck<RouteContext>'.
+  The types of '__param_type__.params' are incompatible between these types.
+    Type '{ id: string; }' is missing the following properties from type 'Promise<any>': then, catch, finally, [Symbol.toStringTag]
+.next/types/app/api/admin/margin-categories/[id]/route.ts(205,7): error TS2344: Type '{ __tag__: "PUT"; __param_position__: "second"; __param_type__: { params: { id: string; }; }; }' does not satisfy the constraint 'ParamCheck<RouteContext>'.
+  The types of '__param_type__.params' are incompatible between these types.
+    Type '{ id: string; }' is missing the following properties from type 'Promise<any>': then, catch, finally, [Symbol.toStringTag]
+.next/types/app/api/admin/margin-categories/[id]/route.ts(244,7): error TS2344: Type '{ __tag__: "DELETE"; __param_position__: "second"; __param_type__: { params: { id: string; }; }; }' does not satisfy the constraint 'ParamCheck<RouteContext>'.
+  The types of '__param_type__.params' are incompatible between these types.
+    Type '{ id: string; }' is missing the following properties from type 'Promise<any>': then, catch, finally, [Symbol.toStringTag]
+.next/types/app/api/inventory/valves/[id]/route.ts(49,7): error TS2344: Type '{ __tag__: "GET"; __param_position__: "second"; __param_type__: { params: { id: string; }; }; }' does not satisfy the constraint 'ParamCheck<RouteContext>'.
+  The types of '__param_type__.params' are incompatible between these types.
+    Type '{ id: string; }' is missing the following properties from type 'Promise<any>': then, catch, finally, [Symbol.toStringTag]
+.next/types/app/api/inventory/valves/[id]/route.ts(205,7): error TS2344: Type '{ __tag__: "PUT"; __param_position__: "second"; __param_type__: { params: { id: string; }; }; }' does not satisfy the constraint 'ParamCheck<RouteContext>'.
+  The types of '__param_type__.params' are incompatible between these types.
+    Type '{ id: string; }' is missing the following properties from type 'Promise<any>': then, catch, finally, [Symbol.toStringTag]
+.next/types/app/api/inventory/valves/[id]/route.ts(244,7): error TS2344: Type '{ __tag__: "DELETE"; __param_position__: "second"; __param_type__: { params: { id: string; }; }; }' does not satisfy the constraint 'ParamCheck<RouteContext>'.
+  The types of '__param_type__.params' are incompatible between these types.
+    Type '{ id: string; }' is missing the following properties from type 'Promise<any>': then, catch, finally, [Symbol.toStringTag]
+.next/types/app/api/vendors/[id]/purchases/route.ts(49,7): error TS2344: Type '{ __tag__: "GET"; __param_position__: "second"; __param_type__: { params: { id: string; }; }; }' does not satisfy the constraint 'ParamCheck<RouteContext>'.
+  The types of '__param_type__.params' are incompatible between these types.
+    Type '{ id: string; }' is missing the following properties from type 'Promise<any>': then, catch, finally, [Symbol.toStringTag]
+.next/types/app/shop/page.ts(12,13): error TS2344: Type 'OmitWithTag<typeof import("C:/lpg-gas-app/src/app/shop/page"), "default" | "metadata" | "viewport" | "config" | "generateStaticParams" | "revalidate" | "dynamic" | "dynamicParams" | "fetchCache" | ... 5 more ... | "experimental_ppr", "">' does not satisfy the constraint '{ [x: string]: never; }'.
+  Property 'useCart' is incompatible with index signature.
+    Type '() => CartContextType' is not assignable to type 'never'.
+.next/types/validator.ts(52,39): error TS2307: Cannot find module '../src/app/(auth)/login/page.js' or its corresponding type declarations.
+.next/types/validator.ts(58,39): error TS2307: Cannot find module '../src/app/(auth)/register/page.js' or its corresponding type declarations.
+.next/types/validator.ts(64,39): error TS2307: Cannot find module '../src/app/(customer)/customer/dashboard/page.js' or its corresponding type declarations.
+.next/types/validator.ts(70,39): error TS2307: Cannot find module '../src/app/(customer)/customer/payments/page.js' or its corresponding type declarations.
+.next/types/validator.ts(76,39): error TS2307: Cannot find module '../src/app/(customer)/customer/profile/page.js' or its corresponding type declarations.
+.next/types/validator.ts(82,39): error TS2307: Cannot find module '../src/app/(customer)/customer/rentals/page.js' or its corresponding type declarations.
+.next/types/validator.ts(88,39): error TS2307: Cannot find module '../src/app/(customer)/customer/service/page.js' or its corresponding type declarations.
+.next/types/validator.ts(94,39): error TS2307: Cannot find module '../src/app/(customer)/customer/support/page.js' or its corresponding type declarations.
+.next/types/validator.ts(100,39): error TS2307: Cannot find module '../src/app/(dashboard)/admin/page.js' or its corresponding type declarations.
+.next/types/validator.ts(106,39): error TS2307: Cannot find module '../src/app/(dashboard)/admin/pricing/page.js' or its corresponding type declarations.
+.next/types/validator.ts(112,39): error TS2307: Cannot find module '../src/app/(dashboard)/customers/[id]/new-payment/page.js' or its corresponding type declarations.
+.next/types/validator.ts(118,39): error TS2307: Cannot find module '../src/app/(dashboard)/customers/[id]/new-return/page.js' or its corresponding type declarations.
+.next/types/validator.ts(124,39): error TS2307: Cannot find module '../src/app/(dashboard)/customers/[id]/new-sale/page.js' or its corresponding type declarations.
+.next/types/validator.ts(130,39): error TS2307: Cannot find module '../src/app/(dashboard)/customers/[id]/page.js' or its corresponding type declarations.
+.next/types/validator.ts(136,39): error TS2307: Cannot find module '../src/app/(dashboard)/customers/b2b/[id]/page.js' or its corresponding type declarations.
+.next/types/validator.ts(142,39): error TS2307: Cannot find module '../src/app/(dashboard)/customers/b2b/page.js' or its corresponding type declarations.
+.next/types/validator.ts(148,39): error TS2307: Cannot find module '../src/app/(dashboard)/customers/b2c/[id]/page.js' or its corresponding type declarations.
+.next/types/validator.ts(154,39): error TS2307: Cannot find module '../src/app/(dashboard)/customers/b2c/[id]/transaction/page.js' or its corresponding type declarations.
+.next/types/validator.ts(160,39): error TS2307: Cannot find module '../src/app/(dashboard)/customers/b2c/[id]/transactions/[transactionId]/page.js' or its corresponding type declarations.
+.next/types/validator.ts(166,39): error TS2307: Cannot find module '../src/app/(dashboard)/customers/b2c/ledger/page.js' or its corresponding type declarations.
+.next/types/validator.ts(172,39): error TS2307: Cannot find module '../src/app/(dashboard)/customers/b2c/new/page.js' or its corresponding type declarations.
+.next/types/validator.ts(178,39): error TS2307: Cannot find module '../src/app/(dashboard)/customers/b2c/page.js' or its corresponding type declarations.
+.next/types/validator.ts(184,39): error TS2307: Cannot find module '../src/app/(dashboard)/customers/new/page.js' or its corresponding type declarations.
+.next/types/validator.ts(190,39): error TS2307: Cannot find module '../src/app/(dashboard)/customers/page.js' or its corresponding type declarations.
+.next/types/validator.ts(196,39): error TS2307: Cannot find module '../src/app/(dashboard)/customers/reports/page.js' or its corresponding type declarations.
+.next/types/validator.ts(202,39): error TS2307: Cannot find module '../src/app/(dashboard)/dashboard/page.js' or its corresponding type declarations.
+.next/types/validator.ts(208,39): error TS2307: Cannot find module '../src/app/(dashboard)/financial/page.js' or its corresponding type declarations.
+.next/types/validator.ts(214,39): error TS2307: Cannot find module '../src/app/(dashboard)/inventory/accessories/page.js' or its corresponding type declarations.
+.next/types/validator.ts(220,39): error TS2307: Cannot find module '../src/app/(dashboard)/inventory/customer-cylinders/page.js' or its corresponding type declarations.
+.next/types/validator.ts(226,39): error TS2307: Cannot find module '../src/app/(dashboard)/inventory/cylinders/page.js' or its corresponding type declarations.
+.next/types/validator.ts(232,39): error TS2307: Cannot find module '../src/app/(dashboard)/inventory/page.js' or its corresponding type declarations.
+.next/types/validator.ts(238,39): error TS2307: Cannot find module '../src/app/(dashboard)/inventory/reports/page.js' or its corresponding type declarations.
+.next/types/validator.ts(244,39): error TS2307: Cannot find module '../src/app/(dashboard)/inventory/store-vehicles/page.js' or its corresponding type declarations.
+.next/types/validator.ts(250,39): error TS2307: Cannot find module '../src/app/(dashboard)/reports/page.js' or its corresponding type declarations.
+.next/types/validator.ts(256,39): error TS2307: Cannot find module '../src/app/(dashboard)/settings/page.js' or its corresponding type declarations.
+.next/types/validator.ts(262,39): error TS2307: Cannot find module '../src/app/(dashboard)/vendors/[id]/page.js' or its corresponding type declarations.
+.next/types/validator.ts(268,39): error TS2307: Cannot find module '../src/app/(dashboard)/vendors/category/[id]/page.js' or its corresponding type declarations.
+.next/types/validator.ts(274,39): error TS2307: Cannot find module '../src/app/(dashboard)/vendors/credits/page.js' or its corresponding type declarations.
+.next/types/validator.ts(280,39): error TS2307: Cannot find module '../src/app/(dashboard)/vendors/debug/page.js' or its corresponding type declarations.
+.next/types/validator.ts(286,39): error TS2307: Cannot find module '../src/app/(dashboard)/vendors/page.js' or its corresponding type declarations.
+.next/types/validator.ts(292,39): error TS2307: Cannot find module '../src/app/(vendor)/vendor/dashboard/page.js' or its corresponding type declarations.
+.next/types/validator.ts(298,39): error TS2307: Cannot find module '../src/app/(vendor)/vendor/inventory/page.js' or its corresponding type declarations.
+.next/types/validator.ts(304,39): error TS2307: Cannot find module '../src/app/(vendor)/vendor/orders/page.js' or its corresponding type declarations.
+.next/types/validator.ts(310,39): error TS2307: Cannot find module '../src/app/(vendor)/vendor/payments/page.js' or its corresponding type declarations.
+.next/types/validator.ts(316,39): error TS2307: Cannot find module '../src/app/(vendor)/vendor/profile/page.js' or its corresponding type declarations.
+.next/types/validator.ts(322,39): error TS2307: Cannot find module '../src/app/about/page.js' or its corresponding type declarations.
+.next/types/validator.ts(328,39): error TS2307: Cannot find module '../src/app/blog/page.js' or its corresponding type declarations.
+.next/types/validator.ts(334,39): error TS2307: Cannot find module '../src/app/contact/page.js' or its corresponding type declarations.
+.next/types/validator.ts(340,39): error TS2307: Cannot find module '../src/app/page.js' or its corresponding type declarations.
+.next/types/validator.ts(346,39): error TS2307: Cannot find module '../src/app/services/page.js' or its corresponding type declarations.
+.next/types/validator.ts(352,39): error TS2307: Cannot find module '../src/app/settings/notifications/page.js' or its corresponding type declarations.
+.next/types/validator.ts(358,39): error TS2307: Cannot find module '../src/app/shop/page.js' or its corresponding type declarations.
+.next/types/validator.ts(364,39): error TS2307: Cannot find module '../src/app/test-notifications/page.js' or its corresponding type declarations.
+.next/types/validator.ts(370,39): error TS2307: Cannot find module '../src/app/api/admin/margin-categories/[id]/route.js' or its corresponding type declarations.
+.next/types/validator.ts(376,39): error TS2307: Cannot find module '../src/app/api/admin/margin-categories/initialize/route.js' or its corresponding type declarations.
+.next/types/validator.ts(382,39): error TS2307: Cannot find module '../src/app/api/admin/margin-categories/route.js' or its corresponding type declarations.
+.next/types/validator.ts(388,39): error TS2307: Cannot find module '../src/app/api/admin/plant-prices/route.js' or its corresponding type declarations.
+.next/types/validator.ts(394,39): error TS2307: Cannot find module '../src/app/api/auth/[...nextauth]/route.js' or its corresponding type declarations.
+.next/types/validator.ts(400,39): error TS2307: Cannot find module '../src/app/api/auth/register/route.js' or its corresponding type declarations.
+.next/types/validator.ts(406,39): error TS2307: Cannot find module '../src/app/api/b2b-transactions/route.js' or its corresponding type declarations.
+.next/types/validator.ts(412,39): error TS2307: Cannot find module '../src/app/api/bill-sequence/route.js' or its corresponding type declarations.
+.next/types/validator.ts(418,39): error TS2307: Cannot find module '../src/app/api/customer/dashboard/route.js' or its corresponding type declarations.
+.next/types/validator.ts(424,39): error TS2307: Cannot find module '../src/app/api/customer/payments/route.js' or its corresponding type declarations.
+.next/types/validator.ts(430,39): error TS2307: Cannot find module '../src/app/api/customer/rentals/route.js' or its corresponding type declarations.
+.next/types/validator.ts(436,39): error TS2307: Cannot find module '../src/app/api/customer/support/route.js' or its corresponding type declarations.
+.next/types/validator.ts(442,39): error TS2307: Cannot find module '../src/app/api/customers/[id]/ledger/route.js' or its corresponding type declarations.
+.next/types/validator.ts(448,39): error TS2307: Cannot find module '../src/app/api/customers/[id]/original-price/route.js' or its corresponding type declarations.
+.next/types/validator.ts(454,39): error TS2307: Cannot find module '../src/app/api/customers/[id]/route.js' or its corresponding type declarations.
+.next/types/validator.ts(460,39): error TS2307: Cannot find module '../src/app/api/customers/[id]/statement/route.js' or its corresponding type declarations.
+.next/types/validator.ts(466,39): error TS2307: Cannot find module '../src/app/api/customers/b2b/[id]/cylinder-dues/route.js' or its corresponding type declarations.
+.next/types/validator.ts(472,39): error TS2307: Cannot find module '../src/app/api/customers/b2b/[id]/ledger/route.js' or its corresponding type declarations.
+.next/types/validator.ts(478,39): error TS2307: Cannot find module '../src/app/api/customers/b2b/[id]/report/route.js' or its corresponding type declarations.
+.next/types/validator.ts(484,39): error TS2307: Cannot find module '../src/app/api/customers/b2b/[id]/route.js' or its corresponding type declarations.
+.next/types/validator.ts(490,39): error TS2307: Cannot find module '../src/app/api/customers/b2b/route.js' or its corresponding type declarations.
+.next/types/validator.ts(496,39): error TS2307: Cannot find module '../src/app/api/customers/b2b/transactions/[transactionId]/report/route.js' or its corresponding type declarations.
+.next/types/validator.ts(502,39): error TS2307: Cannot find module '../src/app/api/customers/b2b/transactions/[transactionId]/route.js' or its corresponding type declarations.
+.next/types/validator.ts(508,39): error TS2307: Cannot find module '../src/app/api/customers/b2b/transactions/[transactionId]/undo/route.js' or its corresponding type declarations.
+.next/types/validator.ts(514,39): error TS2307: Cannot find module '../src/app/api/customers/b2b/transactions/route.js' or its corresponding type declarations.
+.next/types/validator.ts(520,39): error TS2307: Cannot find module '../src/app/api/customers/b2c/[id]/report/route.js' or its corresponding type declarations.
+.next/types/validator.ts(526,39): error TS2307: Cannot find module '../src/app/api/customers/b2c/[id]/route.js' or its corresponding type declarations.
+.next/types/validator.ts(532,39): error TS2307: Cannot find module '../src/app/api/customers/b2c/ledger/route.js' or its corresponding type declarations.
+.next/types/validator.ts(538,39): error TS2307: Cannot find module '../src/app/api/customers/b2c/route.js' or its corresponding type declarations.
+.next/types/validator.ts(544,39): error TS2307: Cannot find module '../src/app/api/customers/b2c/transactions/[transactionId]/report/route.js' or its corresponding type declarations.
+.next/types/validator.ts(550,39): error TS2307: Cannot find module '../src/app/api/customers/b2c/transactions/[transactionId]/route.js' or its corresponding type declarations.
+.next/types/validator.ts(556,39): error TS2307: Cannot find module '../src/app/api/customers/b2c/transactions/[transactionId]/undo/route.js' or its corresponding type declarations.
+.next/types/validator.ts(562,39): error TS2307: Cannot find module '../src/app/api/customers/b2c/transactions/route.js' or its corresponding type declarations.
+.next/types/validator.ts(568,39): error TS2307: Cannot find module '../src/app/api/customers/combined/route.js' or its corresponding type declarations.
+.next/types/validator.ts(574,39): error TS2307: Cannot find module '../src/app/api/customers/export/route.js' or its corresponding type declarations.
+.next/types/validator.ts(580,39): error TS2307: Cannot find module '../src/app/api/customers/import/route.js' or its corresponding type declarations.
+.next/types/validator.ts(586,39): error TS2307: Cannot find module '../src/app/api/customers/route.js' or its corresponding type declarations.
+.next/types/validator.ts(592,39): error TS2307: Cannot find module '../src/app/api/cylinders/route.js' or its corresponding type declarations.
+.next/types/validator.ts(598,39): error TS2307: Cannot find module '../src/app/api/dashboard/stats/route.js' or its corresponding type declarations.
+.next/types/validator.ts(604,39): error TS2307: Cannot find module '../src/app/api/expenses/route.js' or its corresponding type declarations.
+.next/types/validator.ts(610,39): error TS2307: Cannot find module '../src/app/api/inventory/accessories/dynamic/route.js' or its corresponding type declarations.
+.next/types/validator.ts(616,39): error TS2307: Cannot find module '../src/app/api/inventory/accessories/stats/route.js' or its corresponding type declarations.
+.next/types/validator.ts(622,39): error TS2307: Cannot find module '../src/app/api/inventory/categories/route.js' or its corresponding type declarations.
+.next/types/validator.ts(628,39): error TS2307: Cannot find module '../src/app/api/inventory/check/route.js' or its corresponding type declarations.
+.next/types/validator.ts(634,39): error TS2307: Cannot find module '../src/app/api/inventory/custom-items/[id]/route.js' or its corresponding type declarations.
+.next/types/validator.ts(640,39): error TS2307: Cannot find module '../src/app/api/inventory/custom-items/category/[name]/route.js' or its corresponding type declarations.
+.next/types/validator.ts(646,39): error TS2307: Cannot find module '../src/app/api/inventory/custom-items/category/route.js' or its corresponding type declarations.
+.next/types/validator.ts(652,39): error TS2307: Cannot find module '../src/app/api/inventory/custom-items/route.js' or its corresponding type declarations.
+.next/types/validator.ts(658,39): error TS2307: Cannot find module '../src/app/api/inventory/customer-cylinders/route.js' or its corresponding type declarations.
+.next/types/validator.ts(664,39): error TS2307: Cannot find module '../src/app/api/inventory/customer-cylinders/stats/route.js' or its corresponding type declarations.
+.next/types/validator.ts(670,39): error TS2307: Cannot find module '../src/app/api/inventory/cylinder-types/route.js' or its corresponding type declarations.
+.next/types/validator.ts(676,39): error TS2307: Cannot find module '../src/app/api/inventory/cylinders/[id]/route.js' or its corresponding type declarations.
+.next/types/validator.ts(682,39): error TS2307: Cannot find module '../src/app/api/inventory/cylinders/route.js' or its corresponding type declarations.
+.next/types/validator.ts(688,39): error TS2307: Cannot find module '../src/app/api/inventory/cylinders/stats/route.js' or its corresponding type declarations.
+.next/types/validator.ts(694,39): error TS2307: Cannot find module '../src/app/api/inventory/empty-cylinders/route.js' or its corresponding type declarations.
+.next/types/validator.ts(700,39): error TS2307: Cannot find module '../src/app/api/inventory/pipes/[id]/route.js' or its corresponding type declarations.
+.next/types/validator.ts(706,39): error TS2307: Cannot find module '../src/app/api/inventory/pipes/route.js' or its corresponding type declarations.
+.next/types/validator.ts(712,39): error TS2307: Cannot find module '../src/app/api/inventory/regulators/[id]/route.js' or its corresponding type declarations.
+.next/types/validator.ts(718,39): error TS2307: Cannot find module '../src/app/api/inventory/regulators/route.js' or its corresponding type declarations.
+.next/types/validator.ts(724,39): error TS2307: Cannot find module '../src/app/api/inventory/stats/route.js' or its corresponding type declarations.
+.next/types/validator.ts(730,39): error TS2307: Cannot find module '../src/app/api/inventory/stores/route.js' or its corresponding type declarations.
+.next/types/validator.ts(736,39): error TS2307: Cannot find module '../src/app/api/inventory/stoves/[id]/route.js' or its corresponding type declarations.
+.next/types/validator.ts(742,39): error TS2307: Cannot find module '../src/app/api/inventory/stoves/route.js' or its corresponding type declarations.
+.next/types/validator.ts(748,39): error TS2307: Cannot find module '../src/app/api/inventory/valves/[id]/route.js' or its corresponding type declarations.
+.next/types/validator.ts(754,39): error TS2307: Cannot find module '../src/app/api/inventory/valves/route.js' or its corresponding type declarations.
+.next/types/validator.ts(760,39): error TS2307: Cannot find module '../src/app/api/inventory/vehicles/route.js' or its corresponding type declarations.
+.next/types/validator.ts(766,39): error TS2307: Cannot find module '../src/app/api/invoices/generate/route.js' or its corresponding type declarations.
+.next/types/validator.ts(772,39): error TS2307: Cannot find module '../src/app/api/notifications/alerts/route.js' or its corresponding type declarations.
+.next/types/validator.ts(778,39): error TS2307: Cannot find module '../src/app/api/notifications/route.js' or its corresponding type declarations.
+.next/types/validator.ts(784,39): error TS2307: Cannot find module '../src/app/api/notifications/stats/route.js' or its corresponding type declarations.
+.next/types/validator.ts(790,39): error TS2307: Cannot find module '../src/app/api/payments/route.js' or its corresponding type declarations.
+.next/types/validator.ts(796,39): error TS2307: Cannot find module '../src/app/api/pricing/calculate/route.js' or its corresponding type declarations.
+.next/types/validator.ts(802,39): error TS2307: Cannot find module '../src/app/api/products/route.js' or its corresponding type declarations.
+.next/types/validator.ts(808,39): error TS2307: Cannot find module '../src/app/api/reconciliation/customer-ledger/route.js' or its corresponding type declarations.
+.next/types/validator.ts(814,39): error TS2307: Cannot find module '../src/app/api/rentals/route.js' or its corresponding type declarations.
+.next/types/validator.ts(820,39): error TS2307: Cannot find module '../src/app/api/reports/ar-aging/route.js' or its corresponding type declarations.
+.next/types/validator.ts(826,39): error TS2307: Cannot find module '../src/app/api/reports/b2b/route.js' or its corresponding type declarations.
+.next/types/validator.ts(832,39): error TS2307: Cannot find module '../src/app/api/reports/buyback/route.js' or its corresponding type declarations.
+.next/types/validator.ts(838,39): error TS2307: Cannot find module '../src/app/api/reports/daily-cashbook/route.js' or its corresponding type declarations.
+.next/types/validator.ts(844,39): error TS2307: Cannot find module '../src/app/api/reports/route.js' or its corresponding type declarations.
+.next/types/validator.ts(850,39): error TS2307: Cannot find module '../src/app/api/settings/route.js' or its corresponding type declarations.
+.next/types/validator.ts(856,39): error TS2307: Cannot find module '../src/app/api/simple-notifications/route.js' or its corresponding type declarations.
+.next/types/validator.ts(862,39): error TS2307: Cannot find module '../src/app/api/simple-notifications/stats/route.js' or its corresponding type declarations.
+.next/types/validator.ts(868,39): error TS2307: Cannot find module '../src/app/api/support/route.js' or its corresponding type declarations.
+.next/types/validator.ts(874,39): error TS2307: Cannot find module '../src/app/api/test-auth/route.js' or its corresponding type declarations.
+.next/types/validator.ts(880,39): error TS2307: Cannot find module '../src/app/api/test-notification/route.js' or its corresponding type declarations.
+.next/types/validator.ts(886,39): error TS2307: Cannot find module '../src/app/api/vendor-categories/route.js' or its corresponding type declarations.
+.next/types/validator.ts(892,39): error TS2307: Cannot find module '../src/app/api/vendor/dashboard/route.js' or its corresponding type declarations.
+.next/types/validator.ts(898,39): error TS2307: Cannot find module '../src/app/api/vendor/inventory/route.js' or its corresponding type declarations.
+.next/types/validator.ts(904,39): error TS2307: Cannot find module '../src/app/api/vendor/invoices/route.js' or its corresponding type declarations.
+.next/types/validator.ts(910,39): error TS2307: Cannot find module '../src/app/api/vendor/orders/route.js' or its corresponding type declarations.
+.next/types/validator.ts(916,39): error TS2307: Cannot find module '../src/app/api/vendor/payments/route.js' or its corresponding type declarations.
+.next/types/validator.ts(922,39): error TS2307: Cannot find module '../src/app/api/vendor/profile/route.js' or its corresponding type declarations.
+.next/types/validator.ts(928,39): error TS2307: Cannot find module '../src/app/api/vendors/[id]/direct-payments/route.js' or its corresponding type declarations.
+.next/types/validator.ts(934,39): error TS2307: Cannot find module '../src/app/api/vendors/[id]/financial-report/route.js' or its corresponding type declarations.
+.next/types/validator.ts(940,39): error TS2307: Cannot find module '../src/app/api/vendors/[id]/items/[itemId]/route.js' or its corresponding type declarations.
+.next/types/validator.ts(946,39): error TS2307: Cannot find module '../src/app/api/vendors/[id]/items/route.js' or its corresponding type declarations.
+.next/types/validator.ts(952,39): error TS2307: Cannot find module '../src/app/api/vendors/[id]/payments/route.js' or its corresponding type declarations.
+.next/types/validator.ts(958,39): error TS2307: Cannot find module '../src/app/api/vendors/[id]/purchases/route.js' or its corresponding type declarations.
+.next/types/validator.ts(964,39): error TS2307: Cannot find module '../src/app/api/vendors/[id]/route.js' or its corresponding type declarations.
+.next/types/validator.ts(970,39): error TS2307: Cannot find module '../src/app/api/vendors/credits/route.js' or its corresponding type declarations.
+.next/types/validator.ts(976,39): error TS2307: Cannot find module '../src/app/api/vendors/generate-cylinder-codes/route.js' or its corresponding type declarations.
+.next/types/validator.ts(982,39): error TS2307: Cannot find module '../src/app/api/vendors/invoice-sequence/route.js' or its corresponding type declarations.
+.next/types/validator.ts(988,39): error TS2307: Cannot find module '../src/app/api/vendors/route.js' or its corresponding type declarations.
+.next/types/validator.ts(998,39): error TS2307: Cannot find module '../src/app/(customer)/layout.js' or its corresponding type declarations.
+.next/types/validator.ts(1004,39): error TS2307: Cannot find module '../src/app/(dashboard)/layout.js' or its corresponding type declarations.
+.next/types/validator.ts(1010,39): error TS2307: Cannot find module '../src/app/(vendor)/layout.js' or its corresponding type declarations.
+.next/types/validator.ts(1016,39): error TS2307: Cannot find module '../src/app/layout.js' or its corresponding type declarations.
+src/app/(dashboard)/customers/[id]/new-return/page.tsx(629,25): error TS2322: Type '{ children: Element[]; value: string; onValueChange: (value: any) => Promise<void>; }' is not assignable to type 'IntrinsicAttributes & SelectProps & RefAttributes<HTMLSelectElement>'.
+  Property 'onValueChange' does not exist on type 'IntrinsicAttributes & SelectProps & RefAttributes<HTMLSelectElement>'. Did you mean 'onVolumeChange'?
+src/app/(dashboard)/customers/[id]/new-return/page.tsx(629,41): error TS7006: Parameter 'value' implicitly has an 'any' type.
+src/app/(dashboard)/customers/[id]/new-return/page.tsx(678,25): error TS2322: Type '{ children: Element[]; value: "PARTIAL" | "EMPTY" | "FULL"; onValueChange: (value: any) => Promise<void>; }' is not assignable to type 'IntrinsicAttributes & SelectProps & RefAttributes<HTMLSelectElement>'.
+  Property 'onValueChange' does not exist on type 'IntrinsicAttributes & SelectProps & RefAttributes<HTMLSelectElement>'. Did you mean 'onVolumeChange'?
+src/app/(dashboard)/customers/[id]/new-return/page.tsx(678,41): error TS7006: Parameter 'value' implicitly has an 'any' type.
+src/app/(dashboard)/customers/[id]/new-sale/page.tsx(446,25): error TS2322: Type '{ children: Element[]; value: string; onValueChange: (value: any) => void; }' is not assignable to type 'IntrinsicAttributes & SelectProps & RefAttributes<HTMLSelectElement>'.
+  Property 'onValueChange' does not exist on type 'IntrinsicAttributes & SelectProps & RefAttributes<HTMLSelectElement>'. Did you mean 'onVolumeChange'?
+src/app/(dashboard)/customers/[id]/new-sale/page.tsx(446,41): error TS7006: Parameter 'value' implicitly has an 'any' type.
+src/app/(dashboard)/customers/[id]/new-sale/page.tsx(472,25): error TS2322: Type '{ children: Element[]; value: string; onValueChange: (value: any) => void; }' is not assignable to type 'IntrinsicAttributes & SelectProps & RefAttributes<HTMLSelectElement>'.
+  Property 'onValueChange' does not exist on type 'IntrinsicAttributes & SelectProps & RefAttributes<HTMLSelectElement>'. Did you mean 'onVolumeChange'?
+src/app/(dashboard)/customers/[id]/new-sale/page.tsx(472,41): error TS7006: Parameter 'value' implicitly has an 'any' type.
+src/app/(dashboard)/customers/b2c/[id]/transaction/page.tsx(386,9): error TS7034: Variable 'firstInvalidIndex' implicitly has type 'any' in some locations where its type cannot be determined.
+src/app/(dashboard)/customers/b2c/[id]/transaction/page.tsx(391,15): error TS7005: Variable 'firstInvalidIndex' implicitly has an 'any' type.
+src/app/(dashboard)/customers/b2c/[id]/transaction/page.tsx(1039,15): error TS2719: Type 'AccessoryItem[]' is not assignable to type 'AccessoryItem[]'. Two different types with this name exist, but they are unrelated.
+  Property 'markup' is missing in type 'AccessoryItem' but required in type 'AccessoryItem'.
+src/app/(dashboard)/customers/reports/page.tsx(122,56): error TS2304: Cannot find name 'ArrowPathIcon'.
+src/app/(dashboard)/customers/reports/page.tsx(515,17): error TS2322: Type '{ children: Element[]; value: string; onValueChange: Dispatch<SetStateAction<string>>; }' is not assignable to type 'IntrinsicAttributes & SelectProps & RefAttributes<HTMLSelectElement>'.
+  Property 'onValueChange' does not exist on type 'IntrinsicAttributes & SelectProps & RefAttributes<HTMLSelectElement>'. Did you mean 'onVolumeChange'?
+src/app/(dashboard)/inventory/store-vehicles/page.tsx(494,37): error TS2551: Property 'value' does not exist on type 'string'. Did you mean 'valueOf'?
+src/app/(dashboard)/vendors/page.tsx(81,42): error TS18046: 'error' is of type 'unknown'.
+src/app/api/auth/register/route.ts(50,11): error TS2353: Object literal may only specify known properties, and 'firstName' does not exist in type '(Without<CustomerCreateInput, CustomerUncheckedCreateInput> & CustomerUncheckedCreateInput) | (Without<...> & CustomerCreateInput)'.
+src/app/api/b2b-transactions/route.ts(294,15): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/app/api/b2b-transactions/route.ts(296,15): error TS2365: Operator '+=' cannot be applied to types 'Decimal' and 'number'.
+src/app/api/b2b-transactions/route.ts(368,7): error TS2552: Cannot find name 'transactionType'. Did you mean 'B2BTransactionType'?
+src/app/api/b2b-transactions/route.ts(369,7): error TS18004: No value exists in scope for the shorthand property 'customerId'. Either declare one or provide an initializer.
+src/app/api/b2b-transactions/route.ts(370,14): error TS2304: Cannot find name 'items'.
+src/app/api/b2b-transactions/route.ts(370,25): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/app/api/customer/dashboard/route.ts(16,16): error TS2353: Object literal may only specify known properties, and 'userId' does not exist in type 'CustomerWhereInput'.
+src/app/api/customer/payments/route.ts(16,16): error TS2353: Object literal may only specify known properties, and 'userId' does not exist in type 'CustomerWhereInput'.
+src/app/api/customer/rentals/route.ts(16,16): error TS2353: Object literal may only specify known properties, and 'userId' does not exist in type 'CustomerWhereInput'.
+src/app/api/customer/rentals/route.ts(48,27): error TS18047: 'rental.expectedReturnDate' is possibly 'null'.
+src/app/api/customers/[id]/original-price/route.ts(50,13): error TS2353: Object literal may only specify known properties, and 'createdAt' does not exist in type 'B2BTransactionItemOrderByWithRelationInput | B2BTransactionItemOrderByWithRelationInput[]'.
+src/app/api/customers/[id]/original-price/route.ts(59,34): error TS2339: Property 'items' does not exist on type '{ id: string; createdAt: Date; transactionType: B2BTransactionType; billSno: string; customerId: string; date: Date; time: Date; totalAmount: Decimal; ... 10 more ...; voidReason: string | null; }'.
+src/app/api/customers/[id]/original-price/route.ts(60,31): error TS2339: Property 'items' does not exist on type '{ id: string; createdAt: Date; transactionType: B2BTransactionType; billSno: string; customerId: string; date: Date; time: Date; totalAmount: Decimal; ... 10 more ...; voidReason: string | null; }'.
+src/app/api/customers/[id]/original-price/route.ts(83,9): error TS2353: Object literal may only specify known properties, and 'createdAt' does not exist in type 'B2BTransactionItemOrderByWithRelationInput | B2BTransactionItemOrderByWithRelationInput[]'.
+src/app/api/customers/[id]/route.ts(19,9): error TS2561: Object literal may only specify known properties, but 'transactions' does not exist in type 'CustomerInclude<DefaultArgs>'. Did you mean to write 'b2bTransactions'?
+src/app/api/customers/b2b/transactions/[transactionId]/undo/route.ts(193,15): error TS2322: Type 'string | null' is not assignable to type 'string | StringFilter<"Cylinder"> | undefined'.
+  Type 'null' is not assignable to type 'string | StringFilter<"Cylinder"> | undefined'.
+src/app/api/customers/b2b/transactions/[transactionId]/undo/route.ts(233,15): error TS2322: Type 'string | null' is not assignable to type 'string | StringFilter<"Cylinder"> | undefined'.
+  Type 'null' is not assignable to type 'string | StringFilter<"Cylinder"> | undefined'.
+src/app/api/customers/b2b/transactions/[transactionId]/undo/route.ts(263,17): error TS2365: Operator '<=' cannot be applied to types 'Decimal' and 'number'.
+src/app/api/customers/b2b/transactions/[transactionId]/undo/route.ts(355,15): error TS2322: Type 'string | null' is not assignable to type 'string | StringFilter<"Cylinder"> | undefined'.
+  Type 'null' is not assignable to type 'string | StringFilter<"Cylinder"> | undefined'.
+src/app/api/customers/b2c/[id]/report/route.ts(137,11): error TS7034: Variable 'items' implicitly has type 'any[]' in some locations where its type cannot be determined.
+src/app/api/customers/b2c/[id]/report/route.ts(138,34): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/app/api/customers/b2c/[id]/report/route.ts(142,39): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/app/api/customers/b2c/[id]/report/route.ts(145,40): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/app/api/customers/b2c/[id]/report/route.ts(149,23): error TS7005: Variable 'items' implicitly has an 'any[]' type.
+src/app/api/customers/b2c/transactions/route.ts(114,29): error TS18047: 'customer.marginCategory' is possibly 'null'.
+src/app/api/customers/b2c/transactions/route.ts(115,25): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/app/api/customers/b2c/transactions/route.ts(164,30): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/app/api/customers/b2c/transactions/route.ts(306,70): error TS7006: Parameter 'sum' implicitly has an 'any' type.
+src/app/api/customers/b2c/transactions/route.ts(306,75): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/app/api/customers/export/route.ts(19,9): error TS2322: Type '{ transactions: { where: { voided: false; }; include: { items: true; }; orderBy: { date: string; }; }; } | undefined' is not assignable to type 'CustomerInclude<DefaultArgs> | null | undefined'.
+  Object literal may only specify known properties, but 'transactions' does not exist in type 'CustomerInclude<DefaultArgs>'. Did you mean to write 'b2bTransactions'?
+src/app/api/customers/export/route.ts(72,46): error TS2339: Property 'transactions' does not exist on type '{ name: string; id: string; email: string | null; isActive: boolean; createdAt: Date; updatedAt: Date; notes: string | null; createdBy: string; type: string; billSequence: number; ... 10 more ...; marginCategoryId: string | null; }'.
+src/app/api/customers/export/route.ts(73,48): error TS2339: Property 'transactions' does not exist on type '{ name: string; id: string; email: string | null; isActive: boolean; createdAt: Date; updatedAt: Date; notes: string | null; createdBy: string; type: string; billSequence: number; ... 10 more ...; marginCategoryId: string | null; }'.
+src/app/api/customers/export/route.ts(74,45): error TS2339: Property 'transactions' does not exist on type '{ name: string; id: string; email: string | null; isActive: boolean; createdAt: Date; updatedAt: Date; notes: string | null; createdBy: string; type: string; billSequence: number; ... 10 more ...; marginCategoryId: string | null; }'.
+src/app/api/customers/export/route.ts(75,22): error TS7006: Parameter 't' implicitly has an 'any' type.
+src/app/api/customers/export/route.ts(76,22): error TS7006: Parameter 'sum' implicitly has an 'any' type.
+src/app/api/customers/export/route.ts(76,27): error TS7006: Parameter 't' implicitly has an 'any' type.
+src/app/api/customers/export/route.ts(115,54): error TS2339: Property 'transactions' does not exist on type '{ name: string; id: string; email: string | null; isActive: boolean; createdAt: Date; updatedAt: Date; notes: string | null; createdBy: string; type: string; billSequence: number; ... 10 more ...; marginCategoryId: string | null; }'.
+src/app/api/customers/export/route.ts(115,72): error TS7006: Parameter 't' implicitly has an 'any' type.
+src/app/api/customers/export/route.ts(123,31): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/app/api/cylinders/route.ts(45,19): error TS2353: Object literal may only specify known properties, and 'firstName' does not exist in type 'CustomerSelect<DefaultArgs>'.
+src/app/api/cylinders/route.ts(100,39): error TS2304: Cannot find name 'CylinderType'.
+src/app/api/cylinders/route.ts(107,9): error TS2322: Type '"AVAILABLE"' is not assignable to type 'CylinderStatus | undefined'.
+src/app/api/cylinders/route.ts(115,17): error TS2353: Object literal may only specify known properties, and 'firstName' does not exist in type 'CustomerSelect<DefaultArgs>'.
+src/app/api/cylinders/route.ts(179,39): error TS2304: Cannot find name 'CylinderType'.
+src/app/api/cylinders/route.ts(194,17): error TS2353: Object literal may only specify known properties, and 'firstName' does not exist in type 'CustomerSelect<DefaultArgs>'.
+src/app/api/inventory/cylinders/route.ts(226,91): error TS2304: Cannot find name 'body'.
+src/app/api/inventory/valves/[id]/route.ts(9,32): error TS2339: Property 'valve' does not exist on type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>'.
+src/app/api/inventory/valves/[id]/route.ts(49,32): error TS2339: Property 'valve' does not exist on type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>'.
+src/app/api/inventory/valves/[id]/route.ts(77,18): error TS2339: Property 'valve' does not exist on type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>'.
+src/app/api/inventory/valves/route.ts(6,33): error TS2339: Property 'valve' does not exist on type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>'.
+src/app/api/inventory/valves/route.ts(36,32): error TS2339: Property 'valve' does not exist on type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>'.
+src/app/api/notifications/alerts/route.ts(12,11): error TS7034: Variable 'alerts' implicitly has type 'any[]' in some locations where its type cannot be determined.
+src/app/api/notifications/alerts/route.ts(50,26): error TS2322: Type 'FieldRef<"Product", "Int">' is not assignable to type 'string | number | Decimal | DecimalJsLike | FieldRef<"Product", "Decimal"> | undefined'.
+  Type 'FieldRef<"Product", "Int">' is not assignable to type 'FieldRef<"Product", "Decimal">'.
+    Type '"Int"' is not assignable to type '"Decimal"'.
+src/app/api/notifications/alerts/route.ts(83,9): error TS2561: Object literal may only specify known properties, but 'transactions' does not exist in type 'CustomerInclude<DefaultArgs>'. Did you mean to write 'b2bTransactions'?
+src/app/api/notifications/alerts/route.ts(96,33): error TS2339: Property 'transactions' does not exist on type '{ name: string; id: string; email: string | null; isActive: boolean; createdAt: Date; updatedAt: Date; notes: string | null; createdBy: string; type: string; billSequence: number; ... 10 more ...; marginCategoryId: string | null; }'.
+src/app/api/notifications/alerts/route.ts(122,5): error TS7005: Variable 'alerts' implicitly has an 'any[]' type.
+src/app/api/notifications/alerts/route.ts(130,7): error TS7005: Variable 'alerts' implicitly has an 'any[]' type.
+src/app/api/notifications/alerts/route.ts(133,15): error TS7005: Variable 'alerts' implicitly has an 'any[]' type.
+src/app/api/notifications/alerts/route.ts(134,17): error TS7005: Variable 'alerts' implicitly has an 'any[]' type.
+src/app/api/notifications/alerts/route.ts(135,14): error TS7005: Variable 'alerts' implicitly has an 'any[]' type.
+src/app/api/notifications/stats/route.ts(127,28): error TS2345: Argument of type 'string | 0' is not assignable to parameter of type 'string'.
+  Type 'number' is not assignable to type 'string'.
+src/app/api/payments/route.ts(24,39): error TS18046: 'error' is of type 'unknown'.
+src/app/api/rentals/route.ts(26,9): error TS2353: Object literal may only specify known properties, and 'userId' does not exist in type 'CustomerWhereInput'.
+src/app/api/rentals/route.ts(38,9): error TS2322: Type '"AVAILABLE"' is not assignable to type 'CylinderStatus | EnumCylinderStatusFilter<"Cylinder"> | undefined'.
+src/app/api/rentals/route.ts(105,42): error TS2339: Property 'firstName' does not exist on type '{ name: string; email: string | null; contactPerson: string; }'.
+src/app/api/rentals/route.ts(105,71): error TS2339: Property 'lastName' does not exist on type '{ name: string; email: string | null; contactPerson: string; }'.
+src/app/api/rentals/route.ts(133,9): error TS2353: Object literal may only specify known properties, and 'userId' does not exist in type 'CustomerWhereInput'.
+src/app/api/reports/ar-aging/route.ts(30,9): error TS2561: Object literal may only specify known properties, but 'transactions' does not exist in type 'CustomerSelect<DefaultArgs>'. Did you mean to write 'b2bTransactions'?
+src/app/api/reports/ar-aging/route.ts(48,44): error TS2339: Property 'transactions' does not exist on type '{ name: string; id: string; email: string | null; isActive: boolean; createdAt: Date; updatedAt: Date; notes: string | null; createdBy: string; type: string; billSequence: number; ... 10 more ...; marginCategoryId: string | null; }'.
+src/app/api/settings/route.ts(195,9): error TS18046: 'error' is of type 'unknown'.
+src/app/api/support/route.ts(22,39): error TS18046: 'error' is of type 'unknown'.
+src/app/api/vendor-categories/route.ts(51,55): error TS18046: 'error' is of type 'unknown'.
+src/app/api/vendors/[id]/direct-payments/route.ts(161,24): error TS2339: Property 'name' does not exist on type '{ id: string; email: string | null; isActive: boolean; createdAt: Date; updatedAt: Date; phone: string | null; companyName: string; contactPerson: string | null; address: string | null; vendorCode: string; taxId: string | null; paymentTerms: number; categoryId: string | null; }'.
+src/app/api/vendors/[id]/items/route.ts(104,9): error TS2304: Cannot find name 'quantity'.
+src/app/api/vendors/[id]/items/route.ts(104,62): error TS2304: Cannot find name 'quantity'.
+src/app/api/vendors/[id]/items/route.ts(105,9): error TS2304: Cannot find name 'unitPrice'.
+src/app/api/vendors/[id]/items/route.ts(105,64): error TS2304: Cannot find name 'unitPrice'.
+src/app/api/vendors/[id]/payments/route.ts(25,35): error TS2339: Property 'vendorPurchase' does not exist on type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>'.
+src/app/api/vendors/[id]/payments/route.ts(46,34): error TS2339: Property 'vendorPurchasePayment' does not exist on type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>'.
+src/app/api/vendors/[id]/payments/route.ts(56,18): error TS2339: Property 'vendorPurchase' does not exist on type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>'.
+src/app/api/vendors/[id]/route.ts(127,9): error TS2353: Object literal may only specify known properties, and 'name' does not exist in type '(Without<VendorUpdateInput, VendorUncheckedUpdateInput> & VendorUncheckedUpdateInput) | (Without<...> & VendorUpdateInput)'.
+src/app/api/vendors/credits/route.ts(40,9): error TS2353: Object literal may only specify known properties, and 'purchases' does not exist in type 'VendorInclude<DefaultArgs>'.
+src/app/api/vendors/credits/route.ts(51,18): error TS2353: Object literal may only specify known properties, and 'name' does not exist in type 'VendorOrderByWithRelationInput | VendorOrderByWithRelationInput[]'.
+src/app/api/vendors/credits/route.ts(56,37): error TS2339: Property 'purchases' does not exist on type '{ id: string; email: string | null; isActive: boolean; createdAt: Date; updatedAt: Date; phone: string | null; companyName: string; contactPerson: string | null; address: string | null; vendorCode: string; taxId: string | null; paymentTerms: number; categoryId: string | null; }'.
+src/app/api/vendors/credits/route.ts(57,10): error TS7006: Parameter 'sum' implicitly has an 'any' type.
+src/app/api/vendors/credits/route.ts(57,15): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/app/api/vendors/credits/route.ts(60,38): error TS2339: Property 'purchases' does not exist on type '{ id: string; email: string | null; isActive: boolean; createdAt: Date; updatedAt: Date; phone: string | null; companyName: string; contactPerson: string | null; address: string | null; vendorCode: string; taxId: string | null; paymentTerms: number; categoryId: string | null; }'.
+src/app/api/vendors/credits/route.ts(61,10): error TS7006: Parameter 'sum' implicitly has an 'any' type.
+src/app/api/vendors/credits/route.ts(61,15): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/app/api/vendors/credits/route.ts(64,44): error TS2339: Property 'purchases' does not exist on type '{ id: string; email: string | null; isActive: boolean; createdAt: Date; updatedAt: Date; phone: string | null; companyName: string; contactPerson: string | null; address: string | null; vendorCode: string; taxId: string | null; paymentTerms: number; categoryId: string | null; }'.
+src/app/api/vendors/credits/route.ts(65,10): error TS7006: Parameter 'sum' implicitly has an 'any' type.
+src/app/api/vendors/credits/route.ts(65,15): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/app/api/vendors/credits/route.ts(66,12): error TS7006: Parameter 'pSum' implicitly has an 'any' type.
+src/app/api/vendors/credits/route.ts(66,18): error TS7006: Parameter 'pay' implicitly has an 'any' type.
+src/app/api/vendors/credits/route.ts(78,22): error TS2339: Property 'name' does not exist on type '{ id: string; email: string | null; isActive: boolean; createdAt: Date; updatedAt: Date; phone: string | null; companyName: string; contactPerson: string | null; address: string | null; vendorCode: string; taxId: string | null; paymentTerms: number; categoryId: string | null; }'.
+src/app/api/vendors/credits/route.ts(85,31): error TS2339: Property 'purchases' does not exist on type '{ id: string; email: string | null; isActive: boolean; createdAt: Date; updatedAt: Date; phone: string | null; companyName: string; contactPerson: string | null; address: string | null; vendorCode: string; taxId: string | null; paymentTerms: number; categoryId: string | null; }'.
+src/app/api/vendors/credits/route.ts(143,9): error TS2353: Object literal may only specify known properties, and 'purchases' does not exist in type 'VendorInclude<DefaultArgs>'.
+src/app/api/vendors/credits/route.ts(158,35): error TS2339: Property 'purchases' does not exist on type '{ id: string; email: string | null; isActive: boolean; createdAt: Date; updatedAt: Date; phone: string | null; companyName: string; contactPerson: string | null; address: string | null; vendorCode: string; taxId: string | null; paymentTerms: number; categoryId: string | null; }'.
+src/app/api/vendors/credits/route.ts(158,53): error TS7006: Parameter 'sum' implicitly has an 'any' type.
+src/app/api/vendors/credits/route.ts(158,58): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/app/api/vendors/credits/route.ts(159,36): error TS2339: Property 'purchases' does not exist on type '{ id: string; email: string | null; isActive: boolean; createdAt: Date; updatedAt: Date; phone: string | null; companyName: string; contactPerson: string | null; address: string | null; vendorCode: string; taxId: string | null; paymentTerms: number; categoryId: string | null; }'.
+src/app/api/vendors/credits/route.ts(159,54): error TS7006: Parameter 'sum' implicitly has an 'any' type.
+src/app/api/vendors/credits/route.ts(159,59): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/app/api/vendors/credits/route.ts(171,44): error TS2339: Property 'vendorPurchasePayment' does not exist on type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>'.
+src/app/api/vendors/generate-cylinder-codes/route.ts(28,42): error TS2339: Property 'vendorPurchaseItem' does not exist on type 'PrismaClient<PrismaClientOptions, never, DefaultArgs>'.
+src/app/api/vendors/generate-cylinder-codes/route.ts(40,29): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/app/api/vendors/generate-cylinder-codes/route.ts(42,59): error TS7006: Parameter 'code' implicitly has an 'any' type.
+src/app/api/vendors/generate-cylinder-codes/route.ts(43,25): error TS7006: Parameter 'code' implicitly has an 'any' type.
+src/app/api/vendors/generate-cylinder-codes/route.ts(74,7): error TS18004: No value exists in scope for the shorthand property 'prefix'. Either declare one or provide an initializer.
+src/app/api/vendors/generate-cylinder-codes/route.ts(89,20): error TS2304: Cannot find name 'itemName'.
+src/app/api/vendors/generate-cylinder-codes/route.ts(90,19): error TS2304: Cannot find name 'itemName'.
+src/app/api/vendors/generate-cylinder-codes/route.ts(91,26): error TS2304: Cannot find name 'quantity'.
+src/app/test-notifications/page.tsx(44,32): error TS2345: Argument of type '{ type: any; title: string; message: string; userId: string | undefined; metadata: {}; priority: "MEDIUM"; }' is not assignable to parameter of type 'Omit<Notification, "id" | "createdAt">'.
+  Property 'isRead' is missing in type '{ type: any; title: string; message: string; userId: string | undefined; metadata: {}; priority: "MEDIUM"; }' but required in type 'Omit<Notification, "id" | "createdAt">'.
+src/app/test-notifications/page.tsx(215,54): error TS2345: Argument of type '(prev: { type: string; title: string; message: string; priority: "MEDIUM"; userId: string; metadata: string; }) => { priority: string; type: string; title: string; message: string; userId: string; metadata: string; }' is not assignable to parameter of type 'SetStateAction<{ type: string; title: string; message: string; priority: "MEDIUM"; userId: string; metadata: string; }>'.
+  Type '(prev: { type: string; title: string; message: string; priority: "MEDIUM"; userId: string; metadata: string; }) => { priority: string; type: string; title: string; message: string; userId: string; metadata: string; }' is not assignable to type '(prevState: { type: string; title: string; message: string; priority: "MEDIUM"; userId: string; metadata: string; }) => { type: string; title: string; message: string; priority: "MEDIUM"; userId: string; metadata: string; }'.
+    Call signature return types '{ priority: string; type: string; title: string; message: string; userId: string; metadata: string; }' and '{ type: string; title: string; message: string; priority: "MEDIUM"; userId: string; metadata: string; }' are incompatible.
+      The types of 'priority' are incompatible between these types.
+        Type 'string' is not assignable to type '"MEDIUM"'.
+src/components/CreditApplicationModal.tsx(4,60): error TS2305: Module '"@/components/ui/dialog"' has no exported member 'DialogFooter'.
+src/components/ui/notification-toast.tsx(35,22): error TS2554: Expected 1 arguments, but got 0.

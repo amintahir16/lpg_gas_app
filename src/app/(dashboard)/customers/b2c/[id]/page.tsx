@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { HomeIcon, ArrowLeftIcon, MapPinIcon, PhoneIcon, EnvelopeIcon, PlusIcon, CalendarIcon, EyeIcon, FunnelIcon, XMarkIcon, DocumentArrowDownIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import { Input } from '@/components/ui/input';
 import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
+import { B2CTransactionModal } from '@/components/B2CTransactionModal';
 
 interface B2CCustomer {
   id: string;
@@ -95,6 +96,9 @@ export default function B2CCustomerDetailPage() {
   const [showTransactionDetail, setShowTransactionDetail] = useState(false);
   const [loadingTransaction, setLoadingTransaction] = useState(false);
   const [undoingTransaction, setUndoingTransaction] = useState(false);
+
+  // Transaction modal state
+  const [showTransactionModal, setShowTransactionModal] = useState(false);
 
   // Dynamic cylinder types
   const [inventoryCylinderTypes, setInventoryCylinderTypes] = useState<any[]>([]);
@@ -336,7 +340,7 @@ export default function B2CCustomerDetailPage() {
         </div>
         <div className="mt-4 sm:mt-0 flex space-x-3">
           <Button
-            onClick={() => router.push(`/customers/b2c/${customerId}/transaction`)}
+            onClick={() => setShowTransactionModal(true)}
             className="font-semibold"
           >
             <PlusIcon className="w-4 h-4 mr-2" />
@@ -1067,6 +1071,20 @@ export default function B2CCustomerDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Transaction Modal */}
+      {showTransactionModal && customer && (
+        <B2CTransactionModal
+          customerId={customerId}
+          customerName={customer.name}
+          customer={customer}
+          onClose={() => setShowTransactionModal(false)}
+          onSuccess={() => {
+            fetchCustomerDetails();
+            setShowTransactionModal(false);
+          }}
+        />
       )}
     </div>
   );
