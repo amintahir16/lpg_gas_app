@@ -740,11 +740,24 @@ export default function B2CCustomerDetailPage() {
                             {getCylinderTypeDisplay(item.cylinderType)} x{item.quantity}
                           </Badge>
                         ))}
-                        {transaction.securityItems.length > 0 && (
-                          <Badge variant="warning" className="text-xs mr-1">
-                            Security x{transaction.securityItems.reduce((sum, item) => sum + item.quantity, 0)}
-                          </Badge>
-                        )}
+                        {(() => {
+                          const deposits = transaction.securityItems.filter(item => !item.isReturn);
+                          const returns = transaction.securityItems.filter(item => item.isReturn);
+                          return (
+                            <>
+                              {deposits.length > 0 && (
+                                <Badge variant="warning" className="text-xs mr-1">
+                                  Security x{deposits.reduce((sum, item) => sum + item.quantity, 0)}
+                                </Badge>
+                              )}
+                              {returns.length > 0 && (
+                                <Badge variant="outline" className="text-xs mr-1 border-yellow-600 text-yellow-700 bg-yellow-50">
+                                  Security Return x{returns.reduce((sum, item) => sum + item.quantity, 0)}
+                                </Badge>
+                              )}
+                            </>
+                          );
+                        })()}
                         {transaction.accessoryItems.map((item, index) => (
                           <Badge key={index} variant="secondary" className="text-xs mr-1">
                             {item.productName} x{item.quantity}
