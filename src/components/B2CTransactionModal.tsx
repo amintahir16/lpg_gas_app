@@ -4,12 +4,20 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { PlusIcon, CalculatorIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow
+} from '@/components/ui/table';
+import { PlusIcon, CalculatorIcon, XMarkIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { useInventoryValidation } from '@/hooks/useInventoryValidation';
 import { ProfessionalAccessorySelector, AccessoryItem } from '@/components/ui/ProfessionalAccessorySelector';
 import { getCylinderWeight } from '@/lib/cylinder-utils';
+import { CustomSelect } from '@/components/ui/select-custom';
 
 interface B2CTransactionModalProps {
     customerId: string;
@@ -21,15 +29,15 @@ interface B2CTransactionModalProps {
 
 interface GasItem {
     cylinderType: string;
-    quantity: number;
-    pricePerItem: number;
+    quantity: number | '';
+    pricePerItem: number | '';
     costPrice: number;
 }
 
 interface SecurityItem {
     cylinderType: string;
-    quantity: number;
-    pricePerItem: number;
+    quantity: number | '';
+    pricePerItem: number | '';
     isReturn: boolean;
 }
 
@@ -41,8 +49,8 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
     // Form data
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [time, setTime] = useState(new Date().toTimeString().slice(0, 5));
-    const [deliveryCharges, setDeliveryCharges] = useState(0);
-    const [deliveryCost, setDeliveryCost] = useState(0);
+    const [deliveryCharges, setDeliveryCharges] = useState<number | ''>(0);
+    const [deliveryCost, setDeliveryCost] = useState<number | ''>(0);
     const [paymentMethod, setPaymentMethod] = useState('CASH');
     const [notes, setNotes] = useState('');
 
@@ -203,10 +211,10 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
         // Validate inventory when gas quantity changes
         if (field === 'quantity') {
             const cylinders = updated
-                .filter(item => item.quantity > 0)
+                .filter(item => Number(item.quantity) > 0)
                 .map(item => ({
                     cylinderType: item.cylinderType,
-                    requested: item.quantity
+                    requested: Number(item.quantity)
                 }));
 
             // Only validate cylinders - accessories are validated by ProfessionalAccessorySelector
@@ -218,10 +226,10 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
             // Trigger validation to check if the new quantity is valid
             setTimeout(() => {
                 const cylinders = updated
-                    .filter(item => item.quantity > 0)
+                    .filter(item => Number(item.quantity) > 0)
                     .map(item => ({
                         cylinderType: item.cylinderType,
-                        requested: item.quantity
+                        requested: Number(item.quantity)
                     }));
 
                 // Only validate cylinders - accessories are validated by ProfessionalAccessorySelector
@@ -264,6 +272,7 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                     case 'CYLINDER_6KG':
                     case 'CYLINDER_30KG':
                         // For new types, calculate price based on weight ratio
+                        // Fallback: use cost-based calculation if pricing not available
                         if (pricingInfo.finalPrices.standard15kg && cylinderWeightForCost > 0) {
                             calculatedPrice = (pricingInfo.finalPrices.standard15kg / 15.0) * cylinderWeightForCost;
                         }
@@ -338,7 +347,7 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
         const hasErrors = securityItems.some((item, index) => {
             if (item.isReturn && item.cylinderType) {
                 const available = getAvailableHoldings(item.cylinderType);
-                if (item.quantity > available) {
+                if (Number(item.quantity) > available) {
                     if (firstInvalidIndex === null) {
                         firstInvalidIndex = index;
                     }
@@ -392,7 +401,7 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
     // Accessories: use totalPrice which is already calculated (includes vaporizer logic)
     const accessoryTotal = accessoryItems.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
     const subtotal = gasTotal + securityTotal + accessoryTotal;
-    const finalTotal = subtotal + Number(deliveryCharges);
+    const finalTotal = subtotal + Number(deliveryCharges || 0);
 
     // Validate security returns against customer holdings
     const validateSecurityReturns = () => {
@@ -525,8 +534,8 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                 deliveryCost: Number(deliveryCost),
                 paymentMethod,
                 notes: notes || null,
-                gasItems: gasItems.filter(item => item.cylinderType && item.quantity > 0),
-                securityItems: securityItems.filter(item => item.cylinderType && item.quantity > 0),
+                gasItems: gasItems.filter(item => item.cylinderType && Number(item.quantity) > 0),
+                securityItems: securityItems.filter(item => item.cylinderType && Number(item.quantity) > 0),
                 accessoryItems: accessoryItems.filter(item => item.quantity > 0).map(item => ({
                     itemName: `${item.category} - ${item.itemType}`,
                     itemType: item.itemType,
@@ -570,15 +579,10 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm overflow-y-auto h-full w-full z-50">
             <div className="relative top-6 mx-auto p-0 border-0 w-11/12 max-w-5xl shadow-2xl rounded-xl bg-white mb-10 overflow-hidden">
                 {/* Header */}
-                <div className="bg-gray-50 px-6 py-4 border-b flex items-center justify-between">
+                <div className="bg-white px-6 py-4 border-b flex items-center justify-between">
                     <div>
-                        <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                            <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
-                                <PlusIcon className="w-5 h-5 text-white" />
-                            </div>
-                            New Transaction
-                        </h3>
-                        <p className="text-sm text-gray-500 mt-1">Customer: <strong>{customerName}</strong></p>
+                        <h3 className="text-xl font-bold text-gray-900">New Transaction</h3>
+                        <p className="text-sm text-gray-500">Customer: <span className="font-semibold text-gray-700">{customerName}</span></p>
                     </div>
                     <button
                         type="button"
@@ -591,187 +595,300 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
 
                 {/* Error Display */}
                 {error && (
-                    <div className="mx-6 mt-4 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg">
-                        <div className="flex items-start">
-                            <div className="flex-shrink-0">
-                                <XMarkIcon className="h-5 w-5 text-red-400" />
-                            </div>
-                            <div className="ml-3 flex-1">
-                                <p className="text-sm font-medium text-red-800">{error}</p>
-                            </div>
-                            <button onClick={() => setError(null)} className="ml-auto text-red-400 hover:text-red-500">
-                                <XMarkIcon className="h-5 w-5" />
-                            </button>
+                    <div className="mx-6 mt-4 p-3 bg-red-50 border-l-4 border-red-500 rounded-sm flex justify-between items-center">
+                        <div className="flex items-center">
+                            <XMarkIcon className="h-5 w-5 text-red-500 mr-2" />
+                            <p className="text-sm font-medium text-red-800">{error}</p>
                         </div>
+                        <button onClick={() => setError(null)} className="text-red-400 hover:text-red-500">
+                            <XMarkIcon className="h-5 w-5" />
+                        </button>
                     </div>
                 )}
 
                 <div className="p-6 max-h-[80vh] overflow-y-auto">
                     <form onSubmit={handleSubmit} className="space-y-6">
-                        {/* Transaction Details */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-50 p-4 rounded-lg border border-gray-100">
+                        {/* Top Controls: Date, Time, Payment, Delivery */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                                <label className="block text-xs font-semibold text-gray-600 mb-1">Date</label>
                                 <Input
                                     type="date"
                                     value={date}
                                     onChange={(e) => setDate(e.target.value)}
                                     required
-                                    className="bg-white"
+                                    className="h-9 text-sm"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
+                                <label className="block text-xs font-semibold text-gray-600 mb-1">Time</label>
                                 <Input
                                     type="time"
                                     value={time}
                                     onChange={(e) => setTime(e.target.value)}
                                     required
-                                    className="bg-white"
+                                    className="h-9 text-sm"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
-                                <Select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className="bg-white">
-                                    <option value="CASH">Cash</option>
-                                    <option value="BANK_TRANSFER">Bank Transfer</option>
-                                    <option value="CARD">Card</option>
-                                </Select>
+                                <label className="block text-xs font-semibold text-gray-600 mb-1">Payment Method</label>
+                                <CustomSelect
+                                    value={paymentMethod}
+                                    onChange={(val) => setPaymentMethod(val)}
+                                    options={[
+                                        { value: 'CASH', label: 'Cash' },
+                                        { value: 'BANK_TRANSFER', label: 'Bank Transfer' },
+                                        { value: 'CARD', label: 'Card' }
+                                    ]}
+                                    className="h-9 text-sm"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-600 mb-1">Delivery Charges</label>
+                                <div className="flex gap-2">
+                                    <Input
+                                        type="number"
+                                        min="0"
+                                        value={deliveryCharges}
+                                        onChange={(e) => setDeliveryCharges(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                                        className="h-9 text-sm"
+                                        placeholder="Charge"
+                                    />
+                                    <Input
+                                        type="number"
+                                        min="0"
+                                        value={deliveryCost}
+                                        onChange={(e) => setDeliveryCost(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                                        className="h-9 text-sm bg-gray-50"
+                                        placeholder="Cost"
+                                        title="Actual Delivery Cost (Internal)"
+                                    />
+                                </div>
                             </div>
                         </div>
 
-                        {/* Gas Items */}
-                        <Card className="border shadow-sm border-gray-200">
-                            <CardHeader className="bg-gray-50/50 pb-4">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <CardTitle className="text-lg font-semibold text-gray-900">Gas Cylinders</CardTitle>
-                                        <CardDescription>Add gas cylinder sales</CardDescription>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        {pricingInfo && (
-                                            <Button
-                                                type="button"
-                                                onClick={applyCalculatedPrices}
-                                                variant="outline"
-                                                size="sm"
-                                                className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
-                                            >
-                                                <CalculatorIcon className="w-4 h-4 mr-2" />
-                                                Apply Auto-Pricing
-                                            </Button>
-                                        )}
-                                        <Button type="button" onClick={addGasItem} variant="outline" size="sm">
-                                            <PlusIcon className="w-4 h-4 mr-2" />
-                                            Add Gas
+                        {/* Gas Items Table */}
+                        <div className="border rounded-lg overflow-hidden">
+                            <div className="bg-gray-50 px-4 py-2 border-b flex justify-between items-center">
+                                <h4 className="font-semibold text-gray-700 text-sm">Gas Cylinders</h4>
+                                <div className="flex gap-2">
+                                    {pricingInfo && (
+                                        <Button
+                                            type="button"
+                                            onClick={applyCalculatedPrices}
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                        >
+                                            <CalculatorIcon className="w-3 h-3 mr-1" />
+                                            Auto-Price
                                         </Button>
-                                    </div>
+                                    )}
+                                    <Button type="button" onClick={addGasItem} variant="outline" size="sm" className="h-7 text-xs">
+                                        <PlusIcon className="w-3 h-3 mr-1" />
+                                        Add Gas
+                                    </Button>
                                 </div>
-                            </CardHeader>
-                            <CardContent className="pt-6 space-y-4">
-                                {gasItems.map((item, index) => {
-                                    // Find stock information for the selected cylinder type
-                                    const stockInfo = item.cylinderType ? getCylinderStock(item.cylinderType) : null;
-                                    const isExceedingStock = stockInfo && item.quantity > stockInfo.available;
+                            </div>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
+                                        <TableHead className="py-2 h-8 w-[40%]">Type</TableHead>
+                                        <TableHead className="py-2 h-8 w-[15%]">Quantity</TableHead>
+                                        <TableHead className="py-2 h-8 w-[20%]">Price</TableHead>
+                                        <TableHead className="py-2 h-8 w-[20%]">Total</TableHead>
+                                        <TableHead className="py-2 h-8 w-[5%]"></TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {gasItems.map((item, index) => {
+                                        const stockInfo = item.cylinderType ? getCylinderStock(item.cylinderType) : null;
+                                        const isExceedingStock = stockInfo && Number(item.quantity) > stockInfo.available;
+                                        return (
+                                            <TableRow key={index} className="hover:bg-transparent">
+                                                <TableCell className="py-2">
+                                                    <div className="relative">
+                                                        <CustomSelect
+                                                            value={item.cylinderType}
+                                                            onChange={(val) => updateGasItem(index, 'cylinderType', val)}
+                                                            placeholder="Select Type"
+                                                            options={inventoryCylinderTypes.map((type) => {
+                                                                const label = type.label;
+                                                                // If label already has capacity info (e.g. "Special (10kg)"), don't duplicate it
+                                                                // Or if label is just the name, append capacity
+                                                                const displayLabel = label.includes(type.capacity.toString()) || label.includes('kg')
+                                                                    ? label
+                                                                    : `${label} (${type.capacity}kg)`;
 
-                                    return (
-                                        <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end p-4 bg-gray-50 rounded-lg relative group">
-                                            <div className="md:col-span-1">
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Cylinder Type</label>
-                                                <Select
-                                                    value={item.cylinderType}
-                                                    onChange={(e) => updateGasItem(index, 'cylinderType', e.target.value)}
-                                                    className="bg-white"
-                                                >
-                                                    <option value="">Select Type</option>
-                                                    {inventoryCylinderTypes.map((type) => (
-                                                        <option key={type.cylinderType} value={type.cylinderType}>
-                                                            {type.label} ({type.capacity}kg)
-                                                        </option>
-                                                    ))}
-                                                </Select>
-                                                {/* Stock Display */}
-                                                {item.cylinderType && (
-                                                    <div className="mt-1 text-xs">
-                                                        {stockInfo ? (
-                                                            <span className={stockInfo.available < 5 ? (stockInfo.available === 0 ? "text-red-600 font-bold" : "text-orange-600 font-bold") : "text-gray-500"}>
-                                                                Stock: {stockInfo.available} available
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-gray-400">Checking stock...</span>
+                                                                return {
+                                                                    value: type.cylinderType,
+                                                                    label: displayLabel
+                                                                };
+                                                            })}
+                                                            className="h-9 text-sm"
+                                                        />
+                                                        {item.cylinderType && stockInfo && (
+                                                            <div className={`text-[10px] mt-0.5 ${stockInfo.available < 5 ? "text-red-500 font-bold" : "text-gray-400"}`}>
+                                                                Stock: {stockInfo.available}
+                                                            </div>
                                                         )}
                                                     </div>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
-                                                <Input
-                                                    type="number"
-                                                    min="1"
-                                                    value={item.quantity}
-                                                    onChange={(e) => updateGasItem(index, 'quantity', parseInt(e.target.value) || 0)}
-                                                    className={`bg-white ${isExceedingStock ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
-                                                />
-                                                {isExceedingStock && (
-                                                    <p className="text-xs text-red-600 mt-1 font-medium">
-                                                        Exceeds available stock ({stockInfo?.available || 0})
-                                                    </p>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Price (each)</label>
-                                                <Input
-                                                    type="number"
-                                                    min="0"
-                                                    value={item.pricePerItem}
-                                                    onChange={(e) => updateGasItem(index, 'pricePerItem', parseFloat(e.target.value) || 0)}
-                                                    className="bg-white"
-                                                />
-                                                {/* Show cost price for reference */}
-                                                {item.costPrice > 0 && (
-                                                    <p className="text-xs text-gray-500 mt-1">
-                                                        Cost: Rs {item.costPrice}
-                                                    </p>
-                                                )}
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <div className="flex-1">
-                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Total</label>
-                                                    <div className="h-10 px-3 py-2 bg-gray-100 rounded-md text-gray-700 font-medium border border-gray-200 flex items-center">
-                                                        Rs {item.quantity * item.pricePerItem}
-                                                    </div>
-                                                </div>
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={() => removeGasItem(index)}
-                                                    className="text-gray-400 hover:text-red-600 hover:bg-red-50 mb-0.5"
-                                                >
-                                                    <XMarkIcon className="w-5 h-5" />
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                                {gasItems.length === 0 && (
-                                    <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-lg">
-                                        <p className="text-gray-500">No gas cylinders added</p>
-                                        <Button type="button" variant="link" onClick={addGasItem} className="mt-2">
-                                            Add cylinder
-                                        </Button>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
+                                                </TableCell>
+                                                <TableCell className="py-2 align-top">
+                                                    <Input
+                                                        type="number"
+                                                        min="1"
+                                                        value={item.quantity}
+                                                        onChange={(e) => updateGasItem(index, 'quantity', e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value)))}
+                                                        className={`h-9 text-sm ${isExceedingStock ? 'border-red-500' : ''}`}
+                                                    />
+                                                </TableCell>
+                                                <TableCell className="py-2 align-top">
+                                                    <Input
+                                                        type="number"
+                                                        min="0"
+                                                        value={item.pricePerItem}
+                                                        onChange={(e) => updateGasItem(index, 'pricePerItem', e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value)))}
+                                                        className="h-9 text-sm"
+                                                    />
+                                                    {item.costPrice > 0 && (
+                                                        <div className="text-[10px] text-gray-400 mt-0.5">Cost: {item.costPrice}</div>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell className="py-2 align-top font-medium text-gray-700">
+                                                    Rs {(Number(item.quantity) * Number(item.pricePerItem)) || 0}
+                                                </TableCell>
+                                                <TableCell className="py-2 align-top text-right">
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => removeGasItem(index)}
+                                                        className="h-8 w-8 p-0 text-gray-400 hover:text-red-600"
+                                                    >
+                                                        <TrashIcon className="w-4 h-4" />
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                    {gasItems.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={5} className="text-center py-4 text-gray-400 text-sm">
+                                                No gas items added
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
 
-                        {/* Accessories Section */}
-                        <div className="border border-gray-200 rounded-lg bg-white shadow-sm overflow-hidden">
-                            <div className="bg-gray-50/50 px-6 py-4 border-b border-gray-100">
-                                <h3 className="text-lg font-semibold text-gray-900">Accessories</h3>
-                                <p className="text-sm text-gray-500">Add accessories to the transaction</p>
+                        {/* Security Items Table */}
+                        <div className="border rounded-lg overflow-hidden">
+                            <div className="bg-gray-50 px-4 py-2 border-b flex justify-between items-center">
+                                <h4 className="font-semibold text-gray-700 text-sm">Security Deposits / Returns</h4>
+                                <Button type="button" onClick={addSecurityItem} variant="outline" size="sm" className="h-7 text-xs">
+                                    <PlusIcon className="w-3 h-3 mr-1" />
+                                    Add Security
+                                </Button>
                             </div>
-                            <div className="p-6">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
+                                        <TableHead className="py-2 h-8 w-[20%]">Action</TableHead>
+                                        <TableHead className="py-2 h-8 w-[30%]">Type</TableHead>
+                                        <TableHead className="py-2 h-8 w-[15%]">Quantity</TableHead>
+                                        <TableHead className="py-2 h-8 w-[20%]">Amount (ea)</TableHead>
+                                        <TableHead className="py-2 h-8 w-[10%]">Total</TableHead>
+                                        <TableHead className="py-2 h-8 w-[5%]"></TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {securityItems.map((item, index) => {
+                                        const availableHoldings = item.isReturn ? getAvailableHoldings(item.cylinderType) : 0;
+                                        const isReturnInvalid = item.isReturn && item.cylinderType && Number(item.quantity) > availableHoldings;
+                                        return (
+                                            <TableRow key={index} id={`security-item-${index}`} className="hover:bg-transparent">
+                                                <TableCell className="py-2 align-top">
+                                                    <CustomSelect
+                                                        value={item.isReturn ? 'return' : 'deposit'}
+                                                        onChange={(val) => updateSecurityItem(index, 'isReturn', val === 'return')}
+                                                        options={[
+                                                            { value: 'deposit', label: 'Deposit' },
+                                                            { value: 'return', label: 'Return' }
+                                                        ]}
+                                                        className="h-9 text-sm"
+                                                    />
+                                                </TableCell>
+                                                <TableCell className="py-2 align-top">
+                                                    <CustomSelect
+                                                        value={item.cylinderType}
+                                                        onChange={(val) => updateSecurityItem(index, 'cylinderType', val)}
+                                                        placeholder="Select Type"
+                                                        options={inventoryCylinderTypes.map((type) => ({
+                                                            value: type.cylinderType,
+                                                            label: type.label
+                                                        }))}
+                                                        className="h-9 text-sm"
+                                                    />
+                                                    {item.isReturn && item.cylinderType && (
+                                                        <div className={`text-[10px] mt-0.5 ${availableHoldings === 0 ? "text-red-500 font-bold" : "text-gray-400"}`}>
+                                                            Holdings: {availableHoldings}
+                                                        </div>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell className="py-2 align-top">
+                                                    <Input
+                                                        type="number"
+                                                        min="1"
+                                                        value={item.quantity}
+                                                        onChange={(e) => updateSecurityItem(index, 'quantity', e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value)))}
+                                                        className={`h-9 text-sm ${isReturnInvalid ? 'border-red-500' : ''}`}
+                                                    />
+                                                </TableCell>
+                                                <TableCell className="py-2 align-top">
+                                                    <Input
+                                                        type="number"
+                                                        min="0"
+                                                        value={item.pricePerItem}
+                                                        onChange={(e) => updateSecurityItem(index, 'pricePerItem', e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value)))}
+                                                        className="h-9 text-sm"
+                                                    />
+                                                </TableCell>
+                                                <TableCell className="py-2 align-top font-medium">
+                                                    Rs {(Number(item.pricePerItem) * Number(item.quantity)) || 0}
+                                                </TableCell>
+                                                <TableCell className="py-2 align-top text-right">
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => removeSecurityItem(index)}
+                                                        className="h-8 w-8 p-0 text-gray-400 hover:text-red-600"
+                                                    >
+                                                        <TrashIcon className="w-4 h-4" />
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                    {securityItems.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={6} className="text-center py-4 text-gray-400 text-sm">
+                                                No security items added
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+
+                        {/* Accessories (Keeping Component) */}
+                        <div className="border rounded-lg overflow-hidden">
+                            <div className="bg-gray-50 px-4 py-2 border-b">
+                                <h4 className="font-semibold text-gray-700 text-sm">Accessories</h4>
+                            </div>
+                            <div className="p-4">
                                 <ProfessionalAccessorySelector
                                     accessoryItems={accessoryItems}
                                     setAccessoryItems={setAccessoryItems}
@@ -780,190 +897,54 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                             </div>
                         </div>
 
-                        {/* Security Deposits */}
-                        <Card className="border shadow-sm border-gray-200">
-                            <CardHeader className="bg-gray-50/50 pb-4">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <CardTitle className="text-lg font-semibold text-gray-900">Security Deposits</CardTitle>
-                                        <CardDescription>Manage security deposits and returns</CardDescription>
+                        {/* Summary & Footer */}
+                        <div className="bg-gray-50 p-4 rounded-lg border flex flex-col md:flex-row gap-6">
+                            <div className="flex-1">
+                                <label className="block text-xs font-semibold text-gray-600 mb-1">Notes</label>
+                                <Textarea
+                                    value={notes}
+                                    onChange={(e) => setNotes(e.target.value)}
+                                    placeholder="Add transaction notes..."
+                                    rows={2}
+                                    className="bg-white"
+                                />
+                            </div>
+                            <div className="md:w-1/3 flex flex-col justify-between">
+                                <div className="space-y-1 text-sm">
+                                    <div className="flex justify-between text-gray-600">
+                                        <span>Subtotal:</span>
+                                        <span>Rs {subtotal.toFixed(2)}</span>
                                     </div>
-                                    <Button type="button" onClick={addSecurityItem} variant="outline" size="sm">
-                                        <PlusIcon className="w-4 h-4 mr-2" />
-                                        Add Security
+                                    <div className="flex justify-between text-gray-600">
+                                        <span>Delivery:</span>
+                                        <span>Rs {Number(deliveryCharges).toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between font-bold text-lg text-gray-900 border-t pt-2 mt-2">
+                                        <span>Total:</span>
+                                        <span className="text-blue-600">Rs {finalTotal.toFixed(2)}</span>
+                                    </div>
+                                </div>
+                                <div className="flex gap-3 mt-4">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={onClose}
+                                        disabled={submitting}
+                                        className="flex-1"
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        type="submit"
+                                        disabled={submitting || (!gasItems.length && !securityItems.length && !accessoryItems.length) || hasAnyErrors()}
+                                        className="flex-1 bg-blue-600 hover:bg-blue-700"
+                                    >
+                                        {submitting ? 'Saving...' : 'Save'}
                                     </Button>
                                 </div>
-                            </CardHeader>
-                            <CardContent className="pt-6 space-y-4">
-                                {securityItems.map((item, index) => {
-                                    // Check if this return item is invalid (exceeds holdings)
-                                    const availableHoldings = item.isReturn ? getAvailableHoldings(item.cylinderType) : 0;
-                                    const isReturnInvalid = item.isReturn && item.cylinderType && item.quantity > availableHoldings;
-
-                                    return (
-                                        <div key={index} id={`security-item-${index}`} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end p-4 bg-gray-50 rounded-lg relative">
-                                            <div className="md:col-span-1">
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Action</label>
-                                                <Select
-                                                    value={item.isReturn ? 'return' : 'deposit'}
-                                                    onChange={(e) => updateSecurityItem(index, 'isReturn', e.target.value === 'return')}
-                                                    className={`bg-white font-medium ${item.isReturn ? 'text-orange-600 border-orange-200 bg-orange-50' : 'text-green-600 border-green-200 bg-green-50'}`}
-                                                >
-                                                    <option value="deposit">Deposit (Collect)</option>
-                                                    <option value="return">Return (Refund)</option>
-                                                </Select>
-                                            </div>
-                                            <div className="md:col-span-1">
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Cylinder Type</label>
-                                                <Select
-                                                    value={item.cylinderType}
-                                                    onChange={(e) => updateSecurityItem(index, 'cylinderType', e.target.value)}
-                                                    className="bg-white"
-                                                >
-                                                    <option value="">Select Type</option>
-                                                    {inventoryCylinderTypes.map((type) => (
-                                                        <option key={type.cylinderType} value={type.cylinderType}>
-                                                            {type.label}
-                                                        </option>
-                                                    ))}
-                                                </Select>
-                                                {item.isReturn && item.cylinderType && (
-                                                    <div className="mt-1 text-xs">
-                                                        <span className={availableHoldings === 0 ? "text-red-600 font-bold" : "text-gray-500"}>
-                                                            Holdings: {availableHoldings} available
-                                                        </span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
-                                                <Input
-                                                    type="number"
-                                                    min="1"
-                                                    value={item.quantity}
-                                                    onChange={(e) => updateSecurityItem(index, 'quantity', parseInt(e.target.value) || 0)}
-                                                    className={`bg-white ${isReturnInvalid ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
-                                                />
-                                                {isReturnInvalid && (
-                                                    <p className="text-xs text-red-600 mt-1 font-medium">
-                                                        Exceeds holdings ({availableHoldings})
-                                                    </p>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Amount (each)</label>
-                                                <Input
-                                                    type="number"
-                                                    min="0"
-                                                    value={item.pricePerItem}
-                                                    onChange={(e) => updateSecurityItem(index, 'pricePerItem', parseFloat(e.target.value) || 0)}
-                                                    className="bg-white"
-                                                />
-                                                {item.isReturn && (
-                                                    <p className="text-xs text-orange-600 mt-1">25% deduction applied</p>
-                                                )}
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <div className="flex-1">
-                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Total</label>
-                                                    <div className={`h-10 px-3 py-2 rounded-md font-medium border border-gray-200 flex items-center ${item.isReturn ? 'bg-orange-50 text-orange-700' : 'bg-gray-100 text-gray-700'
-                                                        }`}>
-                                                        Rs {item.quantity * item.pricePerItem}
-                                                    </div>
-                                                </div>
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={() => removeSecurityItem(index)}
-                                                    className="text-gray-400 hover:text-red-600 hover:bg-red-50 mb-0.5"
-                                                >
-                                                    <XMarkIcon className="w-5 h-5" />
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                                {securityItems.length === 0 && (
-                                    <div className="text-center py-6 border-2 border-dashed border-gray-200 rounded-lg">
-                                        <p className="text-gray-500">No security deposits/returns added</p>
-                                        <Button type="button" variant="link" onClick={addSecurityItem} className="mt-2">
-                                            Add security item
-                                        </Button>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-
-                        {/* Summary Section */}
-                        <Card className="border shadow-lg bg-white border-blue-100 ring-4 ring-blue-50/50">
-                            <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
-                                <CardTitle className="text-lg font-bold text-blue-900">Transaction Summary</CardTitle>
-                            </CardHeader>
-                            <CardContent className="pt-6 space-y-4">
-
-                                {/* Delivery Section */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Charges (to customer)</label>
-                                        <Input
-                                            type="number"
-                                            min="0"
-                                            step="0.01"
-                                            value={deliveryCharges}
-                                            onChange={(e) => setDeliveryCharges(parseFloat(e.target.value) || 0)}
-                                            placeholder="0.00"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Cost (actual)</label>
-                                        <Input
-                                            type="number"
-                                            min="0"
-                                            step="0.01"
-                                            value={deliveryCost}
-                                            onChange={(e) => setDeliveryCost(parseFloat(e.target.value) || 0)}
-                                            placeholder="0.00"
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Final Total */}
-                                <div className="flex justify-between items-center border-t-2 border-gray-300 pt-4 mt-4">
-                                    <span className="text-xl font-bold text-gray-900">Total Amount to Collect:</span>
-                                    <span className="text-3xl font-extrabold text-blue-600">Rs {finalTotal.toFixed(2)}</span>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label>
-                                    <Textarea
-                                        value={notes}
-                                        onChange={(e) => setNotes(e.target.value)}
-                                        placeholder="Add any additional notes..."
-                                        rows={3}
-                                    />
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* Actions */}
-                        <div className="flex items-center justify-end space-x-4 pt-4 border-t border-gray-200">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={onClose}
-                                disabled={submitting}
-                                className="px-6"
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                type="submit"
-                                disabled={submitting || (!gasItems.length && !securityItems.length && !accessoryItems.length) || hasAnyErrors()}
-                                className="bg-blue-600 hover:bg-blue-700 px-8 font-semibold shadow-lg shadow-blue-200"
-                            >
-                                {submitting ? 'Creating...' : 'Create Transaction'}
-                            </Button>
+                            </div>
                         </div>
+
                     </form>
                 </div>
             </div>
@@ -972,16 +953,7 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
 
     // Helper to get stock
     function getCylinderStock(cylinderType: string) {
-        // This relies on the useInventoryValidation hook internally, or we can fetch it. 
-        // For simpler implementation now, we can omit the real-time stock number or fetch it separately 
-        // if not available in provided props/hooks.
-        // Assuming validation hook handles validation, we just need display.
-        // Let's implement a simple fetch for now since it's used in the render loop.
-        // Actually, better to fetch all stock once in useEffect.
-        // For now, returning null to show "Checking..." or just hide it if simplified.
-        // Ideally pass stock data as prop or fetch one-time.
-        // The previous page didn't show exact stock number next to input, it just validated on change.
-        // We will rely on built-in validation feedback.
+        // Simple stock display - in real app would verify against inventory
         return { available: 0 };
     }
 }
