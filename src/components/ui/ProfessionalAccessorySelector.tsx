@@ -12,6 +12,15 @@ import {
   CurrencyDollarIcon,
   CubeIcon
 } from '@heroicons/react/24/outline';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { CustomSelect } from '@/components/ui/select-custom';
 
 export interface AccessoryItem {
   id: string;
@@ -371,8 +380,8 @@ export function ProfessionalAccessorySelector({
       {/* Header */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-600">Select categories and items from inventory</p>
-        <div className="flex items-center space-x-2 bg-purple-50 px-3 py-1.5 rounded-lg border border-purple-100">
-          <span className="text-sm font-medium text-purple-700">Markup:</span>
+        <div className="flex items-center space-x-2 bg-purple-50 px-3 h-7 rounded-md border border-purple-100">
+          <span className="text-xs font-medium text-purple-700">Markup:</span>
           <div className="relative">
             <input
               type="number"
@@ -386,228 +395,178 @@ export function ProfessionalAccessorySelector({
                 if (val < 0) val = 0;
                 handleGlobalMarkupChange(val);
               }}
-              className="w-12 px-1 py-0.5 text-sm text-center border-b border-purple-300 bg-transparent focus:outline-none focus:border-purple-500 font-semibold text-purple-900"
+              className="w-8 px-0.5 py-0 text-xs text-center border-b border-purple-300 bg-transparent focus:outline-none focus:border-purple-500 font-semibold text-purple-900"
             />
             <span className="absolute right-0 top-0.5 text-transparent select-none pointer-events-none">%</span>
           </div>
-          <span className="text-sm text-purple-700">%</span>
+          <span className="text-xs text-purple-700">%</span>
         </div>
       </div>
 
-      {/* Accessories Table */}
-      {accessoryItems.length === 0 ? (
-        <div className="text-center py-8 bg-gray-50 border border-gray-200 rounded-lg">
-          <CubeIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600 font-medium">No accessories selected</p>
-          <p className="text-gray-500 text-sm mt-1">Click "Add Item" to start adding accessories</p>
-          {inventoryCategories.length === 0 && (
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-              <p className="text-blue-800 text-sm">
-                <strong>Note:</strong> Inventory categories will load automatically when you're logged in.
-              </p>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="overflow-x-auto relative" style={{ zIndex: 9997 }}>
-          <table className="w-full">
-            <thead>
-              <tr className="border-b bg-gray-50">
-                <th className="text-left py-3 px-4 font-semibold text-gray-900">Category</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-900">Item Type</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-900">Quantity</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-900">Cost Price</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-900">Selling Price</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-900">Total Price</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-900">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {accessoryItems.map((item, index) => {
-                const categoryData = inventoryCategories.find(cat => cat.name === item.category);
-                const availableItemTypes = categoryData?.items || [];
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
+              <TableHead className="w-[20%]">Category</TableHead>
+              <TableHead className="w-[20%]">Item Type</TableHead>
+              <TableHead className="w-[10%]">Quantity</TableHead>
+              <TableHead className="w-[15%]">Cost Price</TableHead>
+              <TableHead className="w-[15%]">Selling Price</TableHead>
+              <TableHead className="w-[15%]">Total</TableHead>
+              <TableHead className="w-[5%]"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {accessoryItems.map((item, index) => {
+              const categoryData = inventoryCategories.find(cat => cat.name === item.category);
+              const availableItemTypes = categoryData?.items || [];
 
-                return (
-                  <tr
-                    key={item.id}
-                    className="border-b hover:bg-gray-50 transition-colors"
-                  >
-                    {/* Category Dropdown */}
-                    <td className="py-3 px-4 min-h-[80px] align-top">
-                      <div className="flex flex-col">
-                        <select
-                          value={item.category}
-                          onChange={(e) => handleCategoryChange(item.id, e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        >
-                          <option value="">Select Category</option>
-                          {inventoryCategories.map(category => (
-                            <option key={category.name} value={category.name}>
-                              {category.name}
-                            </option>
-                          ))}
-                        </select>
-                        {item.category && (
-                          <div className="text-xs text-green-600 font-medium mt-1">
-                            ✓ {item.category}
-                          </div>
-                        )}
-                      </div>
-                    </td>
+              return (
+                <TableRow
+                  key={item.id}
+                  className="hover:bg-transparent"
+                >
+                  {/* Category Dropdown */}
+                  <TableCell className="align-top py-2">
+                    <div className="flex flex-col">
+                      <CustomSelect
+                        value={item.category}
+                        onChange={(val) => handleCategoryChange(item.id, val)}
+                        placeholder="Category"
+                        options={inventoryCategories.map(category => ({
+                          value: category.name,
+                          label: category.name
+                        }))}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                  </TableCell>
 
-                    {/* Item Type Dropdown */}
-                    <td className="py-3 px-4 min-h-[80px] align-top">
-                      <div className="flex flex-col">
-                        <select
-                          value={item.itemType}
-                          onChange={(e) => handleItemTypeChange(item.id, e.target.value)}
-                          disabled={!item.category}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
-                        >
-                          <option value="">Select Item Type</option>
-                          {availableItemTypes.map(itemType => (
-                            <option key={itemType.type} value={itemType.type}>
-                              {itemType.type}
-                            </option>
-                          ))}
-                        </select>
-                        {item.itemType && (
-                          <div className="text-xs text-green-600 font-medium mt-1">
-                            ✓ {item.itemType}
-                          </div>
-                        )}
-                      </div>
-                    </td>
+                  {/* Item Type Dropdown */}
+                  <TableCell className="align-top py-2">
+                    <div className="flex flex-col">
+                      <CustomSelect
+                        value={item.itemType}
+                        onChange={(val) => handleItemTypeChange(item.id, val)}
+                        placeholder="Type"
+                        disabled={!item.category}
+                        options={availableItemTypes.map(itemType => ({
+                          value: itemType.type,
+                          label: itemType.type
+                        }))}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                  </TableCell>
 
-                    {/* Quantity Input */}
-                    <td className="py-3 px-4 min-h-[80px] align-top">
-                      <div className="flex flex-col">
-                        <div className="flex items-center space-x-2">
-                          <Input
-                            type="number"
-                            min="0"
-                            max={item.availableStock}
-                            value={item.quantity}
-                            onChange={(e) => updateAccessoryItem(item.id, 'quantity', parseInt(e.target.value) || 0)}
-                            className={`w-20 px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm ${item.quantity > item.availableStock
-                              ? 'border-red-500 bg-red-50 text-red-700'
-                              : 'border-gray-300 bg-white'
-                              }`}
-                            disabled={!item.itemType}
-                          />
+                  {/* Quantity Input */}
+                  <TableCell className="align-top py-2">
+                    <div className="flex flex-col">
+                      <Input
+                        type="number"
+                        min="0"
+                        max={item.availableStock}
+                        value={item.quantity}
+                        onChange={(e) => updateAccessoryItem(item.id, 'quantity', parseInt(e.target.value) || 0)}
+                        className={`h-9 text-sm ${item.quantity > item.availableStock
+                          ? 'border-red-500 bg-red-50 text-red-700'
+                          : 'border-gray-300'
+                          }`}
+                        disabled={!item.itemType}
+                      />
+                      {item.availableStock > 0 && (
+                        <div className="text-[10px] text-gray-500 mt-1">
+                          Stock: {item.availableStock}
                         </div>
-                        {item.availableStock > 0 && (
-                          <div className="text-xs text-gray-500 mt-1">
-                            Available: {item.availableStock}
-                          </div>
-                        )}
-                        {item.quantity > item.availableStock && (
-                          <div className="text-xs text-red-600 mt-1">
-                            Exceeds available stock
-                          </div>
-                        )}
-                      </div>
-                    </td>
+                      )}
+                    </div>
+                  </TableCell>
 
-                    {/* Cost Price */}
-                    <td className="py-3 px-4 min-h-[80px] align-top">
-                      <div className="flex flex-col">
-                        <div className={`flex items-center ${!item.isVaporizer ? 'pt-3' : 'pt-1'}`}>
-                          <CurrencyDollarIcon className="w-4 h-4 mr-1 text-gray-500" />
-                          {item.isVaporizer ? (
-                            <div className="flex flex-col">
-                              <input
-                                type="number"
-                                value={item.usagePrice || 0}
-                                onChange={(e) => updateAccessoryItem(item.id, 'usagePrice', Number(e.target.value))}
-                                className="min-w-20 max-w-32 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                placeholder="0"
-                                min="0"
-                                style={{ width: `${Math.max(80, Math.min(128, (item.usagePrice || 0).toString().length * 8 + 24))}px` }}
-                              />
-                            </div>
-                          ) : (
-                            <span className="text-sm font-medium text-gray-700">
-                              {formatCurrency(item.costPerPiece)}
-                            </span>
-                          )}
-                        </div>
+                  {/* Cost Price */}
+                  <TableCell className="align-top py-2">
+                    {item.isVaporizer ? (
+                      <div className="relative">
+                        <span className="absolute left-2 top-2.5 text-gray-500 text-xs">Rs</span>
+                        <Input
+                          type="number"
+                          value={item.usagePrice || 0}
+                          onChange={(e) => updateAccessoryItem(item.id, 'usagePrice', Number(e.target.value))}
+                          className="h-9 text-sm pl-7"
+                          placeholder="0"
+                          min="0"
+                        />
                       </div>
-                    </td>
-
-                    {/* Selling Price */}
-                    <td className="py-3 px-4 min-h-[80px] align-top">
-                      <div className="flex flex-col">
-                        <div className={`flex items-center ${!item.isVaporizer ? 'pt-3' : 'pt-1'}`}>
-                          <CurrencyDollarIcon className="w-4 h-4 mr-1 text-green-500" />
-                          {item.isVaporizer ? (
-                            <div className="flex flex-col">
-                              <input
-                                type="number"
-                                value={item.sellingPrice || 0}
-                                onChange={(e) => updateAccessoryItem(item.id, 'sellingPrice', Number(e.target.value))}
-                                className="min-w-20 max-w-32 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 shadow-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                placeholder="0"
-                                min="0"
-                                style={{ width: `${Math.max(80, Math.min(128, (item.sellingPrice || 0).toString().length * 8 + 24))}px` }}
-                              />
-                            </div>
-                          ) : (
-                            <>
-                              <>
-                                <span className="text-sm font-medium text-green-700">
-                                  {formatCurrency(item.pricePerItem)}
-                                </span>
-                              </>
-                            </>
-                          )}
-                        </div>
+                    ) : (
+                      <div className="h-9 flex items-center text-sm text-gray-600">
+                        Rs {item.costPerPiece}
                       </div>
-                    </td>
+                    )}
+                  </TableCell>
 
-                    {/* Total Price */}
-                    <td className="py-3 px-4 min-h-[80px] align-top">
-                      <div className="flex flex-col h-full justify-start">
-                        <div className="flex items-center pt-3">
-                          <CurrencyDollarIcon className="w-4 h-4 mr-1 text-blue-500" />
-                          <span className="text-sm font-semibold text-blue-700">
-                            {formatCurrency(item.totalPrice)}
-                          </span>
-                        </div>
+                  {/* Selling Price */}
+                  <TableCell className="align-top py-2">
+                    {item.isVaporizer ? (
+                      <div className="relative">
+                        <span className="absolute left-2 top-2.5 text-gray-500 text-xs">Rs</span>
+                        <Input
+                          type="number"
+                          value={item.sellingPrice || 0}
+                          onChange={(e) => updateAccessoryItem(item.id, 'sellingPrice', Number(e.target.value))}
+                          className="h-9 text-sm pl-7"
+                          placeholder="0"
+                          min="0"
+                        />
                       </div>
-                    </td>
-
-                    {/* Actions */}
-                    <td className="py-3 px-4 min-h-[80px] align-top">
-                      <div className="flex flex-col h-full justify-start">
-                        <button
-                          type="button"
-                          onClick={() => removeAccessoryItem(item.id)}
-                          className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                        >
-                          <XMarkIcon className="w-4 h-4" />
-                        </button>
+                    ) : (
+                      <div className="h-9 flex items-center text-sm font-medium text-green-700">
+                        Rs {item.pricePerItem.toFixed(2)}
                       </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+                    )}
+                  </TableCell>
 
-      {/* Add Item Button */}
-      <Button
-        type="button"
-        onClick={addAccessoryItem}
-        variant="outline"
-        size="sm"
-        className="mt-2 text-purple-700 border-purple-300 hover:bg-purple-50"
-      >
-        <PlusIcon className="w-4 h-4 mr-1" />
-        Add Item
-      </Button>
+                  {/* Total Price */}
+                  <TableCell className="align-top py-2">
+                    <div className="h-9 flex items-center text-sm font-semibold text-blue-700">
+                      Rs {item.totalPrice.toFixed(2)}
+                    </div>
+                  </TableCell>
+
+                  {/* Actions */}
+                  <TableCell className="align-top py-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => removeAccessoryItem(item.id)}
+                      className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                    >
+                      <XMarkIcon className="w-4 h-4" />
+                    </button>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+            {accessoryItems.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-4 text-gray-400 text-sm">
+                  No accessories selected
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className="flex items-center justify-between mt-2">
+        <Button
+          type="button"
+          onClick={addAccessoryItem}
+          variant="outline"
+          size="sm"
+          className="h-7 text-xs text-purple-700 border-purple-300 hover:bg-purple-50"
+        >
+          <PlusIcon className="w-3 h-3 mr-1" />
+          Add Item
+        </Button>
+      </div>
 
       {/* Vaporizer Pricing Information */}
       {accessoryItems.some(item => item.isVaporizer && item.category) && (

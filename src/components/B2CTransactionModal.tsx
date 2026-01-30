@@ -13,7 +13,8 @@ import {
     TableHeader,
     TableRow
 } from '@/components/ui/table';
-import { PlusIcon, CalculatorIcon, XMarkIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { Badge } from '@/components/ui/badge';
+import { PlusIcon, CalculatorIcon, XMarkIcon, TrashIcon, CubeIcon, ArrowPathIcon, CreditCardIcon } from '@heroicons/react/24/outline';
 import { useInventoryValidation } from '@/hooks/useInventoryValidation';
 import { ProfessionalAccessorySelector, AccessoryItem } from '@/components/ui/ProfessionalAccessorySelector';
 import { getCylinderWeight } from '@/lib/cylinder-utils';
@@ -63,6 +64,11 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
 
     // Pricing information
     const [pricingInfo, setPricingInfo] = useState<any>(null);
+
+    // State for Collapsible Sections
+    const [gasExpanded, setGasExpanded] = useState(false);
+    const [securityExpanded, setSecurityExpanded] = useState(false);
+    const [accessoriesExpanded, setAccessoriesExpanded] = useState(false);
 
     // Dynamic cylinder types from inventory
     const [inventoryCylinderTypes, setInventoryCylinderTypes] = useState<any[]>([]);
@@ -667,238 +673,310 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                             </div>
                         </div>
 
-                        {/* Gas Items Table */}
-                        <div className="border rounded-lg overflow-hidden">
-                            <div className="bg-gray-50 px-4 py-2 border-b flex justify-between items-center">
-                                <h4 className="font-semibold text-gray-700 text-sm">Gas Cylinders</h4>
-                                <div className="flex gap-2">
-                                    {pricingInfo && (
+                        {/* Gas Items Accordion */}
+                        <div className={`border rounded-xl overflow-hidden transition-all ${gasExpanded ? 'border-green-200 bg-green-50/30' : 'border-gray-200'}`}>
+                            <button
+                                type="button"
+                                onClick={() => setGasExpanded(!gasExpanded)}
+                                className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors ${gasExpanded ? 'bg-green-100/50' : 'hover:bg-gray-50'}`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-6 h-6 rounded flex items-center justify-center ${gasExpanded ? 'bg-green-600' : 'bg-gray-300'}`}>
+                                        <CubeIcon className="w-3.5 h-3.5 text-white" />
+                                    </div>
+                                    <div className="flex items-center">
+                                        <span className="font-medium text-sm text-gray-900">Gas Cylinders</span>
+                                        {gasItems.length > 0 && (
+                                            <Badge className="ml-2 bg-green-100 text-green-700 border-green-200 text-[10px] px-1.5 py-0 h-5">
+                                                {gasItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)}
+                                            </Badge>
+                                        )}
+                                    </div>
+                                </div>
+                                <svg className={`w-4 h-4 text-gray-500 transition-transform ${gasExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
+
+                            {gasExpanded && (
+                                <div className="p-4 border-t border-green-200">
+
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
+                                                <TableHead className="py-2 h-8 w-[40%]">Type</TableHead>
+                                                <TableHead className="py-2 h-8 w-[15%]">Quantity</TableHead>
+                                                <TableHead className="py-2 h-8 w-[20%]">Price</TableHead>
+                                                <TableHead className="py-2 h-8 w-[20%]">Total</TableHead>
+                                                <TableHead className="py-2 h-8 w-[5%]"></TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {gasItems.map((item, index) => {
+                                                return (
+                                                    <TableRow key={index} className="hover:bg-transparent">
+                                                        <TableCell className="py-2 align-top">
+                                                            <div className="relative">
+                                                                <CustomSelect
+                                                                    value={item.cylinderType}
+                                                                    onChange={(val) => updateGasItem(index, 'cylinderType', val)}
+                                                                    placeholder="Select Type"
+                                                                    options={inventoryCylinderTypes.map((type) => {
+                                                                        const label = type.label;
+                                                                        // If label already has capacity info (e.g. "Special (10kg)"), don't duplicate it
+                                                                        // Or if label is just the name, append capacity
+                                                                        const displayLabel = label.includes(type.capacity.toString()) || label.includes('kg')
+                                                                            ? label
+                                                                            : `${label} (${type.capacity}kg)`;
+
+                                                                        return {
+                                                                            value: type.cylinderType,
+                                                                            label: displayLabel
+                                                                        };
+                                                                    })}
+                                                                    className="h-9 text-sm"
+                                                                />
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell className="py-2 align-top">
+                                                            <Input
+                                                                type="number"
+                                                                min="1"
+                                                                value={item.quantity}
+                                                                onChange={(e) => updateGasItem(index, 'quantity', e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value)))}
+                                                                className="h-9 text-sm"
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell className="py-2 align-top">
+                                                            <Input
+                                                                type="number"
+                                                                min="0"
+                                                                value={item.pricePerItem}
+                                                                onChange={(e) => updateGasItem(index, 'pricePerItem', e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value)))}
+                                                                className="h-9 text-sm"
+                                                            />
+                                                            {item.costPrice > 0 && (
+                                                                <div className="text-[10px] text-gray-400 mt-0.5">Cost: {item.costPrice}</div>
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell className="py-2 align-top font-medium text-gray-700">
+                                                            Rs {(Number(item.quantity) * Number(item.pricePerItem)) || 0}
+                                                        </TableCell>
+                                                        <TableCell className="py-2 align-top text-right">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeGasItem(index)}
+                                                                className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                                                            >
+                                                                <XMarkIcon className="w-4 h-4" />
+                                                            </button>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            })}
+                                            {gasItems.length === 0 && (
+                                                <TableRow>
+                                                    <TableCell colSpan={5} className="text-center py-4 text-gray-400 text-sm">
+                                                        No gas items added
+                                                    </TableCell>
+                                                </TableRow>
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                    <div className="mt-3">
                                         <Button
                                             type="button"
-                                            onClick={applyCalculatedPrices}
-                                            variant="ghost"
+                                            onClick={addGasItem}
+                                            variant="outline"
                                             size="sm"
-                                            className="h-7 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                            className="h-7 text-xs text-green-700 border-green-300 hover:bg-green-50"
                                         >
-                                            <CalculatorIcon className="w-3 h-3 mr-1" />
-                                            Auto-Price
+                                            <PlusIcon className="w-3 h-3 mr-1" />
+                                            Add Gas
                                         </Button>
-                                    )}
-                                    <Button type="button" onClick={addGasItem} variant="outline" size="sm" className="h-7 text-xs">
-                                        <PlusIcon className="w-3 h-3 mr-1" />
-                                        Add Gas
-                                    </Button>
+                                    </div>
                                 </div>
-                            </div>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
-                                        <TableHead className="py-2 h-8 w-[40%]">Type</TableHead>
-                                        <TableHead className="py-2 h-8 w-[15%]">Quantity</TableHead>
-                                        <TableHead className="py-2 h-8 w-[20%]">Price</TableHead>
-                                        <TableHead className="py-2 h-8 w-[20%]">Total</TableHead>
-                                        <TableHead className="py-2 h-8 w-[5%]"></TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {gasItems.map((item, index) => {
-                                        return (
-                                            <TableRow key={index} className="hover:bg-transparent">
-                                                <TableCell className="py-2 align-top">
-                                                    <div className="relative">
-                                                        <CustomSelect
-                                                            value={item.cylinderType}
-                                                            onChange={(val) => updateGasItem(index, 'cylinderType', val)}
-                                                            placeholder="Select Type"
-                                                            options={inventoryCylinderTypes.map((type) => {
-                                                                const label = type.label;
-                                                                // If label already has capacity info (e.g. "Special (10kg)"), don't duplicate it
-                                                                // Or if label is just the name, append capacity
-                                                                const displayLabel = label.includes(type.capacity.toString()) || label.includes('kg')
-                                                                    ? label
-                                                                    : `${label} (${type.capacity}kg)`;
+                            )}
+                        </div>
 
-                                                                return {
+                        {/* Security Accordion */}
+                        <div className={`border rounded-xl overflow-hidden transition-all ${securityExpanded ? 'border-orange-200 bg-orange-50/30' : 'border-gray-200'}`}>
+                            <button
+                                type="button"
+                                onClick={() => setSecurityExpanded(!securityExpanded)}
+                                className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors ${securityExpanded ? 'bg-orange-100/50' : 'hover:bg-gray-50'}`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-6 h-6 rounded flex items-center justify-center ${securityExpanded ? 'bg-orange-500' : 'bg-gray-300'}`}>
+                                        <ArrowPathIcon className="w-3.5 h-3.5 text-white" />
+                                    </div>
+                                    <div className="flex items-center">
+                                        <span className="font-medium text-sm text-gray-900">Security Deposits / Returns</span>
+                                        {securityItems.length > 0 && (
+                                            <Badge className="ml-2 bg-orange-100 text-orange-700 border-orange-200 text-[10px] px-1.5 py-0 h-5">
+                                                {securityItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)}
+                                            </Badge>
+                                        )}
+                                    </div>
+                                </div>
+                                <svg className={`w-4 h-4 text-gray-500 transition-transform ${securityExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
+
+                            {securityExpanded && (
+                                <div className="p-4 border-t border-orange-200">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
+                                                <TableHead className="py-2 h-8 w-[20%]">Action</TableHead>
+                                                <TableHead className="py-2 h-8 w-[30%]">Type</TableHead>
+                                                <TableHead className="py-2 h-8 w-[15%]">Quantity</TableHead>
+                                                <TableHead className="py-2 h-8 w-[20%]">Amount (ea)</TableHead>
+                                                <TableHead className="py-2 h-8 w-[10%]">Total</TableHead>
+                                                <TableHead className="py-2 h-8 w-[5%]"></TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {securityItems.map((item, index) => {
+                                                const availableHoldings = item.isReturn ? getAvailableHoldings(item.cylinderType) : 0;
+                                                const isReturnInvalid = item.isReturn && item.cylinderType && Number(item.quantity) > availableHoldings;
+                                                return (
+                                                    <TableRow key={index} id={`security-item-${index}`} className="hover:bg-transparent">
+                                                        <TableCell className="py-2 align-top">
+                                                            <CustomSelect
+                                                                value={item.isReturn ? 'return' : 'deposit'}
+                                                                onChange={(val) => updateSecurityItem(index, 'isReturn', val === 'return')}
+                                                                options={[
+                                                                    { value: 'deposit', label: 'Deposit' },
+                                                                    { value: 'return', label: 'Return' }
+                                                                ]}
+                                                                className="h-9 text-sm"
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell className="py-2 align-top">
+                                                            <CustomSelect
+                                                                value={item.cylinderType}
+                                                                onChange={(val) => updateSecurityItem(index, 'cylinderType', val)}
+                                                                placeholder="Select Type"
+                                                                options={inventoryCylinderTypes.map((type) => ({
                                                                     value: type.cylinderType,
-                                                                    label: displayLabel
-                                                                };
-                                                            })}
-                                                            className="h-9 text-sm"
-                                                        />
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="py-2 align-top">
-                                                    <Input
-                                                        type="number"
-                                                        min="1"
-                                                        value={item.quantity}
-                                                        onChange={(e) => updateGasItem(index, 'quantity', e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value)))}
-                                                        className="h-9 text-sm"
-                                                    />
-                                                </TableCell>
-                                                <TableCell className="py-2 align-top">
-                                                    <Input
-                                                        type="number"
-                                                        min="0"
-                                                        value={item.pricePerItem}
-                                                        onChange={(e) => updateGasItem(index, 'pricePerItem', e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value)))}
-                                                        className="h-9 text-sm"
-                                                    />
-                                                    {item.costPrice > 0 && (
-                                                        <div className="text-[10px] text-gray-400 mt-0.5">Cost: {item.costPrice}</div>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell className="py-2 align-top font-medium text-gray-700">
-                                                    Rs {(Number(item.quantity) * Number(item.pricePerItem)) || 0}
-                                                </TableCell>
-                                                <TableCell className="py-2 align-top text-right">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => removeGasItem(index)}
-                                                        className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                                                    >
-                                                        <XMarkIcon className="w-4 h-4" />
-                                                    </button>
-                                                </TableCell>
-                                            </TableRow>
-                                        );
-                                    })}
-                                    {gasItems.length === 0 && (
-                                        <TableRow>
-                                            <TableCell colSpan={5} className="text-center py-4 text-gray-400 text-sm">
-                                                No gas items added
-                                            </TableCell>
-                                        </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
+                                                                    label: type.label
+                                                                }))}
+                                                                className="h-9 text-sm"
+                                                            />
+                                                            {item.isReturn && item.cylinderType && (
+                                                                <div className={`text-[10px] mt-0.5 ${availableHoldings === 0 ? "text-red-500 font-bold" : "text-gray-400"}`}>
+                                                                    Holdings: {availableHoldings}
+                                                                </div>
+                                                            )}
+                                                            {!item.isReturn && item.cylinderType && (
+                                                                <div className="text-[10px] mt-0.5 text-gray-400">
+                                                                    {(() => {
+                                                                        const typeInfo = inventoryCylinderTypes.find(t => t.cylinderType === item.cylinderType);
+                                                                        const typeStock = typeInfo?.fullCount ?? 0;
+                                                                        const isLow = typeStock < 5;
+                                                                        return (
+                                                                            <span className={typeStock === 0 || isLow ? "text-red-500 font-bold" : ""}>
+                                                                                Stock: {typeStock}
+                                                                            </span>
+                                                                        );
+                                                                    })()}
+                                                                </div>
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell className="py-2 align-top">
+                                                            <Input
+                                                                type="number"
+                                                                min="1"
+                                                                value={item.quantity}
+                                                                onChange={(e) => updateSecurityItem(index, 'quantity', e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value)))}
+                                                                className={`h-9 text-sm ${isReturnInvalid ? 'border-red-500' : ''}`}
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell className="py-2 align-top">
+                                                            <Input
+                                                                type="number"
+                                                                min="0"
+                                                                value={item.pricePerItem}
+                                                                onChange={(e) => updateSecurityItem(index, 'pricePerItem', e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value)))}
+                                                                className="h-9 text-sm"
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell className="py-2 align-top font-medium">
+                                                            Rs {(Number(item.pricePerItem) * Number(item.quantity)) || 0}
+                                                        </TableCell>
+                                                        <TableCell className="py-2 align-top text-right">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeSecurityItem(index)}
+                                                                className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                                                            >
+                                                                <XMarkIcon className="w-4 h-4" />
+                                                            </button>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            })}
+                                            {securityItems.length === 0 && (
+                                                <TableRow>
+                                                    <TableCell colSpan={6} className="text-center py-4 text-gray-400 text-sm">
+                                                        No security items added
+                                                    </TableCell>
+                                                </TableRow>
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                    <div className="mt-3">
+                                        <Button
+                                            type="button"
+                                            onClick={addSecurityItem}
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 text-xs text-orange-700 border-orange-300 hover:bg-orange-50"
+                                        >
+                                            <PlusIcon className="w-3 h-3 mr-1" />
+                                            Add Security
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
-                        {/* Security Items Table */}
-                        <div className="border rounded-lg overflow-hidden">
-                            <div className="bg-gray-50 px-4 py-2 border-b flex justify-between items-center">
-                                <h4 className="font-semibold text-gray-700 text-sm">Security Deposits / Returns</h4>
-                                <Button type="button" onClick={addSecurityItem} variant="outline" size="sm" className="h-7 text-xs">
-                                    <PlusIcon className="w-3 h-3 mr-1" />
-                                    Add Security
-                                </Button>
-                            </div>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
-                                        <TableHead className="py-2 h-8 w-[20%]">Action</TableHead>
-                                        <TableHead className="py-2 h-8 w-[30%]">Type</TableHead>
-                                        <TableHead className="py-2 h-8 w-[15%]">Quantity</TableHead>
-                                        <TableHead className="py-2 h-8 w-[20%]">Amount (ea)</TableHead>
-                                        <TableHead className="py-2 h-8 w-[10%]">Total</TableHead>
-                                        <TableHead className="py-2 h-8 w-[5%]"></TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {securityItems.map((item, index) => {
-                                        const availableHoldings = item.isReturn ? getAvailableHoldings(item.cylinderType) : 0;
-                                        const isReturnInvalid = item.isReturn && item.cylinderType && Number(item.quantity) > availableHoldings;
-                                        return (
-                                            <TableRow key={index} id={`security-item-${index}`} className="hover:bg-transparent">
-                                                <TableCell className="py-2 align-top">
-                                                    <CustomSelect
-                                                        value={item.isReturn ? 'return' : 'deposit'}
-                                                        onChange={(val) => updateSecurityItem(index, 'isReturn', val === 'return')}
-                                                        options={[
-                                                            { value: 'deposit', label: 'Deposit' },
-                                                            { value: 'return', label: 'Return' }
-                                                        ]}
-                                                        className="h-9 text-sm"
-                                                    />
-                                                </TableCell>
-                                                <TableCell className="py-2 align-top">
-                                                    <CustomSelect
-                                                        value={item.cylinderType}
-                                                        onChange={(val) => updateSecurityItem(index, 'cylinderType', val)}
-                                                        placeholder="Select Type"
-                                                        options={inventoryCylinderTypes.map((type) => ({
-                                                            value: type.cylinderType,
-                                                            label: type.label
-                                                        }))}
-                                                        className="h-9 text-sm"
-                                                    />
-                                                    {item.isReturn && item.cylinderType && (
-                                                        <div className={`text-[10px] mt-0.5 ${availableHoldings === 0 ? "text-red-500 font-bold" : "text-gray-400"}`}>
-                                                            Holdings: {availableHoldings}
-                                                        </div>
-                                                    )}
-                                                    {!item.isReturn && item.cylinderType && (
-                                                        <div className="text-[10px] mt-0.5 text-gray-400">
-                                                            {(() => {
-                                                                const typeInfo = inventoryCylinderTypes.find(t => t.cylinderType === item.cylinderType);
-                                                                // Use fullCount if available (from new API), fallback to 0
-                                                                const stock = typeInfo?.fullCount ?? 0;
-                                                                const isLow = stock < 5;
-                                                                return (
-                                                                    <span className={stock === 0 || isLow ? "text-red-500 font-bold" : ""}>
-                                                                        Stock: {stock}
-                                                                    </span>
-                                                                );
-                                                            })()}
-                                                        </div>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell className="py-2 align-top">
-                                                    <Input
-                                                        type="number"
-                                                        min="1"
-                                                        value={item.quantity}
-                                                        onChange={(e) => updateSecurityItem(index, 'quantity', e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value)))}
-                                                        className={`h-9 text-sm ${isReturnInvalid ? 'border-red-500' : ''}`}
-                                                    />
-                                                </TableCell>
-                                                <TableCell className="py-2 align-top">
-                                                    <Input
-                                                        type="number"
-                                                        min="0"
-                                                        value={item.pricePerItem}
-                                                        onChange={(e) => updateSecurityItem(index, 'pricePerItem', e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value)))}
-                                                        className="h-9 text-sm"
-                                                    />
-                                                </TableCell>
-                                                <TableCell className="py-2 align-top font-medium">
-                                                    Rs {(Number(item.pricePerItem) * Number(item.quantity)) || 0}
-                                                </TableCell>
-                                                <TableCell className="py-2 align-top text-right">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => removeSecurityItem(index)}
-                                                        className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                                                    >
-                                                        <XMarkIcon className="w-4 h-4" />
-                                                    </button>
-                                                </TableCell>
-                                            </TableRow>
-                                        );
-                                    })}
-                                    {securityItems.length === 0 && (
-                                        <TableRow>
-                                            <TableCell colSpan={6} className="text-center py-4 text-gray-400 text-sm">
-                                                No security items added
-                                            </TableCell>
-                                        </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </div>
+                        {/* Accessories Accordion */}
+                        <div className={`border rounded-xl overflow-hidden transition-all ${accessoriesExpanded ? 'border-purple-200 bg-purple-50/30' : 'border-gray-200'}`}>
+                            <button
+                                type="button"
+                                onClick={() => setAccessoriesExpanded(!accessoriesExpanded)}
+                                className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors ${accessoriesExpanded ? 'bg-purple-100/50' : 'hover:bg-gray-50'}`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-6 h-6 rounded flex items-center justify-center ${accessoriesExpanded ? 'bg-purple-600' : 'bg-gray-300'}`}>
+                                        <CubeIcon className="w-3.5 h-3.5 text-white" />
+                                    </div>
+                                    <div className="flex items-center">
+                                        <span className="font-medium text-sm text-gray-900">Accessories</span>
+                                        {accessoryItems.some(i => i.quantity > 0) && (
+                                            <Badge className="ml-2 bg-purple-100 text-purple-700 border-purple-200 text-[10px] px-1.5 py-0 h-5">
+                                                {accessoryItems.filter(i => i.quantity > 0).length}
+                                            </Badge>
+                                        )}
+                                    </div>
+                                </div>
+                                <svg className={`w-4 h-4 text-gray-500 transition-transform ${accessoriesExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
 
-                        {/* Accessories (Keeping Component) */}
-                        <div className="border rounded-lg overflow-hidden">
-                            <div className="bg-gray-50 px-4 py-2 border-b">
-                                <h4 className="font-semibold text-gray-700 text-sm">Accessories</h4>
-                            </div>
-                            <div className="p-4">
-                                <ProfessionalAccessorySelector
-                                    accessoryItems={accessoryItems}
-                                    setAccessoryItems={setAccessoryItems}
-                                    onInventoryValidationChange={handleInventoryValidationChange}
-                                />
-                            </div>
+                            {accessoriesExpanded && (
+                                <div className="p-4 border-t border-purple-200">
+                                    <ProfessionalAccessorySelector
+                                        accessoryItems={accessoryItems}
+                                        setAccessoryItems={setAccessoryItems}
+                                        onInventoryValidationChange={handleInventoryValidationChange}
+                                    />
+                                </div>
+                            )}
                         </div>
 
                         {/* Summary & Footer */}
