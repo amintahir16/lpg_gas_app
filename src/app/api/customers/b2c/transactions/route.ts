@@ -5,10 +5,52 @@ import { authOptions } from '@/lib/auth';
 import { InventoryDeductionService } from '@/lib/inventory-deduction';
 import { getCapacityFromTypeString } from '@/lib/cylinder-utils';
 
+// Define types for transaction items
+interface TransactionGasItem {
+  cylinderType?: string;
+  quantity: number;
+  pricePerItem: number;
+  costPrice?: number;
+}
+
+interface TransactionSecurityItem {
+  cylinderType: string;
+  quantity: number;
+  pricePerItem: number;
+  isReturn?: boolean;
+}
+
+interface TransactionAccessoryItem {
+  itemName?: string;
+  category?: string;
+  itemType?: string;
+  quantity: number;
+  pricePerItem: number;
+  totalPrice?: number;
+  costPrice?: number;
+  costPerPiece?: number;
+  isVaporizer?: boolean;
+  usagePrice?: number;
+  sellingPrice?: number;
+}
+
+interface AccessorySaleItem {
+  category: string;
+  itemType: string;
+  quantity: number;
+  pricePerItem: number;
+  totalPrice: number;
+  // Vaporizer-specific fields
+  isVaporizer?: boolean;
+  usagePrice?: number; // Cost Price - for charging usage (not deducted from inventory)
+  sellingPrice?: number; // Selling Price - for selling vaporizer (deducted from inventory)
+  costPerPiece?: number;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user || (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -22,9 +64,9 @@ export async function POST(request: NextRequest) {
       deliveryCost = 0,
       paymentMethod = 'CASH',
       notes,
-      gasItems = [],
-      securityItems = [],
-      accessoryItems = []
+      gasItems = [] as TransactionGasItem[],
+      securityItems = [] as TransactionSecurityItem[],
+      accessoryItems = [] as TransactionAccessoryItem[]
     } = body;
 
     // Validate required fields
@@ -48,80 +90,66 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate bill number
-    const today = new Date();
-    const dateStr = today.toISOString().split('T')[0];
-    
-    let billSequence = await prisma.billSequence.findUnique({
-      where: { date: new Date(dateStr) }
+    // Generate per-customer sequential bill number
+    const updatedCustomer = await prisma.b2CCustomer.update({
+      where: { id: customerId },
+      data: { billSequence: { increment: 1 } }
     });
 
-    if (!billSequence) {
-      billSequence = await prisma.billSequence.create({
-        data: {
-          date: new Date(dateStr),
-          sequence: 1
-        }
-      });
-    } else {
-      billSequence = await prisma.billSequence.update({
-        where: { date: new Date(dateStr) },
-        data: { sequence: { increment: 1 } }
-      });
-    }
-
-    const billSno = `B2C-${dateStr.replace(/-/g, '')}-${billSequence.sequence.toString().padStart(4, '0')}`;
+    // Simple sequential number: 1, 2, 3...
+    const billSno = updatedCustomer.billSequence.toString();
 
     // Calculate revenue totals
-    const gasTotal = gasItems.reduce((sum: number, item: any) => sum + (item.pricePerItem * item.quantity), 0);
-    const securityTotal = securityItems.reduce((sum: number, item: any) => sum + (item.pricePerItem * item.quantity), 0);
+    const gasTotal = gasItems.reduce((sum: number, item: TransactionGasItem) => sum + (item.pricePerItem * item.quantity), 0);
+    const securityTotal = securityItems.reduce((sum: number, item: TransactionSecurityItem) => sum + (item.pricePerItem * item.quantity), 0);
     // Accessories: use totalPrice if provided (from ProfessionalAccessorySelector), otherwise calculate
-    const accessoryTotal = accessoryItems.reduce((sum: number, item: any) => {
+    const accessoryTotal = accessoryItems.reduce((sum: number, item: TransactionAccessoryItem) => {
       return sum + (item.totalPrice || (item.pricePerItem * item.quantity));
     }, 0);
     const totalAmount = gasTotal + securityTotal + accessoryTotal;
     const finalAmount = totalAmount + Number(deliveryCharges);
 
     // Calculate cost totals
-    const gasCost = gasItems.reduce((sum: number, item: any) => sum + ((item.costPrice || 0) * item.quantity), 0);
+    // Calculate cost totals
+    const gasCost = gasItems.reduce((sum: number, item: TransactionGasItem) => sum + ((item.costPrice || 0) * item.quantity), 0);
     // Accessories: use costPrice if provided, otherwise calculate from costPerPiece
-    const accessoryCost = accessoryItems.reduce((sum: number, item: any) => {
+    const accessoryCost = accessoryItems.reduce((sum: number, item: TransactionAccessoryItem) => {
       if (item.costPrice !== undefined) {
         return sum + (item.costPrice * item.quantity);
       }
       // Fallback: use costPerPiece * quantity (for new ProfessionalAccessorySelector format)
       return sum + ((item.costPerPiece || 0) * item.quantity);
     }, 0);
-    
+
     // Calculate security return profit (25% deduction on returns)
     // Note: We need to look up the actual security amounts from holdings to calculate correctly
     // For now, we'll calculate it during the transaction when we have access to holdings
     // This will be summed up from the returnDeduction values we calculate
-    let securityReturnProfit = 0;
-    
+
     // Calculate profit margins
     const gasProfit = (() => {
-      if (!customer.marginCategory) return gasTotal - gasCost; // Fallback to old calculation
-      
+      const marginCategory = customer.marginCategory;
+      if (!marginCategory) return gasTotal - gasCost; // Fallback to old calculation
+
       // Calculate profit based on margin per kg for each gas item
-      return gasItems.reduce((total: number, item: any) => {
+      return gasItems.reduce((total: number, item: TransactionGasItem) => {
         if (!item.cylinderType) return total;
-        
+
         // Get cylinder weight dynamically from type - fully flexible
         const cylinderWeight = getCapacityFromTypeString(item.cylinderType);
-        
+
         // Calculate profit based on margin per kg: marginPerKg × cylinderWeight × quantity
-        const marginPerKg = customer.marginCategory.marginPerKg;
+        const marginPerKg = Number(marginCategory.marginPerKg);
         return total + (marginPerKg * cylinderWeight * item.quantity);
       }, 0);
     })();
-    
+
     const accessoryProfit = accessoryTotal - accessoryCost;
     const deliveryProfit = Number(deliveryCharges) - Number(deliveryCost || 0);
-    
+
     const totalCost = gasCost + accessoryCost;
     // Note: actualProfit will be updated inside transaction to include security return deductions
-    let actualProfit = gasProfit + accessoryProfit + deliveryProfit;
+    const actualProfit = gasProfit + accessoryProfit + deliveryProfit;
 
     // Create transaction with all items in a transaction
     let calculatedSecurityReturnProfit = 0;
@@ -148,22 +176,22 @@ export async function POST(request: NextRequest) {
       // Create gas items with cost and profit tracking
       if (gasItems.length > 0) {
         await tx.b2CTransactionGasItem.createMany({
-          data: gasItems.map((item: any) => {
+          data: gasItems.map((item: TransactionGasItem) => {
             const totalPrice = item.pricePerItem * item.quantity;
             const costPrice = item.costPrice || 0;
             const totalCost = costPrice * item.quantity;
-            
+
             // Calculate profit margin based on margin per kg if margin category is available
             let profitMargin = totalPrice - totalCost; // Default fallback
             if (customer.marginCategory && item.cylinderType) {
               // Get cylinder weight dynamically from type - fully flexible
               const cylinderWeight = getCapacityFromTypeString(item.cylinderType);
-              
+
               // Calculate profit based on margin per kg: marginPerKg × cylinderWeight × quantity
-              const marginPerKg = customer.marginCategory.marginPerKg;
+              const marginPerKg = Number(customer.marginCategory.marginPerKg);
               profitMargin = marginPerKg * cylinderWeight * item.quantity;
             }
-            
+
             return {
               transactionId: newTransaction.id,
               cylinderType: item.cylinderType,
@@ -181,7 +209,7 @@ export async function POST(request: NextRequest) {
       // Create security items and cylinder holdings
       if (securityItems.length > 0) {
         await tx.b2CTransactionSecurityItem.createMany({
-          data: securityItems.map((item: any) => ({
+          data: securityItems.map((item: TransactionSecurityItem) => ({
             transactionId: newTransaction.id,
             cylinderType: item.cylinderType,
             quantity: item.quantity,
@@ -196,7 +224,7 @@ export async function POST(request: NextRequest) {
           if (!item.isReturn) {
             // New security deposit - deduct from inventory and create cylinder holding record
             const cylinderType = item.cylinderType; // Use string directly
-            
+
             // Find available cylinders of this type (FULL status)
             const availableCylinders = await tx.cylinder.findMany({
               where: {
@@ -247,15 +275,15 @@ export async function POST(request: NextRequest) {
             let remainingQuantity = item.quantity;
             for (const holding of holdings) {
               if (remainingQuantity <= 0) break;
-              
+
               const returnQuantity = Math.min(remainingQuantity, holding.quantity);
               // Calculate 25% deduction per cylinder being returned (this is profit)
               const deductionPerCylinder = Number(holding.securityAmount) * 0.25;
               const totalDeduction = deductionPerCylinder * returnQuantity;
-              
+
               // Add deduction to security return profit (this is our profit from the return)
               calculatedSecurityReturnProfit += totalDeduction;
-              
+
               await tx.b2CCylinderHolding.update({
                 where: { id: holding.id },
                 data: {
@@ -264,7 +292,7 @@ export async function POST(request: NextRequest) {
                   returnDeduction: totalDeduction
                 }
               });
-              
+
               remainingQuantity -= returnQuantity;
             }
           }
@@ -274,14 +302,14 @@ export async function POST(request: NextRequest) {
       // Create accessory items with cost and profit tracking
       if (accessoryItems.length > 0) {
         await tx.b2CTransactionAccessoryItem.createMany({
-          data: accessoryItems.map((item: any) => {
+          data: accessoryItems.map((item: TransactionAccessoryItem) => {
             // Use totalPrice if provided (from ProfessionalAccessorySelector), otherwise calculate
             const totalPrice = item.totalPrice || (item.pricePerItem * item.quantity);
             // Use costPrice if provided, otherwise use costPerPiece * quantity
             const costPrice = item.costPrice !== undefined ? item.costPrice : (item.costPerPiece || 0);
             const totalCost = costPrice * item.quantity;
             const profitMargin = totalPrice - totalCost;
-            
+
             return {
               transactionId: newTransaction.id,
               productName: item.itemName,
@@ -297,13 +325,13 @@ export async function POST(request: NextRequest) {
       }
 
       // ===== INVENTORY INTEGRATION =====
-      
+
       // 1. Gas purchases (refills) - NO inventory deduction
       // NOTE: Customer already owns the cylinder body from security deposit
       // Gas purchase is just a refill, the cylinder is already with the customer
       // No inventory change needed - cylinder status remains WITH_CUSTOMER
       if (gasItems.length > 0) {
-        console.log(`[B2C] Gas purchase (refill): ${gasItems.reduce((sum, item) => sum + item.quantity, 0)} cylinder(s) refilled - NO inventory deduction (customer already owns cylinder body from security deposit)`);
+        console.log(`[B2C] Gas purchase (refill): ${gasItems.reduce((sum: number, item: TransactionGasItem) => sum + item.quantity, 0)} cylinder(s) refilled - NO inventory deduction (customer already owns cylinder body from security deposit)`);
       }
 
       // 2. Return cylinders back to inventory when customer returns them
@@ -372,22 +400,22 @@ export async function POST(request: NextRequest) {
       // 3. Deduct accessories from inventory using professional inventory deduction service (same as B2B)
       if (accessoryItems.length > 0) {
         console.log('🔄 Processing accessories inventory deduction for B2C...');
-        
+
         // Convert accessory items to the format expected by InventoryDeductionService
-        const accessorySaleItems = accessoryItems
-          .filter((item: any) => item.quantity > 0)
-          .map((item: any) => {
+        const accessorySaleItems: AccessorySaleItem[] = accessoryItems
+          .filter((item: TransactionAccessoryItem) => item.quantity > 0)
+          .map((item: TransactionAccessoryItem) => {
             // Parse category and itemType from itemName (format: "Category - ItemType")
             const parts = (item.itemName || '').split(' - ');
             const category = parts[0] || item.category || 'Unknown';
             const itemType = parts[1] || item.itemType || 'Unknown';
-            
+
             return {
               category: category,
               itemType: itemType,
               quantity: item.quantity,
               pricePerItem: item.pricePerItem,
-              totalPrice: item.totalPrice,
+              totalPrice: item.totalPrice || 0,
               // Vaporizer-specific fields
               isVaporizer: item.isVaporizer || false,
               usagePrice: item.usagePrice || 0,
@@ -395,13 +423,13 @@ export async function POST(request: NextRequest) {
               costPerPiece: item.costPerPiece || item.costPrice || 0
             };
           });
-        
+
         if (accessorySaleItems.length > 0) {
           // Log vaporizer pricing information if present
-          const vaporizerItems = accessorySaleItems.filter((item: any) => item.isVaporizer);
+          const vaporizerItems = accessorySaleItems.filter((item: AccessorySaleItem) => item.isVaporizer);
           if (vaporizerItems.length > 0) {
             console.log('🌫️ Processing vaporizer items:');
-            vaporizerItems.forEach((item: any) => {
+            vaporizerItems.forEach((item: AccessorySaleItem) => {
               console.log(`  - ${item.category} - ${item.itemType}: ${item.quantity} units`);
               console.log(`    Usage Price: ${item.usagePrice}`);
               console.log(`    Selling Price: ${item.sellingPrice}`);
@@ -409,13 +437,13 @@ export async function POST(request: NextRequest) {
               console.log(`    Total Price: ${item.totalPrice}`);
             });
           }
-          
+
           // Validate inventory availability first
           const validation = await InventoryDeductionService.validateInventoryAvailability(accessorySaleItems);
           if (!validation.isValid) {
             throw new Error(`Inventory validation failed: ${validation.errors.join(', ')}`);
           }
-          
+
           // Deduct from inventory
           await InventoryDeductionService.deductAccessoriesFromInventory(accessorySaleItems);
           console.log('✅ B2C accessories inventory deduction completed successfully');

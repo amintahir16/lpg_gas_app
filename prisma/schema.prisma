@@ -78,6 +78,7 @@ model B2CCustomer {
   marginCategory   MarginCategory?      @relation(fields: [marginCategoryId], references: [id])
   cylinderHoldings B2CCylinderHolding[]
   transactions     B2CTransaction[]
+  billSequence     Int                  @default(0)
 
   @@map("b2c_customers")
 }
@@ -99,7 +100,7 @@ model B2CCylinderHolding {
 
 model B2CTransaction {
   id              String                        @id @default(cuid())
-  billSno         String                        @unique
+  billSno         String
   customerId      String
   date            DateTime
   time            DateTime
@@ -121,6 +122,8 @@ model B2CTransaction {
   gasItems        B2CTransactionGasItem[]
   securityItems   B2CTransactionSecurityItem[]
   customer        B2CCustomer                   @relation(fields: [customerId], references: [id])
+
+  @@unique([customerId, billSno])
 
   @@map("b2c_transactions")
 }

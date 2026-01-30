@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
   PlusIcon,
-  TrashIcon,
+  XMarkIcon,
   CurrencyDollarIcon,
   CubeIcon
 } from '@heroicons/react/24/outline';
@@ -580,15 +580,13 @@ export function ProfessionalAccessorySelector({
                     {/* Actions */}
                     <td className="py-3 px-4 min-h-[80px] align-top">
                       <div className="flex flex-col h-full justify-start">
-                        <Button
+                        <button
                           type="button"
-                          variant="outline"
-                          size="sm"
                           onClick={() => removeAccessoryItem(item.id)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
                         >
-                          <TrashIcon className="w-4 h-4" />
-                        </Button>
+                          <XMarkIcon className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>

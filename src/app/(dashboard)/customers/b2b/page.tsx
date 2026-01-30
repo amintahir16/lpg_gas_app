@@ -52,6 +52,7 @@ interface B2BSummary {
   totalReceivables: number;
   totalCylinders: number;
   cylinderBreakdown: Record<string, number>;
+  totalProfit?: number;
 }
 
 interface B2BCustomersResponse {
@@ -363,43 +364,47 @@ export default function B2BCustomersPage() {
       {/* Summary Cards */}
       {summary && (
         <Card className="border shadow-sm bg-white overflow-hidden">
-          <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x border-gray-100">
+          <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x border-gray-100">
             {/* Total Cylinders */}
-            {/* Total Cylinders */}
-            <div className="p-4 flex flex-col items-center text-center hover:bg-red-50/50 transition-colors">
-              <span className="text-xs font-medium text-red-600 uppercase tracking-wider mb-1">Total Cylinders With Customers</span>
-              <span className="text-2xl font-bold text-gray-900 mb-1">{summary.totalCylinders}</span>
-              <div className="flex flex-wrap justify-center gap-2 mt-2">
+            <div className="p-2 flex flex-col items-center text-center hover:bg-red-50/50 transition-colors">
+              <span className="text-[10px] font-medium text-red-600 uppercase tracking-wider mb-0.5">Total Cylinders With Customers</span>
+              <span className="text-xl font-bold text-gray-900 mb-0.5">{summary.totalCylinders}</span>
+              <div className="flex flex-wrap justify-center gap-1 mt-1 max-h-[60px] overflow-y-auto w-full px-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
                 {Object.entries(summary.cylinderBreakdown).length > 0 ? (
                   Object.entries(summary.cylinderBreakdown).map(([type, count]) => (
-                    <Badge key={type} variant="secondary" className="bg-red-50 text-red-700 border-red-100 font-normal">
+                    <Badge key={type} variant="secondary" className="bg-red-50 text-red-700 border-red-100 font-normal text-[9px] py-0 px-1.5 h-4 whitespace-nowrap">
                       {formatCylinderHeader(type)}: <span className="font-bold ml-1">{count}</span>
                     </Badge>
                   ))
                 ) : (
-                  <span className="text-xs text-gray-400">No cylinders held</span>
+                  <span className="text-[10px] text-gray-400">No cylinders held</span>
                 )}
               </div>
             </div>
 
             {/* Total Customers */}
-            {/* Total Customers */}
-            <div className="p-4 flex flex-col items-center text-center hover:bg-blue-50/50 transition-colors">
-              <span className="text-xs font-medium text-blue-600 uppercase tracking-wider mb-1">Total Customers</span>
-              <span className="text-2xl font-bold text-gray-900 mb-1">{summary.totalCustomers}</span>
-              <span className="text-xs text-gray-500">
+            <div className="p-2 flex flex-col items-center text-center hover:bg-blue-50/50 transition-colors">
+              <span className="text-[10px] font-medium text-blue-600 uppercase tracking-wider mb-0.5">Total Customers</span>
+              <span className="text-xl font-bold text-gray-900 mb-0.5">{summary.totalCustomers}</span>
+              <span className="text-[10px] text-gray-500">
                 {filterStatus === 'ACTIVE' ? 'Active in last 7 days' :
                   filterStatus === 'INACTIVE' ? 'No recent activity' : 'All Registered'}
               </span>
             </div>
 
+            {/* Total Profit */}
+            <div className="p-2 flex flex-col items-center text-center hover:bg-purple-50/50 transition-colors">
+              <span className="text-[10px] font-medium text-purple-600 uppercase tracking-wider mb-0.5">Total Profit</span>
+              <span className="text-xl font-bold text-green-600 mb-0.5">{formatCurrency(summary.totalProfit || 0)}</span>
+              <span className="text-[10px] text-gray-500">Estimated Gross Profit</span>
+            </div>
+
             {/* Total Receivables */}
-            {/* Total Receivables */}
-            <div className="p-4 flex flex-col items-center text-center hover:bg-green-50/50 transition-colors">
-              <span className="text-xs font-medium text-green-600 uppercase tracking-wider mb-1">Total Account Receivables</span>
+            <div className="p-2 flex flex-col items-center text-center hover:bg-green-50/50 transition-colors">
+              <span className="text-[10px] font-medium text-green-600 uppercase tracking-wider mb-0.5">Total Account Receivables</span>
               {/* Logic: Receivables (Customer owes) shown as negative red to match Net Balance logic */}
-              <span className="text-2xl font-bold text-red-600 mb-1">{formatCurrency(-summary.totalReceivables)}</span>
-              <span className="text-xs text-gray-500">Outstanding Balance</span>
+              <span className="text-xl font-bold text-red-600 mb-0.5">{formatCurrency(-summary.totalReceivables)}</span>
+              <span className="text-[10px] text-gray-500">Outstanding Balance</span>
             </div>
           </div>
         </Card>

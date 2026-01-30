@@ -577,7 +577,7 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
 
     return (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm overflow-y-auto h-full w-full z-50">
-            <div className="relative top-6 mx-auto p-0 border-0 w-11/12 max-w-5xl shadow-2xl rounded-xl bg-white mb-10 overflow-hidden">
+            <div className="relative top-6 mx-auto p-0 border-0 w-11/12 max-w-3xl shadow-2xl rounded-xl bg-white mb-10 overflow-hidden">
                 {/* Header */}
                 <div className="bg-white px-6 py-4 border-b flex items-center justify-between">
                     <div>
@@ -609,7 +609,7 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                 <div className="p-6 max-h-[80vh] overflow-y-auto">
                     <form onSubmit={handleSubmit} className="space-y-6">
                         {/* Top Controls: Date, Time, Payment, Delivery */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-xs font-semibold text-gray-600 mb-1">Date</label>
                                 <Input
@@ -702,11 +702,9 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                 </TableHeader>
                                 <TableBody>
                                     {gasItems.map((item, index) => {
-                                        const stockInfo = item.cylinderType ? getCylinderStock(item.cylinderType) : null;
-                                        const isExceedingStock = stockInfo && Number(item.quantity) > stockInfo.available;
                                         return (
                                             <TableRow key={index} className="hover:bg-transparent">
-                                                <TableCell className="py-2">
+                                                <TableCell className="py-2 align-top">
                                                     <div className="relative">
                                                         <CustomSelect
                                                             value={item.cylinderType}
@@ -727,11 +725,6 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                                             })}
                                                             className="h-9 text-sm"
                                                         />
-                                                        {item.cylinderType && stockInfo && (
-                                                            <div className={`text-[10px] mt-0.5 ${stockInfo.available < 5 ? "text-red-500 font-bold" : "text-gray-400"}`}>
-                                                                Stock: {stockInfo.available}
-                                                            </div>
-                                                        )}
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="py-2 align-top">
@@ -740,7 +733,7 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                                         min="1"
                                                         value={item.quantity}
                                                         onChange={(e) => updateGasItem(index, 'quantity', e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value)))}
-                                                        className={`h-9 text-sm ${isExceedingStock ? 'border-red-500' : ''}`}
+                                                        className="h-9 text-sm"
                                                     />
                                                 </TableCell>
                                                 <TableCell className="py-2 align-top">
@@ -759,15 +752,13 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                                     Rs {(Number(item.quantity) * Number(item.pricePerItem)) || 0}
                                                 </TableCell>
                                                 <TableCell className="py-2 align-top text-right">
-                                                    <Button
+                                                    <button
                                                         type="button"
-                                                        variant="ghost"
-                                                        size="sm"
                                                         onClick={() => removeGasItem(index)}
-                                                        className="h-8 w-8 p-0 text-gray-400 hover:text-red-600"
+                                                        className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
                                                     >
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </Button>
+                                                        <XMarkIcon className="w-4 h-4" />
+                                                    </button>
                                                 </TableCell>
                                             </TableRow>
                                         );
@@ -836,6 +827,21 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                                             Holdings: {availableHoldings}
                                                         </div>
                                                     )}
+                                                    {!item.isReturn && item.cylinderType && (
+                                                        <div className="text-[10px] mt-0.5 text-gray-400">
+                                                            {(() => {
+                                                                const typeInfo = inventoryCylinderTypes.find(t => t.cylinderType === item.cylinderType);
+                                                                // Use fullCount if available (from new API), fallback to 0
+                                                                const stock = typeInfo?.fullCount ?? 0;
+                                                                const isLow = stock < 5;
+                                                                return (
+                                                                    <span className={stock === 0 || isLow ? "text-red-500 font-bold" : ""}>
+                                                                        Stock: {stock}
+                                                                    </span>
+                                                                );
+                                                            })()}
+                                                        </div>
+                                                    )}
                                                 </TableCell>
                                                 <TableCell className="py-2 align-top">
                                                     <Input
@@ -859,15 +865,13 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                                     Rs {(Number(item.pricePerItem) * Number(item.quantity)) || 0}
                                                 </TableCell>
                                                 <TableCell className="py-2 align-top text-right">
-                                                    <Button
+                                                    <button
                                                         type="button"
-                                                        variant="ghost"
-                                                        size="sm"
                                                         onClick={() => removeSecurityItem(index)}
-                                                        className="h-8 w-8 p-0 text-gray-400 hover:text-red-600"
+                                                        className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
                                                     >
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </Button>
+                                                        <XMarkIcon className="w-4 h-4" />
+                                                    </button>
                                                 </TableCell>
                                             </TableRow>
                                         );
@@ -951,9 +955,5 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
         </div>
     );
 
-    // Helper to get stock
-    function getCylinderStock(cylinderType: string) {
-        // Simple stock display - in real app would verify against inventory
-        return { available: 0 };
-    }
+
 }

@@ -5,12 +5,26 @@ import { useRouter, useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { HomeIcon, ArrowLeftIcon, MapPinIcon, PhoneIcon, EnvelopeIcon, PlusIcon, CalendarIcon, EyeIcon, FunnelIcon, XMarkIcon, DocumentArrowDownIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import { Input } from '@/components/ui/input';
-import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
 import { B2CTransactionModal } from '@/components/B2CTransactionModal';
+import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
+import {
+  ArrowLeftIcon,
+  HomeIcon,
+  MapPinIcon,
+  PhoneIcon,
+  EnvelopeIcon,
+  PlusIcon,
+  CalendarIcon,
+  EyeIcon,
+  FunnelIcon,
+  XMarkIcon,
+  DocumentArrowDownIcon,
+  CurrencyDollarIcon,
+  ArrowPathIcon
+} from '@heroicons/react/24/outline';
 
+// Interfaces based on API response
 interface B2CCustomer {
   id: string;
   name: string;
@@ -26,45 +40,74 @@ interface B2CCustomer {
   totalProfit: number;
   isActive: boolean;
   createdAt: string;
+  marginCategory?: {
+    id: string;
+    name: string;
+    marginPerKg: number;
+  };
   cylinderHoldings: {
     id: string;
     cylinderType: string;
     quantity: number;
     securityAmount: number;
     issueDate: string;
-    returnDate: string | null;
     isReturned: boolean;
-    returnDeduction: number;
   }[];
-  transactions: {
-    id: string;
-    billSno: string;
-    date: string;
-    time: string;
-    totalAmount: number;
-    deliveryCharges: number;
-    finalAmount: number;
-    paymentMethod: string;
-    gasItems: {
-      cylinderType: string;
-      quantity: number;
-      pricePerItem: number;
-      totalPrice: number;
-    }[];
-    securityItems: {
-      cylinderType: string;
-      quantity: number;
-      pricePerItem: number;
-      totalPrice: number;
-      isReturn: boolean;
-    }[];
-    accessoryItems: {
-      productName: string;
-      quantity: number;
-      pricePerItem: number;
-      totalPrice: number;
-    }[];
+}
+
+interface B2CTransaction {
+  id: string;
+  billSno: string;
+  date: string;
+  time: string;
+  totalAmount: number; // For B2C, usually assumes fully paid
+  paidAmount?: number;
+  deliveryCharges: number;
+  finalAmount: number;
+  actualProfit: number;
+  paymentMethod: string;
+  notes?: string;
+  paymentReference?: string;
+  gasItems: {
+    cylinderType: string;
+    quantity: number;
+    pricePerItem: number;
+    totalPrice: number;
   }[];
+  securityItems: {
+    cylinderType: string;
+    quantity: number;
+    pricePerItem: number;
+    totalPrice: number;
+    isReturn: boolean;
+  }[];
+  accessoryItems: {
+    productName: string;
+    quantity: number;
+    pricePerItem: number;
+    totalPrice: number;
+  }[];
+  voided: boolean;
+  voidReason?: string;
+}
+
+interface CustomerLedgerResponse {
+  customer: B2CCustomer;
+  transactions: B2CTransaction[];
+  summary: {
+    netBalance: number;
+    totalIn: number;
+    totalOut: number;
+    totalProfit: number;
+    totalSecurityHeld: number;
+    cylinderHoldingsCount: number;
+  };
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
 }
 
 export default function B2CCustomerDetailPage() {
@@ -73,8 +116,17 @@ export default function B2CCustomerDetailPage() {
   const customerId = params.id as string;
 
   const [customer, setCustomer] = useState<B2CCustomer | null>(null);
+  const [transactions, setTransactions] = useState<B2CTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<CustomerLedgerResponse['summary'] | null>(null);
+
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    pages: 0
+  });
 
   // Date filter states
   const [dateFilter, setDateFilter] = useState({
@@ -83,7 +135,7 @@ export default function B2CCustomerDetailPage() {
   });
   const [showDateFilter, setShowDateFilter] = useState(false);
 
-  // Report download states
+  // Report states
   const [reportDateFilter, setReportDateFilter] = useState({
     startDate: '',
     endDate: ''
@@ -91,23 +143,23 @@ export default function B2CCustomerDetailPage() {
   const [showReportDateFilter, setShowReportDateFilter] = useState(false);
   const [downloadingReport, setDownloadingReport] = useState(false);
 
+  // Transaction modal state
+  const [showTransactionModal, setShowTransactionModal] = useState(false);
+
   // Transaction detail modal states
-  const [selectedTransaction, setSelectedTransaction] = useState<any | null>(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<B2CTransaction | null>(null);
   const [showTransactionDetail, setShowTransactionDetail] = useState(false);
   const [loadingTransaction, setLoadingTransaction] = useState(false);
   const [undoingTransaction, setUndoingTransaction] = useState(false);
 
-  // Transaction modal state
-  const [showTransactionModal, setShowTransactionModal] = useState(false);
-
-  // Dynamic cylinder types
+  // Dynamic cylinder types (cache)
   const [inventoryCylinderTypes, setInventoryCylinderTypes] = useState<any[]>([]);
 
   useEffect(() => {
     if (customerId) {
-      fetchCustomerDetails();
+      fetchCustomerLedger();
     }
-  }, [customerId, dateFilter.startDate, dateFilter.endDate]);
+  }, [customerId, pagination.page, dateFilter.startDate, dateFilter.endDate]);
 
   useEffect(() => {
     fetchCylinderTypes();
@@ -131,32 +183,31 @@ export default function B2CCustomerDetailPage() {
     }
   }, [showDateFilter, showReportDateFilter]);
 
-  const fetchCustomerDetails = async () => {
+  const fetchCustomerLedger = async () => {
     try {
       setLoading(true);
-
-      const params = new URLSearchParams();
-      if (dateFilter.startDate) {
-        params.append('startDate', dateFilter.startDate);
-      }
-      if (dateFilter.endDate) {
-        params.append('endDate', dateFilter.endDate);
-      }
-
-      const queryString = params.toString();
-      const url = `/api/customers/b2c/${customerId}${queryString ? `?${queryString}` : ''}`;
-
-      const response = await fetch(url, {
-        cache: 'no-store' // Always fetch fresh data
+      const params = new URLSearchParams({
+        page: pagination.page.toString(),
+        limit: pagination.limit.toString()
       });
 
+      if (dateFilter.startDate) params.append('startDate', dateFilter.startDate);
+      if (dateFilter.endDate) params.append('endDate', dateFilter.endDate);
+
+      const response = await fetch(`/api/customers/b2c/${customerId}/ledger?${params.toString()}`);
+
       if (!response.ok) {
-        throw new Error('Failed to fetch customer details');
+        throw new Error('Failed to fetch customer ledger');
       }
 
-      const data = await response.json();
-      setCustomer(data);
+      const data: CustomerLedgerResponse = await response.json();
+      setCustomer(data.customer);
+      setTransactions(data.transactions);
+      setSummary(data.summary);
+      setPagination(data.pagination);
+
     } catch (err) {
+      console.error('Error fetching ledger:', err);
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
@@ -177,31 +228,10 @@ export default function B2CCustomerDetailPage() {
     }
   };
 
-  const getCylinderTypeColor = (type: string) => {
-    switch (type) {
-      case 'DOMESTIC_11_8KG':
-        return 'success';
-      case 'STANDARD_15KG':
-        return 'info';
-      case 'COMMERCIAL_45_4KG':
-        return 'warning';
-      default:
-        return 'secondary';
-    }
+  const handleTransactionCreated = () => {
+    setShowTransactionModal(false);
+    fetchCustomerLedger();
   };
-
-  const formatAddress = (customer: B2CCustomer) => {
-    const parts = [];
-    if (customer.houseNumber) parts.push(`H.No: ${customer.houseNumber}`);
-    if (customer.sector) parts.push(`Sector: ${customer.sector}`);
-    if (customer.street) parts.push(`St: ${customer.street}`);
-    if (customer.phase) parts.push(`Ph: ${customer.phase}`);
-    if (customer.area) parts.push(customer.area);
-    return parts.join(', ') || customer.address;
-  };
-
-  const activeCylinders = customer?.cylinderHoldings.filter(h => !h.isReturned) || [];
-  const totalSecurityAmount = activeCylinders.reduce((sum, h) => sum + (Number(h.securityAmount) * h.quantity), 0);
 
   const handleDownloadReport = async () => {
     if (!customer) return;
@@ -209,12 +239,8 @@ export default function B2CCustomerDetailPage() {
     setDownloadingReport(true);
     try {
       const params = new URLSearchParams();
-      if (reportDateFilter.startDate) {
-        params.append('startDate', reportDateFilter.startDate);
-      }
-      if (reportDateFilter.endDate) {
-        params.append('endDate', reportDateFilter.endDate);
-      }
+      if (reportDateFilter.startDate) params.append('startDate', reportDateFilter.startDate);
+      if (reportDateFilter.endDate) params.append('endDate', reportDateFilter.endDate);
 
       const response = await fetch(`/api/customers/b2c/${customerId}/report?${params.toString()}`);
 
@@ -241,17 +267,7 @@ export default function B2CCustomerDetailPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600 font-medium">Loading customer details...</p>
-        </div>
-      </div>
-    );
-  }
-
+  // Helpers
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-PK', {
       style: 'currency',
@@ -261,55 +277,48 @@ export default function B2CCustomerDetailPage() {
     }).format(amount);
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-PK');
-  };
-
-  const formatTime = (timeString: string) => {
-    return new Date(timeString).toLocaleTimeString('en-PK', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
+  const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-PK');
+  const formatTime = (timeString: string) => new Date(timeString).toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
 
   const getCylinderTypeDisplay = (type: string | null) => {
     if (!type) return 'N/A';
-
-    // Try to find dynamic type first
     if (inventoryCylinderTypes.length > 0) {
       const dynamicType = inventoryCylinderTypes.find(t => t.cylinderType === type);
-      if (dynamicType) {
-        return dynamicType.label;
-      }
+      if (dynamicType) return dynamicType.label;
     }
-
     return getCylinderTypeDisplayName(type);
   };
 
-  if (error || !customer) {
+  const formatAddress = (c: B2CCustomer) => {
+    const parts = [];
+    if (c.houseNumber) parts.push(`H.No: ${c.houseNumber}`);
+    if (c.sector) parts.push(`Sector: ${c.sector}`);
+    if (c.street) parts.push(`St: ${c.street}`);
+    if (c.phase) parts.push(`Ph: ${c.phase}`);
+    if (c.area) parts.push(c.area);
+    return parts.join(', ') || c.address;
+  };
+
+  if (loading && !customer) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.push('/customers/b2c')}
-            className="mr-4 flex items-center"
-          >
-            <ArrowLeftIcon className="w-4 h-4 mr-2" />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600 font-medium">Loading customer details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!customer) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+        <div className="text-center">
+          <p className="text-gray-600 font-medium">Customer not found</p>
+          <Button onClick={() => router.push('/customers/b2c')} className="mt-4">
             Back to B2C Customers
           </Button>
         </div>
-        <Card className="border-0 shadow-sm bg-red-50 border-red-200">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
-                <span className="text-white text-xs font-bold">!</span>
-              </div>
-              <p className="text-red-700 font-medium">{error || 'Customer not found'}</p>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     );
   }
@@ -317,176 +326,203 @@ export default function B2CCustomerDetailPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="flex items-center mb-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => router.push('/customers/b2c')}
-              className="mr-4 flex items-center"
-            >
-              <ArrowLeftIcon className="w-4 h-4 mr-2" />
-              Back to B2C Customers
-            </Button>
-          </div>
+      <div className="flex items-center space-x-4">
+        <Button
+          variant="outline"
+          onClick={() => router.push('/customers/b2c')}
+          className="flex items-center"
+        >
+          <ArrowLeftIcon className="w-4 h-4 mr-2" />
+          Back to B2C Customers
+        </Button>
+        <div className="flex-1">
           <h1 className="text-3xl font-bold text-gray-900 flex items-center">
             <HomeIcon className="w-8 h-8 mr-3 text-green-600" />
             {customer.name}
           </h1>
           <p className="mt-2 text-gray-600 font-medium">
-            Customer Home: {formatAddress(customer)}
+            Customer Profile & Transaction History
           </p>
         </div>
-        <div className="mt-4 sm:mt-0 flex space-x-3">
-          <Button
-            onClick={() => setShowTransactionModal(true)}
-            className="font-semibold"
-          >
-            <PlusIcon className="w-4 h-4 mr-2" />
-            New Transaction
-          </Button>
-        </div>
       </div>
 
-      {/* Customer Info Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-          <CardContent className="p-6">
-            <div className="flex items-center">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <span className="text-green-600 text-lg font-bold">₹</span>
+      {/* Error Display */}
+      {error && (
+        <Card className="border-0 shadow-sm bg-red-50 border-red-200">
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
+                <span className="text-white text-xs font-bold">!</span>
               </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total Profit</p>
-                <p className="text-2xl font-bold text-gray-900">Rs {Number(customer.totalProfit).toFixed(2)}</p>
-              </div>
+              <p className="text-red-700 font-medium">{error}</p>
             </div>
           </CardContent>
         </Card>
+      )}
 
-        <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-          <CardContent className="p-6">
-            <div className="flex items-center">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <span className="text-blue-600 text-lg font-bold">🔥</span>
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Security Held</p>
-                <p className="text-2xl font-bold text-gray-900">Rs {Number(totalSecurityAmount).toFixed(2)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Customer Info & Summary Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-          <CardContent className="p-6">
-            <div className="flex items-center">
-              <div className="p-2 bg-orange-100 rounded-lg">
-                <span className="text-orange-600 text-lg font-bold">📦</span>
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Active Cylinders</p>
-                <p className="text-2xl font-bold text-gray-900">{activeCylinders.reduce((sum, h) => sum + h.quantity, 0)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-          <CardContent className="p-6">
-            <div className="flex items-center">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <span className="text-purple-600 text-lg font-bold">📋</span>
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total Transactions</p>
-                <p className="text-2xl font-bold text-gray-900">{customer.transactions.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Customer Details */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Contact Information */}
-        <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
+        {/* Customer Information (Left) */}
+        <Card className="lg:col-span-2 border-0 shadow-sm bg-white/80 backdrop-blur-sm">
           <CardHeader>
-            <CardTitle className="text-lg font-semibold text-gray-900">Contact Information</CardTitle>
+            <CardTitle className="text-lg font-semibold text-gray-900">Customer Information</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center">
-              <PhoneIcon className="w-5 h-5 text-gray-400 mr-3" />
-              <span className="text-gray-700">{customer.phone}</span>
-            </div>
-            {customer.email && (
-              <div className="flex items-center">
-                <EnvelopeIcon className="w-5 h-5 text-gray-400 mr-3" />
-                <span className="text-gray-700">{customer.email}</span>
-              </div>
-            )}
-            <div className="flex items-start">
-              <MapPinIcon className="w-5 h-5 text-gray-400 mr-3 mt-0.5" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <p className="text-gray-700">{formatAddress(customer)}</p>
-                <p className="text-gray-700">{customer.city}</p>
+                <p className="text-sm font-medium text-gray-500">Phone</p>
+                <p className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <PhoneIcon className="w-4 h-4 text-gray-400" /> {customer.phone}
+                </p>
               </div>
-            </div>
-            <div className="pt-2">
-              <Badge variant={customer.isActive ? 'success' : 'destructive'} className="font-semibold">
-                {customer.isActive ? 'Active' : 'Inactive'}
-              </Badge>
+              {customer.email && (
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Email</p>
+                  <p className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                    <EnvelopeIcon className="w-4 h-4 text-gray-400" /> {customer.email}
+                  </p>
+                </div>
+              )}
+              <div className="md:col-span-2">
+                <p className="text-sm font-medium text-gray-500">Address</p>
+                <div className="flex items-start gap-2">
+                  <MapPinIcon className="w-5 h-5 text-gray-400 mt-0.5" />
+                  <div>
+                    <p className="text-lg font-semibold text-gray-900">{formatAddress(customer)}</p>
+                    <p className="text-gray-600">{customer.city}</p>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Status</p>
+                <Badge variant={customer.isActive ? 'success' : 'destructive'} className="mt-1">
+                  {customer.isActive ? 'Active' : 'Inactive'}
+                </Badge>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Margin Category</p>
+                <p className="text-lg font-semibold text-gray-900">
+                  {customer.marginCategory ? `${customer.marginCategory.name} (Rs ${customer.marginCategory.marginPerKg}/kg)` : 'Standard'}
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Cylinder Holdings */}
+        {/* Account Summary (Right) */}
         <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
           <CardHeader>
-            <CardTitle className="text-lg font-semibold text-gray-900">Current Cylinder Holdings</CardTitle>
+            <CardTitle className="text-lg font-semibold text-gray-900">Account Summary</CardTitle>
           </CardHeader>
-          <CardContent>
-            {activeCylinders.length > 0 ? (
-              <div className="space-y-3">
-                {activeCylinders.map((holding) => (
-                  <div key={holding.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <Badge variant={getCylinderTypeColor(holding.cylinderType) as any} className="font-semibold">
-                        {getCylinderTypeDisplay(holding.cylinderType)} x{holding.quantity}
-                      </Badge>
-                      <p className="text-sm text-gray-600 mt-1" suppressHydrationWarning>
-                        Issued: {new Date(holding.issueDate).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-gray-900">Rs {Number(holding.securityAmount).toFixed(2)}</p>
-                      <p className="text-sm text-gray-600">Security</p>
-                    </div>
-                  </div>
-                ))}
+          <CardContent className="space-y-6">
+
+            {/* Net Balance (Always 0 for B2C usually, but aligned to B2B style) */}
+            <div className="text-center">
+              <p className="text-sm font-medium text-gray-500">Net Balance</p>
+              <div className="flex flex-col items-center justify-center">
+                <p className="text-3xl font-bold flex items-center justify-center text-gray-900">
+                  <CurrencyDollarIcon className="w-6 h-6 mr-2" />
+                  {formatCurrency(summary?.netBalance || 0)}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Cash & Carry (Always Settled)
+                </p>
               </div>
-            ) : (
-              <div className="text-center py-6">
-                <p className="text-gray-500">No active cylinder holdings</p>
+            </div>
+
+            {/* Financial Stats */}
+            {summary && (
+              <div className="space-y-3 pt-2 border-t border-gray-200">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-gray-600">Total In (+)</span>
+                  <span className="text-sm font-semibold text-green-600">
+                    {formatCurrency(summary.totalIn)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-gray-600">Total Out (-)</span>
+                  <span className="text-sm font-semibold text-red-600">
+                    {formatCurrency(summary.totalOut)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+                  <span className="text-sm font-medium text-green-600">Total Profit</span>
+                  <span className="text-sm font-semibold text-green-600">
+                    {formatCurrency(summary.totalProfit)}
+                  </span>
+                </div>
               </div>
             )}
+
+            {/* Security Holdings */}
+            <div>
+              <p className="text-sm font-medium text-gray-500 mb-2">Security Holdings</p>
+              {customer?.cylinderHoldings && customer.cylinderHoldings.filter(h => !h.isReturned).length > 0 ? (
+                <div className="space-y-2">
+                  {Object.entries(
+                    customer.cylinderHoldings
+                      .filter(h => !h.isReturned)
+                      .reduce((acc, h) => {
+                        const type = h.cylinderType;
+                        if (!acc[type]) {
+                          acc[type] = { quantity: 0, amount: 0 };
+                        }
+                        acc[type].quantity += h.quantity;
+                        acc[type].amount += (Number(h.securityAmount) * h.quantity);
+                        return acc;
+                      }, {} as Record<string, { quantity: number; amount: number }>)
+                  ).map(([type, data], index) => (
+                    <div key={index} className="flex justify-between items-center">
+                      <span className="text-sm text-blue-700 font-medium">
+                        {getCylinderTypeDisplay(type)} <span className="text-xs text-blue-500">x{data.quantity}</span>
+                      </span>
+                      <span className="text-sm font-bold text-blue-800">
+                        {formatCurrency(data.amount)}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between items-center pt-1 mt-1 border-t border-dashed border-gray-200">
+                    <span className="text-xs font-semibold text-gray-500">Total</span>
+                    <span className="text-xs font-bold text-gray-700">
+                      {formatCurrency(summary?.totalSecurityHeld || 0)}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm text-gray-500">No active security items</div>
+              )}
+            </div>
+
+            {/* New Transaction Button */}
+            <div className="space-y-3 pt-2">
+              <Button
+                onClick={() => setShowTransactionModal(true)}
+                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg"
+              >
+                <PlusIcon className="w-4 h-4 mr-2" />
+                New Transaction
+              </Button>
+              <p className="text-xs text-gray-500 text-center">
+                Sale & Security management
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Transaction History */}
+      {/* Transaction Ledger Table */}
       <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-lg font-semibold text-gray-900">Transaction History</CardTitle>
+              <CardTitle className="text-lg font-semibold text-gray-900">Transaction Ledger</CardTitle>
               <CardDescription className="text-gray-600 font-medium">
-                Complete transaction history for this customer
+                Complete transaction history
               </CardDescription>
             </div>
             <div className="flex items-center gap-3">
-              {/* Date Filter Button */}
+              {/* Date Filter */}
               <div className="relative date-filter-container">
                 <Button
                   variant="outline"
@@ -502,98 +538,24 @@ export default function B2CCustomerDetailPage() {
                     </span>
                   )}
                 </Button>
-
-                {/* Date Filter Dropdown */}
                 {showDateFilter && (
                   <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4 date-filter-container">
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                        <CalendarIcon className="w-4 h-4" />
-                        Filter by Date Range
+                        <CalendarIcon className="w-4 h-4" /> Filter by Date Range
                       </h3>
-                      <button
-                        onClick={() => setShowDateFilter(false)}
-                        className="text-gray-400 hover:text-gray-600"
-                      >
-                        <XMarkIcon className="w-5 h-5" />
-                      </button>
+                      <button onClick={() => setShowDateFilter(false)}><XMarkIcon className="w-5 h-5 text-gray-400 hover:text-gray-600" /></button>
                     </div>
-
                     <div className="space-y-3">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1.5">
-                          Start Date
-                        </label>
-                        <Input
-                          type="date"
-                          value={dateFilter.startDate}
-                          onChange={(e) => setDateFilter({ ...dateFilter, startDate: e.target.value })}
-                          className="w-full text-sm"
-                          max={dateFilter.endDate || new Date().toISOString().split('T')[0]}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1.5">
-                          End Date
-                        </label>
-                        <Input
-                          type="date"
-                          value={dateFilter.endDate}
-                          onChange={(e) => setDateFilter({ ...dateFilter, endDate: e.target.value })}
-                          className="w-full text-sm"
-                          min={dateFilter.startDate || undefined}
-                          max={new Date().toISOString().split('T')[0]}
-                        />
-                      </div>
-
-                      <div className="flex gap-2 pt-2 border-t border-gray-200">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setDateFilter({ startDate: '', endDate: '' });
-                          }}
-                          className="flex-1 text-xs"
-                        >
-                          Clear
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            setShowDateFilter(false);
-                          }}
-                          className="flex-1 text-xs"
-                        >
-                          Apply Filter
-                        </Button>
-                      </div>
-
-                      {(dateFilter.startDate || dateFilter.endDate) && (
-                        <div className="pt-2 border-t border-gray-200">
-                          <p className="text-xs text-gray-600">
-                            {(dateFilter.startDate && dateFilter.endDate) ? (
-                              <>
-                                Showing transactions from <strong>{new Date(dateFilter.startDate).toLocaleDateString()}</strong> to <strong>{new Date(dateFilter.endDate).toLocaleDateString()}</strong>
-                              </>
-                            ) : dateFilter.startDate ? (
-                              <>
-                                Showing transactions from <strong>{new Date(dateFilter.startDate).toLocaleDateString()}</strong> onwards
-                              </>
-                            ) : (
-                              <>
-                                Showing transactions up to <strong>{new Date(dateFilter.endDate).toLocaleDateString()}</strong>
-                              </>
-                            )}
-                          </p>
-                        </div>
-                      )}
+                      <div><label className="block text-xs font-medium text-gray-700 mb-1">Start Date</label><Input type="date" value={dateFilter.startDate} onChange={(e) => setDateFilter({ ...dateFilter, startDate: e.target.value })} className="text-sm" /></div>
+                      <div><label className="block text-xs font-medium text-gray-700 mb-1">End Date</label><Input type="date" value={dateFilter.endDate} onChange={(e) => setDateFilter({ ...dateFilter, endDate: e.target.value })} className="text-sm" /></div>
+                      <div className="flex gap-2 pt-2 border-t"><Button variant="outline" size="sm" onClick={() => setDateFilter({ startDate: '', endDate: '' })} className="flex-1 text-xs">Clear</Button><Button size="sm" onClick={() => setShowDateFilter(false)} className="flex-1 text-xs">Apply</Button></div>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Trans Report Button */}
+              {/* Report Button */}
               <div className="relative report-date-filter-container">
                 <Button
                   variant="outline"
@@ -604,102 +566,18 @@ export default function B2CCustomerDetailPage() {
                 >
                   <DocumentArrowDownIcon className="w-4 h-4" />
                   <span className="hidden sm:inline">Trans Report</span>
-                  {downloadingReport && (
-                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600 ml-1"></div>
-                  )}
+                  {downloadingReport && <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600 ml-1"></div>}
                 </Button>
-
-                {/* Report Date Filter Dropdown */}
                 {showReportDateFilter && (
                   <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4 report-date-filter-container">
                     <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                        <CalendarIcon className="w-4 h-4" />
-                        Select Date Range for Report
-                      </h3>
-                      <button
-                        onClick={() => setShowReportDateFilter(false)}
-                        className="text-gray-400 hover:text-gray-600"
-                      >
-                        <XMarkIcon className="w-5 h-5" />
-                      </button>
+                      <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2"><CalendarIcon className="w-4 h-4" /> Report Range</h3>
+                      <button onClick={() => setShowReportDateFilter(false)}><XMarkIcon className="w-5 h-5 text-gray-400 hover:text-gray-600" /></button>
                     </div>
-
                     <div className="space-y-3">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1.5">
-                          Start Date
-                        </label>
-                        <Input
-                          type="date"
-                          value={reportDateFilter.startDate}
-                          onChange={(e) => setReportDateFilter({ ...reportDateFilter, startDate: e.target.value })}
-                          className="w-full text-sm"
-                          max={reportDateFilter.endDate || new Date().toISOString().split('T')[0]}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1.5">
-                          End Date
-                        </label>
-                        <Input
-                          type="date"
-                          value={reportDateFilter.endDate}
-                          onChange={(e) => setReportDateFilter({ ...reportDateFilter, endDate: e.target.value })}
-                          className="w-full text-sm"
-                          min={reportDateFilter.startDate || undefined}
-                          max={new Date().toISOString().split('T')[0]}
-                        />
-                      </div>
-
-                      <div className="flex gap-2 pt-2 border-t border-gray-200">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setReportDateFilter({ startDate: '', endDate: '' });
-                          }}
-                          className="flex-1 text-xs"
-                        >
-                          Clear
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={handleDownloadReport}
-                          disabled={downloadingReport}
-                          className="flex-1 text-xs"
-                        >
-                          {downloadingReport ? (
-                            <div className="flex items-center justify-center">
-                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
-                              Generating...
-                            </div>
-                          ) : (
-                            'Download PDF'
-                          )}
-                        </Button>
-                      </div>
-
-                      {(reportDateFilter.startDate || reportDateFilter.endDate) && (
-                        <div className="pt-2 border-t border-gray-200">
-                          <p className="text-xs text-gray-600">
-                            {(reportDateFilter.startDate && reportDateFilter.endDate) ? (
-                              <>
-                                Report will include transactions from <strong>{new Date(reportDateFilter.startDate).toLocaleDateString()}</strong> to <strong>{new Date(reportDateFilter.endDate).toLocaleDateString()}</strong>
-                              </>
-                            ) : reportDateFilter.startDate ? (
-                              <>
-                                Report will include transactions from <strong>{new Date(reportDateFilter.startDate).toLocaleDateString()}</strong> onwards
-                              </>
-                            ) : (
-                              <>
-                                Report will include transactions up to <strong>{new Date(reportDateFilter.endDate).toLocaleDateString()}</strong>
-                              </>
-                            )}
-                          </p>
-                        </div>
-                      )}
+                      <div><label className="block text-xs font-medium text-gray-700 mb-1">Start Date</label><Input type="date" value={reportDateFilter.startDate} onChange={(e) => setReportDateFilter({ ...reportDateFilter, startDate: e.target.value })} className="text-sm" /></div>
+                      <div><label className="block text-xs font-medium text-gray-700 mb-1">End Date</label><Input type="date" value={reportDateFilter.endDate} onChange={(e) => setReportDateFilter({ ...reportDateFilter, endDate: e.target.value })} className="text-sm" /></div>
+                      <div className="flex gap-2 pt-2 border-t"><Button variant="outline" size="sm" onClick={() => setReportDateFilter({ startDate: '', endDate: '' })} className="flex-1 text-xs">Clear</Button><Button size="sm" onClick={handleDownloadReport} className="flex-1 text-xs">Download</Button></div>
                     </div>
                   </div>
                 )}
@@ -708,383 +586,289 @@ export default function B2CCustomerDetailPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {customer.transactions.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="font-semibold text-gray-700">Date</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Bill No.</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Items</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Amount</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Payment</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {customer.transactions.map((transaction) => (
-                  <TableRow
-                    key={transaction.id}
-                    className="hover:bg-gray-50 cursor-pointer"
-                    onClick={() => router.push(`/customers/b2c/${customerId}/transactions/${transaction.id}`)}
-                  >
-                    <TableCell>
-                      <div suppressHydrationWarning>
-                        <p className="font-semibold text-gray-900">
-                          {new Date(transaction.date).toLocaleDateString()}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          {new Date(transaction.time).toLocaleTimeString()}
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-semibold text-gray-900">{transaction.billSno}</TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        {transaction.gasItems.map((item, index) => (
-                          <Badge key={index} variant="info" className="text-xs mr-1">
-                            {getCylinderTypeDisplay(item.cylinderType)} x{item.quantity}
-                          </Badge>
-                        ))}
-                        {(() => {
-                          const deposits = transaction.securityItems.filter(item => !item.isReturn);
-                          const returns = transaction.securityItems.filter(item => item.isReturn);
-                          return (
-                            <>
-                              {deposits.length > 0 && (
-                                <Badge variant="warning" className="text-xs mr-1">
-                                  Security x{deposits.reduce((sum, item) => sum + item.quantity, 0)}
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Time</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Bill No</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Transaction Type</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Details</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Amount</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Profit</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {transactions.map((tx) => {
+                  // Infer detailed transaction type
+                  const hasGasSale = tx.gasItems.length > 0;
+                  const hasAccessorySale = tx.accessoryItems.length > 0;
+                  const hasDeposit = tx.securityItems.some(s => !s.isReturn);
+                  const hasReturn = tx.securityItems.some(s => s.isReturn);
+
+                  const parts = [];
+                  if (hasGasSale || hasAccessorySale) parts.push('Sale');
+                  if (hasDeposit) parts.push('Deposit');
+                  if (hasReturn) parts.push('Return');
+
+                  return (
+                    <tr key={tx.id} className={tx.voided ? 'opacity-50' : ''}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{formatDate(tx.date)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{formatTime(tx.time)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">{tx.billSno}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex gap-1 flex-wrap">
+                          {tx.voided ? (
+                            <Badge variant="destructive">VOIDED</Badge>
+                          ) : (
+                            parts.map((type, idx) => {
+                              let variant = 'default';
+                              if (type === 'Sale') variant = 'success';
+                              else if (type === 'Deposit') variant = 'info';
+                              else if (type === 'Return') variant = 'warning';
+
+                              return (
+                                <Badge key={idx} variant={variant as any}>
+                                  {type}
                                 </Badge>
-                              )}
-                              {returns.length > 0 && (
-                                <Badge variant="outline" className="text-xs mr-1 border-yellow-600 text-yellow-700 bg-yellow-50">
-                                  Security Return x{returns.reduce((sum, item) => sum + item.quantity, 0)}
-                                </Badge>
-                              )}
-                            </>
-                          );
-                        })()}
-                        {transaction.accessoryItems.map((item, index) => (
-                          <Badge key={index} variant="secondary" className="text-xs mr-1">
-                            {item.productName} x{item.quantity}
-                          </Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="font-semibold text-gray-900">Rs {Number(transaction.finalAmount).toFixed(2)}</p>
-                        {transaction.deliveryCharges > 0 && (
-                          <p className="text-sm text-gray-600">
-                            + Rs {Number(transaction.deliveryCharges).toFixed(2)} delivery
-                          </p>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <Badge variant="success" className="font-semibold">
-                          {transaction.paymentMethod}
-                        </Badge>
+                              );
+                            })
+                          )}
+                          {!tx.voided && parts.length === 0 && (
+                            <Badge variant="secondary">Transaction</Badge>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-700">
+                        <div className="max-w-xs space-y-0.5">
+                          {tx.gasItems.map((item, i) => (
+                            <div key={`gas-${i}`} className="text-xs">
+                              {getCylinderTypeDisplay(item.cylinderType)} Gas x{item.quantity}
+                            </div>
+                          ))}
+                          {tx.securityItems.map((item, i) => (
+                            <div key={`sec-${i}`} className={`text-xs ${item.isReturn ? 'text-orange-600' : ''}`}>
+                              {item.isReturn ? 'Return' : 'Security'}: {getCylinderTypeDisplay(item.cylinderType)} x{item.quantity}
+                            </div>
+                          ))}
+                          {tx.accessoryItems.map((item, i) => (
+                            <div key={`acc-${i}`} className="text-xs">
+                              {item.productName} x{item.quantity}
+                            </div>
+                          ))}
+                          {tx.deliveryCharges > 0 && (
+                            <div className="text-xs text-gray-500 italic">
+                              Delivery: {formatCurrency(tx.deliveryCharges)}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
+                        {formatCurrency(tx.finalAmount)}
+                        <div className="text-xs font-normal text-green-600 mt-1">{tx.paymentMethod}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
+                        {/* Show profit for this transaction if available */}
+                        {tx.actualProfit > 0 ? formatCurrency(tx.actualProfit) : '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            setSelectedTransaction(transaction);
+                          onClick={() => {
+                            setSelectedTransaction(tx);
                             setShowTransactionDetail(true);
-                            // Fetch full transaction details with items
-                            try {
-                              setLoadingTransaction(true);
-                              const response = await fetch(`/api/customers/b2c/transactions/${transaction.id}`);
-                              if (response.ok) {
-                                const data = await response.json();
-                                setSelectedTransaction(data);
-                              }
-                            } catch (err) {
-                              console.error('Error fetching transaction details:', err);
-                            } finally {
-                              setLoadingTransaction(false);
-                            }
                           }}
                         >
                           <EyeIcon className="w-4 h-4" />
                         </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <div className="text-center py-12">
-              <CalendarIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No transactions yet</h3>
-              <p className="text-gray-600 mb-4">This customer hasn't made any transactions yet</p>
-              <Button
-                onClick={() => router.push(`/customers/b2c/${customerId}/transaction`)}
-                className="font-semibold"
-              >
-                <PlusIcon className="w-4 h-4 mr-2" />
-                Create First Transaction
-              </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {pagination.pages > 1 && (
+            <div className="flex items-center justify-between mt-6">
+              <p className="text-sm text-gray-700">
+                Showing {((pagination.page - 1) * pagination.limit) + 1} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}
+              </p>
+              <div className="flex space-x-2">
+                <Button variant="outline" size="sm" disabled={pagination.page === 1} onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}>Previous</Button>
+                <Button variant="outline" size="sm" disabled={pagination.page === pagination.pages} onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}>Next</Button>
+              </div>
             </div>
           )}
         </CardContent>
       </Card>
 
+      {/* New Transaction Modal */}
+      {showTransactionModal && (
+        <B2CTransactionModal
+          customerId={customer.id}
+          customerName={customer.name}
+          customer={customer}
+          onClose={() => setShowTransactionModal(false)}
+          onSuccess={handleTransactionCreated}
+        />
+      )}
+
       {/* Transaction Detail Modal */}
       {showTransactionDetail && selectedTransaction && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
           <div className="relative top-10 mx-auto p-5 border w-11/12 max-w-5xl shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              {/* Header with buttons */}
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Transaction Details - {selectedTransaction.billSno}
-                </h3>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      try {
-                        const response = await fetch(`/api/customers/b2c/transactions/${selectedTransaction.id}/report`);
-                        if (response.ok) {
-                          const blob = await response.blob();
-                          const url = window.URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = `Transaction-${selectedTransaction.billSno}.pdf`;
-                          document.body.appendChild(a);
-                          a.click();
-                          window.URL.revokeObjectURL(url);
-                          document.body.removeChild(a);
-                        } else {
-                          alert('Failed to download transaction report');
-                        }
-                      } catch (err) {
-                        console.error('Error downloading report:', err);
-                        alert('Failed to download transaction report');
-                      }
-                    }}
-                    className="flex items-center gap-2"
-                  >
-                    <DocumentArrowDownIcon className="w-4 h-4" />
-                    Download Transaction
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      const confirmed = window.confirm(
-                        `Are you sure you want to undo this transaction?\n\n` +
-                        `This will:\n` +
-                        `- Reverse all balance changes\n` +
-                        `- Return inventory items\n` +
-                        `- Update cylinder holdings\n\n` +
-                        `Transaction: ${selectedTransaction.billSno}\n` +
-                        `Amount: ${formatCurrency(selectedTransaction.totalAmount)}\n\n` +
-                        `This action cannot be undone.`
-                      );
-
-                      if (!confirmed) return;
-
-                      const reason = prompt('Please provide a reason for undoing this transaction (optional):') || undefined;
-
-                      try {
-                        setUndoingTransaction(true);
-                        const response = await fetch(`/api/customers/b2c/transactions/${selectedTransaction.id}/undo`, {
-                          method: 'POST',
-                          headers: {
-                            'Content-Type': 'application/json',
-                          },
-                          body: JSON.stringify({ reason })
-                        });
-
-                        if (response.ok) {
-                          alert('Transaction successfully undone. All changes have been reversed.');
-                          setShowTransactionDetail(false);
-                          setSelectedTransaction(null);
-                          // Refresh customer details
-                          await fetchCustomerDetails();
-                        } else {
-                          const errorData = await response.json();
-                          alert(`Failed to undo transaction: ${errorData.error || 'Unknown error'}`);
-                        }
-                      } catch (err) {
-                        console.error('Error undoing transaction:', err);
-                        alert('Failed to undo transaction. Please try again.');
-                      } finally {
-                        setUndoingTransaction(false);
-                      }
-                    }}
-                    disabled={selectedTransaction.voided || undoingTransaction}
-                    className={`flex items-center gap-2 ${selectedTransaction.voided ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-50 hover:border-red-300 hover:text-red-600'
-                      }`}
-                  >
-                    <ArrowPathIcon className="w-4 h-4" />
-                    {undoingTransaction ? 'Undoing...' : 'Undo Transaction'}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setShowTransactionDetail(false);
-                      setSelectedTransaction(null);
-                    }}
-                  >
-                    <XMarkIcon className="w-5 h-5" />
-                  </Button>
-                </div>
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Transaction Details - {selectedTransaction.billSno}</h3>
+                {selectedTransaction.voided && <span className="text-red-600 font-bold bg-red-50 text-xs px-2 py-1 rounded">VOIDED</span>}
               </div>
 
-              {loadingTransaction ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="mt-2 text-gray-600">Loading transaction details...</p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {/* Transaction Info */}
-                  <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-                    <CardHeader>
-                      <CardTitle className="text-lg font-semibold text-gray-900">Transaction Information</CardTitle>
-                    </CardHeader>
-                    <CardContent className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm text-gray-600">Bill Number</p>
-                        <p className="font-semibold text-gray-900">{selectedTransaction.billSno}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Date</p>
-                        <p className="font-semibold text-gray-900" suppressHydrationWarning>
-                          {formatDate(selectedTransaction.date)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Time</p>
-                        <p className="font-semibold text-gray-900" suppressHydrationWarning>
-                          {formatTime(selectedTransaction.time)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Payment Method</p>
-                        <Badge variant="success" className="font-semibold">
-                          {selectedTransaction.paymentMethod}
-                        </Badge>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Total Amount</p>
-                        <p className="font-semibold text-gray-900">{formatCurrency(selectedTransaction.totalAmount)}</p>
-                      </div>
-                      {selectedTransaction.deliveryCharges > 0 && (
-                        <div>
-                          <p className="text-sm text-gray-600">Delivery Charges</p>
-                          <p className="font-semibold text-gray-900">{formatCurrency(selectedTransaction.deliveryCharges)}</p>
-                        </div>
-                      )}
-                      <div>
-                        <p className="text-sm text-gray-600">Final Amount</p>
-                        <p className="font-semibold text-gray-900">{formatCurrency(selectedTransaction.finalAmount)}</p>
-                      </div>
-                      {selectedTransaction.notes && (
-                        <div className="col-span-2">
-                          <p className="text-sm text-gray-600">Notes</p>
-                          <p className="font-semibold text-gray-900">{selectedTransaction.notes}</p>
-                        </div>
-                      )}
-                      {selectedTransaction.voided && selectedTransaction.voidReason && (
-                        <div className="col-span-2">
-                          <p className="text-sm text-red-600">Void Reason</p>
-                          <p className="font-semibold text-red-600">{selectedTransaction.voidReason}</p>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      const response = await fetch(`/api/customers/b2c/transactions/${selectedTransaction.id}/report`);
+                      if (response.ok) {
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `Transaction-${selectedTransaction.billSno}.pdf`;
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        document.body.removeChild(a);
+                      } else {
+                        alert('Failed to download receipt');
+                      }
+                    } catch (err) { console.error(err); alert('Error downloading'); }
+                  }}
+                >
+                  <DocumentArrowDownIcon className="w-4 h-4 mr-1" /> Receipt
+                </Button>
 
-                  {/* Items Table - Combined Gas, Security, and Accessories */}
-                  <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-                    <CardHeader>
-                      <CardTitle className="text-lg font-semibold text-gray-900">Transaction Items</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {((selectedTransaction.gasItems && selectedTransaction.gasItems.length > 0) ||
-                        (selectedTransaction.securityItems && selectedTransaction.securityItems.length > 0) ||
-                        (selectedTransaction.accessoryItems && selectedTransaction.accessoryItems.length > 0)) ? (
-                        <div className="overflow-x-auto">
-                          <table className="w-full border-collapse">
-                            <thead>
-                              <tr className="bg-gray-50">
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-b">Item</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-b">Quantity</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-b">Price Per Item</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-b">Total Price</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {/* Gas Items */}
-                              {selectedTransaction.gasItems && selectedTransaction.gasItems.map((item: any, index: number) => (
-                                <tr key={`gas-${index}`} className="border-b hover:bg-gray-50">
-                                  <td className="px-4 py-3 text-sm text-gray-900">
-                                    {getCylinderTypeDisplay(item.cylinderType)}
-                                  </td>
-                                  <td className="px-4 py-3 text-sm text-gray-700">{Number(item.quantity)}</td>
-                                  <td className="px-4 py-3 text-sm text-gray-700">{formatCurrency(Number(item.pricePerItem))}</td>
-                                  <td className="px-4 py-3 text-sm font-semibold text-gray-900">{formatCurrency(Number(item.totalPrice))}</td>
-                                </tr>
-                              ))}
-                              {/* Security Items */}
-                              {selectedTransaction.securityItems && selectedTransaction.securityItems.map((item: any, index: number) => (
-                                <tr key={`security-${index}`} className="border-b hover:bg-gray-50">
-                                  <td className="px-4 py-3 text-sm text-gray-900">
-                                    Security - {getCylinderTypeDisplay(item.cylinderType)} {item.isReturn ? '(Return)' : ''}
-                                  </td>
-                                  <td className="px-4 py-3 text-sm text-gray-700">{Number(item.quantity)}</td>
-                                  <td className="px-4 py-3 text-sm text-gray-700">{formatCurrency(Number(item.pricePerItem))}</td>
-                                  <td className="px-4 py-3 text-sm font-semibold text-gray-900">{formatCurrency(Number(item.totalPrice))}</td>
-                                </tr>
-                              ))}
-                              {/* Accessory Items */}
-                              {selectedTransaction.accessoryItems && selectedTransaction.accessoryItems.map((item: any, index: number) => (
-                                <tr key={`accessory-${index}`} className="border-b hover:bg-gray-50">
-                                  <td className="px-4 py-3 text-sm text-gray-900">
-                                    {item.productName}
-                                  </td>
-                                  <td className="px-4 py-3 text-sm text-gray-700">{Number(item.quantity)}</td>
-                                  <td className="px-4 py-3 text-sm text-gray-700">{formatCurrency(Number(item.pricePerItem))}</td>
-                                  <td className="px-4 py-3 text-sm font-semibold text-gray-900">{formatCurrency(Number(item.totalPrice))}</td>
-                                </tr>
-                              ))}
-                              <tr className="bg-gray-50 font-semibold">
-                                <td colSpan={3} className="px-4 py-3 text-right text-sm text-gray-900">Total:</td>
-                                <td className="px-4 py-3 text-sm text-gray-900">{formatCurrency(selectedTransaction.totalAmount)}</td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
-                      ) : (
-                        <p className="text-gray-500 text-center py-4">No items in this transaction</p>
-                      )}
-                    </CardContent>
-                  </Card>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={selectedTransaction.voided || undoingTransaction}
+                  className="hover:bg-red-50 hover:text-red-600 hover:border-red-200"
+                  onClick={async () => {
+                    if (!confirm('Are you sure you want to VOID this transaction? This will reverse all stock and accounting entries.')) return;
+                    const reason = prompt('Reason for voiding (optional):');
+                    try {
+                      setUndoingTransaction(true);
+                      const res = await fetch(`/api/customers/b2c/transactions/${selectedTransaction.id}/undo`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ reason })
+                      });
+                      if (res.ok) {
+                        alert('Transaction voided successfully');
+                        setShowTransactionDetail(false);
+                        fetchCustomerLedger();
+                      } else {
+                        const err = await res.json();
+                        alert('Failed: ' + err.error);
+                      }
+                    } catch (e) { alert('Error voiding transaction'); }
+                    finally { setUndoingTransaction(false); }
+                  }}
+                >
+                  <ArrowPathIcon className="w-4 h-4 mr-1" /> {undoingTransaction ? 'Voiding...' : 'Inverse/Void'}
+                </Button>
+
+                <Button variant="ghost" size="sm" onClick={() => setShowTransactionDetail(false)}>
+                  <XMarkIcon className="w-5 h-5" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              {/* Info Grid */}
+              <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
+                <div>
+                  <p className="text-sm text-gray-500">Date & Time</p>
+                  <p className="font-semibold">{formatDate(selectedTransaction.date)} | {formatTime(selectedTransaction.time)}</p>
                 </div>
-              )}
+                <div>
+                  <p className="text-sm text-gray-500">Payment Method</p>
+                  <p className="font-semibold">{selectedTransaction.paymentMethod}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Total Amount</p>
+                  <p className="font-semibold text-lg">{formatCurrency(selectedTransaction.finalAmount)}</p>
+                </div>
+                {selectedTransaction.notes && (
+                  <div className="col-span-2">
+                    <p className="text-sm text-gray-500">Notes</p>
+                    <p className="font-medium italic text-gray-700">{selectedTransaction.notes}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Items Sections */}
+              <div className="space-y-4">
+                {selectedTransaction.gasItems.length > 0 && (
+                  <div className="border rounded-md p-3">
+                    <h4 className="text-sm font-bold text-gray-700 mb-2 bg-blue-50 p-1">Gas Cylinders (Sold)</h4>
+                    {selectedTransaction.gasItems.map((item, i) => (
+                      <div key={i} className="flex justify-between text-sm py-1 border-b last:border-0 border-gray-100">
+                        <span>{getCylinderTypeDisplay(item.cylinderType)} x {item.quantity}</span>
+                        <span className="font-medium">{formatCurrency(item.totalPrice)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {selectedTransaction.securityItems.length > 0 && (
+                  <div className="border rounded-md p-3">
+                    <h4 className="text-sm font-bold text-gray-700 mb-2 bg-yellow-50 p-1">Security Deposits / Returns</h4>
+                    {selectedTransaction.securityItems.map((item, i) => (
+                      <div key={i} className="flex justify-between text-sm py-1 border-b last:border-0 border-gray-100">
+                        <span>
+                          {item.isReturn ? 'Return' : 'Deposit'}: {getCylinderTypeDisplay(item.cylinderType)} x {item.quantity}
+                        </span>
+                        <span className="font-medium">{formatCurrency(item.totalPrice)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {selectedTransaction.accessoryItems.length > 0 && (
+                  <div className="border rounded-md p-3">
+                    <h4 className="text-sm font-bold text-gray-700 mb-2 bg-gray-100 p-1">Accessories</h4>
+                    {selectedTransaction.accessoryItems.map((item, i) => (
+                      <div key={i} className="flex justify-between text-sm py-1 border-b last:border-0 border-gray-100">
+                        <span>{item.productName} x {item.quantity}</span>
+                        <span className="font-medium">{formatCurrency(item.totalPrice)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {selectedTransaction.deliveryCharges > 0 && (
+                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded font-semibold">
+                    <span>Delivery Charges</span>
+                    <span>{formatCurrency(selectedTransaction.deliveryCharges)}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center p-3 bg-green-50 text-green-800 rounded text-lg font-bold">
+                  <span>Grand Total</span>
+                  <span>{formatCurrency(selectedTransaction.finalAmount)}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      )}
-
-      {/* Transaction Modal */}
-      {showTransactionModal && customer && (
-        <B2CTransactionModal
-          customerId={customerId}
-          customerName={customer.name}
-          customer={customer}
-          onClose={() => setShowTransactionModal(false)}
-          onSuccess={() => {
-            fetchCustomerDetails();
-            setShowTransactionModal(false);
-          }}
-        />
       )}
     </div>
   );

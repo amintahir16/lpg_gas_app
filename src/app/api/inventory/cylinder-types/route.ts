@@ -22,7 +22,23 @@ export async function GET(request: NextRequest) {
             }
         });
 
-        // Transform to friendly format
+        // Fetch counts for FULL cylinders specifically
+        const fullCounts = await prisma.cylinder.groupBy({
+            by: ['cylinderType'],
+            where: {
+                currentStatus: 'FULL'
+            },
+            _count: {
+                id: true
+            }
+        });
+
+        // Create a map for quick lookup of full counts
+        const fullCountMap = new Map<string, number>();
+        fullCounts.forEach(fc => {
+            fullCountMap.set(fc.cylinderType, fc._count.id);
+        });
+
         // Transform to friendly format
         const types = cylinderTypes.map(type => {
             const displayType = type.typeName
@@ -38,19 +54,19 @@ export async function GET(request: NextRequest) {
                 'COMMERCIAL_45_4KG': 9000,
             };
 
-            // Determine security price - prioritize known types, fallback to calculation based on capacity
+            // Determine security price
             let securityPrice = securityPrices[type.cylinderType] || 0;
             if (securityPrice === 0 && type.capacity) {
-                // Generic calculation: ~300 per kg if unknown
                 securityPrice = Math.round(parseFloat(type.capacity.toString()) * 300);
             }
 
             return {
-                cylinderType: type.cylinderType, // This is the ID/Value used in logic
+                cylinderType: type.cylinderType,
                 typeName: type.typeName,
                 capacity: parseFloat(type.capacity.toString()),
                 label: displayType,
-                count: type._count.id,
+                count: type._count.id, // Total count (all statuses)
+                fullCount: fullCountMap.get(type.cylinderType) || 0, // Count of FULL cylinders only
                 securityPrice: securityPrice
             };
         });

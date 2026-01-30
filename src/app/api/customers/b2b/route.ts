@@ -182,6 +182,99 @@ export async function GET(request: NextRequest) {
       return { map, types };
     };
 
+    // Calculate Total Profit for ALL filtered customers
+    // This is an expensive operation so we try to be efficient by fetching only necessary fields
+    // We need all SALE transactions for the filtered customers
+
+    // First, get all customer IDs efficiently
+    const allCustomerIds = filteredCustomers.map(c => c.id);
+
+    // Fetch all SALE transactions for these customers with their items
+    // Minimal selection for performance
+    const profitTransactions = await prisma.b2BTransaction.findMany({
+      where: {
+        customerId: { in: allCustomerIds },
+        transactionType: 'SALE'
+      },
+      select: {
+        customerId: true,
+        items: {
+          select: {
+            quantity: true,
+            cylinderType: true,
+            pricePerItem: true, // Selling Price
+            costPrice: true,
+            // We need to know if it's an accessory or gas item. 
+            // CylinderType exists = Gas, else Accessory
+          }
+        }
+      }
+    });
+
+    // Create a map of customer margin categories for quick lookup
+    // filteredCustomers already has marginCategoryId. We need the actual margin values.
+    // Let's fetch all margin categories once and map them.
+    const uniqueMarginCategoryIds = Array.from(new Set(filteredCustomers.map(c => c.marginCategoryId).filter(Boolean)));
+    const marginCategories = await prisma.marginCategory.findMany({
+      where: { id: { in: uniqueMarginCategoryIds as string[] } },
+      select: { id: true, marginPerKg: true }
+    });
+
+    const marginMap = new Map();
+    marginCategories.forEach(mc => {
+      marginMap.set(mc.id, Number(mc.marginPerKg));
+    });
+
+    // Map filtered customers to their margin category ID for O(1) lookup during transaction iteration
+    const customerMarginMap = new Map();
+    filteredCustomers.forEach(c => {
+      customerMarginMap.set(c.id, c.marginCategoryId);
+    });
+
+    let totalProfit = 0;
+
+    profitTransactions.forEach(tx => {
+      const marginCategoryId = customerMarginMap.get(tx.customerId);
+      const marginPerKg = marginCategoryId ? (marginMap.get(marginCategoryId) || 0) : 0;
+
+      tx.items.forEach(item => {
+        const itemQty = Number(item.quantity);
+
+        if (item.cylinderType) {
+          // Gas Item: Profit = Quantity * Capacity * MarginPerKg
+          let capacity = 15; // default
+          // Parse capacity
+          const match = item.cylinderType.match(/(\d+)(?:_(\d+))?/);
+          if (match) {
+            const whole = match[1];
+            const decimal = match[2];
+            capacity = decimal ? parseFloat(`${whole}.${decimal}`) : parseFloat(whole);
+          } else if (item.cylinderType.includes('kg')) {
+            // Handle custom string like "Commercial (45.4kg)"
+            const customMatch = item.cylinderType.match(/(\d+(?:\.\d+)?)kg/);
+            if (customMatch) {
+              capacity = parseFloat(customMatch[1]);
+            }
+          }
+
+          totalProfit += (itemQty * capacity * marginPerKg);
+
+        } else {
+          // Accessory Item: Profit = (Selling - Cost) * Qty
+          const sellingPrice = Number(item.pricePerItem);
+          const costPrice = Number(item.costPrice || 0);
+
+          if (costPrice > 0) {
+            totalProfit += (sellingPrice - costPrice) * itemQty;
+          } else {
+            // Fallback: 20% margin
+            totalProfit += (sellingPrice * 0.20) * itemQty;
+          }
+        }
+      });
+    });
+
+
     // 5. Apply Manual Sorting
     if (sortBy === 'RECEIVABLES') {
       filteredCustomers.sort((a, b) => {
@@ -358,7 +451,8 @@ export async function GET(request: NextRequest) {
         totalCustomers,
         totalReceivables,
         totalCylinders: totalCylindersCount,
-        cylinderBreakdown: totalCylindersSummary
+        cylinderBreakdown: totalCylindersSummary,
+        totalProfit // Add profit to summary response
       }
     });
 
