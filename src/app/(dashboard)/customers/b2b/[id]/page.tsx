@@ -1373,37 +1373,37 @@ export default function B2BCustomerDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Customer Information */}
         <Card className="lg:col-span-2 border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-          <CardHeader>
+          <CardHeader className="py-3 px-4 pb-0">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-lg font-semibold text-gray-900">Customer Information</CardTitle>
+              <CardTitle className="text-base font-semibold text-gray-900">Customer Information</CardTitle>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleModalOpen}
-                className="text-xs font-medium"
+                className="text-xs font-medium h-7 px-2"
               >
                 Edit Margin Category
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <CardContent className="space-y-3 p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
               <div>
-                <p className="text-sm font-medium text-gray-500">Contact Person</p>
-                <p className="text-lg font-semibold text-gray-900">{customer.contactPerson}</p>
+                <p className="text-xs font-medium text-gray-500">Contact Person</p>
+                <p className="text-base font-semibold text-gray-900">{customer.contactPerson}</p>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-500">Phone</p>
-                <p className="text-lg font-semibold text-gray-900">{customer.phone}</p>
+                <p className="text-xs font-medium text-gray-500">Phone</p>
+                <p className="text-base font-semibold text-gray-900">{customer.phone}</p>
               </div>
 
               <div>
-                <p className="text-sm font-medium text-gray-500">Payment Terms</p>
-                <p className="text-lg font-semibold text-gray-900">{customer.paymentTermsDays} days</p>
+                <p className="text-xs font-medium text-gray-500">Payment Terms</p>
+                <p className="text-base font-semibold text-gray-900">{customer.paymentTermsDays} days</p>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-500">Margin Category</p>
-                <p className="text-lg font-semibold text-gray-900">
+                <p className="text-xs font-medium text-gray-500">Margin Category</p>
+                <p className="text-base font-semibold text-gray-900">
                   {customer.marginCategory ?
                     `${customer.marginCategory.name} (Rs ${customer.marginCategory.marginPerKg}/kg)` :
                     'Not assigned'
@@ -1411,13 +1411,13 @@ export default function B2BCustomerDetailPage() {
                 </p>
               </div>
               <div className="md:col-span-2">
-                <p className="text-sm font-medium text-gray-500">Address</p>
-                <p className="text-lg font-semibold text-gray-900">{customer.address || '-'}</p>
+                <p className="text-xs font-medium text-gray-500">Address</p>
+                <p className="text-base font-semibold text-gray-900">{customer.address || '-'}</p>
               </div>
               {customer.notes && (
                 <div className="md:col-span-2">
-                  <p className="text-sm font-medium text-gray-500">Notes</p>
-                  <p className="text-lg font-semibold text-gray-900">{customer.notes}</p>
+                  <p className="text-xs font-medium text-gray-500">Notes</p>
+                  <p className="text-base font-semibold text-gray-900">{customer.notes}</p>
                 </div>
               )}
             </div>
@@ -1425,14 +1425,14 @@ export default function B2BCustomerDetailPage() {
         </Card>
 
         {/* Account Summary & Quick Actions */}
-        <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold text-gray-900">Account Summary</CardTitle>
+        <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm h-full">
+          <CardHeader className="py-3 px-4 pb-0">
+            <CardTitle className="text-base font-semibold text-gray-900">Account Summary</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-4 p-4">
             {/* Net Balance */}
-            <div className="text-center">
-              <p className="text-sm font-medium text-gray-500">Net Balance</p>
+            <div className="text-center py-1">
+              <p className="text-xs font-medium text-gray-500">Net Balance</p>
               {customer && (
                 <>
                   {(() => {
@@ -1440,13 +1440,13 @@ export default function B2BCustomerDetailPage() {
                     const netBalance = summary ? summary.netBalance : -(customer.ledgerBalance || 0);
                     return (
                       <>
-                        <p className={`text-3xl font-bold flex items-center justify-center ${netBalance < 0 ? 'text-red-600' :
+                        <p className={`text-2xl font-bold flex items-center justify-center ${netBalance < 0 ? 'text-red-600' :
                           netBalance > 0 ? 'text-green-600' : 'text-gray-900'
                           }`}>
-                          <CurrencyDollarIcon className="w-6 h-6 mr-2" />
+                          <CurrencyDollarIcon className="w-5 h-5 mr-1.5" />
                           {formatCurrency(netBalance)}
                         </p>
-                        <p className="text-xs text-gray-500 mt-1">
+                        <p className="text-[10px] text-gray-500 mt-0.5">
                           {netBalance < 0 ? 'Customer owes you' :
                             netBalance > 0 ? 'Customer has credit' :
                               'Balance settled'}
@@ -1461,22 +1461,22 @@ export default function B2BCustomerDetailPage() {
 
             {/* Total In & Total Out */}
             {summary && summary.totalIn !== undefined && summary.totalOut !== undefined && (
-              <div className="space-y-3 pt-2 border-t border-gray-200">
+              <div className="space-y-2 pt-3 border-t border-gray-100">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-gray-600">Total In (+)</span>
+                  <span className="text-xs font-medium text-gray-600">Total In (+)</span>
                   <span className="text-sm font-semibold text-green-600">
                     {formatCurrency(summary.totalIn)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-gray-600">Total Out (-)</span>
+                  <span className="text-xs font-medium text-gray-600">Total Out (-)</span>
                   <span className="text-sm font-semibold text-red-600">
                     {formatCurrency(summary.totalOut)}
                   </span>
                 </div>
                 {summary.totalProfit !== undefined && (
                   <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-                    <span className="text-sm font-medium text-green-600">Total profit</span>
+                    <span className="text-xs font-medium text-green-600">Total profit</span>
                     <span className="text-sm font-semibold text-green-600">
                       {formatCurrency(summary.totalProfit)}
                     </span>
@@ -1486,41 +1486,42 @@ export default function B2BCustomerDetailPage() {
             )}
 
             {/* Cylinders Due */}
-            <div>
-              <p className="text-sm font-medium text-gray-500 mb-2">Remaining Cylinders Due</p>
+            <div className="pt-2 border-t border-gray-100">
+              <p className="text-xs font-medium text-gray-500 mb-2">Remaining Cylinders Due</p>
               {loadingCylinderDues ? (
-                <div className="text-sm text-gray-500">Loading...</div>
+                <div className="text-xs text-gray-500">Loading...</div>
               ) : cylinderDues.length > 0 ? (
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {cylinderDues.map((due) => (
                     <div key={due.cylinderType} className="flex justify-between">
-                      <span className="text-sm">{due.displayName}</span>
-                      <Badge variant={due.count > 0 ? 'destructive' : 'secondary'}>
+                      <span className="text-xs text-gray-700">{due.displayName}</span>
+                      <Badge variant={due.count > 0 ? 'destructive' : 'secondary'} className="h-5 text-[10px] px-1.5">
                         {due.count}
                       </Badge>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-sm text-gray-500">No cylinders due</div>
+                <div className="text-xs text-gray-500">No cylinders due</div>
               )}
             </div>
 
             {/* Quick Actions - Unified Transaction */}
-            <div className="space-y-3">
+            <div className="space-y-2 pt-1">
               <Button
                 type="button"
+                size="sm"
                 onClick={() => {
                   setTransactionType('UNIFIED');
                   resetUnifiedForm();
                   setShowTransactionForm(true);
                 }}
-                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg"
+                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-md h-9"
               >
                 <PlusIcon className="w-4 h-4 mr-2" />
                 New Transaction
               </Button>
-              <p className="text-xs text-gray-500 text-center">
+              <p className="text-[10px] text-gray-500 text-center">
                 Sale, Payment, Buyback & Returns in one transaction
               </p>
             </div>

@@ -1012,16 +1012,16 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                         variant="outline"
                                         onClick={onClose}
                                         disabled={submitting}
-                                        className="flex-1"
+                                        className="flex-1 h-9"
                                     >
                                         Cancel
                                     </Button>
                                     <Button
                                         type="submit"
                                         disabled={submitting || (!gasItems.length && !securityItems.length && !accessoryItems.length) || hasAnyErrors()}
-                                        className="flex-1 bg-blue-600 hover:bg-blue-700"
+                                        className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-md h-9"
                                     >
-                                        {submitting ? 'Saving...' : 'Save'}
+                                        {submitting ? 'Creating...' : 'Create Transaction'}
                                     </Button>
                                 </div>
                             </div>

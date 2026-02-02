@@ -67,6 +67,8 @@ export async function GET(
             orderBy: { createdAt: 'asc' },
         });
 
+        console.log(`[B2C API] Fetching ledger for ${customerId}. Found ${allTransactions.length} transactions.`);
+
         // Calculate Summary Stats from ALL transactions (Lifetime)
         let totalIn = 0;
         let totalOut = 0;
@@ -120,11 +122,12 @@ export async function GET(
             customer,
             transactions: paginatedTransactions,
             summary: {
-                netBalance: 0, // B2C is always 0 (Cash & Carry)
+                netBalance: 0,
+                totalTransactions: allTransactions.length,
                 totalIn,
                 totalOut,
                 totalProfit,
-                totalSecurityHeld, // Replacement for "ledgerBalance" or "cylindersDue" in context of value
+                totalSecurityHeld,
                 cylinderHoldingsCount: customer.cylinderHoldings.reduce((acc, curr) => acc + curr.quantity, 0)
             },
             pagination: {

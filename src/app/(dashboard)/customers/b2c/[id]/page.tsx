@@ -96,6 +96,7 @@ interface CustomerLedgerResponse {
   transactions: B2CTransaction[];
   summary: {
     netBalance: number;
+    totalTransactions: number;
     totalIn: number;
     totalOut: number;
     totalProfit: number;
@@ -365,44 +366,44 @@ export default function B2CCustomerDetailPage() {
 
         {/* Customer Information (Left) */}
         <Card className="lg:col-span-2 border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold text-gray-900">Customer Information</CardTitle>
+          <CardHeader className="py-3 px-4 pb-0">
+            <CardTitle className="text-base font-semibold text-gray-900">Customer Information</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <CardContent className="space-y-3 p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
               <div>
-                <p className="text-sm font-medium text-gray-500">Phone</p>
-                <p className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <p className="text-xs font-medium text-gray-500">Phone</p>
+                <p className="text-base font-semibold text-gray-900 flex items-center gap-2">
                   <PhoneIcon className="w-4 h-4 text-gray-400" /> {customer.phone}
                 </p>
               </div>
               {customer.email && (
                 <div>
-                  <p className="text-sm font-medium text-gray-500">Email</p>
-                  <p className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <p className="text-xs font-medium text-gray-500">Email</p>
+                  <p className="text-base font-semibold text-gray-900 flex items-center gap-2">
                     <EnvelopeIcon className="w-4 h-4 text-gray-400" /> {customer.email}
                   </p>
                 </div>
               )}
               <div className="md:col-span-2">
-                <p className="text-sm font-medium text-gray-500">Address</p>
+                <p className="text-xs font-medium text-gray-500">Address</p>
                 <div className="flex items-start gap-2">
-                  <MapPinIcon className="w-5 h-5 text-gray-400 mt-0.5" />
+                  <MapPinIcon className="w-4 h-4 text-gray-400 mt-0.5" />
                   <div>
-                    <p className="text-lg font-semibold text-gray-900">{formatAddress(customer)}</p>
-                    <p className="text-gray-600">{customer.city}</p>
+                    <p className="text-base font-semibold text-gray-900">{formatAddress(customer)}</p>
+                    <p className="text-sm text-gray-600">{customer.city}</p>
                   </div>
                 </div>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-500">Status</p>
-                <Badge variant={customer.isActive ? 'success' : 'destructive'} className="mt-1">
+                <p className="text-xs font-medium text-gray-500">Status</p>
+                <Badge variant={customer.isActive ? 'success' : 'destructive'} className="mt-1 h-5 text-xs">
                   {customer.isActive ? 'Active' : 'Inactive'}
                 </Badge>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-500">Margin Category</p>
-                <p className="text-lg font-semibold text-gray-900">
+                <p className="text-xs font-medium text-gray-500">Margin Category</p>
+                <p className="text-base font-semibold text-gray-900">
                   {customer.marginCategory ? `${customer.marginCategory.name} (Rs ${customer.marginCategory.marginPerKg}/kg)` : 'Standard'}
                 </p>
               </div>
@@ -411,44 +412,37 @@ export default function B2CCustomerDetailPage() {
         </Card>
 
         {/* Account Summary (Right) */}
-        <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold text-gray-900">Account Summary</CardTitle>
+        <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm h-full">
+          <CardHeader className="py-3 px-4 pb-0">
+            <CardTitle className="text-base font-semibold text-gray-900">Account Summary</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-4 p-4">
 
-            {/* Net Balance (Always 0 for B2C usually, but aligned to B2B style) */}
-            <div className="text-center">
-              <p className="text-sm font-medium text-gray-500">Net Balance</p>
+            {/* Total Transactions (Replaces Net Balance) */}
+            <div className="text-center py-1">
+              <p className="text-xs font-medium text-gray-500">Total Transactions</p>
               <div className="flex flex-col items-center justify-center">
-                <p className="text-3xl font-bold flex items-center justify-center text-gray-900">
-                  <CurrencyDollarIcon className="w-6 h-6 mr-2" />
-                  {formatCurrency(summary?.netBalance || 0)}
+                <p className="text-3xl font-bold flex items-center justify-center text-indigo-600">
+                  {summary?.totalTransactions || 0}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Cash & Carry (Always Settled)
+                <p className="text-[10px] text-gray-500">
+                  Lifetime Activity
                 </p>
               </div>
             </div>
 
             {/* Financial Stats */}
             {summary && (
-              <div className="space-y-3 pt-2 border-t border-gray-200">
+              <div className="space-y-2 pt-3 border-t border-gray-100">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-gray-600">Total In (+)</span>
-                  <span className="text-sm font-semibold text-green-600">
-                    {formatCurrency(summary.totalIn)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-gray-600">Total Out (-)</span>
-                  <span className="text-sm font-semibold text-red-600">
+                  <span className="text-xs font-medium text-gray-600">Total Sales</span>
+                  <span className="text-sm font-bold text-gray-800">
                     {formatCurrency(summary.totalOut)}
                   </span>
                 </div>
-                <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-                  <span className="text-sm font-medium text-green-600">Total Profit</span>
-                  <span className="text-sm font-semibold text-green-600">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-medium text-green-600">Total Profit</span>
+                  <span className="text-sm font-bold text-green-600">
                     {formatCurrency(summary.totalProfit)}
                   </span>
                 </div>
@@ -456,10 +450,10 @@ export default function B2CCustomerDetailPage() {
             )}
 
             {/* Security Holdings */}
-            <div>
-              <p className="text-sm font-medium text-gray-500 mb-2">Security Holdings</p>
+            <div className="pt-2 border-t border-gray-100">
+              <p className="text-xs font-medium text-gray-500 mb-2">Security Holdings</p>
               {customer?.cylinderHoldings && customer.cylinderHoldings.filter(h => !h.isReturned).length > 0 ? (
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {Object.entries(
                     customer.cylinderHoldings
                       .filter(h => !h.isReturned)
@@ -474,38 +468,36 @@ export default function B2CCustomerDetailPage() {
                       }, {} as Record<string, { quantity: number; amount: number }>)
                   ).map(([type, data], index) => (
                     <div key={index} className="flex justify-between items-center">
-                      <span className="text-sm text-blue-700 font-medium">
-                        {getCylinderTypeDisplay(type)} <span className="text-xs text-blue-500">x{data.quantity}</span>
+                      <span className="text-xs text-blue-700 font-medium">
+                        {getCylinderTypeDisplay(type)} <span className="text-[10px] text-blue-500">x{data.quantity}</span>
                       </span>
-                      <span className="text-sm font-bold text-blue-800">
+                      <span className="text-xs font-bold text-blue-800">
                         {formatCurrency(data.amount)}
                       </span>
                     </div>
                   ))}
                   <div className="flex justify-between items-center pt-1 mt-1 border-t border-dashed border-gray-200">
-                    <span className="text-xs font-semibold text-gray-500">Total</span>
+                    <span className="text-[10px] font-semibold text-gray-500">Total</span>
                     <span className="text-xs font-bold text-gray-700">
                       {formatCurrency(summary?.totalSecurityHeld || 0)}
                     </span>
                   </div>
                 </div>
               ) : (
-                <div className="text-sm text-gray-500">No active security items</div>
+                <div className="text-xs text-gray-500">No active security items</div>
               )}
             </div>
 
             {/* New Transaction Button */}
-            <div className="space-y-3 pt-2">
+            <div className="space-y-2 pt-1">
               <Button
+                size="sm"
                 onClick={() => setShowTransactionModal(true)}
-                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg"
+                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-md h-9"
               >
                 <PlusIcon className="w-4 h-4 mr-2" />
                 New Transaction
               </Button>
-              <p className="text-xs text-gray-500 text-center">
-                Sale & Security management
-              </p>
             </div>
           </CardContent>
         </Card>
