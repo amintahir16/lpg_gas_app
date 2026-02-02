@@ -50,8 +50,8 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
     // Form data
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [time, setTime] = useState(new Date().toTimeString().slice(0, 5));
-    const [deliveryCharges, setDeliveryCharges] = useState<number | ''>(0);
-    const [deliveryCost, setDeliveryCost] = useState<number | ''>(0);
+    const [deliveryCharges, setDeliveryCharges] = useState<number | ''>('');
+    const [deliveryCost, setDeliveryCost] = useState<number | ''>('');
     const [paymentMethod, setPaymentMethod] = useState('CASH');
     const [notes, setNotes] = useState('');
 
@@ -84,6 +84,9 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
     const [hasInventoryErrors, setHasInventoryErrors] = useState(false);
     const [firstInvalidInventoryItem, setFirstInvalidInventoryItem] = useState<{ category: string, index: number } | null>(null);
 
+    // Accessory validation state
+    const [hasAccessoryErrors, setHasAccessoryErrors] = useState(false);
+
     useEffect(() => {
         const initData = async () => {
             try {
@@ -92,8 +95,23 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                     fetchCalculatedPrices(),
                     fetchCylinderTypes()
                 ]);
-                // Add initial gas item
+                // Initialize all sections with one empty item
                 addGasItem();
+                addSecurityItem();
+                setAccessoryItems([{
+                    id: `item-${Date.now()}`,
+                    category: '',
+                    itemType: '',
+                    quantity: 0,
+                    costPerPiece: 0,
+                    pricePerItem: 0,
+                    totalPrice: 0,
+                    availableStock: 0,
+                    isVaporizer: false,
+                    usagePrice: 0,
+                    sellingPrice: 0,
+                    markup: 20
+                }]);
             } catch (err) {
                 console.error("Error initializing modal data", err);
             } finally {
@@ -145,7 +163,7 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
     };
 
     const addGasItem = () => {
-        setGasItems([...gasItems, { cylinderType: '', quantity: 1, pricePerItem: 0, costPrice: 0 }]);
+        setGasItems([...gasItems, { cylinderType: '', quantity: '', pricePerItem: '', costPrice: 0 }]);
     };
 
     const removeGasItem = (index: number) => {
@@ -153,6 +171,7 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
     };
 
     const updateGasItem = (index: number, field: keyof GasItem, value: any) => {
+        if (error) setError(null); // Clear error when user makes changes
         const updated = [...gasItems];
         updated[index] = { ...updated[index], [field]: value };
 
@@ -300,7 +319,7 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
     };
 
     const addSecurityItem = () => {
-        setSecurityItems([...securityItems, { cylinderType: '', quantity: 1, pricePerItem: 0, isReturn: false }]);
+        setSecurityItems([...securityItems, { cylinderType: '', quantity: '', pricePerItem: '', isReturn: false }]);
     };
 
     const removeSecurityItem = (index: number) => {
@@ -368,6 +387,7 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
     };
 
     const updateSecurityItem = (index: number, field: keyof SecurityItem, value: any) => {
+        if (error) setError(null); // Clear error when user makes changes
         const updated = [...securityItems];
         updated[index] = { ...updated[index], [field]: value };
 
@@ -506,8 +526,12 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!gasItems.length && !securityItems.length && !accessoryItems.length) {
-            setError('Please add at least one item to the transaction');
+        const validGasItems = gasItems.filter(item => item.cylinderType && Number(item.quantity) > 0);
+        const validSecurityItems = securityItems.filter(item => item.cylinderType && Number(item.quantity) > 0);
+        const validAccessoryItems = accessoryItems.filter(item => item.quantity > 0);
+
+        if (validGasItems.length === 0 && validSecurityItems.length === 0 && validAccessoryItems.length === 0) {
+            setError('Please add at least one item before creating a transaction');
             return;
         }
 
@@ -520,6 +544,12 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
         // Check for inventory errors and scroll to first invalid item
         if (hasInventoryErrors) {
             scrollToInvalidInventoryItem();
+            return;
+        }
+
+        // Check for accessory errors
+        if (hasAccessoryErrors) {
+            // Error is already displayed by the component
             return;
         }
 
@@ -686,9 +716,9 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                     </div>
                                     <div className="flex items-center">
                                         <span className="font-medium text-sm text-gray-900">Gas Cylinders</span>
-                                        {gasItems.length > 0 && (
-                                            <Badge className="ml-2 bg-green-100 text-green-700 border-green-200 text-[10px] px-1.5 py-0 h-5">
-                                                {gasItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)}
+                                        {gasItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0) > 0 && (
+                                            <Badge className="ml-2 bg-green-50 text-green-700 border-green-200 text-[10px] px-2 py-0.5 font-normal rounded-full hover:bg-green-100">
+                                                {gasItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)} cylinders
                                             </Badge>
                                         )}
                                     </div>
@@ -741,10 +771,11 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                                         <TableCell className="py-2 align-top">
                                                             <Input
                                                                 type="number"
-                                                                min="1"
-                                                                value={item.quantity}
+                                                                min="0"
+                                                                value={item.quantity || ''}
                                                                 onChange={(e) => updateGasItem(index, 'quantity', e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value)))}
-                                                                className="h-9 text-sm"
+                                                                className="h-9 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                                placeholder="0"
                                                             />
                                                         </TableCell>
                                                         <TableCell className="py-2 align-top">
@@ -754,6 +785,7 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                                                 value={item.pricePerItem}
                                                                 onChange={(e) => updateGasItem(index, 'pricePerItem', e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value)))}
                                                                 className="h-9 text-sm"
+                                                                placeholder="0"
                                                             />
                                                             {item.costPrice > 0 && (
                                                                 <div className="text-[10px] text-gray-400 mt-0.5">Cost: {item.costPrice}</div>
@@ -812,9 +844,9 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                     </div>
                                     <div className="flex items-center">
                                         <span className="font-medium text-sm text-gray-900">Security Deposits / Returns</span>
-                                        {securityItems.length > 0 && (
-                                            <Badge className="ml-2 bg-orange-100 text-orange-700 border-orange-200 text-[10px] px-1.5 py-0 h-5">
-                                                {securityItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)}
+                                        {securityItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0) > 0 && (
+                                            <Badge className="ml-2 bg-orange-50 text-orange-700 border-orange-200 text-[10px] px-2 py-0.5 font-normal rounded-full hover:bg-orange-100">
+                                                {securityItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)} cylinders
                                             </Badge>
                                         )}
                                     </div>
@@ -888,10 +920,11 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                                         <TableCell className="py-2 align-top">
                                                             <Input
                                                                 type="number"
-                                                                min="1"
-                                                                value={item.quantity}
+                                                                min="0"
+                                                                value={item.quantity || ''}
                                                                 onChange={(e) => updateSecurityItem(index, 'quantity', e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value)))}
-                                                                className={`h-9 text-sm ${isReturnInvalid ? 'border-red-500' : ''}`}
+                                                                className={`h-9 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 ${isReturnInvalid ? 'border-red-500' : ''}`}
+                                                                placeholder="0"
                                                             />
                                                         </TableCell>
                                                         <TableCell className="py-2 align-top">
@@ -901,6 +934,7 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                                                 value={item.pricePerItem}
                                                                 onChange={(e) => updateSecurityItem(index, 'pricePerItem', e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value)))}
                                                                 className="h-9 text-sm"
+                                                                placeholder="0"
                                                             />
                                                         </TableCell>
                                                         <TableCell className="py-2 align-top font-medium">
@@ -972,7 +1006,11 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                 <div className="p-4 border-t border-purple-200">
                                     <ProfessionalAccessorySelector
                                         accessoryItems={accessoryItems}
-                                        setAccessoryItems={setAccessoryItems}
+                                        setAccessoryItems={(items) => {
+                                            if (error) setError(null);
+                                            setAccessoryItems(items);
+                                        }}
+                                        onValidationChange={setHasAccessoryErrors}
                                         onInventoryValidationChange={handleInventoryValidationChange}
                                     />
                                 </div>
@@ -1018,7 +1056,7 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                     </Button>
                                     <Button
                                         type="submit"
-                                        disabled={submitting || (!gasItems.length && !securityItems.length && !accessoryItems.length) || hasAnyErrors()}
+                                        disabled={submitting}
                                         className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-md h-9"
                                     >
                                         {submitting ? 'Creating...' : 'Create Transaction'}
