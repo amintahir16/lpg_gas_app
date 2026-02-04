@@ -820,10 +820,10 @@ export default function B2CCustomerDetailPage() {
                         <Badge variant="success">SALE</Badge>
                       )}
                       {selectedTransaction.securityItems.some(item => !item.isReturn) && (
-                        <Badge variant="info">DEPOSIT</Badge>
+                        <Badge variant="info">SECURITY DEPOSIT</Badge>
                       )}
                       {selectedTransaction.securityItems.some(item => item.isReturn) && (
-                        <Badge variant="warning">RETURN</Badge>
+                        <Badge variant="warning">SECURITY RETURN</Badge>
                       )}
                       {selectedTransaction.gasItems.length === 0 &&
                         selectedTransaction.accessoryItems.length === 0 &&

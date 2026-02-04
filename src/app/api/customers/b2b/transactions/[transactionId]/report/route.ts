@@ -536,12 +536,21 @@ async function generatePDF(transaction: any, customer: any, cylinderTypeMap: Map
   }
 
   // Footer
-  const footerY = pageHeight - 20;
-  doc.setFontSize(8);
-  doc.setTextColor(150, 150, 150);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Flamora - LPG Gas Management System', pageWidth / 2, footerY, { align: 'center' });
-  doc.text('Confidential Document', pageWidth / 2, footerY + 5, { align: 'center' });
+  // Add Footer to all pages
+  const pageCount = doc.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    const footerY = pageHeight - 15;
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.setFont('helvetica', 'normal');
+
+    // Line 1
+    doc.text('This report was generated automatically by Flamora Gas Management System', pageWidth / 2, footerY, { align: 'center' });
+
+    // Line 2
+    doc.text(`Page ${i} of ${pageCount} | Confidential Document`, pageWidth / 2, footerY + 5, { align: 'center' });
+  }
 
   return doc;
 }
