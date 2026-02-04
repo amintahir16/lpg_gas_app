@@ -634,24 +634,49 @@ export default function B2CCustomerDetailPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-700">
-                        <div className="max-w-xs space-y-0.5">
-                          {tx.gasItems.map((item, i) => (
-                            <div key={`gas-${i}`} className="text-xs">
-                              {getCylinderTypeDisplay(item.cylinderType)} Gas x{item.quantity}
+                        <div className="max-w-xs space-y-1">
+                          {/* Sold Section (Gas + Accessories) */}
+                          {(tx.gasItems.length > 0 || tx.accessoryItems.length > 0) && (
+                            <div>
+                              <span className="text-xs font-semibold text-green-700 bg-green-50 px-1 rounded mr-1">Sold:</span>
+                              <span className="text-xs text-gray-700">
+                                {[
+                                  ...tx.gasItems.map(item => `${getCylinderTypeDisplay(item.cylinderType)} x${item.quantity}`),
+                                  ...tx.accessoryItems.map(item => `${item.productName} x${item.quantity}`)
+                                ].join(', ')}
+                              </span>
                             </div>
-                          ))}
-                          {tx.securityItems.map((item, i) => (
-                            <div key={`sec-${i}`} className={`text-xs ${item.isReturn ? 'text-orange-600' : ''}`}>
-                              {item.isReturn ? 'Return' : 'Security'}: {getCylinderTypeDisplay(item.cylinderType)} x{item.quantity}
+                          )}
+
+                          {/* Returned Section (Security Returns) */}
+                          {tx.securityItems.some(s => s.isReturn) && (
+                            <div>
+                              <span className="text-xs font-semibold text-orange-700 bg-orange-50 px-1 rounded mr-1">Returned:</span>
+                              <span className="text-xs text-gray-700">
+                                {tx.securityItems
+                                  .filter(s => s.isReturn)
+                                  .map(item => `${getCylinderTypeDisplay(item.cylinderType)} x${item.quantity}`)
+                                  .join(', ')}
+                              </span>
                             </div>
-                          ))}
-                          {tx.accessoryItems.map((item, i) => (
-                            <div key={`acc-${i}`} className="text-xs">
-                              {item.productName} x{item.quantity}
+                          )}
+
+                          {/* Deposit Section (Security Taken) */}
+                          {tx.securityItems.some(s => !s.isReturn) && (
+                            <div>
+                              <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-1 rounded mr-1">Deposit:</span>
+                              <span className="text-xs text-gray-700">
+                                {tx.securityItems
+                                  .filter(s => !s.isReturn)
+                                  .map(item => `${getCylinderTypeDisplay(item.cylinderType)} x${item.quantity}`)
+                                  .join(', ')}
+                              </span>
                             </div>
-                          ))}
+                          )}
+
+                          {/* Delivery Charges */}
                           {tx.deliveryCharges > 0 && (
-                            <div className="text-xs text-gray-500 italic">
+                            <div className="text-xs text-gray-500 italic mt-1">
                               Delivery: {formatCurrency(tx.deliveryCharges)}
                             </div>
                           )}
@@ -785,79 +810,200 @@ export default function B2CCustomerDetailPage() {
 
             <div className="space-y-6">
               {/* Info Grid */}
-              <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
-                <div>
-                  <p className="text-sm text-gray-500">Date & Time</p>
-                  <p className="font-semibold">{formatDate(selectedTransaction.date)} | {formatTime(selectedTransaction.time)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Payment Method</p>
-                  <p className="font-semibold">{selectedTransaction.paymentMethod}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Total Amount</p>
-                  <p className="font-semibold text-lg">{formatCurrency(selectedTransaction.finalAmount)}</p>
-                </div>
-                {selectedTransaction.notes && (
-                  <div className="col-span-2">
-                    <p className="text-sm text-gray-500">Notes</p>
-                    <p className="font-medium italic text-gray-700">{selectedTransaction.notes}</p>
+              {/* Info Grid */}
+              <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
+                <CardContent className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600">Transaction Type</p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {(selectedTransaction.gasItems.length > 0 || selectedTransaction.accessoryItems.length > 0) && (
+                        <Badge variant="success">SALE</Badge>
+                      )}
+                      {selectedTransaction.securityItems.some(item => !item.isReturn) && (
+                        <Badge variant="info">DEPOSIT</Badge>
+                      )}
+                      {selectedTransaction.securityItems.some(item => item.isReturn) && (
+                        <Badge variant="warning">RETURN</Badge>
+                      )}
+                      {selectedTransaction.gasItems.length === 0 &&
+                        selectedTransaction.accessoryItems.length === 0 &&
+                        selectedTransaction.securityItems.length === 0 && (
+                          <Badge variant="secondary">TRANSACTION</Badge>
+                        )}
+                    </div>
                   </div>
-                )}
-              </div>
 
-              {/* Items Sections */}
-              <div className="space-y-4">
-                {selectedTransaction.gasItems.length > 0 && (
-                  <div className="border rounded-md p-3">
-                    <h4 className="text-sm font-bold text-gray-700 mb-2 bg-blue-50 p-1">Gas Cylinders (Sold)</h4>
-                    {selectedTransaction.gasItems.map((item, i) => (
-                      <div key={i} className="flex justify-between text-sm py-1 border-b last:border-0 border-gray-100">
-                        <span>{getCylinderTypeDisplay(item.cylinderType)} x {item.quantity}</span>
-                        <span className="font-medium">{formatCurrency(item.totalPrice)}</span>
+                  <div>
+                    <p className="text-sm text-gray-600">Date</p>
+                    <p className="font-semibold text-gray-900">{formatDate(selectedTransaction.date)}</p>
+                  </div>
+
+                  <div>
+                    <p className="text-sm text-gray-600">Time</p>
+                    <p className="font-semibold text-gray-900">{formatTime(selectedTransaction.time)}</p>
+                  </div>
+
+                  <div>
+                    <p className="text-sm text-gray-600">Total Amount</p>
+                    <p className="font-semibold text-gray-900">{formatCurrency(selectedTransaction.finalAmount)}</p>
+                  </div>
+
+                  <div>
+                    <p className="text-sm text-gray-600">Payment Method</p>
+                    <p className="font-semibold text-gray-900">
+                      {selectedTransaction.paymentMethod ? selectedTransaction.paymentMethod.replace(/_/g, ' ') : '-'}
+                    </p>
+                  </div>
+
+                  {selectedTransaction.notes && (
+                    <div className="col-span-2">
+                      <p className="text-sm text-gray-600">Notes</p>
+                      <p className="font-semibold text-gray-900">{selectedTransaction.notes}</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Transaction Items */}
+              <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
+                <CardHeader>
+                  <CardTitle className="text-lg font-semibold text-gray-900">Transaction Items</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {/* Items Table - Grouped by Category */}
+                  <div className="space-y-4">
+                    {/* Sold Items Table */}
+                    {(selectedTransaction.gasItems.length > 0 || selectedTransaction.accessoryItems.length > 0) && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge variant="success" className="text-xs">SOLD</Badge>
+                          <span className="text-sm font-medium text-gray-700">
+                            {selectedTransaction.gasItems.length + selectedTransaction.accessoryItems.length} item(s)
+                          </span>
+                        </div>
+                        <div className="overflow-x-auto border border-green-200 rounded-lg">
+                          <table className="w-full border-collapse">
+                            <thead>
+                              <tr className="bg-green-50">
+                                <th className="px-4 py-2 text-left text-xs font-semibold text-green-700 uppercase">Item</th>
+                                <th className="px-4 py-2 text-left text-xs font-semibold text-green-700 uppercase">Qty</th>
+                                <th className="px-4 py-2 text-left text-xs font-semibold text-green-700 uppercase">Price/Unit</th>
+                                <th className="px-4 py-2 text-left text-xs font-semibold text-green-700 uppercase">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {/* Combine gas and accessory items for display */}
+                              {[
+                                ...selectedTransaction.gasItems.map(item => ({ ...item, type: 'GAS' })),
+                                ...selectedTransaction.accessoryItems.map(item => ({ ...item, type: 'ACCESSORY' }))
+                              ].map((item: any, index) => (
+                                <tr key={`sold-${index}`} className="border-t border-green-100">
+                                  <td className="px-4 py-2 text-sm text-gray-900">
+                                    {item.type === 'GAS' ? getCylinderTypeDisplay(item.cylinderType) : item.productName}
+                                  </td>
+                                  <td className="px-4 py-2 text-sm text-gray-700">{Number(item.quantity)}</td>
+                                  <td className="px-4 py-2 text-sm text-gray-700">
+                                    {formatCurrency(item.quantity > 0 ? Number(item.totalPrice) / Number(item.quantity) : 0)}
+                                  </td>
+                                  <td className="px-4 py-2 text-sm font-semibold text-gray-900">{formatCurrency(Number(item.totalPrice))}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                )}
+                    )}
 
-                {selectedTransaction.securityItems.length > 0 && (
-                  <div className="border rounded-md p-3">
-                    <h4 className="text-sm font-bold text-gray-700 mb-2 bg-yellow-50 p-1">Security Deposits / Returns</h4>
-                    {selectedTransaction.securityItems.map((item, i) => (
-                      <div key={i} className="flex justify-between text-sm py-1 border-b last:border-0 border-gray-100">
-                        <span>
-                          {item.isReturn ? 'Return' : 'Deposit'}: {getCylinderTypeDisplay(item.cylinderType)} x {item.quantity}
-                        </span>
-                        <span className="font-medium">{formatCurrency(item.totalPrice)}</span>
+                    {/* Returned Items Table (Security Return) */}
+                    {selectedTransaction.securityItems.some(item => item.isReturn) && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge variant="warning" className="text-xs">RETURNED</Badge>
+                          <span className="text-sm font-medium text-gray-700">
+                            {selectedTransaction.securityItems.filter(item => item.isReturn).length} item(s)
+                          </span>
+                          <span className="text-sm text-orange-600">(Security Returned)</span>
+                        </div>
+                        <div className="overflow-x-auto border border-orange-200 rounded-lg">
+                          <table className="w-full border-collapse">
+                            <thead>
+                              <tr className="bg-orange-50">
+                                <th className="px-4 py-2 text-left text-xs font-semibold text-orange-700 uppercase">Item</th>
+                                <th className="px-4 py-2 text-left text-xs font-semibold text-orange-700 uppercase">Qty</th>
+                                <th className="px-4 py-2 text-left text-xs font-semibold text-orange-700 uppercase">Refund/Unit</th>
+                                <th className="px-4 py-2 text-left text-xs font-semibold text-orange-700 uppercase">Total Refund</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {selectedTransaction.securityItems.filter(item => item.isReturn).map((item, index) => (
+                                <tr key={`return-${index}`} className="border-t border-orange-100">
+                                  <td className="px-4 py-2 text-sm text-gray-900">{getCylinderTypeDisplay(item.cylinderType)}</td>
+                                  <td className="px-4 py-2 text-sm text-gray-700">{Number(item.quantity)}</td>
+                                  <td className="px-4 py-2 text-sm text-gray-700">
+                                    {formatCurrency(item.quantity > 0 ? Number(item.totalPrice) / Number(item.quantity) : 0)}
+                                  </td>
+                                  <td className="px-4 py-2 text-sm font-semibold text-gray-900">{formatCurrency(Number(item.totalPrice))}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                )}
+                    )}
 
-                {selectedTransaction.accessoryItems.length > 0 && (
-                  <div className="border rounded-md p-3">
-                    <h4 className="text-sm font-bold text-gray-700 mb-2 bg-gray-100 p-1">Accessories</h4>
-                    {selectedTransaction.accessoryItems.map((item, i) => (
-                      <div key={i} className="flex justify-between text-sm py-1 border-b last:border-0 border-gray-100">
-                        <span>{item.productName} x {item.quantity}</span>
-                        <span className="font-medium">{formatCurrency(item.totalPrice)}</span>
+                    {/* Deposit Items Table (Security Taken) */}
+                    {selectedTransaction.securityItems.some(item => !item.isReturn) && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge variant="info" className="text-xs">DEPOSIT</Badge>
+                          <span className="text-sm font-medium text-gray-700">
+                            {selectedTransaction.securityItems.filter(item => !item.isReturn).length} item(s)
+                          </span>
+                          <span className="text-sm text-blue-600">(Security Taken)</span>
+                        </div>
+                        <div className="overflow-x-auto border border-blue-200 rounded-lg">
+                          <table className="w-full border-collapse">
+                            <thead>
+                              <tr className="bg-blue-50">
+                                <th className="px-4 py-2 text-left text-xs font-semibold text-blue-700 uppercase">Item</th>
+                                <th className="px-4 py-2 text-left text-xs font-semibold text-blue-700 uppercase">Qty</th>
+                                <th className="px-4 py-2 text-left text-xs font-semibold text-blue-700 uppercase">Deposit/Unit</th>
+                                <th className="px-4 py-2 text-left text-xs font-semibold text-blue-700 uppercase">Total Deposit</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {selectedTransaction.securityItems.filter(item => !item.isReturn).map((item, index) => (
+                                <tr key={`deposit-${index}`} className="border-t border-blue-100">
+                                  <td className="px-4 py-2 text-sm text-gray-900">{getCylinderTypeDisplay(item.cylinderType)}</td>
+                                  <td className="px-4 py-2 text-sm text-gray-700">{Number(item.quantity)}</td>
+                                  <td className="px-4 py-2 text-sm text-gray-700">
+                                    {formatCurrency(item.quantity > 0 ? Number(item.totalPrice) / Number(item.quantity) : 0)}
+                                  </td>
+                                  <td className="px-4 py-2 text-sm font-semibold text-gray-900">{formatCurrency(Number(item.totalPrice))}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                )}
+                    )}
 
-                {selectedTransaction.deliveryCharges > 0 && (
-                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded font-semibold">
-                    <span>Delivery Charges</span>
-                    <span>{formatCurrency(selectedTransaction.deliveryCharges)}</span>
-                  </div>
-                )}
+                    {selectedTransaction.deliveryCharges > 0 && (
+                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded font-semibold border border-gray-200">
+                        <span className="text-gray-900">Delivery Charges</span>
+                        <span className="text-gray-900">{formatCurrency(selectedTransaction.deliveryCharges)}</span>
+                      </div>
+                    )}
 
-                <div className="flex justify-between items-center p-3 bg-green-50 text-green-800 rounded text-lg font-bold">
-                  <span>Grand Total</span>
-                  <span>{formatCurrency(selectedTransaction.finalAmount)}</span>
-                </div>
-              </div>
+                    <div className="border-t-2 border-gray-300 pt-3 mt-4">
+                      <div className="flex justify-between items-center text-lg font-bold">
+                        <span className="text-gray-900">Net Transaction Amount:</span>
+                        <span className="text-gray-900">{formatCurrency(selectedTransaction.finalAmount)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </div>
         </div>

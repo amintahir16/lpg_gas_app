@@ -2900,14 +2900,9 @@ export default function B2BCustomerDetailPage() {
                 <div className="space-y-6">
                   {/* Transaction Info */}
                   <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-                    <CardHeader>
-                      <CardTitle className="text-lg font-semibold text-gray-900">Transaction Information</CardTitle>
-                    </CardHeader>
+
                     <CardContent className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm text-gray-600">Bill Number</p>
-                        <p className="font-semibold text-gray-900">{selectedTransaction.billSno}</p>
-                      </div>
+
                       <div>
                         <p className="text-sm text-gray-600">Transaction Type</p>
                         {(() => {

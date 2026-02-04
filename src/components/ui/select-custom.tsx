@@ -42,7 +42,7 @@ export function CustomSelect({ value, onChange, options, placeholder = "Select..
             {name && <input type="hidden" name={name} value={activeValue} required={required} />}
 
             <Listbox value={activeValue} onChange={handleChange} disabled={disabled}>
-                <Listbox.Button className="relative w-full cursor-pointer rounded-md bg-white py-2 pl-3 pr-10 text-left border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-gray-50 h-9 sm:text-sm">
+                <Listbox.Button className="relative w-full cursor-pointer rounded-md bg-white py-2 pl-3 pr-10 text-left border border-gray-200 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-gray-50 h-9 sm:text-sm">
                     <span className={cn("block truncate", !selectedOption && !internalValue && "text-gray-400")}>
                         {displayLabel}
                     </span>
