@@ -394,7 +394,7 @@ async function generatePDF(transaction: any, customer: any, cylinderTypeMap: Map
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
-    const footerY = pageHeight - 15;
+    const footerY = pageHeight - 25; // Moved up to fit more lines
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
     doc.setFont('helvetica', 'normal');
@@ -404,6 +404,12 @@ async function generatePDF(transaction: any, customer: any, cylinderTypeMap: Map
 
     // Line 2
     doc.text(`Page ${i} of ${pageCount} | Confidential Document`, pageWidth / 2, footerY + 5, { align: 'center' });
+
+    // Developer Credits
+    doc.setFontSize(7);
+    doc.setTextColor(180, 180, 180);
+    doc.text('Software by AMIN TAHIR', pageWidth / 2, footerY + 12, { align: 'center' });
+    doc.text('Contact No: 03339109535', pageWidth / 2, footerY + 16, { align: 'center' });
   }
 
   return doc;

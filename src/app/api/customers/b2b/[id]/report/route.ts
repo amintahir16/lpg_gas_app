@@ -646,14 +646,20 @@ async function generatePDF(
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
-    const footerY = pageHeight - 10;
+    const footerY = pageHeight - 25; // Moved up to fit more lines
 
-    doc.setTextColor(100, 100, 100);
+    doc.setTextColor(150, 150, 150);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
 
-    doc.text('This report was generated automatically by Flamora Gas Management System', pageWidth / 2, footerY - 5, { align: 'center' });
-    doc.text(`Page ${i} of ${pageCount} | Confidential Document`, pageWidth / 2, footerY, { align: 'center' });
+    doc.text('This report was generated automatically by Flamora Gas Management System', pageWidth / 2, footerY, { align: 'center' });
+    doc.text(`Page ${i} of ${pageCount} | Confidential Document`, pageWidth / 2, footerY + 5, { align: 'center' });
+
+    // Developer Credits
+    doc.setFontSize(7);
+    doc.setTextColor(180, 180, 180);
+    doc.text('Software by AMIN TAHIR', pageWidth / 2, footerY + 12, { align: 'center' });
+    doc.text('Contact No: 03339109535', pageWidth / 2, footerY + 16, { align: 'center' });
   }
 
   return doc;
