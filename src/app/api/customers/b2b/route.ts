@@ -160,20 +160,8 @@ export async function GET(request: NextRequest) {
         if (holderId) {
           if (!map[holderId]) map[holderId] = {};
 
-          // Determine Key (Enum for Standard, Display Name for Custom)
+          // Determine Key (Use Raw Cylinder Type Code)
           let key = cyl.cylinderType;
-          const STANDARD_TYPES = ['DOMESTIC_11_8KG', 'STANDARD_15KG', 'COMMERCIAL_45_4KG'];
-
-          if (!STANDARD_TYPES.includes(cyl.cylinderType)) {
-            const typeName = cyl.typeName ? cyl.typeName.trim() : '';
-            const capacity = cyl.capacity;
-
-            if (typeName && typeName.toLowerCase() !== 'cylinder') {
-              key = `${typeName} (${capacity}kg)`;
-            } else if (capacity) {
-              key = `Cylinder (${capacity}kg)`;
-            }
-          }
 
           map[holderId][key] = (map[holderId][key] || 0) + 1;
           types.add(key);
@@ -322,14 +310,12 @@ export async function GET(request: NextRequest) {
     // For now, let's rely on the `due` columns for specific types if possible, BUT user stressed dynamic.
     // We will do a separate aggregation for the Summary Card to be 100% accurate on dynamic types.
 
+    // 7. Fetch Dynamic Holdings for Paginated Customers AND Global Summary
     const pageCustomerIds = paginatedCustomers.map(c => c.id);
     const allFilteredCustomerIds = filteredCustomers.map(c => c.id);
 
-    // Fetch Holdings logic was hoisted above for use in sorting
-
-    // Parallel fetch: Page Holdings (Details) & Total Summary Holdings (Aggregated)
-    // Total Summary Holdings: We just need Counts Grouped By Type for ALL filtered IDs.
-    const [pageHoldings, summaryCylinderStats] = await Promise.all([
+    // Parallel fetch: Page Holdings (Details), Total Summary Holdings (Aggregated), and Type Definitions
+    const [pageHoldings, summaryCylinderStats, cylinderDefinitions] = await Promise.all([
       getHoldings(paginatedCustomers.map(c => ({ id: c.id, name: c.name }))),
       prisma.cylinder.findMany({
         where: {
@@ -340,9 +326,32 @@ export async function GET(request: NextRequest) {
             ...filteredCustomers.map(c => ({ location: { contains: c.name, mode: 'insensitive' as const } }))
           ]
         },
+        select: { cylinderType: true }
+      }),
+      // Fetch definitions for all types
+      prisma.cylinder.findMany({
+        distinct: ['cylinderType'],
         select: { cylinderType: true, typeName: true, capacity: true }
       })
     ]);
+
+    // Create Type Definitions Map for Frontend (matches B2C logic)
+    const typeDefinitions: Record<string, { name: string, capacity: number }> = {};
+    cylinderDefinitions.forEach(def => {
+      let displayName = 'Cylinder';
+      if (def.typeName && def.typeName.trim().toLowerCase() !== 'cylinder') {
+        displayName = def.typeName.trim();
+      } else {
+        const upperType = def.cylinderType.toUpperCase();
+        if (upperType.includes('DOMESTIC')) displayName = 'Domestic';
+        else if (upperType.includes('STANDARD')) displayName = 'Standard';
+        else if (upperType.includes('COMMERCIAL')) displayName = 'Commercial';
+      }
+      typeDefinitions[def.cylinderType] = {
+        name: displayName,
+        capacity: Number(def.capacity)
+      };
+    });
 
     // Standard Cylinder Map (Enums to Legacy Fields)
     const STANDARD_CYLINDER_MAP: Record<string, keyof typeof allMatchingCustomers[0]> = {
@@ -352,53 +361,18 @@ export async function GET(request: NextRequest) {
     };
 
     // Calculate Global Cylinder Summary (Count by Type)
-    // Merge Physical Counts with Legacy Counts (use MAX for safety to avoid under-reporting)
     const totalCylindersSummary: Record<string, number> = {};
-
-    // 1. Initialize with Legacy Totals - DISABLED as per user request (legacy data obsolete)
-    /*
-    filteredCustomers.forEach(c => {
-      Object.entries(STANDARD_CYLINDER_MAP).forEach(([type, field]) => {
-        const legacyVal = Number(c[field] || 0);
-        if (legacyVal > 0) {
-          totalCylindersSummary[type] = (totalCylindersSummary[type] || 0) + legacyVal;
-        }
-      });
-    });
-    */
-
-    // 2. Merge/Override with Physical Counts (Taking the greater of the aggregate legacy vs aggregate physical is risky but simple)
-    // BETTER: We should use the physical count if it exists for a type, else add legacy? NO.
-    // Ideally we want sum(max(physical, legacy)) per customer.
-    // But for global summary, we only have aggregate physical. 
-    // Let's rely on physical aggregate for non-standard types.
-    // For standard types, let's take the MAX of (Aggregate Legacy) vs (Aggregate Physical).
-
     const physicalSummary: Record<string, number> = {};
+
+    // Use raw cylinderType as key - NO formatting here
     summaryCylinderStats.forEach(cyl => {
-      let key = cyl.cylinderType;
-      // Temporarily hardcoded standard map for this scope
-      if (!['DOMESTIC_11_8KG', 'STANDARD_15KG', 'COMMERCIAL_45_4KG'].includes(cyl.cylinderType)) {
-        const typeName = cyl.typeName ? cyl.typeName.trim() : '';
-        const capacity = cyl.capacity;
-        if (typeName && typeName.toLowerCase() !== 'cylinder') {
-          key = `${typeName} (${capacity}kg)`;
-        } else if (capacity) {
-          key = `Cylinder (${capacity}kg)`;
-        }
-      }
+      const key = cyl.cylinderType;
       physicalSummary[key] = (physicalSummary[key] || 0) + 1;
     });
 
     // Merge logic
     Object.entries(physicalSummary).forEach(([type, count]) => {
-      if (STANDARD_CYLINDER_MAP[type]) {
-        // It's a standard type. Just use physical count. Legacy merge disabled.
-        totalCylindersSummary[type] = (totalCylindersSummary[type] || 0) + count;
-      } else {
-        // It's a non-standard type. Just use physical.
-        totalCylindersSummary[type] = (totalCylindersSummary[type] || 0) + count;
-      }
+      totalCylindersSummary[type] = (totalCylindersSummary[type] || 0) + count;
     });
 
     let totalCylindersCount = Object.values(totalCylindersSummary).reduce((a, b) => a + b, 0);
@@ -408,18 +382,6 @@ export async function GET(request: NextRequest) {
     const finalCustomers = paginatedCustomers.map(c => {
       const physicalHoldings = pageHoldings.map[c.id] || {};
       const mergedHoldings: Record<string, number> = { ...physicalHoldings };
-
-      Object.entries(STANDARD_CYLINDER_MAP).forEach(([type, field]) => {
-        // Legacy merge disabled
-        /*
-        const legacyVal = Number(c[field] || 0);
-        const physicalVal = mergedHoldings[type] || 0;
-        if (legacyVal > physicalVal) {
-          mergedHoldings[type] = legacyVal;
-        }
-        */
-      });
-
       return {
         ...c,
         isActive: (c as any).isEffectivelyActive,
@@ -429,18 +391,13 @@ export async function GET(request: NextRequest) {
 
     const uniqueCylinderTypes = Array.from(new Set([
       ...pageHoldings.types,
-      // Removed forced standard keys
       ...Object.keys(totalCylindersSummary)
-    ])).filter(t => {
-      // Always show types that are present in the current page's holdings
-      if (pageHoldings.types.has(t)) return true;
-      // Show others if they exist in the summary
-      return (totalCylindersSummary[t] || 0) > 0;
-    }).sort();
+    ])).sort();
 
     return NextResponse.json({
       customers: finalCustomers,
       cylinderTypes: uniqueCylinderTypes,
+      typeDefinitions, // Return definitions
       pagination: {
         page,
         limit,
@@ -452,7 +409,7 @@ export async function GET(request: NextRequest) {
         totalReceivables,
         totalCylinders: totalCylindersCount,
         cylinderBreakdown: totalCylindersSummary,
-        totalProfit // Add profit to summary response
+        totalProfit
       }
     });
 

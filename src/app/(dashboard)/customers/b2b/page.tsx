@@ -27,6 +27,34 @@ import {
 import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
 import { CustomSelect } from '@/components/ui/select-custom';
 
+// Palette for dynamic cylinder badges
+const CYLINDER_COLORS = [
+  'bg-blue-100 text-blue-800 border-blue-200',
+  'bg-green-100 text-green-800 border-green-200',
+  'bg-purple-100 text-purple-800 border-purple-200',
+  'bg-orange-100 text-orange-800 border-orange-200',
+  'bg-pink-100 text-pink-800 border-pink-200',
+  'bg-indigo-100 text-indigo-800 border-indigo-200',
+  'bg-teal-100 text-teal-800 border-teal-200',
+  'bg-cyan-100 text-cyan-800 border-cyan-200',
+  'bg-rose-100 text-rose-800 border-rose-200',
+  'bg-amber-100 text-amber-800 border-amber-200',
+  'bg-lime-100 text-lime-800 border-lime-200',
+  'bg-emerald-100 text-emerald-800 border-emerald-200',
+  'bg-sky-100 text-sky-800 border-sky-200',
+  'bg-violet-100 text-violet-800 border-violet-200',
+  'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200',
+];
+
+const getCylinderColor = (type: string) => {
+  let hash = 0;
+  for (let i = 0; i < type.length; i++) {
+    hash = type.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % CYLINDER_COLORS.length;
+  return CYLINDER_COLORS[index];
+};
+
 interface B2BCustomer {
   id: string;
   name: string;
@@ -90,6 +118,8 @@ export default function B2BCustomersPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [cylinderTypes, setCylinderTypes] = useState<string[]>([]);
+  const [typeDefinitions, setTypeDefinitions] = useState<Record<string, { name: string; capacity: number }>>({});
+
   const [summary, setSummary] = useState<B2BSummary | null>(null);
 
   // Filters State
@@ -175,14 +205,17 @@ export default function B2BCustomersPage() {
         throw new Error(`Failed to fetch B2B customers: ${response.status} ${text}`);
       }
 
-      const data: B2BCustomersResponse = await response.json();
+      const data: any = await response.json(); // Use any temporarily to handle extended response
 
       setCustomers(data.customers || []);
       setPagination(data.pagination || { page: 1, limit: 10, total: 0, pages: 0 });
       setSummary(data.summary || null);
 
-      if ((data as any).cylinderTypes) {
-        setCylinderTypes((data as any).cylinderTypes);
+      if (data.cylinderTypes) {
+        setCylinderTypes(data.cylinderTypes);
+      }
+      if (data.typeDefinitions) {
+        setTypeDefinitions(data.typeDefinitions);
       }
     } catch (err) {
       console.error('Error fetching B2B customers:', err);
@@ -203,13 +236,18 @@ export default function B2BCustomersPage() {
   };
 
   const formatCylinderHeader = (type: string) => {
-    // If it's a legacy or custom type string like "Commercial (45.4kg)"
+    // Dynamic logic from typeDefinitions (matches B2C)
+    if (typeDefinitions[type]) {
+      const { name, capacity } = typeDefinitions[type];
+      return `${name} ${capacity}kg`; // Format as "Name Capacitykg" (e.g. Domestic 11.8kg)
+    }
+
+    // Fallback logic
     if (type.includes('(') && type.includes(')')) {
       return type.replace('(', '').replace(')', '').replace('Cylinder ', '').replace('Cylinder', '');
     }
 
     const display = getCylinderTypeDisplayName(type);
-    // Remove "Cylinder (" and ")" to be concise (e.g. "11.8kg")
     return display.replace('Cylinder (', '').replace(')', '').replace('Cylinder', type);
   };
 
@@ -372,7 +410,7 @@ export default function B2BCustomersPage() {
               <div className="flex flex-wrap justify-center gap-1 mt-1 max-h-[60px] overflow-y-auto w-full px-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
                 {Object.entries(summary.cylinderBreakdown).length > 0 ? (
                   Object.entries(summary.cylinderBreakdown).map(([type, count]) => (
-                    <Badge key={type} variant="secondary" className="bg-red-50 text-red-700 border-red-100 font-normal text-[9px] py-0 px-1.5 h-4 whitespace-nowrap">
+                    <Badge key={type} variant="secondary" className={`${getCylinderColor(type)} font-normal text-[9px] py-0 px-1.5 h-4 whitespace-nowrap hover:opacity-80`}>
                       {formatCylinderHeader(type)}: <span className="font-bold ml-1">{count}</span>
                     </Badge>
                   ))
@@ -601,7 +639,7 @@ export default function B2BCustomersPage() {
                         return (
                           <TableCell key={type} className="text-center">
                             {count > 0 ? (
-                              <Badge variant="secondary" className="bg-red-50 text-red-700 font-bold hover:bg-red-100 border-red-100">
+                              <Badge variant="secondary" className={`${getCylinderColor(type)} font-bold hover:opacity-80`}>
                                 {count}
                               </Badge>
                             ) : (

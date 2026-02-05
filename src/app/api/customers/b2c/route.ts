@@ -6,7 +6,7 @@ import { authOptions } from '@/lib/auth';
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user || (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -64,38 +64,64 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Get cylinder distribution by type
-    const cylinderDistribution = await Promise.all([
-      prisma.b2CCylinderHolding.aggregate({
-        where: { 
-          isReturned: false,
-          cylinderType: 'DOMESTIC_11_8KG'
-        },
-        _sum: { quantity: true }
-      }),
-      prisma.b2CCylinderHolding.aggregate({
-        where: { 
-          isReturned: false,
-          cylinderType: 'STANDARD_15KG'
-        },
-        _sum: { quantity: true }
-      }),
-      prisma.b2CCylinderHolding.aggregate({
-        where: { 
-          isReturned: false,
-          cylinderType: 'COMMERCIAL_45_4KG'
-        },
-        _sum: { quantity: true }
-      })
-    ]);
+    // Get cylinder distribution by type dynamically
+    const cylinderHoldings = await prisma.b2CCylinderHolding.groupBy({
+      by: ['cylinderType'],
+      where: { isReturned: false },
+      _sum: { quantity: true }
+    });
+
+    const cylinderBreakdown: Record<string, number> = {};
+    cylinderHoldings.forEach(holding => {
+      cylinderBreakdown[holding.cylinderType] = holding._sum.quantity || 0;
+    });
+
+    // Get all unique types sorted alphabetically
+    const cylinderTypes = Object.keys(cylinderBreakdown).sort();
+
+    // Fetch details for these types from the Cylinder table to get proper display names
+    // This is how B2B dashboard handles it - dynamic type names
+    const cylinderDefinitions = await prisma.cylinder.findMany({
+      where: {
+        cylinderType: {
+          in: cylinderTypes
+        }
+      },
+      distinct: ['cylinderType'],
+      select: {
+        cylinderType: true,
+        typeName: true,
+        capacity: true
+      }
+    });
+
+    // Create a map for frontend to use: code -> { name, capacity }
+    const typeDefinitions: Record<string, { name: string, capacity: number }> = {};
+
+    cylinderDefinitions.forEach(def => {
+      let displayName = 'Cylinder';
+
+      // Use typeName from database if available (this supports "Industrial", "Special" etc)
+      if (def.typeName && def.typeName.trim().toLowerCase() !== 'cylinder') {
+        displayName = def.typeName.trim();
+      } else {
+        // Fallback or Standard Names
+        const upperType = def.cylinderType.toUpperCase();
+        if (upperType.includes('DOMESTIC')) displayName = 'Domestic';
+        else if (upperType.includes('STANDARD')) displayName = 'Standard';
+        else if (upperType.includes('COMMERCIAL')) displayName = 'Commercial';
+      }
+
+      typeDefinitions[def.cylinderType] = {
+        name: displayName,
+        capacity: Number(def.capacity)
+      };
+    });
 
     const summary = {
       totalCustomers,
       totalProfit: Number(profitSummary._sum.totalProfit || 0),
-      cylindersInMarket: {
-        domestic: Number(cylinderDistribution[0]._sum.quantity || 0),
-        standard: Number(cylinderDistribution[1]._sum.quantity || 0),
-        commercial: Number(cylinderDistribution[2]._sum.quantity || 0)
-      }
+      cylinderBreakdown
     };
 
     const pagination = {
@@ -108,7 +134,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       customers,
       pagination,
-      summary
+      summary,
+      cylinderTypes,
+      typeDefinitions // Send definitions to frontend
     });
 
   } catch (error) {
@@ -123,7 +151,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user || (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
