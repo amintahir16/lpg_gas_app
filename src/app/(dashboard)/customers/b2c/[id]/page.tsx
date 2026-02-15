@@ -330,8 +330,9 @@ export default function B2CCustomerDetailPage() {
       <div className="flex items-center space-x-4">
         <Button
           variant="outline"
+          size="sm"
           onClick={() => router.push('/customers/b2c')}
-          className="flex items-center"
+          className="flex items-center h-9 text-xs"
         >
           <ArrowLeftIcon className="w-4 h-4 mr-2" />
           Back to B2C Customers
@@ -520,7 +521,7 @@ export default function B2CCustomerDetailPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => setShowDateFilter(!showDateFilter)}
-                  className="flex items-center gap-2 bg-white hover:bg-gray-50 border-gray-300"
+                  className="flex items-center gap-2 bg-white hover:bg-gray-50 border-gray-300 h-9"
                 >
                   <FunnelIcon className="w-4 h-4" />
                   <span className="hidden sm:inline">Filter</span>
@@ -554,7 +555,7 @@ export default function B2CCustomerDetailPage() {
                   size="sm"
                   onClick={() => setShowReportDateFilter(!showReportDateFilter)}
                   disabled={downloadingReport}
-                  className="flex items-center gap-2 bg-white hover:bg-gray-50 border-gray-300"
+                  className="flex items-center gap-2 bg-white hover:bg-gray-50 border-gray-300 h-9"
                 >
                   <DocumentArrowDownIcon className="w-4 h-4" />
                   <span className="hidden sm:inline">Trans Report</span>
