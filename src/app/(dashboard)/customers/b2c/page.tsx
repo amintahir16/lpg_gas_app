@@ -716,20 +716,15 @@ export default function B2CCustomersPage() {
                   <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
                     Margin Category *
                   </label>
-                  <select
+                  <CustomSelect
                     name="marginCategoryId"
                     required
                     disabled={loadingCategories}
                     defaultValue={editingCustomer.marginCategoryId || ''}
-                    className="flex h-9 w-full rounded-md border border-gray-300 bg-white px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-green-600 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <option value="">{loadingCategories ? "Loading categories..." : "Select margin category"}</option>
-                    {marginCategories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name} - Rs {category.marginPerKg}/kg
-                      </option>
-                    ))}
-                  </select>
+                    placeholder={loadingCategories ? "Loading..." : "Select Category"}
+                    options={marginCategories.map(c => ({ value: c.id, label: `${c.name} - Rs ${c.marginPerKg}/kg` }))}
+                    className="h-9"
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Full Address</label>
@@ -737,14 +732,15 @@ export default function B2CCustomersPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Status</label>
-                  <select
+                  <CustomSelect
                     name="isActive"
                     defaultValue={editingCustomer.isActive ? 'true' : 'false'}
-                    className="flex h-9 w-full rounded-md border border-gray-300 bg-white px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-green-600 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <option value="true">Active</option>
-                    <option value="false">Inactive</option>
-                  </select>
+                    options={[
+                      { value: 'true', label: 'Active' },
+                      { value: 'false', label: 'Inactive' }
+                    ]}
+                    className="h-9"
+                  />
                 </div>
                 <div className="flex justify-end space-x-3 pt-2">
                   <Button

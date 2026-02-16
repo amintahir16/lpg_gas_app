@@ -12,6 +12,7 @@ export interface SelectOption {
 
 interface CustomSelectProps {
     value?: string;
+    defaultValue?: string; // Add defaultValue prop
     onChange?: (value: string) => void;
     options: SelectOption[];
     placeholder?: string;
@@ -21,10 +22,10 @@ interface CustomSelectProps {
     required?: boolean;
 }
 
-export function CustomSelect({ value, onChange, options, placeholder = "Select...", className, name, disabled, required }: CustomSelectProps) {
+export function CustomSelect({ value, defaultValue, onChange, options, placeholder = "Select...", className, name, disabled, required }: CustomSelectProps) {
     // Finds the selected option object based on the value prop (controlled) or matches internal state if uncontrolled (simplified here for controlled usage mostly)
     const selectedOption = options.find(o => o.value === value) || null;
-    const [internalValue, setInternalValue] = useState<string>('');
+    const [internalValue, setInternalValue] = useState<string>(defaultValue || '');
 
     // Handle change: if external handler provided, use it.
     // Note: For native form submission (name prop), we render a hidden input.
