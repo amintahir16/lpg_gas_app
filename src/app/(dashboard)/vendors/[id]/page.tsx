@@ -20,6 +20,7 @@ import {
 import VendorPaymentModal from '@/components/VendorPaymentModal';
 import VendorExportModal from '@/components/VendorExportModal';
 import { generateCylinderTypeFromCapacity } from '@/lib/cylinder-utils';
+import { CustomSelect } from '@/components/ui/select-custom';
 
 interface Vendor {
   id: string;
@@ -1345,31 +1346,31 @@ export default function VendorDetailPage() {
 
       {/* Contact Info */}
       {(vendor.contactPerson || vendor.phone || vendor.email || vendor.address) && (
-        <Card className="mb-6">
-          <CardContent className="p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+        <Card className="mb-4 shadow-sm border-gray-200">
+          <CardContent className="p-2.5">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
               {vendor.contactPerson && (
-                <div>
-                  <span className="text-gray-500">Contact:</span>
-                  <span className="ml-2 font-medium">{vendor.contactPerson}</span>
+                <div className="flex items-center">
+                  <span className="text-gray-500 mr-2">Contact:</span>
+                  <span className="font-semibold text-gray-900 truncate">{vendor.contactPerson}</span>
                 </div>
               )}
               {vendor.phone && (
-                <div>
-                  <span className="text-gray-500">Phone:</span>
-                  <span className="ml-2 font-medium">{vendor.phone}</span>
+                <div className="flex items-center">
+                  <span className="text-gray-500 mr-2">Phone:</span>
+                  <span className="font-semibold text-gray-900 truncate">{vendor.phone}</span>
                 </div>
               )}
               {vendor.email && (
-                <div>
-                  <span className="text-gray-500">Email:</span>
-                  <span className="ml-2 font-medium">{vendor.email}</span>
+                <div className="flex items-center">
+                  <span className="text-gray-500 mr-2">Email:</span>
+                  <span className="font-semibold text-gray-900 truncate">{vendor.email}</span>
                 </div>
               )}
               {vendor.address && (
-                <div>
-                  <span className="text-gray-500">Address:</span>
-                  <span className="ml-2 font-medium">{vendor.address}</span>
+                <div className="flex items-center">
+                  <span className="text-gray-500 mr-2">Address:</span>
+                  <span className="font-semibold text-gray-900 truncate max-w-xs">{vendor.address}</span>
                 </div>
               )}
             </div>
@@ -1378,103 +1379,95 @@ export default function VendorDetailPage() {
       )}
 
       {/* Financial Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <Card>
-          <CardContent className="p-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+        <Card className="shadow-sm border-gray-200">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 mb-1">Cash Out (Purchases)</p>
-                <p className="text-2xl font-bold text-red-600">
+                <p className="text-xs text-gray-500 font-medium mb-0.5 uppercase tracking-wide">Cash Out (Purchases)</p>
+                <p className="text-lg font-bold text-red-600">
                   {formatCurrency(Math.round(vendor.financialSummary.cashOut))}
                 </p>
               </div>
-              <div className="p-3 bg-red-100 rounded-lg">
-                <ShoppingCartIcon className="w-8 h-8 text-red-600" />
+              <div className="p-2 bg-red-50 rounded-md">
+                <ShoppingCartIcon className="w-5 h-5 text-red-600" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-6">
+        <Card className="shadow-sm border-gray-200">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 mb-1">Cash In (Payments)</p>
-                <p className="text-2xl font-bold text-green-600">
+                <p className="text-xs text-gray-500 font-medium mb-0.5 uppercase tracking-wide">Cash In (Payments)</p>
+                <p className="text-lg font-bold text-green-600">
                   {formatCurrency(Math.round(vendor.financialSummary.cashIn))}
                 </p>
               </div>
-              <div className="p-3 bg-green-100 rounded-lg">
-                <BanknotesIcon className="w-8 h-8 text-green-600" />
+              <div className="p-2 bg-green-50 rounded-md">
+                <BanknotesIcon className="w-5 h-5 text-green-600" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex-1">
-                <p className="text-sm text-gray-500 mb-1">Net Balance (Outstanding)</p>
-                <p className={`text-2xl font-bold ${vendor.financialSummary.netBalance > 0 ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                  {formatCurrency(Math.round(vendor.financialSummary.netBalance))}
-                </p>
-                {vendor.financialSummary.netBalance > 0 && (
-                  <p className="text-xs text-red-500 mt-1">
-                    You owe this amount to the vendor
+        <Card className="shadow-sm border-gray-200">
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 min-w-0 mr-2">
+                <p className="text-xs text-gray-500 font-medium mb-0.5 uppercase tracking-wide">Net Balance</p>
+                <div className="flex items-baseline flex-wrap gap-2">
+                  <p className={`text-lg font-bold truncate ${vendor.financialSummary.netBalance > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatCurrency(Math.round(vendor.financialSummary.netBalance))}
                   </p>
-                )}
-                {vendor.financialSummary.netBalance < 0 && (
-                  <p className="text-xs text-red-500 mt-1">
-                    Vendor owes you this amount
-                  </p>
-                )}
+                  {(vendor.financialSummary.netBalance !== 0) && (
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${vendor.financialSummary.netBalance > 0 ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                      {vendor.financialSummary.netBalance > 0 ? 'You Owe' : 'Owes You'}
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className={`p-3 rounded-lg ${vendor.financialSummary.netBalance > 0 ? 'bg-yellow-100' : 'bg-gray-100'
-                }`}>
-                <CurrencyDollarIcon className={`w-8 h-8 ${vendor.financialSummary.netBalance > 0 ? 'text-yellow-600' : 'text-gray-600'
-                  }`} />
+              <div className={`p-2 rounded-md ${vendor.financialSummary.netBalance > 0 ? 'bg-yellow-50' : 'bg-gray-50'}`}>
+                <CurrencyDollarIcon className={`w-5 h-5 ${vendor.financialSummary.netBalance > 0 ? 'text-yellow-600' : 'text-gray-500'}`} />
               </div>
             </div>
             {vendor.financialSummary.outstandingBalance < 0 && (
-              <Button
-                onClick={() => {
-                  setSelectedInvoiceNumber(null);
-                  setSelectedEntryTotal(null);
-                  setShowPaymentModal(true);
-                }}
-                className="w-full bg-green-600 hover:bg-green-700 text-white"
-                size="sm"
-              >
-                <BanknotesIcon className="h-4 w-4 mr-2" />
-                Make Payment
-              </Button>
+              <div className="mt-2 pt-2 border-t border-gray-100">
+                <Button
+                  onClick={() => {
+                    setSelectedInvoiceNumber(null);
+                    setSelectedEntryTotal(null);
+                    setShowPaymentModal(true);
+                  }}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white h-7 text-xs"
+                  size="sm"
+                >
+                  <BanknotesIcon className="h-3 w-3 mr-1.5" />
+                  Pay Now
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>
 
         {vendor.creditBalance !== undefined && vendor.creditBalance !== 0 && (
-          <Card>
-            <CardContent className="p-6">
+          <Card className="shadow-sm border-gray-200 md:col-span-3">
+            <CardContent className="p-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-500 mb-1">Credit Balance</p>
-                  <p className={`text-2xl font-bold ${vendor.creditBalance > 0 ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                    {vendor.creditBalance > 0 ? '+' : ''}{formatCurrency(Math.abs(vendor.creditBalance))}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {vendor.creditBalance > 0
-                      ? 'Vendor owes you money'
-                      : 'You owe vendor money'
-                    }
-                  </p>
+                  <p className="text-xs text-gray-500 font-medium mb-0.5 uppercase tracking-wide">Credit Balance</p>
+                  <div className="flex items-center gap-2">
+                    <p className={`text-lg font-bold ${vendor.creditBalance > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {vendor.creditBalance > 0 ? '+' : ''}{formatCurrency(Math.abs(vendor.creditBalance))}
+                    </p>
+                    <span className="text-[10px] text-gray-500">
+                      {vendor.creditBalance > 0 ? '(Vendor owes you)' : '(You owe vendor)'}
+                    </span>
+                  </div>
                 </div>
-                <div className={`p-3 rounded-lg ${vendor.creditBalance > 0 ? 'bg-green-100' : 'bg-red-100'
-                  }`}>
-                  <CurrencyDollarIcon className={`w-8 h-8 ${vendor.creditBalance > 0 ? 'text-green-600' : 'text-red-600'
-                    }`} />
+                <div className={`p-2 rounded-md ${vendor.creditBalance > 0 ? 'bg-green-50' : 'bg-red-50'}`}>
+                  <CurrencyDollarIcon className={`w-5 h-5 ${vendor.creditBalance > 0 ? 'text-green-600' : 'text-red-600'}`} />
                 </div>
               </div>
             </CardContent>
@@ -1525,21 +1518,25 @@ export default function VendorDetailPage() {
               Entries (Total {getFilteredPurchaseEntries().length})
             </h2>
             <div className="flex items-center gap-4">
-              <select
-                value={purchaseFilter}
-                onChange={(e) => setPurchaseFilter(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="all">All Time</option>
-                <option value="today">Today</option>
-                <option value="week">This Week</option>
-                <option value="twoWeeks">Two Weeks</option>
-                <option value="month">This Month</option>
-                <option value="twoMonths">Two Months</option>
-                <option value="sixMonths">Six Months</option>
-                <option value="year">This Year</option>
-              </select>
+              <div className="w-40">
+                <CustomSelect
+                  value={purchaseFilter}
+                  onChange={(val) => setPurchaseFilter(val)}
+                  options={[
+                    { label: 'All Time', value: 'all' },
+                    { label: 'Today', value: 'today' },
+                    { label: 'This Week', value: 'week' },
+                    { label: 'Two Weeks', value: 'twoWeeks' },
+                    { label: 'This Month', value: 'month' },
+                    { label: 'Two Months', value: 'twoMonths' },
+                    { label: 'Six Months', value: 'sixMonths' },
+                    { label: 'This Year', value: 'year' },
+                  ]}
+                  className="h-9"
+                />
+              </div>
               <Button
+                size="sm"
                 onClick={showPurchaseForm ? () => {
                   setShowPurchaseForm(false);
                   // Reset price per 11.8kg when canceling
@@ -1547,9 +1544,9 @@ export default function VendorDetailPage() {
                     setPricePer11_8kg(0);
                   }
                 } : handleOpenPurchaseForm}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 h-9 text-xs"
               >
-                <PlusIcon className="w-5 h-5" />
+                <PlusIcon className="w-4 h-4" />
                 {showPurchaseForm ? 'Cancel' : 'Add Purchase Entry'}
               </Button>
             </div>
@@ -2423,10 +2420,11 @@ export default function VendorDetailPage() {
                   </div>
 
                   <div className="flex gap-3">
-                    <Button type="submit">Create Purchase Entry</Button>
+                    <Button type="submit" className="h-9 text-xs">Create Purchase Entry</Button>
                     <Button
                       type="button"
                       variant="outline"
+                      className="h-9 text-xs"
                       onClick={() => {
                         setShowPurchaseForm(false);
 
@@ -2470,8 +2468,12 @@ export default function VendorDetailPage() {
                 <p className="text-gray-500 mb-4">
                   Start by adding your first purchase entry
                 </p>
-                <Button onClick={handleOpenPurchaseForm}>
-                  <PlusIcon className="w-5 h-5 mr-2" />
+                <Button
+                  size="sm"
+                  onClick={handleOpenPurchaseForm}
+                  className="h-9 text-xs"
+                >
+                  <PlusIcon className="w-4 h-4 mr-2" />
                   Add First Purchase
                 </Button>
               </CardContent>
@@ -2480,13 +2482,13 @@ export default function VendorDetailPage() {
             <div className="space-y-4">
               {getFilteredPurchaseEntries().map((purchase: any, index: number) => (
                 <Card key={purchase.id}>
-                  <CardContent className="p-6">
-                    <div className="flex justify-between items-start mb-4">
+                  <CardContent className="p-3">
+                    <div className="flex justify-between items-start mb-2">
                       <div>
-                        <h3 className="font-semibold text-gray-900">
+                        <h3 className="font-semibold text-gray-900 leading-tight">
                           {purchase.invoiceNumber || 'No Invoice Number'}
                         </h3>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-xs text-gray-500">
                           {formatDate(purchase.purchaseDate)}
                         </p>
                       </div>
@@ -2500,15 +2502,15 @@ export default function VendorDetailPage() {
                               setSelectedEntryTotal(entryTotal);
                               setShowPaymentModal(true);
                             }}
-                            className="bg-green-600 hover:bg-green-700 text-white"
+                            className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs px-2"
                             size="sm"
                           >
-                            <BanknotesIcon className="h-4 w-4 mr-1.5" />
-                            Make Payment
+                            <BanknotesIcon className="h-3 w-3 mr-1" />
+                            Pay
                           </Button>
                         )}
                         <span
-                          className={`px-3 py-1 text-sm font-medium rounded-full ${purchase.status === 'PAID'
+                          className={`px-2 py-0.5 text-xs font-medium rounded-full ${purchase.status === 'PAID'
                             ? 'bg-green-100 text-green-700'
                             : purchase.status === 'PARTIAL'
                               ? 'bg-yellow-100 text-yellow-700'
@@ -2521,30 +2523,26 @@ export default function VendorDetailPage() {
                     </div>
 
                     {/* Items Table */}
-                    <div className="mb-4">
-                      <table className="w-full text-sm">
+                    <div className="mb-2">
+                      <table className="w-full text-xs">
                         <thead className="bg-gray-50">
                           <tr>
                             {vendor?.category?.slug === 'accessories_purchase' && (
-                              <th className="px-4 py-2 text-left font-medium text-gray-700">
+                              <th className="px-4 py-1 text-left font-medium text-gray-700">
                                 Category
                               </th>
                             )}
-                            <th className="px-4 py-2 text-left font-medium text-gray-700">
+                            <th className="px-4 py-1 text-left font-medium text-gray-700">
                               Item
                             </th>
-                            <th className="px-4 py-2 text-right font-medium text-gray-700">
+                            <th className="px-4 py-1 text-right font-medium text-gray-700">
                               Qty
                             </th>
-                            <th className="px-4 py-2 text-right font-medium text-gray-700">
+                            <th className="px-4 py-1 text-right font-medium text-gray-700">
                               Unit Price
                             </th>
-                            {vendor?.category?.slug === 'cylinder_purchase' && (
-                              <th className="px-4 py-2 text-left font-medium text-gray-700">
-                                Cylinder Codes
-                              </th>
-                            )}
-                            <th className="px-4 py-2 text-right font-medium text-gray-700">
+
+                            <th className="px-4 py-1 text-right font-medium text-gray-700">
                               Total
                             </th>
                           </tr>
@@ -2566,21 +2564,17 @@ export default function VendorDetailPage() {
                             return (
                               <tr key={itemIndex} className="border-t border-gray-200">
                                 {vendor?.category?.slug === 'accessories_purchase' && (
-                                  <td className="px-4 py-2 text-gray-600 font-medium">
+                                  <td className="px-4 py-1 text-gray-600 font-medium">
                                     {categoryDisplay}
                                   </td>
                                 )}
-                                <td className="px-4 py-2">{item.itemName}</td>
-                                <td className="px-4 py-2 text-right">{item.quantity}</td>
-                                <td className="px-4 py-2 text-right">
+                                <td className="px-4 py-1">{item.itemName}</td>
+                                <td className="px-4 py-1 text-right">{item.quantity}</td>
+                                <td className="px-4 py-1 text-right">
                                   {formatCurrency(Math.round(Number(item.unitPrice)))}
                                 </td>
-                                {vendor?.category?.slug === 'cylinder_purchase' && (
-                                  <td className="px-4 py-2 text-left text-xs text-gray-600">
-                                    {item.cylinderCodes || '-'}
-                                  </td>
-                                )}
-                                <td className="px-4 py-2 text-right font-medium">
+
+                                <td className="px-4 py-1 text-right font-medium">
                                   {formatCurrency(Math.round(Number(item.totalPrice)))}
                                 </td>
                               </tr>
@@ -2591,7 +2585,7 @@ export default function VendorDetailPage() {
                     </div>
 
                     {/* Purchase Summary */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-200">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pt-2 border-t border-gray-200">
                       <div>
                         <div className="text-xs text-gray-500 mb-1">Total Amount</div>
                         <div className="text-lg font-semibold text-gray-900">
@@ -2676,11 +2670,11 @@ export default function VendorDetailPage() {
 
                     {/* Notes */}
                     {purchase.notes && (
-                      <div className="mt-4 pt-4 border-t border-gray-200">
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">
+                      <div className="mt-2 pt-2 border-t border-gray-200">
+                        <h4 className="text-xs font-medium text-gray-700 mb-1">
                           Notes
                         </h4>
-                        <p className="text-sm text-gray-600">{purchase.notes}</p>
+                        <p className="text-xs text-gray-600">{purchase.notes}</p>
                       </div>
                     )}
 
@@ -2691,15 +2685,15 @@ export default function VendorDetailPage() {
                       ) || [];
 
                       return purchasePayments.length > 0 && (
-                        <div className="mt-4 pt-4 border-t border-gray-200">
-                          <h4 className="text-sm font-medium text-gray-700 mb-2">
+                        <div className="mt-2 pt-2 border-t border-gray-200">
+                          <h4 className="text-xs font-medium text-gray-700 mb-1">
                             Recent Payments
                           </h4>
-                          <div className="space-y-2">
+                          <div className="space-y-1">
                             {purchasePayments.slice(0, 3).map((payment) => (
                               <div
                                 key={payment.id}
-                                className="flex justify-between text-sm"
+                                className="flex justify-between text-xs"
                               >
                                 <span className="text-gray-600">
                                   {formatDate(payment.paymentDate)} - {payment.method}
@@ -2728,10 +2722,11 @@ export default function VendorDetailPage() {
               Vendor Items
             </h2>
             <Button
+              size="sm"
               onClick={() => setShowItemForm(!showItemForm)}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 h-9 text-xs"
             >
-              <PlusIcon className="w-5 h-5" />
+              <PlusIcon className="w-4 h-4" />
               Add Item
             </Button>
           </div>
@@ -2812,8 +2807,12 @@ export default function VendorDetailPage() {
                 <p className="text-gray-500 mb-4">
                   Add items to quickly select them when creating purchase entries
                 </p>
-                <Button onClick={() => setShowItemForm(true)}>
-                  <PlusIcon className="w-5 h-5 mr-2" />
+                <Button
+                  size="sm"
+                  onClick={() => setShowItemForm(true)}
+                  className="h-9 text-xs"
+                >
+                  <PlusIcon className="w-4 h-4 mr-2" />
                   Add First Item
                 </Button>
               </CardContent>
@@ -2822,37 +2821,35 @@ export default function VendorDetailPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {vendor.inventories?.map((item) => (
                 <Card key={item.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="font-semibold text-gray-900">
+                  <CardContent className="p-3">
+                    <div className="flex justify-between items-start mb-0.5">
+                      <h3 className="font-semibold text-gray-900 text-sm">
                         {item.name}
                       </h3>
                       <div className="flex gap-1">
                         <Button
                           variant="outline"
-                          size="sm"
                           onClick={() => handleEditItem(item)}
-                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 p-1"
+                          className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                         >
-                          <PencilIcon className="w-4 h-4" />
+                          <PencilIcon className="w-3 h-3" />
                         </Button>
                         <Button
                           variant="outline"
-                          size="sm"
                           onClick={() => handleDeleteItem(item.id)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1"
+                          className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                         >
-                          <TrashIcon className="w-4 h-4" />
+                          <TrashIcon className="w-3 h-3" />
                         </Button>
                       </div>
                     </div>
                     {item.category && (
-                      <p className="text-sm text-gray-500 mb-2">
+                      <p className="text-xs text-gray-500 mb-0.5">
                         {item.category}
                       </p>
                     )}
                     {item.description && (
-                      <p className="text-sm text-gray-600">
+                      <p className="text-xs text-gray-600">
                         {item.description}
                       </p>
                     )}
@@ -2872,26 +2869,30 @@ export default function VendorDetailPage() {
             </h2>
             <div className="flex gap-3">
               <Button
+                size="sm"
                 onClick={() => setShowExportModal(true)}
-                className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold px-4 py-2 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200"
+                className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold h-9 px-3 text-xs rounded-lg shadow-lg hover:shadow-xl transition-all duration-200"
               >
-                <DocumentArrowDownIcon className="h-5 w-5 mr-2" />
+                <DocumentArrowDownIcon className="h-4 w-4 mr-2" />
                 Export Report
               </Button>
-              <select
-                value={reportPeriod}
-                onChange={(e) => setReportPeriod(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="all">All Time</option>
-                <option value="daily">Today</option>
-                <option value="weekly">This Week</option>
-                <option value="twoWeeks">Two Weeks</option>
-                <option value="monthly">This Month</option>
-                <option value="twoMonths">Two Months</option>
-                <option value="sixMonths">Six Months</option>
-                <option value="yearly">This Year</option>
-              </select>
+              <div className="w-40">
+                <CustomSelect
+                  value={reportPeriod}
+                  onChange={(val) => setReportPeriod(val)}
+                  options={[
+                    { label: 'All Time', value: 'all' },
+                    { label: 'Today', value: 'daily' },
+                    { label: 'This Week', value: 'weekly' },
+                    { label: 'Two Weeks', value: 'twoWeeks' },
+                    { label: 'This Month', value: 'monthly' },
+                    { label: 'Two Months', value: 'twoMonths' },
+                    { label: 'Six Months', value: 'sixMonths' },
+                    { label: 'This Year', value: 'yearly' },
+                  ]}
+                  className="h-9"
+                />
+              </div>
             </div>
           </div>
 
