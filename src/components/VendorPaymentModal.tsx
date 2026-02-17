@@ -38,9 +38,9 @@ export default function VendorPaymentModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
+
     const paymentAmount = parseFloat(amount);
-    
+
     if (!paymentAmount || paymentAmount <= 0) {
       setError('Please enter a valid payment amount');
       return;
@@ -81,7 +81,7 @@ export default function VendorPaymentModal({
       setDescription('');
       onPaymentSuccess();
       onClose();
-      
+
       // Show success notification
       alert(`✅ Payment of Rs ${paymentAmount.toLocaleString()} recorded successfully!`);
     } catch (err: any) {
@@ -129,42 +129,35 @@ export default function VendorPaymentModal({
 
         <form onSubmit={handleSubmit} className="px-8 py-6 space-y-8">
           {/* Outstanding Balance Display */}
-          <div className={`rounded-xl p-6 shadow-sm ${
-            outstandingBalance < 0 
-              ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200' 
+          <div className={`rounded-xl p-6 shadow-sm ${outstandingBalance < 0
+              ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200'
               : 'bg-gradient-to-r from-red-50 to-pink-50 border-2 border-red-200'
-          }`}>
+            }`}>
             <div className="flex justify-between items-center">
               <div>
-                <div className={`text-sm font-semibold uppercase tracking-wide ${
-                  outstandingBalance < 0 ? 'text-green-600' : 'text-red-600'
-                }`}>
+                <div className={`text-sm font-semibold uppercase tracking-wide ${outstandingBalance < 0 ? 'text-green-600' : 'text-red-600'
+                  }`}>
                   {invoiceNumber ? `Invoice ${invoiceNumber} - Amount Due` : 'Outstanding Balance'}
                 </div>
-                <div className={`text-3xl font-bold mt-2 ${
-                  outstandingBalance < 0 ? 'text-red-700' : 'text-black'
-                }`}>
+                <div className={`text-3xl font-bold mt-2 ${outstandingBalance < 0 ? 'text-red-700' : 'text-black'
+                  }`}>
                   {formatCurrency(Math.round(invoiceNumber && purchaseEntryTotal ? purchaseEntryTotal : outstandingBalance))}
                 </div>
-                <div className={`text-xs mt-1 flex items-center gap-1 ${
-                  outstandingBalance < 0 ? 'text-red-500' : 'text-black'
-                }`}>
-                  <div className={`w-2 h-2 rounded-full ${
-                    outstandingBalance < 0 ? 'bg-red-400' : 'bg-black'
-                  }`}></div>
-                  {invoiceNumber 
+                <div className={`text-xs mt-1 flex items-center gap-1 ${outstandingBalance < 0 ? 'text-red-500' : 'text-black'
+                  }`}>
+                  <div className={`w-2 h-2 rounded-full ${outstandingBalance < 0 ? 'bg-red-400' : 'bg-black'
+                    }`}></div>
+                  {invoiceNumber
                     ? `Payment for invoice ${invoiceNumber}`
-                    : outstandingBalance < 0 
-                      ? 'Vendor owes you this amount' 
+                    : outstandingBalance < 0
+                      ? 'Vendor owes you this amount'
                       : 'You owe this amount to the vendor'}
                 </div>
               </div>
-              <div className={`p-4 rounded-full ${
-                outstandingBalance < 0 ? 'bg-green-100' : 'bg-red-100'
-              }`}>
-                <BanknotesIcon className={`h-8 w-8 ${
-                  outstandingBalance < 0 ? 'text-green-600' : 'text-red-600'
-                }`} />
+              <div className={`p-4 rounded-full ${outstandingBalance < 0 ? 'bg-green-100' : 'bg-red-100'
+                }`}>
+                <BanknotesIcon className={`h-8 w-8 ${outstandingBalance < 0 ? 'text-green-600' : 'text-red-600'
+                  }`} />
               </div>
             </div>
           </div>
@@ -180,7 +173,7 @@ export default function VendorPaymentModal({
                 variant="outline"
                 size="sm"
                 onClick={() => handleQuickAmount(0.25)}
-                className="h-12 border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50 text-blue-700 font-semibold transition-all duration-200"
+                className="h-9 border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50 text-blue-700 font-semibold transition-all duration-200"
               >
                 25%
               </Button>
@@ -189,7 +182,7 @@ export default function VendorPaymentModal({
                 variant="outline"
                 size="sm"
                 onClick={() => handleQuickAmount(0.5)}
-                className="h-12 border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50 text-blue-700 font-semibold transition-all duration-200"
+                className="h-9 border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50 text-blue-700 font-semibold transition-all duration-200"
               >
                 50%
               </Button>
@@ -198,7 +191,7 @@ export default function VendorPaymentModal({
                 variant="outline"
                 size="sm"
                 onClick={() => handleQuickAmount(0.75)}
-                className="h-12 border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50 text-blue-700 font-semibold transition-all duration-200"
+                className="h-9 border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50 text-blue-700 font-semibold transition-all duration-200"
               >
                 75%
               </Button>
@@ -207,7 +200,7 @@ export default function VendorPaymentModal({
                 variant="outline"
                 size="sm"
                 onClick={() => handleQuickAmount(1)}
-                className="h-12 border-2 border-green-200 hover:border-green-400 hover:bg-green-50 text-green-700 font-semibold transition-all duration-200"
+                className="h-9 border-2 border-green-200 hover:border-green-400 hover:bg-green-50 text-green-700 font-semibold transition-all duration-200"
               >
                 100%
               </Button>
@@ -265,7 +258,7 @@ export default function VendorPaymentModal({
                   }
                 }}
                 placeholder="0"
-                className="pl-12 pr-4 py-4 text-xl font-bold border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg"
+                className="pl-12 pr-4 h-10 text-lg font-bold border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg"
                 required
               />
             </div>
@@ -279,11 +272,10 @@ export default function VendorPaymentModal({
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-600 font-medium">Remaining Balance:</span>
-                  <span className={`font-bold text-lg ${
-                    (invoiceNumber && purchaseEntryTotal ? purchaseEntryTotal : Math.abs(outstandingBalance)) - parseFloat(amount) > 0 
-                      ? 'text-red-600' 
+                  <span className={`font-bold text-lg ${(invoiceNumber && purchaseEntryTotal ? purchaseEntryTotal : Math.abs(outstandingBalance)) - parseFloat(amount) > 0
+                      ? 'text-red-600'
                       : 'text-green-600'
-                  }`}>
+                    }`}>
                     {formatCurrency(Math.round(Math.max(0, (invoiceNumber && purchaseEntryTotal ? purchaseEntryTotal : Math.abs(outstandingBalance)) - parseFloat(amount))))}
                   </span>
                 </div>
@@ -303,7 +295,7 @@ export default function VendorPaymentModal({
                 value={paymentDate}
                 onChange={(e) => setPaymentDate(e.target.value)}
                 max={new Date().toISOString().split('T')[0]}
-                className="py-3 border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg"
+                className="h-9 border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg text-sm"
                 required
               />
             </div>
@@ -317,7 +309,7 @@ export default function VendorPaymentModal({
                 id="paymentMethod"
                 value={paymentMethod}
                 onChange={(e) => setPaymentMethod(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 font-medium"
+                className="w-full px-4 h-9 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 font-medium text-sm"
                 required
               >
                 <option value="CASH">💵 Cash</option>
@@ -341,7 +333,7 @@ export default function VendorPaymentModal({
                 value={reference}
                 onChange={(e) => setReference(e.target.value)}
                 placeholder="Transaction ID, Check #, etc."
-                className="py-3 border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg"
+                className="h-9 border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg text-sm"
               />
             </div>
           )}
@@ -378,7 +370,7 @@ export default function VendorPaymentModal({
               variant="outline"
               onClick={onClose}
               disabled={loading}
-              className="flex-1 h-12 border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50 text-gray-700 font-semibold"
+              className="flex-1 h-9 border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50 text-gray-700 font-semibold"
             >
               <XMarkIcon className="h-5 w-5 mr-2" />
               Cancel
@@ -386,7 +378,7 @@ export default function VendorPaymentModal({
             <Button
               type="submit"
               disabled={loading || !amount || parseFloat(amount) <= 0}
-              className="flex-1 h-12 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold shadow-lg hover:shadow-xl transition-all duration-200"
+              className="flex-1 h-9 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold shadow-lg hover:shadow-xl transition-all duration-200"
             >
               {loading ? (
                 <>

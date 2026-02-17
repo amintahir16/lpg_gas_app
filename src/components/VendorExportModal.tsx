@@ -95,29 +95,29 @@ export default function VendorExportModal({
       console.log('No date range specified, returning all data:', data.length, 'items');
       return data;
     }
-    
+
     // Set start date to beginning of day (00:00:00.000)
     const start = new Date(startDate);
     start.setHours(0, 0, 0, 0);
-    
+
     // Set end date to end of day (23:59:59.999)
     const end = new Date(endDate);
     end.setHours(23, 59, 59, 999);
-    
+
     const filtered = data.filter(item => {
       const itemDateStr = item.purchaseDate || item.paymentDate || item.createdAt;
       if (!itemDateStr) return false;
-      
+
       // Create date and normalize to start of day for comparison
       const itemDate = new Date(itemDateStr);
       // Compare dates by normalizing to start of day
       const itemDateOnly = new Date(itemDate.getFullYear(), itemDate.getMonth(), itemDate.getDate());
       const startDateOnly = new Date(start.getFullYear(), start.getMonth(), start.getDate());
       const endDateOnly = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-      
+
       return itemDateOnly >= startDateOnly && itemDateOnly <= endDateOnly;
     });
-    
+
     console.log('Date filtering:', {
       startDate,
       endDate,
@@ -130,7 +130,7 @@ export default function VendorExportModal({
         included: filtered.includes(item)
       }))
     });
-    
+
     return filtered;
   };
 
@@ -139,14 +139,14 @@ export default function VendorExportModal({
     // Always use freshly fetched data if available, otherwise use props
     const purchases = allPurchases.length > 0 ? allPurchases : purchaseEntries;
     const payments = allPayments.length > 0 ? allPayments : paymentHistory;
-    
+
     console.log('Export data sources:', {
       usingAllPurchases: allPurchases.length > 0,
       usingAllPayments: allPayments.length > 0,
       purchasesCount: purchases.length,
       paymentsCount: payments.length
     });
-    
+
     return {
       purchases: filterDataByDateRange(purchases),
       payments: filterDataByDateRange(payments)
@@ -155,10 +155,10 @@ export default function VendorExportModal({
 
   const generatePDF = async () => {
     setLoading(true);
-    
+
     try {
       const { purchases, payments } = getExportData();
-      
+
       console.log('PDF Export Data:', {
         exportType,
         purchasesCount: purchases.length,
@@ -166,17 +166,17 @@ export default function VendorExportModal({
         allPurchasesCount: allPurchases.length,
         allPaymentsCount: allPayments.length
       });
-      
+
       // Check if we have data to export
       const hasPurchases = exportType === 'purchases' || exportType === 'both';
       const hasPayments = exportType === 'payments' || exportType === 'both';
-      
+
       if (hasPurchases && purchases.length === 0) {
         alert('No purchase entries found for the selected date range.');
         setLoading(false);
         return;
       }
-      
+
       if (hasPayments && payments.length === 0) {
         alert('No payment history found for the selected date range.');
         setLoading(false);
@@ -185,11 +185,11 @@ export default function VendorExportModal({
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
-      
+
       // Professional Header with Company Branding
       doc.setFillColor(41, 128, 185);
       doc.rect(0, 0, pageWidth, 35, 'F');
-      
+
       // Company Logo Area (placeholder)
       doc.setFillColor(255, 255, 255);
       doc.circle(25, 18, 8, 'F');
@@ -197,43 +197,43 @@ export default function VendorExportModal({
       doc.setTextColor(41, 128, 185);
       doc.setFont('helvetica', 'bold');
       doc.text('Flamora', 25, 20, { align: 'center' });
-      
+
       // Report Title
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(24);
       doc.setFont('helvetica', 'bold');
       doc.text('VENDOR FINANCIAL REPORT', pageWidth / 2, 22, { align: 'center' });
-      
+
       // Report Details
       doc.setFontSize(12);
       doc.setFont('helvetica', 'normal');
       doc.text(`Vendor: ${vendorName}`, pageWidth / 2, 30, { align: 'center' });
-      
+
       if (startDate && endDate) {
         doc.text(`Period: ${formatDate(startDate)} - ${formatDate(endDate)}`, pageWidth / 2, 35, { align: 'center' });
       } else {
         doc.text(`Period: All Time`, pageWidth / 2, 35, { align: 'center' });
       }
-      
+
       // Reset colors
       doc.setTextColor(0, 0, 0);
-      
+
       // Report Info Box
       doc.setFillColor(248, 249, 250);
       doc.rect(15, 45, pageWidth - 30, 25, 'F');
       doc.setDrawColor(200, 200, 200);
       doc.rect(15, 45, pageWidth - 30, 25, 'S');
-      
+
       doc.setFontSize(10);
       doc.setTextColor(100, 100, 100);
-      doc.text(`Generated: ${new Date().toLocaleDateString('en-PK', { 
-        year: 'numeric', 
-        month: 'long', 
+      doc.text(`Generated: ${new Date().toLocaleDateString('en-PK', {
+        year: 'numeric',
+        month: 'long',
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit'
       })}`, 20, 55);
-      
+
       doc.text(`Report ID: RPT-${Date.now().toString().slice(-6)}`, 20, 60);
       // Calculate total records based on export type
       let totalRecords = 0;
@@ -244,9 +244,9 @@ export default function VendorExportModal({
         totalRecords += payments.length;
       }
       doc.text(`Total Records: ${totalRecords}`, pageWidth - 50, 55);
-      
+
       let yPosition = 80;
-      
+
       // Purchase Entries Section
       if (exportType === 'purchases' || exportType === 'both') {
         if (purchases.length > 0) {
@@ -257,12 +257,12 @@ export default function VendorExportModal({
           doc.setFontSize(14);
           doc.setFont('helvetica', 'bold');
           doc.text('PURCHASE ENTRIES', 20, yPosition + 6);
-          
+
           yPosition += 15;
-          
+
           // Check if this is an accessories purchase vendor
           const isAccessoriesPurchase = vendorCategorySlug === 'accessories_purchase';
-          
+
           // Build purchase data with conditional category column
           const purchaseData = purchases.map((purchase, index) => {
             const baseRow = [
@@ -275,16 +275,16 @@ export default function VendorExportModal({
               formatCurrencyForPDF(Number(purchase.totalPrice)),
               purchase.status || 'PENDING'
             ];
-            
+
             // For accessories purchases, insert category column before Item (index 3)
             if (isAccessoriesPurchase) {
               const category = purchase.itemDescription || '-';
               baseRow.splice(3, 0, category); // Insert category at index 3, before Item
             }
-            
+
             return baseRow;
           });
-          
+
           // Add total row
           const totalPurchases = purchases.reduce((sum, p) => sum + Number(p.totalPrice), 0);
           const totalRow: any[] = [
@@ -297,24 +297,24 @@ export default function VendorExportModal({
             formatCurrencyForPDF(totalPurchases),
             ''
           ];
-          
+
           // For accessories purchases, add empty cell for category column
           if (isAccessoriesPurchase) {
             totalRow.splice(3, 0, ''); // Insert empty category cell at index 3
           }
-          
+
           purchaseData.push(totalRow);
-          
+
           // Build header row with conditional category column
           const headerRow = ['#', 'Invoice', 'Date', 'Item', 'Qty', 'Unit Price (Rs)', 'Total (Rs)', 'Status'];
           if (isAccessoriesPurchase) {
             headerRow.splice(3, 0, 'Category'); // Insert Category at index 3, before Item
           }
-          
+
           // Build column styles with conditional category column
           // Column indices: 0=#, 1=Invoice, 2=Date, 3=Category(if accessories)/Item, 4=Item(if accessories)/Qty, etc.
           const columnStyles: any = {};
-          
+
           if (isAccessoriesPurchase) {
             // With Category column: #, Invoice, Date, Category, Item, Qty, Unit Price, Total, Status
             // Balanced widths to maintain professional alignment - total ~180 (same as non-accessories)
@@ -338,33 +338,33 @@ export default function VendorExportModal({
             columnStyles[6] = { halign: 'right', cellWidth: 25, overflow: 'linebreak' }; // Total
             columnStyles[7] = { halign: 'center', cellWidth: 20 }; // Status
           }
-          
+
           autoTable(doc, {
             head: [headerRow],
             body: purchaseData,
             startY: yPosition,
-            styles: { 
+            styles: {
               fontSize: 9,
               cellPadding: 4,
               lineColor: [200, 200, 200],
               lineWidth: 0.5
             },
-            headStyles: { 
+            headStyles: {
               fillColor: [41, 128, 185],
               textColor: [255, 255, 255],
               fontStyle: 'bold',
               fontSize: 10
             },
-            alternateRowStyles: { 
-              fillColor: [248, 249, 250] 
+            alternateRowStyles: {
+              fillColor: [248, 249, 250]
             },
             columnStyles: columnStyles,
           });
-          
+
           yPosition = (doc as any).lastAutoTable.finalY + 25;
         }
       }
-      
+
       // Payment History Section
       if (exportType === 'payments' || exportType === 'both') {
         if (payments.length > 0) {
@@ -372,7 +372,7 @@ export default function VendorExportModal({
             doc.addPage();
             yPosition = 20;
           }
-          
+
           // Section Header
           doc.setFillColor(39, 174, 96);
           doc.rect(15, yPosition, pageWidth - 30, 8, 'F');
@@ -380,9 +380,9 @@ export default function VendorExportModal({
           doc.setFontSize(14);
           doc.setFont('helvetica', 'bold');
           doc.text('PAYMENT HISTORY', 20, yPosition + 6);
-          
+
           yPosition += 15;
-          
+
           const paymentData = payments.map((payment, index) => [
             index + 1,
             formatDate(payment.paymentDate),
@@ -392,7 +392,7 @@ export default function VendorExportModal({
             payment.status || 'COMPLETED',
             payment.description || 'N/A'
           ]);
-          
+
           // Add total row
           const totalPayments = payments.reduce((sum, p) => sum + Number(p.amount), 0);
           paymentData.push([
@@ -404,25 +404,25 @@ export default function VendorExportModal({
             '',
             ''
           ]);
-          
+
           autoTable(doc, {
             head: [['#', 'Date', 'Method', 'Amount (Rs)', 'Reference', 'Status', 'Description']],
             body: paymentData,
             startY: yPosition,
-            styles: { 
+            styles: {
               fontSize: 9,
               cellPadding: 4,
               lineColor: [200, 200, 200],
               lineWidth: 0.5
             },
-            headStyles: { 
+            headStyles: {
               fillColor: [39, 174, 96],
               textColor: [255, 255, 255],
               fontStyle: 'bold',
               fontSize: 10
             },
-            alternateRowStyles: { 
-              fillColor: [248, 249, 250] 
+            alternateRowStyles: {
+              fillColor: [248, 249, 250]
             },
             columnStyles: {
               0: { halign: 'center', cellWidth: 15 },
@@ -434,11 +434,11 @@ export default function VendorExportModal({
               6: { cellWidth: 40 }
             },
           });
-          
+
           yPosition = (doc as any).lastAutoTable.finalY + 25;
         }
       }
-      
+
       // Footer
       yPosition += 20;
       doc.setTextColor(100, 100, 100);
@@ -446,11 +446,11 @@ export default function VendorExportModal({
       doc.setFont('helvetica', 'normal');
       doc.text('This report was generated automatically by Flamora Gas Management System', pageWidth / 2, yPosition, { align: 'center' });
       doc.text(`Page 1 of 1 | Confidential Document`, pageWidth / 2, yPosition + 5, { align: 'center' });
-      
+
       // Save PDF
       const fileName = `${vendorName.replace(/\s+/g, '_')}_Report_${new Date().toISOString().split('T')[0]}.pdf`;
       doc.save(fileName);
-      
+
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('Error generating PDF. Please try again.');
@@ -495,7 +495,7 @@ export default function VendorExportModal({
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg"
+                  className="h-9 text-sm border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg"
                 />
               </div>
               <div>
@@ -506,7 +506,7 @@ export default function VendorExportModal({
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg"
+                  className="h-9 text-sm border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg"
                 />
               </div>
             </div>
@@ -525,11 +525,10 @@ export default function VendorExportModal({
                 type="button"
                 variant="outline"
                 onClick={() => setExportType('purchases')}
-                className={`h-12 border-2 font-semibold transition-all duration-200 ${
-                  exportType === 'purchases'
+                className={`h-9 border-2 font-semibold transition-all duration-200 ${exportType === 'purchases'
                     ? 'bg-blue-600 border-blue-600 text-white hover:bg-blue-700 hover:border-blue-700'
                     : 'border-blue-300 text-blue-700 hover:border-blue-500 hover:bg-blue-50'
-                }`}
+                  }`}
               >
                 Purchase Entries
               </Button>
@@ -537,11 +536,10 @@ export default function VendorExportModal({
                 type="button"
                 variant="outline"
                 onClick={() => setExportType('payments')}
-                className={`h-12 border-2 font-semibold transition-all duration-200 ${
-                  exportType === 'payments'
+                className={`h-9 border-2 font-semibold transition-all duration-200 ${exportType === 'payments'
                     ? 'bg-green-600 border-green-600 text-white hover:bg-green-700 hover:border-green-700'
                     : 'border-green-300 text-green-700 hover:border-green-500 hover:bg-green-50'
-                }`}
+                  }`}
               >
                 Payment History
               </Button>
@@ -549,11 +547,10 @@ export default function VendorExportModal({
                 type="button"
                 variant="outline"
                 onClick={() => setExportType('both')}
-                className={`h-12 border-2 font-semibold transition-all duration-200 ${
-                  exportType === 'both'
+                className={`h-9 border-2 font-semibold transition-all duration-200 ${exportType === 'both'
                     ? 'bg-purple-600 border-purple-600 text-white hover:bg-purple-700 hover:border-purple-700'
                     : 'border-purple-300 text-purple-700 hover:border-purple-500 hover:bg-purple-50'
-                }`}
+                  }`}
               >
                 Both Reports
               </Button>
@@ -568,7 +565,7 @@ export default function VendorExportModal({
               variant="outline"
               onClick={onClose}
               disabled={loading}
-              className="flex-1 h-12 border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50 text-gray-700 font-semibold"
+              className="flex-1 h-9 border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50 text-gray-700 font-semibold"
             >
               <XMarkIcon className="h-5 w-5 mr-2" />
               Cancel
@@ -577,7 +574,7 @@ export default function VendorExportModal({
               type="button"
               onClick={handleExport}
               disabled={loading}
-              className="flex-1 h-12 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold shadow-lg hover:shadow-xl transition-all duration-200"
+              className="flex-1 h-9 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold shadow-lg hover:shadow-xl transition-all duration-200"
             >
               {loading ? (
                 <>
@@ -586,8 +583,8 @@ export default function VendorExportModal({
                 </>
               ) : (
                 <>
-                <DocumentArrowDownIcon className="h-5 w-5 mr-2" />
-                Generate PDF Report
+                  <DocumentArrowDownIcon className="h-5 w-5 mr-2" />
+                  Generate PDF Report
                 </>
               )}
             </Button>

@@ -1308,7 +1308,7 @@ export default function VendorDetailPage() {
                 });
                 setShowEditModal(true);
               }}
-              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 h-9"
             >
               <PencilIcon className="w-4 h-4 mr-1" />
               Edit Vendor
@@ -1320,9 +1320,9 @@ export default function VendorDetailPage() {
                 setDeleteConfirmationName('');
                 setShowDeleteConfirm(true);
               }}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              className="text-red-600 hover:text-red-700 hover:bg-red-50 h-9"
             >
-              <TrashIcon className="w-4 h-4 mr-1" />
+              <PencilIcon className="w-4 h-4 mr-1" />
               Delete Vendor
             </Button>
           </div>
@@ -2712,6 +2712,7 @@ export default function VendorDetailPage() {
                       }}
                       placeholder="e.g., Domestic (11.8kg) Cylinder"
                       required
+                      className="h-9 text-sm"
                     />
                   </div>
                   <div>
@@ -2728,6 +2729,7 @@ export default function VendorDetailPage() {
                         });
                       }}
                       placeholder="e.g., Cylinder, Gas, Vaporizer"
+                      className="h-9 text-sm"
                     />
                   </div>
                   <div>
@@ -2744,13 +2746,16 @@ export default function VendorDetailPage() {
                         });
                       }}
                       placeholder="Item description"
+                      className="h-9 text-sm"
                     />
                   </div>
                   <div className="flex gap-3">
-                    <Button type="submit">Add Item</Button>
+                    <Button type="submit" size="sm" className="h-9">Add Item</Button>
                     <Button
                       type="button"
                       variant="outline"
+                      size="sm"
+                      className="h-9"
                       onClick={() => {
                         setShowItemForm(false);
                         setItemFormData({ name: '', description: '', category: '' });
@@ -3106,6 +3111,7 @@ export default function VendorDetailPage() {
                       onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
                       placeholder="e.g., Khattak Plant, Ali Dealer"
                       required
+                      className="h-9 text-sm"
                     />
                   </div>
                   <div>
@@ -3116,6 +3122,7 @@ export default function VendorDetailPage() {
                       value={editFormData.contactPerson}
                       onChange={(e) => setEditFormData({ ...editFormData, contactPerson: e.target.value })}
                       placeholder="Contact person name"
+                      className="h-9 text-sm"
                     />
                   </div>
                   <div>
@@ -3126,6 +3133,7 @@ export default function VendorDetailPage() {
                       value={editFormData.phone}
                       onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
                       placeholder="Phone number"
+                      className="h-9 text-sm"
                     />
                   </div>
                   <div>
@@ -3137,6 +3145,7 @@ export default function VendorDetailPage() {
                       value={editFormData.email}
                       onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
                       placeholder="Email address"
+                      className="h-9 text-sm"
                     />
                   </div>
                 </div>
@@ -3148,13 +3157,16 @@ export default function VendorDetailPage() {
                     value={editFormData.address}
                     onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })}
                     placeholder="Full address"
+                    className="h-9 text-sm"
                   />
                 </div>
                 <div className="flex gap-3">
-                  <Button type="submit">Update Vendor</Button>
+                  <Button type="submit" size="sm" className="h-9">Update Vendor</Button>
                   <Button
                     type="button"
                     variant="outline"
+                    size="sm"
+                    className="h-9"
                     onClick={() => setShowEditModal(false)}
                   >
                     Cancel
@@ -3198,6 +3210,7 @@ export default function VendorDetailPage() {
                     onChange={(e) => setEditItemFormData({ ...editItemFormData, name: e.target.value })}
                     placeholder="Enter item name"
                     required
+                    className="h-9 text-sm"
                   />
                 </div>
 
@@ -3209,6 +3222,7 @@ export default function VendorDetailPage() {
                     value={editItemFormData.category}
                     onChange={(e) => setEditItemFormData({ ...editItemFormData, category: e.target.value })}
                     placeholder="Enter category"
+                    className="h-9 text-sm"
                   />
                 </div>
 
@@ -3220,14 +3234,17 @@ export default function VendorDetailPage() {
                     value={editItemFormData.description}
                     onChange={(e) => setEditItemFormData({ ...editItemFormData, description: e.target.value })}
                     placeholder="Enter description"
+                    className="h-9 text-sm"
                   />
                 </div>
 
                 <div className="flex gap-3">
-                  <Button type="submit">Update Item</Button>
+                  <Button type="submit" size="sm" className="h-9">Update Item</Button>
                   <Button
                     type="button"
                     variant="outline"
+                    size="sm"
+                    className="h-9"
                     onClick={() => {
                       setShowEditItemModal(false);
                       setEditingItem(null);
@@ -3278,7 +3295,7 @@ export default function VendorDetailPage() {
                     value={deleteConfirmationName}
                     onChange={(e) => setDeleteConfirmationName(e.target.value)}
                     placeholder="Enter vendor name"
-                    className="w-full"
+                    className="w-full h-9 text-sm"
                     autoFocus
                   />
                   {deleteConfirmationName.trim() !== '' &&
@@ -3291,6 +3308,8 @@ export default function VendorDetailPage() {
                 <div className="flex justify-center space-x-3">
                   <Button
                     variant="outline"
+                    size="sm"
+                    className="h-9"
                     onClick={() => {
                       setShowDeleteConfirm(false);
                       setDeleteConfirmationName('');
@@ -3300,11 +3319,12 @@ export default function VendorDetailPage() {
                   </Button>
                   <Button
                     variant="destructive"
+                    size="sm"
                     onClick={handleDeleteVendor}
                     disabled={
                       deleteConfirmationName.trim() !== (vendor.name || vendor.companyName || '').trim()
                     }
-                    className="disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="disabled:opacity-50 disabled:cursor-not-allowed h-9"
                   >
                     Delete Vendor
                   </Button>
