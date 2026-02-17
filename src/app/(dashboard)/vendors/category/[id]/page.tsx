@@ -155,7 +155,7 @@ export default function CategoryVendorsPage() {
     // Get the vendor to match name (using same logic as card display)
     const vendor = vendors.find(v => v.id === vendorId);
     const vendorName = vendor?.name || vendor?.companyName || 'Unnamed Vendor';
-    
+
     // Validate that the confirmation name matches
     if (deleteConfirmationName.trim() !== vendorName.trim()) {
       alert('Vendor name does not match. Please type the exact vendor name to confirm deletion.');
@@ -225,20 +225,21 @@ export default function CategoryVendorsPage() {
       {/* Actions Bar */}
       <div className="mb-6 flex flex-col sm:flex-row gap-4 justify-between">
         <div className="relative flex-1 max-w-md">
-          <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
             type="text"
             placeholder="Search vendors..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
+            className="pl-10 h-9 text-sm"
           />
         </div>
         <Button
           onClick={() => setShowAddForm(!showAddForm)}
-          className="flex items-center gap-2"
+          size="sm"
+          className="flex items-center gap-2 h-9 text-sm"
         >
-          <PlusIcon className="w-5 h-5" />
+          <PlusIcon className="w-4 h-4" />
           Add New Vendor
         </Button>
       </div>
@@ -258,9 +259,13 @@ export default function CategoryVendorsPage() {
                   </label>
                   <Input
                     value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFormData({ ...formData, name: val.charAt(0).toUpperCase() + val.slice(1) });
+                    }}
                     placeholder="e.g., Khattak Plant, Ali Dealer"
                     required
+                    className="h-9 text-sm"
                   />
                 </div>
                 <div>
@@ -269,8 +274,12 @@ export default function CategoryVendorsPage() {
                   </label>
                   <Input
                     value={formData.contactPerson}
-                    onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFormData({ ...formData, contactPerson: val.charAt(0).toUpperCase() + val.slice(1) });
+                    }}
                     placeholder="Contact person name"
+                    className="h-9 text-sm"
                   />
                 </div>
                 <div>
@@ -281,6 +290,7 @@ export default function CategoryVendorsPage() {
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     placeholder="Phone number"
+                    className="h-9 text-sm"
                   />
                 </div>
                 <div>
@@ -292,6 +302,7 @@ export default function CategoryVendorsPage() {
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     placeholder="Email address"
+                    className="h-9 text-sm"
                   />
                 </div>
               </div>
@@ -303,13 +314,16 @@ export default function CategoryVendorsPage() {
                   value={formData.address}
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                   placeholder="Full address"
+                  className="h-9 text-sm"
                 />
               </div>
               <div className="flex gap-3">
-                <Button type="submit">Create Vendor</Button>
+                <Button type="submit" size="sm" className="h-9">Create Vendor</Button>
                 <Button
                   type="button"
                   variant="outline"
+                  size="sm"
+                  className="h-9"
                   onClick={() => {
                     setShowAddForm(false);
                     setFormData({
@@ -444,7 +458,7 @@ export default function CategoryVendorsPage() {
         if (!vendorToDelete) return null;
         // Use same logic as card display
         const vendorName = vendorToDelete.name || vendorToDelete.companyName || 'Unnamed Vendor';
-        
+
         return (
           <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
             <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
@@ -468,28 +482,31 @@ export default function CategoryVendorsPage() {
                       value={deleteConfirmationName}
                       onChange={(e) => setDeleteConfirmationName(e.target.value)}
                       placeholder="Enter vendor name"
-                      className="w-full"
+                      className="w-full h-9 text-sm"
                       autoFocus
                     />
-                    {deleteConfirmationName.trim() !== '' && 
-                     deleteConfirmationName.trim() !== vendorName.trim() && (
-                      <p className="mt-2 text-sm text-red-600">
-                        The name does not match. Please type the exact vendor name.
-                      </p>
-                    )}
+                    {deleteConfirmationName.trim() !== '' &&
+                      deleteConfirmationName.trim() !== vendorName.trim() && (
+                        <p className="mt-2 text-sm text-red-600">
+                          The name does not match. Please type the exact vendor name.
+                        </p>
+                      )}
                   </div>
                   <div className="flex justify-center space-x-3">
                     <Button
                       variant="outline"
+                      size="sm"
+                      className="h-9"
                       onClick={cancelDeleteVendor}
                     >
                       Cancel
                     </Button>
                     <Button
                       variant="destructive"
+                      size="sm"
+                      className="h-9 disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={() => handleDeleteVendor(deletingVendor)}
                       disabled={deleteConfirmationName.trim() !== vendorName.trim()}
-                      className="disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Delete Vendor
                     </Button>

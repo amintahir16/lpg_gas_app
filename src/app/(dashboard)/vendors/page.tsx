@@ -298,7 +298,10 @@ export default function VendorsPage() {
                   </label>
                   <Input
                     value={newCategoryName}
-                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setNewCategoryName(val.charAt(0).toUpperCase() + val.slice(1));
+                    }}
                     placeholder="e.g., Cylinder Purchase, Gas Purchase, Vaporizer Purchase, Accessories Purchase"
                     required
                     className="h-9 text-sm"
@@ -310,7 +313,10 @@ export default function VendorsPage() {
                   </label>
                   <Input
                     value={newCategoryDescription}
-                    onChange={(e) => setNewCategoryDescription(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setNewCategoryDescription(val.charAt(0).toUpperCase() + val.slice(1));
+                    }}
                     placeholder="Brief description of this category"
                     className="h-9 text-sm"
                   />
@@ -461,7 +467,10 @@ export default function VendorsPage() {
                     </label>
                     <Input
                       value={editCategoryName}
-                      onChange={(e) => setEditCategoryName(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditCategoryName(val.charAt(0).toUpperCase() + val.slice(1));
+                      }}
                       placeholder="e.g., Cylinder Purchase, Gas Purchase, Vaporizer Purchase, Accessories Purchase"
                       required
                       className="h-9 text-sm"
@@ -473,7 +482,10 @@ export default function VendorsPage() {
                     </label>
                     <Input
                       value={editCategoryDescription}
-                      onChange={(e) => setEditCategoryDescription(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditCategoryDescription(val.charAt(0).toUpperCase() + val.slice(1));
+                      }}
                       placeholder="Brief description of this category"
                       className="h-9 text-sm"
                     />
