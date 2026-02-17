@@ -373,18 +373,18 @@ export default function CategoryVendorsPage() {
               className="block h-full"
             >
               <Card className="hover:shadow-lg transition-all duration-200 h-full cursor-pointer group hover:border-blue-300 border-2 border-transparent">
-                <CardContent className="p-6">
-                  <div className="flex justify-between items-start mb-4">
+                <CardContent className="p-4">
+                  <div className="flex justify-between items-start mb-3">
                     <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-1 group-hover:text-blue-600 transition-colors">
+                      <h3 className="text-base font-semibold text-gray-900 mb-0.5 group-hover:text-blue-600 transition-colors line-clamp-1">
                         {vendor.name || vendor.companyName || 'Unnamed Vendor'}
                       </h3>
-                      <p className="text-sm text-gray-500">{vendor.vendorCode}</p>
+                      <p className="text-xs text-gray-500 font-medium">{vendor.vendorCode}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       {vendor.totalBalance > 0 && (
-                        <span className="px-3 py-1 bg-red-100 text-red-700 text-sm font-medium rounded-full">
-                          Outstanding
+                        <span className="px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-bold uppercase tracking-wider rounded-md">
+                          Debt
                         </span>
                       )}
                       <Button
@@ -395,7 +395,7 @@ export default function CategoryVendorsPage() {
                           e.stopPropagation();
                           confirmDeleteVendor(vendor.id);
                         }}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                       >
                         <TrashIcon className="w-4 h-4" />
                       </Button>
@@ -403,44 +403,44 @@ export default function CategoryVendorsPage() {
                   </div>
 
                   {(vendor.contactPerson || vendor.phone || vendor.address) && (
-                    <div className="space-y-2 mb-4 text-sm text-gray-600">
+                    <div className="space-y-1 mb-3 text-xs text-gray-600">
                       {vendor.contactPerson && (
                         <div className="flex items-center gap-2">
-                          <BuildingOfficeIcon className="w-4 h-4" />
-                          {vendor.contactPerson}
+                          <BuildingOfficeIcon className="w-3.5 h-3.5 text-gray-400" />
+                          <span className="line-clamp-1">{vendor.contactPerson}</span>
                         </div>
                       )}
                       {vendor.phone && (
                         <div className="flex items-center gap-2">
-                          <PhoneIcon className="w-4 h-4" />
-                          {vendor.phone}
+                          <PhoneIcon className="w-3.5 h-3.5 text-gray-400" />
+                          <span>{vendor.phone}</span>
                         </div>
                       )}
                       {vendor.address && (
                         <div className="flex items-center gap-2">
-                          <MapPinIcon className="w-4 h-4" />
+                          <MapPinIcon className="w-3.5 h-3.5 text-gray-400" />
                           <span className="line-clamp-1">{vendor.address}</span>
                         </div>
                       )}
                     </div>
                   )}
 
-                  <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200">
+                  <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-100">
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">Total Purchases</div>
-                      <div className="text-sm font-semibold text-gray-900">
+                      <div className="text-[10px] text-gray-500 font-medium uppercase tracking-tight mb-0.5">Purchases</div>
+                      <div className="text-sm font-bold text-gray-900">
                         {formatCurrency(Math.round(vendor.totalPurchases))}
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">Paid</div>
-                      <div className="text-sm font-semibold text-green-600">
+                      <div className="text-[10px] text-gray-500 font-medium uppercase tracking-tight mb-0.5">Paid</div>
+                      <div className="text-sm font-bold text-green-600">
                         {formatCurrency(Math.round(vendor.totalPaid))}
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">Balance</div>
-                      <div className={`text-sm font-semibold ${vendor.totalBalance > 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                      <div className="text-[10px] text-gray-500 font-medium uppercase tracking-tight mb-0.5">Balance</div>
+                      <div className={`text-sm font-bold ${vendor.totalBalance > 0 ? 'text-red-600' : 'text-gray-900'}`}>
                         {vendor.totalBalance > 0 ? '-' : ''}{formatCurrency(Math.round(Math.abs(vendor.totalBalance)))}
                       </div>
                     </div>
