@@ -225,12 +225,7 @@ export default function VendorDetailPage() {
     { itemName: 'Commercial (45.4kg) Cylinder', quantity: 0, unitPrice: 0, totalPrice: 0, status: 'EMPTY' }
   ];
 
-  // Default gas purchase items for Gas Purchase category
-  const defaultGasItems = [
-    { itemName: 'Domestic (11.8kg) Gas', quantity: 0, unitPrice: 0, totalPrice: 0 },
-    { itemName: 'Standard (15kg) Gas', quantity: 0, unitPrice: 0, totalPrice: 0 },
-    { itemName: 'Commercial (45.4kg) Gas', quantity: 0, unitPrice: 0, totalPrice: 0 }
-  ];
+
 
   // Default vaporizer purchase items for Vaporizer Purchase category
   const defaultVaporizerItems = [
@@ -326,10 +321,8 @@ export default function VendorDetailPage() {
       if (item.itemName && item.itemName.trim()) {
         const calculatedPrice = calculateUnitPriceFromBase(item.itemName, basePrice);
         const capacity = getCapacityFromItemName(item.itemName);
-        // For gas purchase, price per item = (quantity * unitPrice * capacity)
-        const totalPrice = capacity > 0
-          ? Math.round(Number(item.quantity) * calculatedPrice * capacity)
-          : Math.round(Number(item.quantity) * calculatedPrice);
+        // For gas purchase, price per item = (quantity * unitPrice) - unitPrice already includes capacity factor
+        const totalPrice = Math.round(Number(item.quantity) * calculatedPrice);
 
         return {
           ...item,
@@ -882,13 +875,13 @@ export default function VendorDetailPage() {
     if (field === 'quantity' || field === 'unitPrice') {
       let totalPrice = Number(newItems[index].quantity) * Number(newItems[index].unitPrice);
 
-      // For gas purchase, apply capacity multiplier
-      if (isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
-        const capacity = getCapacityFromItemName(newItems[index].itemName);
-        if (capacity > 0) {
-          totalPrice = Number(newItems[index].quantity) * Number(newItems[index].unitPrice) * capacity;
-        }
-      }
+      // For gas purchase, valid unit price is already per cylinder
+      // if (isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
+      //   const capacity = getCapacityFromItemName(newItems[index].itemName);
+      //   if (capacity > 0) {
+      //     totalPrice = Number(newItems[index].quantity) * Number(newItems[index].unitPrice);
+      //   }
+      // }
 
       newItems[index].totalPrice = Math.round(totalPrice);
     }
@@ -904,15 +897,11 @@ export default function VendorDetailPage() {
               const calculatedPrice = calculateUnitPriceFromBase(value, pricePer11_8kg);
               newItems[index].unitPrice = calculatedPrice;
               const capacity = getCapacityFromItemName(value);
-              if (capacity > 0) {
-                newItems[index].totalPrice = Math.round(Number(newItems[index].quantity) * calculatedPrice * capacity);
-              } else {
-                newItems[index].totalPrice = Math.round(Number(newItems[index].quantity) * calculatedPrice);
-              }
+              newItems[index].totalPrice = Math.round(Number(newItems[index].quantity) * calculatedPrice);
             }
-            // Update items to trigger re-render and show max quantity
-            setPurchaseItems([...newItems]);
           }
+          // Update items to trigger re-render and show max quantity
+          setPurchaseItems([...newItems]);
         });
       } else if (field === 'quantity' && value > 0 && newItems[index].itemName) {
         // Fetch empty cylinders first, then validate quantity
@@ -934,13 +923,9 @@ export default function VendorDetailPage() {
             if (maxQuantity > 0 && Number(value) > maxQuantity) {
               newItems[index].quantity = maxQuantity;
               const capacity = getCapacityFromItemName(newItems[index].itemName);
-              if (capacity > 0) {
-                newItems[index].totalPrice = Math.round(maxQuantity * Number(newItems[index].unitPrice) * capacity);
-              } else {
-                newItems[index].totalPrice = Math.round(maxQuantity * Number(newItems[index].unitPrice));
-              }
-              setPurchaseItems([...newItems]);
+              newItems[index].totalPrice = Math.round(maxQuantity * Number(newItems[index].unitPrice));
             }
+            setPurchaseItems([...newItems]);
           }
         });
       }
@@ -1568,7 +1553,7 @@ export default function VendorDetailPage() {
                       <Input
                         value={purchaseFormData.invoiceNumber}
                         readOnly
-                        className="bg-gray-50 text-gray-900 cursor-not-allowed"
+                        className="bg-gray-50 text-gray-900 cursor-not-allowed h-9 text-sm"
                         placeholder="Auto-generated"
                       />
                       <p className="text-xs text-gray-500 mt-1">
@@ -1586,6 +1571,7 @@ export default function VendorDetailPage() {
                           notes: e.target.value
                         })}
                         placeholder="Additional notes"
+                        className="h-9 text-sm"
                       />
                     </div>
                   </div>
@@ -1598,7 +1584,7 @@ export default function VendorDetailPage() {
                       </label>
                       <Input
                         type="number"
-                        value={pricePer11_8kg}
+                        value={pricePer11_8kg === 0 ? '' : pricePer11_8kg}
                         onChange={(e) => {
                           const value = parseFloat(e.target.value) || 0;
                           setPricePer11_8kg(value);
@@ -1608,7 +1594,7 @@ export default function VendorDetailPage() {
                         placeholder="Enter price per 11.8kg"
                         min="0"
                         step="0.5"
-                        className="max-w-xs"
+                        className="max-w-xs h-9 text-sm"
                       />
                       <p className="text-xs text-gray-500 mt-1">
                         Unit prices for all cylinder types will be calculated based on this base price
@@ -1629,6 +1615,7 @@ export default function VendorDetailPage() {
                             variant="outline"
                             size="sm"
                             onClick={handleAddPurchaseItem}
+                            className="h-9 text-sm"
                           >
                             <PlusIcon className="w-4 h-4 mr-1" />
                             Add Item
@@ -1647,22 +1634,22 @@ export default function VendorDetailPage() {
                             </colgroup>
                             <thead>
                               <tr className="bg-gray-50">
-                                <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-left font-semibold text-gray-700 text-sm">
                                   Category
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-left font-semibold text-gray-700 text-sm">
                                   Item Type
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-700 text-sm">
                                   Quantity
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-700 text-sm">
                                   Price Per Unit
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-700 text-sm">
                                   Price Per Item
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-700 text-sm">
                                   Actions
                                 </th>
                               </tr>
@@ -1670,70 +1657,68 @@ export default function VendorDetailPage() {
                             <tbody>
                               {getDisplayItems().map((item, index) => (
                                 <tr key={index}>
-                                  <td className="border border-gray-300 px-4 py-2">
-                                    <select
+                                  <td className="border border-gray-300 px-2 py-2">
+                                    <CustomSelect
                                       value={item.category || ''}
-                                      onChange={(e) => handlePurchaseItemChange(index, 'category', e.target.value)}
-                                      className="w-full border-0 focus:ring-1 bg-transparent text-sm font-medium text-gray-900"
-                                    >
-                                      <option value="">Select Category</option>
-                                      {[...new Set(vendorItems.map(item => normalizeCategoryName(item.category)))].map((category) => (
-                                        <option key={category} value={category}>
-                                          {category}
-                                        </option>
-                                      ))}
-                                    </select>
+                                      onChange={(val) => handlePurchaseItemChange(index, 'category', val)}
+                                      options={[
+                                        ...[...new Set(vendorItems.map(item => normalizeCategoryName(item.category)))].map((category) => ({
+                                          value: category,
+                                          label: category
+                                        }))
+                                      ]}
+                                      placeholder="Select Category"
+                                      className="h-9"
+                                    />
                                   </td>
-                                  <td className="border border-gray-300 px-4 py-2">
-                                    <select
+                                  <td className="border border-gray-300 px-2 py-2">
+                                    <CustomSelect
                                       value={item.itemName}
-                                      onChange={(e) => handlePurchaseItemChange(index, 'itemName', e.target.value)}
-                                      className="w-full border-0 focus:ring-1 bg-transparent text-sm font-medium text-gray-900"
-                                      disabled={!item.category}
-                                    >
-                                      <option value="">Select Item Type</option>
-                                      {vendorItems
+                                      onChange={(val) => handlePurchaseItemChange(index, 'itemName', val)}
+                                      options={vendorItems
                                         .filter(vi => normalizeCategoryName(vi.category) === item.category)
-                                        .map((vendorItem) => (
-                                          <option key={vendorItem.id} value={vendorItem.name}>
-                                            {vendorItem.name}
-                                          </option>
-                                        ))}
-                                    </select>
+                                        .map((vendorItem) => ({
+                                          value: vendorItem.name,
+                                          label: vendorItem.name
+                                        }))}
+                                      placeholder="Select Item Type"
+                                      className="h-9"
+                                      disabled={!item.category}
+                                    />
                                   </td>
-                                  <td className="border border-gray-300 px-4 py-2">
+                                  <td className="border border-gray-300 px-2 py-2">
                                     <Input
                                       type="number"
-                                      value={item.quantity}
+                                      value={item.quantity === 0 ? '' : item.quantity}
                                       onChange={(e) => handlePurchaseItemChange(index, 'quantity', e.target.value)}
                                       placeholder="0"
                                       min="0"
                                       step="1"
-                                      className="text-center border-0 focus:ring-1 bg-transparent"
+                                      className="text-center border-0 focus:ring-1 bg-transparent h-9 text-sm"
                                     />
                                   </td>
-                                  <td className="border border-gray-300 px-4 py-2">
+                                  <td className="border border-gray-300 px-2 py-2">
                                     <Input
                                       type="number"
-                                      value={item.unitPrice}
+                                      value={item.unitPrice === 0 ? '' : item.unitPrice}
                                       onChange={(e) => handlePurchaseItemChange(index, 'unitPrice', e.target.value)}
                                       placeholder="0"
                                       min="0"
                                       step="0.01"
-                                      className="text-center border-0 focus:ring-1 bg-transparent"
+                                      className="text-center border-0 focus:ring-1 bg-transparent h-9 text-sm"
                                     />
                                   </td>
-                                  <td className="border border-gray-300 px-4 py-2 text-center font-medium text-gray-900">
+                                  <td className="border border-gray-300 px-2 py-2 text-center font-medium text-gray-900 text-sm">
                                     Rs {item.totalPrice || 0}
                                   </td>
-                                  <td className="border border-gray-300 px-4 py-2 text-center">
+                                  <td className="border border-gray-300 px-2 py-2 text-center">
                                     <Button
                                       type="button"
                                       variant="outline"
                                       size="sm"
                                       onClick={() => handleRemovePurchaseItem(index)}
                                       disabled={getDisplayItems().length <= 1}
-                                      className="text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      className="text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed h-8 text-sm px-2"
                                     >
                                       Remove
                                     </Button>
@@ -1743,13 +1728,13 @@ export default function VendorDetailPage() {
                             </tbody>
                             <tfoot>
                               <tr className="bg-gray-50">
-                                <td colSpan={3} className="border border-gray-300 px-4 py-2 text-right font-semibold text-gray-700">
+                                <td colSpan={3} className="border border-gray-300 px-2 py-2 text-right font-semibold text-gray-700 text-sm">
                                   Grand Total:
                                 </td>
-                                <td className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-900">
+                                <td className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-900 text-sm">
                                   Rs {purchaseItems.reduce((sum, item) => sum + (item.totalPrice || 0), 0)}
                                 </td>
-                                <td className="border border-gray-300 px-4 py-2"></td>
+                                <td className="border border-gray-300 px-2 py-2"></td>
                               </tr>
                             </tfoot>
                           </table>
@@ -1767,6 +1752,7 @@ export default function VendorDetailPage() {
                             variant="outline"
                             size="sm"
                             onClick={handleAddPurchaseItem}
+                            className="h-9 text-sm"
                           >
                             <PlusIcon className="w-4 h-4 mr-1" />
                             Add Item
@@ -1784,19 +1770,19 @@ export default function VendorDetailPage() {
                             </colgroup>
                             <thead>
                               <tr className="bg-gray-50">
-                                <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-left font-semibold text-gray-700 text-sm">
                                   Item
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-700 text-sm">
                                   Quantity
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-700 text-sm">
                                   Price per Unit
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-700 text-sm">
                                   Price per Item
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-700 text-sm">
                                   Actions
                                 </th>
                               </tr>
@@ -1804,37 +1790,23 @@ export default function VendorDetailPage() {
                             <tbody>
                               {getDisplayItems().map((item, index) => (
                                 <tr key={index}>
-                                  <td className="border border-gray-300 px-4 py-2">
-                                    <select
+                                  <td className="border border-gray-300 px-2 py-2">
+                                    <CustomSelect
                                       value={item.itemName}
-                                      onChange={(e) => handlePurchaseItemChange(
-                                        index,
-                                        'itemName',
-                                        e.target.value
-                                      )}
-                                      className="w-full border-0 focus:ring-1 bg-transparent text-sm font-medium text-gray-900"
-                                    >
-                                      <option value="">Select Item</option>
-                                      {vendorItems.length > 0 ? (
-                                        vendorItems.map((vendorItem) => (
-                                          <option key={vendorItem.id} value={vendorItem.name}>
-                                            {vendorItem.name}
-                                          </option>
-                                        ))
-                                      ) : (
-                                        defaultGasItems.map((defaultItem, idx) => (
-                                          <option key={idx} value={defaultItem.itemName}>
-                                            {defaultItem.itemName}
-                                          </option>
-                                        ))
-                                      )}
-                                    </select>
+                                      onChange={(val) => handlePurchaseItemChange(index, 'itemName', val)}
+                                      options={vendorItems.map((vendorItem) => ({
+                                        value: vendorItem.name,
+                                        label: vendorItem.name
+                                      }))}
+                                      placeholder="Select Item"
+                                      className="h-9"
+                                    />
                                   </td>
-                                  <td className="border border-gray-300 px-4 py-2">
+                                  <td className="border border-gray-300 px-2 py-1">
                                     <div className="space-y-1">
                                       <Input
                                         type="number"
-                                        value={item.quantity}
+                                        value={item.quantity === 0 ? '' : item.quantity}
                                         onChange={(e) => {
                                           const maxQty = getMaxQuantity(item.itemName);
                                           const parsedValue = e.target.value === '' ? 0 : parseInt(e.target.value) || 0;
@@ -1865,12 +1837,12 @@ export default function VendorDetailPage() {
                                         min="0"
                                         step="1"
                                         max={getMaxQuantity(item.itemName) || undefined}
-                                        className="text-center border-0 focus:ring-1 bg-transparent"
+                                        className="text-center border-0 focus:ring-1 bg-transparent h-9 text-sm"
                                       />
                                       {(() => {
                                         const maxQty = getMaxQuantity(item.itemName);
                                         return maxQty !== null && maxQty !== undefined && maxQty > 0 && (
-                                          <p className="text-xs text-gray-500 text-center">
+                                          <p className="text-[10px] text-gray-500 text-center">
                                             Max: {maxQty} available
                                           </p>
                                         );
@@ -1878,17 +1850,17 @@ export default function VendorDetailPage() {
                                       {(() => {
                                         const maxQty = getMaxQuantity(item.itemName);
                                         return maxQty === 0 && item.itemName && (
-                                          <p className="text-xs text-red-500 text-center">
+                                          <p className="text-[10px] text-red-500 text-center">
                                             No empty cylinders available
                                           </p>
                                         );
                                       })()}
                                     </div>
                                   </td>
-                                  <td className="border border-gray-300 px-4 py-2">
+                                  <td className="border border-gray-300 px-2 py-1">
                                     <Input
                                       type="number"
-                                      value={item.unitPrice}
+                                      value={item.unitPrice === 0 ? '' : item.unitPrice}
                                       onChange={(e) => {
                                         // If price per 11.8kg is set, don't allow manual editing
                                         // Otherwise allow manual entry
@@ -1903,26 +1875,27 @@ export default function VendorDetailPage() {
                                       placeholder="Enter price per unit"
                                       min="0"
                                       step="0.01"
-                                      className="text-center border-0 focus:ring-1 bg-transparent"
+                                      className="text-center border-0 focus:ring-1 bg-transparent h-9 text-sm"
                                       readOnly={pricePer11_8kg > 0 && item.itemName ? true : false}
                                     />
                                     {pricePer11_8kg > 0 && item.itemName && (
-                                      <p className="text-xs text-gray-500 text-center mt-1">
+                                      <p className="text-[10px] text-gray-500 text-center mt-0.5">
                                         Auto-calculated
                                       </p>
                                     )}
                                   </td>
-                                  <td className="border border-gray-300 px-4 py-2 text-center font-medium">
+
+                                  <td className="border border-gray-300 px-2 py-2 text-center font-medium text-sm">
                                     {formatCurrency(item.totalPrice)}
                                   </td>
-                                  <td className="border border-gray-300 px-4 py-2 text-center">
+                                  <td className="border border-gray-300 px-2 py-2 text-center">
                                     <Button
                                       type="button"
                                       variant="outline"
                                       size="sm"
                                       onClick={() => handleRemovePurchaseItem(index)}
                                       disabled={getDisplayItems().length <= 1}
-                                      className="text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      className="text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed h-8 text-sm px-2"
                                     >
                                       Remove
                                     </Button>
@@ -1932,13 +1905,13 @@ export default function VendorDetailPage() {
                             </tbody>
                             <tfoot>
                               <tr className="bg-gray-50">
-                                <td colSpan={3} className="border border-gray-300 px-4 py-2 text-right font-semibold text-gray-700">
+                                <td colSpan={3} className="border border-gray-300 px-2 py-2 text-right font-semibold text-gray-700 text-sm">
                                   Grand Total:
                                 </td>
-                                <td className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-900">
+                                <td className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-900 text-sm">
                                   {formatCurrency(calculatePurchaseTotal())}
                                 </td>
-                                <td className="border border-gray-300 px-4 py-2"></td>
+                                <td className="border border-gray-300 px-2 py-2"></td>
                               </tr>
                             </tfoot>
                           </table>
@@ -1956,6 +1929,7 @@ export default function VendorDetailPage() {
                             variant="outline"
                             size="sm"
                             onClick={handleAddPurchaseItem}
+                            className="h-9 text-sm"
                           >
                             <PlusIcon className="w-4 h-4 mr-1" />
                             Add Item
@@ -1973,19 +1947,19 @@ export default function VendorDetailPage() {
                             </colgroup>
                             <thead>
                               <tr className="bg-gray-50">
-                                <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-left font-semibold text-gray-700 text-sm">
                                   Item
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-700 text-sm">
                                   Quantity
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-700 text-sm">
                                   Price per Unit
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-700 text-sm">
                                   Price per Item
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-700 text-sm">
                                   Actions
                                 </th>
                               </tr>
@@ -1993,37 +1967,30 @@ export default function VendorDetailPage() {
                             <tbody>
                               {getDisplayItems().map((item, index) => (
                                 <tr key={index}>
-                                  <td className="border border-gray-300 px-4 py-2">
-                                    <select
+                                  <td className="border border-gray-300 px-2 py-2">
+                                    <CustomSelect
                                       value={item.itemName}
-                                      onChange={(e) => handlePurchaseItemChange(
-                                        index,
-                                        'itemName',
-                                        e.target.value
-                                      )}
-                                      className="w-full border-0 focus:ring-1 bg-transparent text-sm font-medium text-gray-900"
-                                    >
-                                      <option value="">Select Item</option>
-                                      {vendorItems.length > 0 ? (
-                                        vendorItems.map((vendorItem) => (
-                                          <option key={vendorItem.id} value={vendorItem.name}>
-                                            {vendorItem.name}
-                                          </option>
-                                        ))
+                                      onChange={(val) => handlePurchaseItemChange(index, 'itemName', val)}
+                                      options={vendorItems.length > 0 ? (
+                                        vendorItems.map((vendorItem) => ({
+                                          value: vendorItem.name,
+                                          label: vendorItem.name
+                                        }))
                                       ) : (
-                                        defaultCylinderItems.map((defaultItem, idx) => (
-                                          <option key={idx} value={defaultItem.itemName}>
-                                            {defaultItem.itemName}
-                                          </option>
-                                        ))
+                                        defaultCylinderItems.map((defaultItem) => ({
+                                          value: defaultItem.itemName,
+                                          label: defaultItem.itemName
+                                        }))
                                       )}
-                                    </select>
+                                      placeholder="Select Item"
+                                      className="h-9"
+                                    />
                                   </td>
-                                  <td className="border border-gray-300 px-4 py-2">
+                                  <td className="border border-gray-300 px-2 py-2">
                                     <div className="space-y-1">
                                       <Input
                                         type="number"
-                                        value={item.quantity}
+                                        value={item.quantity === 0 ? '' : item.quantity}
                                         onChange={(e) => handlePurchaseItemChange(
                                           index,
                                           'quantity',
@@ -2033,12 +2000,12 @@ export default function VendorDetailPage() {
                                         min="0"
                                         step="1"
                                         max={getMaxQuantity(item.itemName) || undefined}
-                                        className="text-center border-0 focus:ring-1 bg-transparent"
+                                        className="text-center border-0 focus:ring-1 bg-transparent h-9 text-sm"
                                       />
                                       {(() => {
                                         const maxQty = getMaxQuantity(item.itemName);
                                         return maxQty !== null && maxQty !== undefined && maxQty > 0 && (
-                                          <p className="text-xs text-gray-500 text-center">
+                                          <p className="text-[10px] text-gray-500 text-center">
                                             Max: {maxQty} available
                                           </p>
                                         );
@@ -2046,17 +2013,17 @@ export default function VendorDetailPage() {
                                       {(() => {
                                         const maxQty = getMaxQuantity(item.itemName);
                                         return maxQty === 0 && item.itemName && (
-                                          <p className="text-xs text-red-500 text-center">
+                                          <p className="text-[10px] text-red-500 text-center">
                                             No items available
                                           </p>
                                         );
                                       })()}
                                     </div>
                                   </td>
-                                  <td className="border border-gray-300 px-4 py-2">
+                                  <td className="border border-gray-300 px-2 py-2">
                                     <Input
                                       type="number"
-                                      value={item.unitPrice}
+                                      value={item.unitPrice === 0 ? '' : item.unitPrice}
                                       onChange={(e) => handlePurchaseItemChange(
                                         index,
                                         'unitPrice',
@@ -2065,20 +2032,20 @@ export default function VendorDetailPage() {
                                       placeholder="Enter price per unit"
                                       min="0"
                                       step="1"
-                                      className="text-center border-0 focus:ring-1 bg-transparent"
+                                      className="text-center border-0 focus:ring-1 bg-transparent h-9 text-sm"
                                     />
                                   </td>
-                                  <td className="border border-gray-300 px-4 py-2 text-center font-medium">
+                                  <td className="border border-gray-300 px-2 py-2 text-center font-medium text-sm">
                                     {formatCurrency(item.totalPrice)}
                                   </td>
-                                  <td className="border border-gray-300 px-4 py-2 text-center">
+                                  <td className="border border-gray-300 px-2 py-2 text-center">
                                     <Button
                                       type="button"
                                       variant="outline"
                                       size="sm"
                                       onClick={() => handleRemovePurchaseItem(index)}
                                       disabled={getDisplayItems().length <= 1}
-                                      className="text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      className="text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed h-8 text-sm px-2"
                                     >
                                       Remove
                                     </Button>
@@ -2088,13 +2055,13 @@ export default function VendorDetailPage() {
                             </tbody>
                             <tfoot>
                               <tr className="bg-gray-50">
-                                <td colSpan={3} className="border border-gray-300 px-4 py-2 text-right font-semibold text-gray-700">
+                                <td colSpan={3} className="border border-gray-300 px-2 py-2 text-right font-semibold text-gray-700 text-sm">
                                   Grand Total:
                                 </td>
-                                <td className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-900">
+                                <td className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-900 text-sm">
                                   {formatCurrency(calculatePurchaseTotal())}
                                 </td>
-                                <td className="border border-gray-300 px-4 py-2"></td>
+                                <td className="border border-gray-300 px-2 py-2"></td>
                               </tr>
                             </tfoot>
                           </table>
@@ -2112,6 +2079,7 @@ export default function VendorDetailPage() {
                             variant="outline"
                             size="sm"
                             onClick={handleAddPurchaseItem}
+                            className="h-9 text-sm"
                           >
                             <PlusIcon className="w-4 h-4 mr-1" />
                             Add Item
@@ -2129,19 +2097,19 @@ export default function VendorDetailPage() {
                             </colgroup>
                             <thead>
                               <tr className="bg-gray-50">
-                                <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-left font-semibold text-gray-700 text-sm">
                                   Item
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-700 text-sm">
                                   Quantity
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-700 text-sm">
                                   Price per Unit
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-700 text-sm">
                                   Price per Item
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-700 text-sm">
                                   Actions
                                 </th>
                               </tr>
@@ -2149,36 +2117,29 @@ export default function VendorDetailPage() {
                             <tbody>
                               {getDisplayItems().map((item, index) => (
                                 <tr key={index}>
-                                  <td className="border border-gray-300 px-4 py-2">
-                                    <select
+                                  <td className="border border-gray-300 px-2 py-2">
+                                    <CustomSelect
                                       value={item.itemName}
-                                      onChange={(e) => handlePurchaseItemChange(
-                                        index,
-                                        'itemName',
-                                        e.target.value
-                                      )}
-                                      className="w-full border-0 focus:ring-1 bg-transparent text-sm font-medium text-gray-900"
-                                    >
-                                      <option value="">Select Item</option>
-                                      {vendorItems.length > 0 ? (
-                                        vendorItems.map((vendorItem) => (
-                                          <option key={vendorItem.id} value={vendorItem.name}>
-                                            {vendorItem.name}
-                                          </option>
-                                        ))
+                                      onChange={(val) => handlePurchaseItemChange(index, 'itemName', val)}
+                                      options={vendorItems.length > 0 ? (
+                                        vendorItems.map((vendorItem) => ({
+                                          value: vendorItem.name,
+                                          label: vendorItem.name
+                                        }))
                                       ) : (
-                                        defaultVaporizerItems.map((defaultItem, idx) => (
-                                          <option key={idx} value={defaultItem.itemName}>
-                                            {defaultItem.itemName}
-                                          </option>
-                                        ))
+                                        defaultVaporizerItems.map((defaultItem) => ({
+                                          value: defaultItem.itemName,
+                                          label: defaultItem.itemName
+                                        }))
                                       )}
-                                    </select>
+                                      placeholder="Select Item"
+                                      className="h-9"
+                                    />
                                   </td>
-                                  <td className="border border-gray-300 px-4 py-2">
+                                  <td className="border border-gray-300 px-2 py-2">
                                     <Input
                                       type="number"
-                                      value={item.quantity}
+                                      value={item.quantity === 0 ? '' : item.quantity}
                                       onChange={(e) => handlePurchaseItemChange(
                                         index,
                                         'quantity',
@@ -2187,13 +2148,13 @@ export default function VendorDetailPage() {
                                       placeholder="Enter quantity"
                                       min="0"
                                       step="1"
-                                      className="text-center border-0 focus:ring-1 bg-transparent"
+                                      className="text-center border-0 focus:ring-1 bg-transparent h-9 text-sm"
                                     />
                                   </td>
-                                  <td className="border border-gray-300 px-4 py-2">
+                                  <td className="border border-gray-300 px-2 py-2">
                                     <Input
                                       type="number"
-                                      value={item.unitPrice}
+                                      value={item.unitPrice === 0 ? '' : item.unitPrice}
                                       onChange={(e) => handlePurchaseItemChange(
                                         index,
                                         'unitPrice',
@@ -2202,20 +2163,20 @@ export default function VendorDetailPage() {
                                       placeholder="Enter price per unit"
                                       min="0"
                                       step="1"
-                                      className="text-center border-0 focus:ring-1 bg-transparent"
+                                      className="text-center border-0 focus:ring-1 bg-transparent h-9 text-sm"
                                     />
                                   </td>
-                                  <td className="border border-gray-300 px-4 py-2 text-center font-medium">
+                                  <td className="border border-gray-300 px-2 py-2 text-center font-medium text-sm">
                                     {formatCurrency(item.totalPrice)}
                                   </td>
-                                  <td className="border border-gray-300 px-4 py-2 text-center">
+                                  <td className="border border-gray-300 px-2 py-2 text-center">
                                     <Button
                                       type="button"
                                       variant="outline"
                                       size="sm"
                                       onClick={() => handleRemovePurchaseItem(index)}
                                       disabled={getDisplayItems().length <= 1}
-                                      className="text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      className="text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed h-8 text-sm px-2"
                                     >
                                       Remove
                                     </Button>
@@ -2225,13 +2186,13 @@ export default function VendorDetailPage() {
                             </tbody>
                             <tfoot>
                               <tr className="bg-gray-50">
-                                <td colSpan={3} className="border border-gray-300 px-4 py-2 text-right font-semibold text-gray-700">
+                                <td colSpan={3} className="border border-gray-300 px-2 py-2 text-right font-semibold text-gray-700 text-sm">
                                   Grand Total:
                                 </td>
-                                <td className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-900">
+                                <td className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-900 text-sm">
                                   {formatCurrency(calculatePurchaseTotal())}
                                 </td>
-                                <td className="border border-gray-300 px-4 py-2"></td>
+                                <td className="border border-gray-300 px-2 py-2"></td>
                               </tr>
                             </tfoot>
                           </table>
@@ -2249,6 +2210,7 @@ export default function VendorDetailPage() {
                             variant="outline"
                             size="sm"
                             onClick={handleAddPurchaseItem}
+                            className="h-9 text-sm"
                           >
                             <PlusIcon className="w-4 h-4 mr-1" />
                             Add Item
@@ -2266,19 +2228,19 @@ export default function VendorDetailPage() {
                             </colgroup>
                             <thead>
                               <tr className="bg-gray-50">
-                                <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-left font-semibold text-gray-700 text-sm">
                                   Item
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-700 text-sm">
                                   Quantity
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-700 text-sm">
                                   Price per Unit
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-700 text-sm">
                                   Price per Item
                                 </th>
-                                <th className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-700">
+                                <th className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-700 text-sm">
                                   Actions
                                 </th>
                               </tr>
@@ -2286,32 +2248,26 @@ export default function VendorDetailPage() {
                             <tbody>
                               {getDisplayItems().map((item, index) => (
                                 <tr key={index}>
-                                  <td className="border border-gray-300 px-4 py-2">
-                                    <select
+                                  <td className="border border-gray-300 px-2 py-2">
+                                    <CustomSelect
                                       value={item.itemName}
-                                      onChange={(e) => handlePurchaseItemChange(
-                                        index,
-                                        'itemName',
-                                        e.target.value
-                                      )}
-                                      className="w-full border-0 focus:ring-1 bg-transparent text-sm font-medium text-gray-900"
-                                    >
-                                      <option value="">Select Item</option>
-                                      {vendorItems.length > 0 ? (
-                                        vendorItems.map((vendorItem) => (
-                                          <option key={vendorItem.id} value={vendorItem.name}>
-                                            {vendorItem.name}
-                                          </option>
-                                        ))
+                                      onChange={(val) => handlePurchaseItemChange(index, 'itemName', val)}
+                                      options={vendorItems.length > 0 ? (
+                                        vendorItems.map((vendorItem) => ({
+                                          value: vendorItem.name,
+                                          label: vendorItem.name
+                                        }))
                                       ) : (
-                                        <option value={item.itemName}>{item.itemName}</option>
+                                        [{ value: item.itemName, label: item.itemName }]
                                       )}
-                                    </select>
+                                      placeholder="Select Item"
+                                      className="h-9"
+                                    />
                                   </td>
-                                  <td className="border border-gray-300 px-4 py-2">
+                                  <td className="border border-gray-300 px-2 py-2">
                                     <Input
                                       type="number"
-                                      value={item.quantity}
+                                      value={item.quantity === 0 ? '' : item.quantity}
                                       onChange={(e) => handlePurchaseItemChange(
                                         index,
                                         'quantity',
@@ -2320,13 +2276,13 @@ export default function VendorDetailPage() {
                                       placeholder="Enter quantity"
                                       min="0"
                                       step="1"
-                                      className="text-center border-0 focus:ring-1 bg-transparent"
+                                      className="text-center border-0 focus:ring-1 bg-transparent h-9 text-sm"
                                     />
                                   </td>
-                                  <td className="border border-gray-300 px-4 py-2">
+                                  <td className="border border-gray-300 px-2 py-2">
                                     <Input
                                       type="number"
-                                      value={item.unitPrice}
+                                      value={item.unitPrice === 0 ? '' : item.unitPrice}
                                       onChange={(e) => handlePurchaseItemChange(
                                         index,
                                         'unitPrice',
@@ -2335,20 +2291,20 @@ export default function VendorDetailPage() {
                                       placeholder="Enter price per unit"
                                       min="0"
                                       step="1"
-                                      className="text-center border-0 focus:ring-1 bg-transparent"
+                                      className="text-center border-0 focus:ring-1 bg-transparent h-9 text-sm"
                                     />
                                   </td>
-                                  <td className="border border-gray-300 px-4 py-2 text-center font-medium">
+                                  <td className="border border-gray-300 px-2 py-2 text-center font-medium text-sm">
                                     {formatCurrency(Number(item.totalPrice) || 0)}
                                   </td>
-                                  <td className="border border-gray-300 px-4 py-2 text-center">
+                                  <td className="border border-gray-300 px-2 py-2 text-center">
                                     <Button
                                       type="button"
                                       variant="outline"
                                       size="sm"
                                       onClick={() => handleRemovePurchaseItem(index)}
                                       disabled={getDisplayItems().length <= 1}
-                                      className="text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      className="text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed h-8 text-sm px-2"
                                     >
                                       Remove
                                     </Button>
@@ -2358,13 +2314,13 @@ export default function VendorDetailPage() {
                             </tbody>
                             <tfoot>
                               <tr className="bg-gray-50">
-                                <td colSpan={3} className="border border-gray-300 px-4 py-2 text-right font-semibold text-gray-700">
+                                <td colSpan={3} className="border border-gray-300 px-2 py-2 text-right font-semibold text-gray-700 text-sm">
                                   Grand Total:
                                 </td>
-                                <td className="border border-gray-300 px-4 py-2 text-center font-semibold text-gray-900">
-                                  {formatCurrency(calculatePurchaseTotal() || 0)}
+                                <td className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-900 text-sm">
+                                  {formatCurrency(calculatePurchaseTotal())}
                                 </td>
-                                <td className="border border-gray-300 px-4 py-2"></td>
+                                <td className="border border-gray-300 px-2 py-2"></td>
                               </tr>
                             </tfoot>
                           </table>
@@ -2380,7 +2336,7 @@ export default function VendorDetailPage() {
                       </label>
                       <Input
                         type="number"
-                        value={purchaseFormData.paidAmount}
+                        value={purchaseFormData.paidAmount === 0 ? '' : purchaseFormData.paidAmount}
                         onChange={(e) => {
                           const val = parseFloat(e.target.value);
                           setPurchaseFormData({
@@ -2391,6 +2347,7 @@ export default function VendorDetailPage() {
                         placeholder="Amount paid now"
                         min="0"
                         step="1"
+                        className="h-9 text-sm"
                       />
                       <p className="text-sm text-gray-500 mt-1">
                         Leave as 0 if payment will be made later
@@ -2400,22 +2357,23 @@ export default function VendorDetailPage() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Payment Method <span className="text-red-500">*</span>
                       </label>
-                      <select
+                      <CustomSelect
                         value={purchaseFormData.paymentMethod}
-                        onChange={(e) => setPurchaseFormData({
+                        onChange={(val) => setPurchaseFormData({
                           ...purchaseFormData,
-                          paymentMethod: e.target.value
+                          paymentMethod: val
                         })}
-                        className="flex h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-colors duration-200"
+                        options={[
+                          { value: "CASH", label: "💵 Cash" },
+                          { value: "BANK_TRANSFER", label: "🏦 Bank Transfer" },
+                          { value: "CHECK", label: "📄 Check" },
+                          { value: "CREDIT_CARD", label: "💳 Credit Card" },
+                          { value: "DEBIT_CARD", label: "💳 Debit Card" },
+                          { value: "WIRE_TRANSFER", label: "🔗 Wire Transfer" }
+                        ]}
+                        className="h-9"
                         required
-                      >
-                        <option value="CASH">💵 Cash</option>
-                        <option value="BANK_TRANSFER">🏦 Bank Transfer</option>
-                        <option value="CHECK">📄 Check</option>
-                        <option value="CREDIT_CARD">💳 Credit Card</option>
-                        <option value="DEBIT_CARD">💳 Debit Card</option>
-                        <option value="WIRE_TRANSFER">🔗 Wire Transfer</option>
-                      </select>
+                      />
                     </div>
                   </div>
 
@@ -2745,10 +2703,13 @@ export default function VendorDetailPage() {
                     </label>
                     <Input
                       value={itemFormData.name}
-                      onChange={(e) => setItemFormData({
-                        ...itemFormData,
-                        name: e.target.value
-                      })}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setItemFormData({
+                          ...itemFormData,
+                          name: val.charAt(0).toUpperCase() + val.slice(1)
+                        });
+                      }}
                       placeholder="e.g., Domestic (11.8kg) Cylinder"
                       required
                     />
@@ -2759,10 +2720,13 @@ export default function VendorDetailPage() {
                     </label>
                     <Input
                       value={itemFormData.category}
-                      onChange={(e) => setItemFormData({
-                        ...itemFormData,
-                        category: e.target.value
-                      })}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setItemFormData({
+                          ...itemFormData,
+                          category: val.charAt(0).toUpperCase() + val.slice(1)
+                        });
+                      }}
                       placeholder="e.g., Cylinder, Gas, Vaporizer"
                     />
                   </div>
@@ -2772,10 +2736,13 @@ export default function VendorDetailPage() {
                     </label>
                     <Input
                       value={itemFormData.description}
-                      onChange={(e) => setItemFormData({
-                        ...itemFormData,
-                        description: e.target.value
-                      })}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setItemFormData({
+                          ...itemFormData,
+                          description: val.charAt(0).toUpperCase() + val.slice(1)
+                        });
+                      }}
                       placeholder="Item description"
                     />
                   </div>
