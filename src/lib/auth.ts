@@ -36,6 +36,13 @@ export const authOptions: NextAuthOptions = {
             return null;
           }
 
+          // Strict Role Based Access Control
+          // Only allow ADMIN and SUPER_ADMIN to login
+          if (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+            console.warn(`Login attempt denied for user ${user.email} with role ${user.role}`);
+            return null;
+          }
+
           return {
             id: user.id,
             email: user.email,
