@@ -6,14 +6,24 @@ export async function GET(request: NextRequest) {
     // Get user info from headers (set by middleware)
     const userId = request.headers.get('x-user-id');
     const userRole = request.headers.get('x-user-role');
-    
+
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // For customer payments, we need to get the customer ID from the user
+    // First find the user to get their email
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Then find the customer linked to this email
     const customer = await prisma.customer.findFirst({
-      where: { userId: userId }
+      where: { email: user.email }
     });
 
     if (!customer) {
@@ -28,7 +38,7 @@ export async function GET(request: NextRequest) {
     // Get customer ledger entries (payments)
     const [payments, total] = await Promise.all([
       prisma.customerLedger.findMany({
-        where: { 
+        where: {
           customerId: customer.id,
           transactionType: 'PAYMENT'
         },
@@ -37,7 +47,7 @@ export async function GET(request: NextRequest) {
         orderBy: { createdAt: 'desc' }
       }),
       prisma.customerLedger.count({
-        where: { 
+        where: {
           customerId: customer.id,
           transactionType: 'PAYMENT'
         }

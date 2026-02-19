@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
       }),
       prisma.b2CCylinderHolding.aggregate({
         where: { isReturned: false },
-        _sum: { quantity: true }
+        _sum: { quantity: true, securityAmount: true }
       })
     ]);
 
@@ -121,6 +121,7 @@ export async function GET(request: NextRequest) {
     const summary = {
       totalCustomers,
       totalProfit: Number(profitSummary._sum.totalProfit || 0),
+      totalSecurity: Number(cylinderSummary._sum.securityAmount || 0),
       cylinderBreakdown
     };
 

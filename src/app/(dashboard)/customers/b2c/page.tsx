@@ -86,6 +86,7 @@ interface B2CCustomersResponse {
   summary: {
     totalCustomers: number;
     totalProfit: number;
+    totalSecurity: number;
     cylinderBreakdown: Record<string, number>;
   };
   cylinderTypes: string[];
@@ -108,10 +109,12 @@ export default function B2CCustomersPage() {
   const [summary, setSummary] = useState<{
     totalCustomers: number;
     totalProfit: number;
+    totalSecurity: number;
     cylinderBreakdown: Record<string, number>;
   }>({
     totalCustomers: 0,
     totalProfit: 0,
+    totalSecurity: 0,
     cylinderBreakdown: {}
   });
   const [cylinderTypes, setCylinderTypes] = useState<string[]>([]);
@@ -372,7 +375,7 @@ export default function B2CCustomersPage() {
 
       {/* Summary Cards */}
       <Card className="border shadow-sm bg-white overflow-hidden">
-        <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x border-gray-100">
+        <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x border-gray-100">
           {/* Total Cylinders */}
           <div className="p-2 flex flex-col items-center text-center hover:bg-orange-50/50 transition-colors">
             <span className="text-[10px] font-medium text-orange-600 uppercase tracking-wider mb-0.5">TOTAL CYLINDERS WITH CUSTOMERS AGAINST SECURITY</span>
@@ -386,6 +389,13 @@ export default function B2CCustomersPage() {
                 </Badge>
               ))}
             </div>
+          </div>
+
+          {/* Total Security */}
+          <div className="p-2 flex flex-col items-center text-center hover:bg-purple-50/50 transition-colors">
+            <span className="text-[10px] font-medium text-purple-600 uppercase tracking-wider mb-0.5">TOTAL SECURITY</span>
+            <span className="text-xl font-bold text-purple-600 mb-0.5">{formatCurrency(summary.totalSecurity)}</span>
+            <span className="text-[10px] text-gray-500">Held from Customers</span>
           </div>
 
           {/* Total Customers */}
