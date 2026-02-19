@@ -3,14 +3,16 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { signIn, useSession } from 'next-auth/react';
+import { logoBase64 } from '@/lib/logoBase64';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { 
-  EyeIcon, 
-  EyeSlashIcon, 
+import {
+  EyeIcon,
+  EyeSlashIcon,
   CubeIcon,
   ExclamationCircleIcon,
   CheckCircleIcon,
@@ -59,7 +61,7 @@ function LoginForm() {
     setIsLoading(true);
     setError('');
     setSuccess('');
-    
+
     try {
       const result = await signIn('credentials', {
         email,
@@ -87,25 +89,23 @@ function LoginForm() {
       <div className="max-w-md w-full space-y-8">
         {/* Header */}
         <div className="text-center">
-          <div className="flex justify-center mb-6">
-            <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl flex items-center justify-center shadow-lg">
-              <CubeIcon className="w-8 h-8 text-white" />
-            </div>
+          <div className="flex justify-center mb-0">
+            <img
+              src={`data:image/png;base64,${logoBase64}`}
+              alt="Flamora Logo"
+              className="w-64 sm:w-72 h-auto object-contain drop-shadow-sm"
+            />
           </div>
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">
-            Welcome Back
-          </h2>
-          <p className="text-gray-600 font-medium">
-            Sign in to your LPG Gas Cylinder Business account
-          </p>
         </div>
-        
+
         {/* Login Card */}
         <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl text-center font-bold text-gray-900">Sign In</CardTitle>
-            <CardDescription className="text-center text-gray-600">
-              Enter your credentials to access your account
+            <CardTitle className="text-2xl text-center font-bold text-gray-900">
+              Welcome Back
+            </CardTitle>
+            <CardDescription className="text-center text-gray-600 pt-2">
+              Enter your credentials to access your Flamora LPG Business account
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -117,14 +117,14 @@ function LoginForm() {
                   <p className="text-sm font-medium text-red-700">{error}</p>
                 </div>
               )}
-              
+
               {success && (
                 <div className="flex items-center space-x-3 p-4 bg-green-50 border border-green-200 rounded-lg">
                   <CheckCircleIcon className="w-5 h-5 text-green-600 flex-shrink-0" />
                   <p className="text-sm font-medium text-green-700">{success}</p>
                 </div>
               )}
-              
+
               {/* Email Field */}
               <div className="space-y-2">
                 <label htmlFor="email" className="text-sm font-semibold text-gray-700">
@@ -190,43 +190,13 @@ function LoginForm() {
                 )}
               </Button>
 
-              {/* Demo Credentials */}
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
-                <div className="flex items-center space-x-2 mb-3">
-                  <ShieldCheckIcon className="w-5 h-5 text-blue-600" />
-                  <h4 className="text-sm font-semibold text-gray-900">Demo Credentials</h4>
-                </div>
-                <div className="space-y-1 text-xs text-gray-700">
-                  <p><span className="font-semibold">Email:</span> admin@lpg.com</p>
-                  <p><span className="font-semibold">Password:</span> admin123</p>
-                </div>
-                <Badge variant="secondary" className="mt-2 text-xs">
-                  For testing purposes
-                </Badge>
-              </div>
-
               {/* Links */}
-              <div className="text-center space-y-3">
-                <Link 
-                  href="/" 
-                  className="inline-block text-sm text-gray-600 hover:text-gray-800 transition-colors font-medium"
+              <div className="text-center space-y-3 pt-2">
+                <Link
+                  href="/"
+                  className="inline-block text-sm text-gray-500 hover:text-gray-800 transition-colors font-medium"
                 >
                   ← Back to Landing Page
-                </Link>
-                <p className="text-sm text-gray-600">
-                  Don't have an account?{' '}
-                  <Link 
-                    href="/register" 
-                    className="font-semibold text-blue-600 hover:text-blue-700 transition-colors"
-                  >
-                    Sign up
-                  </Link>
-                </p>
-                <Link 
-                  href="/forgot-password" 
-                  className="text-sm text-gray-500 hover:text-gray-700 transition-colors font-medium"
-                >
-                  Forgot your password?
                 </Link>
               </div>
             </form>
