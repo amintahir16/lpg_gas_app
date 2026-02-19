@@ -11,11 +11,17 @@ model User {
   id               String            @id @default(cuid())
   email            String            @unique
   name             String?
+  firstName        String?
+  lastName         String?
+  phone            String?
+  cnic             String?           @unique
   password         String
   role             Role              @default(USER)
   isActive         Boolean           @default(true)
+  lastActiveAt     DateTime?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
+  activityLogs     ActivityLog[]
   b2b_transactions B2BTransaction[]
   cylinderRentals  CylinderRental[]  @relation("UserCylinderRentals")
   dailyPlantPrices DailyPlantPrice[]
@@ -868,4 +874,19 @@ enum NotificationPriority {
   MEDIUM
   HIGH
   URGENT
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  userId     String
+  action     String
+  entityType String?
+  entityId   String?
+  details    String?
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@map("activity_logs")
 }

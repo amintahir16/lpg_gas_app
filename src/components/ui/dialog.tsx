@@ -31,12 +31,12 @@ const DialogContext = React.createContext<{
   onOpenChange: (open: boolean) => void;
 }>({
   open: false,
-  onOpenChange: () => {},
+  onOpenChange: () => { },
 });
 
 export function Dialog({ open = false, onOpenChange, children }: DialogProps) {
   return (
-    <DialogContext.Provider value={{ open, onOpenChange: onOpenChange || (() => {}) }}>
+    <DialogContext.Provider value={{ open, onOpenChange: onOpenChange || (() => { }) }}>
       {children}
     </DialogContext.Provider>
   );
@@ -72,7 +72,7 @@ export function DialogContent({ className, children, ...props }: DialogContentPr
         className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm transition-opacity"
         onClick={() => onOpenChange(false)}
       />
-      
+
       {/* Dialog */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
@@ -91,7 +91,7 @@ export function DialogContent({ className, children, ...props }: DialogContentPr
             <XMarkIcon className="h-5 w-5 text-gray-500" />
             <span className="sr-only">Close</span>
           </button>
-          
+
           {children}
         </div>
       </div>
@@ -132,9 +132,47 @@ export function DialogDescription({ className, children, ...props }: DialogDescr
   );
 }
 
+// DialogTrigger Component
+export function DialogTrigger({ children, asChild }: { children: React.ReactNode; asChild?: boolean }) {
+  const { onOpenChange } = React.useContext(DialogContext);
+
+  if (asChild && React.isValidElement(children)) {
+    return React.cloneElement(children as React.ReactElement<any>, {
+      onClick: (e: React.MouseEvent) => {
+        // Call original onClick if exists
+        (children as any).props.onClick?.(e);
+        onOpenChange(true);
+      }
+    });
+  }
+
+  return (
+    <button onClick={() => onOpenChange(true)}>
+      {children}
+    </button>
+  );
+}
+
+// DialogFooter Component
+export function DialogFooter({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={cn(
+        'flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2',
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </div>
+  );
+}
+
 Dialog.displayName = 'Dialog';
+DialogTrigger.displayName = 'DialogTrigger';
 DialogContent.displayName = 'DialogContent';
 DialogHeader.displayName = 'DialogHeader';
+DialogFooter.displayName = 'DialogFooter';
 DialogTitle.displayName = 'DialogTitle';
 DialogDescription.displayName = 'DialogDescription';
 

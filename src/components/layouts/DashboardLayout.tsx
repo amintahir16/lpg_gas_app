@@ -4,19 +4,20 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
-import { 
-  HomeIcon, 
-  UsersIcon, 
-  CubeIcon, 
-  CurrencyDollarIcon, 
-  BuildingOfficeIcon, 
+import {
+  HomeIcon,
+  UsersIcon,
+  CubeIcon,
+  CurrencyDollarIcon,
+  BuildingOfficeIcon,
   ChartBarIcon,
   CogIcon,
   Bars3Icon,
   XMarkIcon,
   UserCircleIcon,
   ArrowRightOnRectangleIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
+  UserGroupIcon
 } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -35,6 +36,7 @@ interface NavigationItem {
 
 const superAdminNavigation: NavigationItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, roles: ['SUPER_ADMIN'] },
+  { name: 'Team Management', href: '/admin/team', icon: UserGroupIcon, roles: ['SUPER_ADMIN'] },
   { name: 'Customers', href: '/customers', icon: UsersIcon, roles: ['SUPER_ADMIN'] },
   { name: 'Inventory', href: '/inventory', icon: CubeIcon, roles: ['SUPER_ADMIN'] },
   { name: 'Financial', href: '/financial', icon: CurrencyDollarIcon, roles: ['SUPER_ADMIN'] },
@@ -70,7 +72,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session, status } = useSession();
-  
+
   // Redirect to login if not authenticated
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -101,7 +103,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const isCustomer = userRole === 'USER';
   const isAdmin = userRole === 'ADMIN';
   const isSuperAdmin = userRole === 'SUPER_ADMIN';
-  
+
   let currentNavigation;
   if (isCustomer) {
     currentNavigation = customerNavigation;
@@ -122,7 +124,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 z-40 bg-gray-600 bg-opacity-75 lg:hidden backdrop-blur-sm"
           onClick={() => setSidebarOpen(false)}
         />
@@ -152,7 +154,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <XMarkIcon className="w-5 h-5" />
           </Button>
         </div>
-        
+
         {/* Navigation */}
         <nav className="mt-8 px-4">
           <div className="space-y-1">
@@ -240,7 +242,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               ← Landing
             </Link>
           </div>
-          
+
           <div className="flex items-center space-x-4">
             {/* Notifications */}
             <NotificationBell />
@@ -318,8 +320,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
             {/* User Menu */}
             <div className="hidden lg:flex items-center space-x-4">
-              <Link 
-                href="/" 
+              <Link
+                href="/"
                 className="group inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded-lg transition-all duration-300 hover:shadow-md"
               >
                 <span>Landing Page</span>
@@ -328,10 +330,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <span className="text-sm font-medium text-gray-700">
                 Welcome, {session?.user?.name}
               </span>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleLogout} 
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLogout}
                 className="font-medium border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition-all duration-300"
               >
                 Logout
