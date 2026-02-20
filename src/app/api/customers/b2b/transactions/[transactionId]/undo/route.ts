@@ -11,7 +11,7 @@ export async function POST(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user || (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -67,12 +67,27 @@ export async function POST(
       // Reverse balance based on transaction type
       switch (transaction.transactionType) {
         case 'SALE':
-          // Reverse: subtract unpaid amount (or full amount if old format)
-          const unpaidAmount = transaction.unpaidAmount 
-            ? parseFloat(transaction.unpaidAmount.toString())
-            : parseFloat(transaction.totalAmount.toString());
-          newLedgerBalance -= unpaidAmount;
-          
+          // Calculate buyback credit included in this transaction
+          let totalBuybackCredit = 0;
+          transaction.items.forEach((item: any) => {
+            if (item.buybackTotal && Number(item.buybackTotal) > 0) {
+              totalBuybackCredit += Number(item.buybackTotal);
+            }
+          });
+
+          let impactToReverse = 0;
+          if (transaction.paymentStatus === 'FULLY_PAID') {
+            impactToReverse = 0 - totalBuybackCredit; // fully paid sale, but buybacks gave credit
+          } else if (transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined) {
+            // unpaidAmount is gross, so we must subtract buybackCredit to find net impact
+            impactToReverse = parseFloat(transaction.unpaidAmount.toString()) - totalBuybackCredit;
+          } else {
+            // legacy format fallback
+            impactToReverse = parseFloat(transaction.totalAmount.toString()) - totalBuybackCredit;
+          }
+
+          newLedgerBalance -= impactToReverse;
+
           // Reverse cylinder due counts
           // In SALE transactions, items can be:
           // 1. Delivered cylinders (increases due) - has cylinderType, NO returnedCondition
@@ -80,7 +95,7 @@ export async function POST(
           transaction.items.forEach((item: any) => {
             if (item.cylinderType && item.quantity > 0) {
               const quantity = Number(item.quantity);
-              
+
               if (item.returnedCondition === 'EMPTY') {
                 // This was a returned cylinder - it DECREASED due, so we ADD it back
                 switch (item.cylinderType) {
@@ -176,15 +191,15 @@ export async function POST(
       // 3. Reverse inventory changes
       if (transaction.transactionType === 'SALE') {
         // Return cylinders to inventory - only for delivered cylinders (not returned ones)
-        const gasItems = transaction.items.filter((item: any) => 
-          item.cylinderType && 
-          item.quantity > 0 && 
+        const gasItems = transaction.items.filter((item: any) =>
+          item.cylinderType &&
+          item.quantity > 0 &&
           item.returnedCondition !== 'EMPTY' // Only reverse delivered cylinders, not returned ones
         );
-        
+
         for (const item of gasItems) {
           const quantity = Number(item.quantity);
-          const cylinderType = item.cylinderType; // Use string directly
+          const cylinderType = item.cylinderType as string;
 
           // Find cylinders that are WITH_CUSTOMER for this customer
           // Order by most recent first (or by some consistent order) to match transaction order
@@ -214,18 +229,18 @@ export async function POST(
             console.warn(`⚠️ Warning: Could not find ${quantity} ${cylinderType} cylinders with customer ${customer.name}. Found: ${cylindersWithCustomer.length}`);
           }
         }
-        
+
         // Handle cylinders that were returned in the SALE transaction
         // These need to be removed from inventory (they were added back as EMPTY)
-        const returnedCylinders = transaction.items.filter((item: any) => 
-          item.cylinderType && 
-          item.quantity > 0 && 
+        const returnedCylinders = transaction.items.filter((item: any) =>
+          item.cylinderType &&
+          item.quantity > 0 &&
           item.returnedCondition === 'EMPTY'
         );
-        
+
         for (const item of returnedCylinders) {
           const quantity = Number(item.quantity);
-          const cylinderType = item.cylinderType; // Use string directly
+          const cylinderType = item.cylinderType as string;
 
           // Find EMPTY cylinders in store (these were added back during the return)
           const emptyCylinders = await tx.cylinder.findMany({
@@ -257,21 +272,21 @@ export async function POST(
 
         // Return accessories to inventory
         const accessoryItems = transaction.items.filter((item: any) => !item.cylinderType);
-        
+
         if (accessoryItems.length > 0) {
           for (const item of accessoryItems) {
-            if (item.quantity <= 0) continue;
-            
+            if (Number(item.quantity) <= 0) continue;
+
             const quantity = Number(item.quantity);
             const productName = item.productName || '';
-            
-            // Parse category and itemType from productName (format: "Category - ItemType")
-            const parts = productName.split(' - ');
-            const category = parts[0] || '';
-            const itemType = parts[1] || category; // Fallback to category if no separator
-            
-            console.log(`Reversing accessory: ${category} - ${itemType}, quantity: ${quantity}`);
-            
+
+            // Parse category and itemType securely using saved database fields
+            const category = item.category || productName.split(' - ')[0] || '';
+            // If itemType is explicitly in productName, use it; otherwise fallback to category
+            const itemType = productName.includes(' - ') ? productName.split(' - ').slice(1).join(' - ') : category;
+
+            console.log(`Reversing custom accessory: ${category} - ${itemType}, quantity: ${quantity}`);
+
             // Try to find in CustomItem table (used by InventoryDeductionService)
             const customItem = await tx.customItem.findFirst({
               where: {
@@ -280,12 +295,12 @@ export async function POST(
                 isActive: true
               }
             });
-            
+
             if (customItem) {
               // Reverse the deduction by incrementing quantity
               const newQuantity = customItem.quantity + quantity;
               const newTotalCost = newQuantity * Number(customItem.costPerPiece);
-              
+
               await tx.customItem.update({
                 where: { id: customItem.id },
                 data: {
@@ -322,7 +337,7 @@ export async function POST(
                     name: { contains: productName, mode: 'insensitive' }
                   }
                 });
-                
+
                 if (productByName) {
                   await tx.product.update({
                     where: { id: productByName.id },
@@ -344,10 +359,10 @@ export async function POST(
         // Reverse: Remove cylinders from inventory (they were added back as EMPTY)
         // Some may have been existing cylinders updated, some may have been newly created
         const gasItems = transaction.items.filter((item: any) => item.cylinderType && item.quantity > 0);
-        
+
         for (const item of gasItems) {
           const quantity = Number(item.quantity);
-          const cylinderType = item.cylinderType; // Use string directly
+          const cylinderType = item.cylinderType as string;
 
           // Find EMPTY cylinders in store (prioritize most recently updated - likely from this transaction)
           const emptyCylinders = await tx.cylinder.findMany({
@@ -391,9 +406,9 @@ export async function POST(
       }
     });
 
-    return NextResponse.json({ 
-      success: true, 
-      message: 'Transaction successfully voided and all changes reversed' 
+    return NextResponse.json({
+      success: true,
+      message: 'Transaction successfully voided and all changes reversed'
     });
   } catch (error) {
     console.error('Error undoing transaction:', error);

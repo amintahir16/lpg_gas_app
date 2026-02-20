@@ -75,6 +75,8 @@ export async function GET(
         let totalProfit = 0;
 
         allTransactions.forEach(tx => {
+            if (tx.voided) return; // Do not include voided transactions in lifetime totals
+
             const finalAmount = parseFloat(tx.finalAmount.toString());
             const profit = parseFloat(tx.actualProfit.toNumber().toString());
 

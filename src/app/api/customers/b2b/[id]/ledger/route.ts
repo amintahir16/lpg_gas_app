@@ -80,8 +80,10 @@ export async function GET(
       switch (transaction.transactionType) {
         case 'SALE':
           // For SALE transactions, only unpaid amount affects balance
-          // Check if paymentStatus is FULLY_PAID first (new format)
-          if (transaction.paymentStatus === 'FULLY_PAID') {
+          // If transaction is voided, it has zero impact on balances
+          if (transaction.voided) {
+            balanceImpact = 0;
+          } else if (transaction.paymentStatus === 'FULLY_PAID') {
             // Fully paid sale - zero balance impact
             balanceImpact = 0;
           } else if (transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined) {
@@ -96,7 +98,7 @@ export async function GET(
         case 'BUYBACK':
         case 'ADJUSTMENT':
         case 'CREDIT_NOTE':
-          balanceImpact = -totalAmount; // Decreases what customer owes (less negative)
+          balanceImpact = transaction.voided ? 0 : -totalAmount; // Decreases what customer owes (less negative)
           break;
         default:
           balanceImpact = 0;
@@ -137,7 +139,9 @@ export async function GET(
       switch (transaction.transactionType) {
         case 'SALE':
           // For SALE transactions, only unpaid amount affects balance
-          if (transaction.paymentStatus === 'FULLY_PAID') {
+          if (transaction.voided) {
+            balanceImpact = 0;
+          } else if (transaction.paymentStatus === 'FULLY_PAID') {
             balanceImpact = 0; // Fully paid sale - zero impact
           } else if (transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined) {
             balanceImpact = parseFloat(transaction.unpaidAmount.toString());
@@ -149,7 +153,7 @@ export async function GET(
         case 'BUYBACK':
         case 'ADJUSTMENT':
         case 'CREDIT_NOTE':
-          balanceImpact = -totalAmount; // Decreases what customer owes
+          balanceImpact = transaction.voided ? 0 : -totalAmount; // Decreases what customer owes
           break;
       }
 
@@ -185,6 +189,9 @@ export async function GET(
     let totalProfit = 0; // Total profit from all sales
 
     allTransactions.forEach(transaction => {
+      // Safely skip voided transactions from affecting lifetime totals
+      if (transaction.voided) return;
+
       const totalAmount = parseFloat(transaction.totalAmount.toString());
       switch (transaction.transactionType) {
         case 'SALE':
