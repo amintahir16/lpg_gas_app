@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select } from "@/components/ui/select";
+import { CustomSelect } from "@/components/ui/select-custom";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "react-hot-toast";
 
@@ -366,18 +366,19 @@ export default function SettingsPage() {
                 Currency
               </label>
               {isEditing ? (
-                <Select
+                <CustomSelect
                   value={formData.currency || ''}
-                  onChange={(e) => handleInputChange('currency', e.target.value)}
-                  className="w-full h-8 px-3 py-1 text-sm"
-                >
-                  <option value="">Select currency</option>
-                  <option value="USD">USD ($)</option>
-                  <option value="EUR">EUR (€)</option>
-                  <option value="GBP">GBP (£)</option>
-                  <option value="CAD">CAD (C$)</option>
-                  <option value="AUD">AUD (A$)</option>
-                </Select>
+                  onChange={(val) => handleInputChange('currency', val)}
+                  options={[
+                    { value: "USD", label: "USD ($)" },
+                    { value: "EUR", label: "EUR (€)" },
+                    { value: "GBP", label: "GBP (£)" },
+                    { value: "CAD", label: "CAD (C$)" },
+                    { value: "AUD", label: "AUD (A$)" }
+                  ]}
+                  placeholder="Select currency"
+                  className="w-full h-8 text-sm"
+                />
               ) : (
                 <p className="text-gray-900">{settings.currency}</p>
               )}
@@ -388,19 +389,21 @@ export default function SettingsPage() {
                 Timezone
               </label>
               {isEditing ? (
-                <Select
+                <CustomSelect
                   value={formData.timezone || ''}
-                  onChange={(e) => handleInputChange('timezone', e.target.value)}
-                  className="w-full h-8 px-3 py-1 text-sm"
-                >
-                  <option value="">Select timezone</option>
-                  <option value="America/New_York">Eastern Time (ET)</option>
-                  <option value="America/Chicago">Central Time (CT)</option>
-                  <option value="America/Denver">Mountain Time (MT)</option>
-                  <option value="America/Los_Angeles">Pacific Time (PT)</option>
-                  <option value="America/Anchorage">Alaska Time (AKT)</option>
-                  <option value="Pacific/Honolulu">Hawaii Time (HST)</option>
-                </Select>
+                  onChange={(val) => handleInputChange('timezone', val)}
+                  options={[
+                    { value: "America/New_York", label: "Eastern Time (ET)" },
+                    { value: "America/Chicago", label: "Central Time (CT)" },
+                    { value: "America/Denver", label: "Mountain Time (MT)" },
+                    { value: "America/Los_Angeles", label: "Pacific Time (PT)" },
+                    { value: "America/Anchorage", label: "Alaska Time (AKT)" },
+                    { value: "Pacific/Honolulu", label: "Hawaii Time (HST)" },
+                    { value: "Asia/Karachi", label: "Pakistan Standard Time (PKT)" }
+                  ]}
+                  placeholder="Select timezone"
+                  className="w-full h-8 text-sm"
+                />
               ) : (
                 <p className="text-gray-900">{settings.timezone}</p>
               )}

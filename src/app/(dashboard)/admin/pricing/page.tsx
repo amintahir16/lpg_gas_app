@@ -416,7 +416,7 @@ export default function PricingManagementPage() {
                           <td className="py-2 px-3">
                             <Input
                               type="number"
-                              step="0.01"
+                              step="1"
                               value={editForm.marginPerKg}
                               onChange={(e) => setEditForm({ ...editForm, marginPerKg: e.target.value === '' ? '' : parseFloat(e.target.value) })}
                               className="h-8 py-1 px-2 text-sm text-right max-w-[100px] ml-auto"
@@ -618,7 +618,7 @@ export default function PricingManagementPage() {
                           <td className="py-2 px-3">
                             <Input
                               type="number"
-                              step="0.01"
+                              step="1"
                               value={editForm.marginPerKg}
                               onChange={(e) => setEditForm({ ...editForm, marginPerKg: e.target.value === '' ? '' : parseFloat(e.target.value) })}
                               className="h-8 py-1 px-2 text-sm text-right max-w-[100px] ml-auto"
