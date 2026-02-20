@@ -215,7 +215,7 @@ async function generatePDF(
   startDate: string | null,
   endDate: string | null,
   cylinderTypeMap?: Map<string, { typeName: string | null, capacity: number | null }>,
-  cylinderStats?: Map<string, { delivered: number, returned: number, buyback: number, held: number }>
+  cylinderStats?: Map<string, { delivered: number, returned: number, buyback: number, held: number, buybackWeight: number, buybackCredit: number }>
 ) {
   // Import jsPDF and jspdf-autotable
   const jsPDFModule = await import('jspdf');
@@ -312,7 +312,7 @@ async function generatePDF(
   yPosition += 14;
 
   // Transaction History Section
-  if (yPosition > pageHeight - 100) {
+  if (yPosition > pageHeight - 120) {
     doc.addPage();
     yPosition = 20;
   }
@@ -485,7 +485,7 @@ async function generatePDF(
       7: { halign: 'right', cellWidth: 16 },        // In (+)
       8: { halign: 'right', cellWidth: 18 }         // Balance
     },
-    margin: { left: 15, right: 15 }
+    margin: { left: 15, right: 15, bottom: 35 }
   });
 
 
@@ -494,7 +494,7 @@ async function generatePDF(
   const historyY = (doc as any).lastAutoTable?.finalY || yPosition;
 
   if (cylinderStats && cylinderStats.size > 0) {
-    if (historyY > pageHeight - 50) {
+    if (historyY > pageHeight - 90) {
       doc.addPage();
       yPosition = 20;
     } else {
@@ -518,22 +518,23 @@ async function generatePDF(
         const typeName = getCylinderTypeDisplay(type, cylinderTypeMap);
         historyData.push([
           typeName,
-          stats.delivered,
-          stats.returned,
-          stats.buyback,
-          stats.held
+          stats.delivered.toString(),
+          stats.returned.toString(),
+          stats.buybackWeight > 0 ? `${stats.buybackWeight.toFixed(1)}kg` : '-',
+          stats.buybackCredit > 0 ? formatCurrencyRsRounded(stats.buybackCredit) : '-',
+          stats.held.toString()
         ]);
       }
     });
 
     if (historyData.length > 0) {
       autoTable(doc, {
-        head: [['Type', 'Delivered', 'Returned Empty', 'Bought Back', 'Holding Qty']],
+        head: [['Type', 'Delivered', 'Returned', 'Bought Back Gas', 'Total Credit', 'Holding Qty']],
         body: historyData,
         startY: yPosition,
         tableWidth: pageWidth - 30,
         styles: {
-          fontSize: 9,
+          fontSize: 8,
           cellPadding: 3,
           lineColor: [200, 200, 200],
           lineWidth: 0.5,
@@ -544,16 +545,20 @@ async function generatePDF(
           fillColor: [52, 73, 94], // Matching Transaction History Header
           textColor: [255, 255, 255],
           fontStyle: 'bold',
-          fontSize: 10
+          fontSize: 9
         },
         alternateRowStyles: {
           fillColor: [248, 249, 250]
         },
         columnStyles: {
-          0: { halign: 'left' },
-          4: { fontStyle: 'bold' } // Emphasize Holding Qty
+          0: { halign: 'left', cellWidth: 40 },
+          1: { cellWidth: 20 },
+          2: { cellWidth: 20 },
+          3: { cellWidth: 35 },
+          4: { cellWidth: 35 },
+          5: { fontStyle: 'bold', cellWidth: 30 } // Emphasize Holding Qty
         },
-        margin: { left: 15, right: 15 }
+        margin: { left: 15, right: 15, bottom: 35 }
       });
 
       yPosition = (doc as any).lastAutoTable?.finalY + 5;
@@ -564,7 +569,7 @@ async function generatePDF(
 
   // Financial Summary Section check page break
   // Height of financial summary is ~85 (Header 8 + Gap 12 + Box 65)
-  if (yPosition > pageHeight - 85) {
+  if (yPosition > pageHeight - 120) {
     doc.addPage();
     yPosition = 20;
   }
@@ -871,7 +876,7 @@ export async function GET(
 
     // Calculate Dynamic Cylinder Statistics
     // Iterate through all transactions UP TO the end date (or all if no end date)
-    const cylinderStats = new Map<string, { delivered: number, returned: number, buyback: number, held: number }>();
+    const cylinderStats = new Map<string, { delivered: number, returned: number, buyback: number, held: number, buybackWeight: number, buybackCredit: number }>();
 
     const holdingCalculationTransactions = endDate
       ? allTransactions.filter(t => new Date(t.date).getTime() <= new Date(endDate).setHours(23, 59, 59, 999))
@@ -884,7 +889,7 @@ export async function GET(
       // Sale Items (Deliveries) -> ADD to delivered and held
       saleItems.forEach((item: any) => {
         if (item.cylinderType) {
-          const current = cylinderStats.get(item.cylinderType) || { delivered: 0, returned: 0, buyback: 0, held: 0 };
+          const current = cylinderStats.get(item.cylinderType) || { delivered: 0, returned: 0, buyback: 0, held: 0, buybackWeight: 0, buybackCredit: 0 };
           const qty = item.quantity ? Number(item.quantity) : 0;
           current.delivered += qty;
           current.held += qty;
@@ -892,13 +897,24 @@ export async function GET(
         }
       });
 
-      // Buyback Items (Returns with value) -> ADD to buyback, SUBTRACT from held
+      // Buyback Items (Returns with value) -> ADD to returned (as empty), ADD weight/credit, SUBTRACT from held
       buybackItems.forEach((item: any) => {
         if (item.cylinderType) {
-          const current = cylinderStats.get(item.cylinderType) || { delivered: 0, returned: 0, buyback: 0, held: 0 };
+          const current = cylinderStats.get(item.cylinderType) || { delivered: 0, returned: 0, buyback: 0, held: 0, buybackWeight: 0, buybackCredit: 0 };
           const qty = item.quantity ? Number(item.quantity) : 0;
+          // As requested: track cylinder count under returned, not buyback
+          current.returned += qty;
           current.buyback += qty;
           current.held -= qty;
+
+          // Accumulate weight and credit
+          if (item.remainingKg) {
+            current.buybackWeight += Number(item.remainingKg) * qty;
+          }
+          if (item.totalPrice) {
+            current.buybackCredit += Number(item.totalPrice);
+          }
+
           cylinderStats.set(item.cylinderType, current);
         }
       });
@@ -906,7 +922,7 @@ export async function GET(
       // Return Items (Empty Returns) -> ADD to returned, SUBTRACT from held
       returnItems.forEach((item: any) => {
         if (item.cylinderType) {
-          const current = cylinderStats.get(item.cylinderType) || { delivered: 0, returned: 0, buyback: 0, held: 0 };
+          const current = cylinderStats.get(item.cylinderType) || { delivered: 0, returned: 0, buyback: 0, held: 0, buybackWeight: 0, buybackCredit: 0 };
           const qty = item.quantity ? Number(item.quantity) : 0;
           current.returned += qty;
           current.held -= qty;

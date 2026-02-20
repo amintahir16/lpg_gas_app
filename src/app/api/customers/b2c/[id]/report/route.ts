@@ -204,7 +204,7 @@ async function generatePDF(
   yPosition += (customer.email ? 25 : 18);
 
   // Transaction History Section
-  if (yPosition > pageHeight - 100) {
+  if (yPosition > pageHeight - 120) {
     doc.addPage();
     yPosition = 20;
   }
@@ -285,13 +285,13 @@ async function generatePDF(
       5: { cellWidth: 60 },                       // Details
       6: { halign: 'right', cellWidth: 25 }       // Amount
     },
-    margin: { left: 15, right: 15 }
+    margin: { left: 15, right: 15, bottom: 35 }
   });
 
   // Financial Summary Section
   const finalY = (doc as any).lastAutoTable?.finalY || yPosition;
 
-  if (finalY > pageHeight - 100) {
+  if (finalY > pageHeight - 120) {
     doc.addPage();
     yPosition = 20;
   } else {

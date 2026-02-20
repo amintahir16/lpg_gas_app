@@ -115,7 +115,12 @@ function getTransactionTypeBadges(saleItems: any[], buybackItems: any[], returnI
 }
 
 // Dynamic import to ensure proper loading in Next.js API routes
-async function generatePDF(transaction: any, customer: any, cylinderTypeMap: Map<string, { typeName: string | null, capacity: number | null }>) {
+async function generatePDF(
+  transaction: any,
+  customer: any,
+  cylinderTypeMap: Map<string, { typeName: string | null, capacity: number | null }>,
+  cylinderStats: Map<string, { delivered: number, returned: number, buyback: number, held: number, buybackWeight: number, buybackCredit: number }>
+) {
   const jsPDFModule = await import('jspdf');
   const autoTableModule = await import('jspdf-autotable');
 
@@ -284,7 +289,7 @@ async function generatePDF(transaction: any, customer: any, cylinderTypeMap: Map
     if (items.length === 0) return;
 
     // Check if we need a new page
-    if (yPosition > pageHeight - 60) {
+    if (yPosition > pageHeight - 90) {
       doc.addPage();
       yPosition = 20;
     }
@@ -296,7 +301,7 @@ async function generatePDF(transaction: any, customer: any, cylinderTypeMap: Map
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.text(title, margin + 3, yPosition + 4.5);
-    yPosition += 10;
+    yPosition += 8;
 
     // Prepare table data
     let headers: string[];
@@ -382,7 +387,7 @@ async function generatePDF(transaction: any, customer: any, cylinderTypeMap: Map
       head: [headers],
       body: tableData,
       theme: 'striped',
-      margin: { left: margin, right: margin },
+      margin: { left: margin, right: margin, bottom: 35 },
       headStyles: {
         fillColor: titleColor,
         textColor: [255, 255, 255],
@@ -417,10 +422,82 @@ async function generatePDF(transaction: any, customer: any, cylinderTypeMap: Map
     drawItemsTable('EMPTY RETURNS', returnItems, false, true, [107, 114, 128]);
   }
 
+  // CYLINDER HISTORY SECTION
+  if (cylinderStats && cylinderStats.size > 0) {
+    if (yPosition > pageHeight - 90) {
+      doc.addPage();
+      yPosition = 20;
+    } else {
+      yPosition += 5;
+    }
+
+    // Section Header
+    doc.setFillColor(52, 73, 94);
+    doc.rect(margin, yPosition, contentWidth, 8, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('CYLINDER HISTORY', margin + 5, yPosition + 6);
+
+    yPosition += 10;
+
+    const historyData: any[] = [];
+    cylinderStats.forEach((stats, type) => {
+      if (stats.delivered > 0 || stats.returned > 0 || stats.buyback > 0 || stats.held !== 0) {
+        const typeName = getCylinderTypeDisplay(type, cylinderTypeMap);
+        historyData.push([
+          typeName,
+          stats.delivered.toString(),
+          stats.returned.toString(),
+          stats.buybackWeight > 0 ? `${stats.buybackWeight.toFixed(1)}kg` : '-',
+          stats.buybackCredit > 0 ? formatCurrencyRs(stats.buybackCredit) : '-',
+          stats.held.toString()
+        ]);
+      }
+    });
+
+    if (historyData.length > 0) {
+      autoTable(doc, {
+        head: [['Type', 'Delivered', 'Returned', 'Bought Back Gas', 'Total Credit', 'Holding Qty']],
+        body: historyData,
+        startY: yPosition,
+        tableWidth: contentWidth,
+        styles: {
+          fontSize: 8,
+          cellPadding: 3,
+          lineColor: [200, 200, 200],
+          lineWidth: 0.5,
+          overflow: 'linebreak',
+          halign: 'center'
+        },
+        headStyles: {
+          fillColor: [52, 73, 94],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 9
+        },
+        alternateRowStyles: {
+          fillColor: [248, 249, 250]
+        },
+        columnStyles: {
+          0: { halign: 'left', cellWidth: contentWidth * 0.30 },
+          1: { cellWidth: contentWidth * 0.12 },
+          2: { cellWidth: contentWidth * 0.12 },
+          3: { cellWidth: contentWidth * 0.18 },
+          4: { cellWidth: contentWidth * 0.16 },
+          5: { fontStyle: 'bold', cellWidth: contentWidth * 0.12 }
+        },
+        margin: { left: margin, right: margin, bottom: 35 }
+      });
+
+      yPosition = (doc as any).lastAutoTable.finalY + 8;
+    }
+  }
+
   // Summary Section
   yPosition += 5;
 
-  if (yPosition > pageHeight - 60) {
+  if (yPosition > pageHeight - 120) {
     doc.addPage();
     yPosition = 20;
   }
@@ -595,12 +672,73 @@ export async function GET(
       return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
     }
 
+    // Get all transactions for this customer up to this transaction to calculate holding
+    const allTransactions = await prisma.b2BTransaction.findMany({
+      where: {
+        customerId: transaction.customerId,
+        createdAt: {
+          lte: transaction.createdAt
+        }
+      },
+      include: {
+        items: true
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    // Build cylinder stats
+    const cylinderStats = new Map<string, { delivered: number, returned: number, buyback: number, held: number, buybackWeight: number, buybackCredit: number }>();
+
+    allTransactions.forEach(t => {
+      const items = t.items || [];
+      const { saleItems, buybackItems, returnItems } = categorizeItems(items, t.transactionType);
+
+      saleItems.forEach((item: any) => {
+        if (item.cylinderType) {
+          const current = cylinderStats.get(item.cylinderType) || { delivered: 0, returned: 0, buyback: 0, held: 0, buybackWeight: 0, buybackCredit: 0 };
+          const qty = item.quantity ? Number(item.quantity) : 0;
+          current.delivered += qty;
+          current.held += qty;
+          cylinderStats.set(item.cylinderType, current);
+        }
+      });
+
+      buybackItems.forEach((item: any) => {
+        if (item.cylinderType) {
+          const current = cylinderStats.get(item.cylinderType) || { delivered: 0, returned: 0, buyback: 0, held: 0, buybackWeight: 0, buybackCredit: 0 };
+          const qty = item.quantity ? Number(item.quantity) : 0;
+          current.returned += qty;
+          current.buyback += qty;
+          current.held -= qty;
+          if (item.remainingKg) {
+            current.buybackWeight += Number(item.remainingKg) * qty;
+          }
+          if (item.totalPrice) {
+            current.buybackCredit += Number(item.totalPrice);
+          }
+          cylinderStats.set(item.cylinderType, current);
+        }
+      });
+
+      returnItems.forEach((item: any) => {
+        if (item.cylinderType) {
+          const current = cylinderStats.get(item.cylinderType) || { delivered: 0, returned: 0, buyback: 0, held: 0, buybackWeight: 0, buybackCredit: 0 };
+          const qty = item.quantity ? Number(item.quantity) : 0;
+          current.returned += qty;
+          current.held -= qty;
+          cylinderStats.set(item.cylinderType, current);
+        }
+      });
+    });
+
     // Build cylinder type mapping for proper display names
     const uniqueCylinderTypes = new Set<string>();
-    transaction.items?.forEach((item: any) => {
-      if (item.cylinderType) {
-        uniqueCylinderTypes.add(item.cylinderType);
-      }
+    allTransactions.forEach((t) => {
+      t.items?.forEach((item: any) => {
+        if (item.cylinderType) {
+          uniqueCylinderTypes.add(item.cylinderType);
+        }
+      });
     });
 
     const cylinderTypeMap = new Map<string, { typeName: string | null, capacity: number | null }>();
@@ -637,7 +775,7 @@ export async function GET(
     }
 
     // Generate PDF with cylinder type mapping
-    const doc = await generatePDF(transaction, transaction.customer, cylinderTypeMap);
+    const doc = await generatePDF(transaction, transaction.customer, cylinderTypeMap, cylinderStats);
     const pdfBlob = doc.output('blob');
     const pdfBuffer = Buffer.from(await pdfBlob.arrayBuffer());
 

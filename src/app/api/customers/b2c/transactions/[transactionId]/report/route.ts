@@ -130,7 +130,7 @@ async function generatePDF(transaction: any, customer: any, cylinderTypeMap: Map
   yPosition += (customer.email && customer.address ? 30 : customer.email || customer.address ? 24 : 18);
 
   // Transaction Details Header
-  if (yPosition > pageHeight - 100) {
+  if (yPosition > pageHeight - 120) {
     doc.addPage();
     yPosition = 20;
   }
@@ -195,7 +195,7 @@ async function generatePDF(transaction: any, customer: any, cylinderTypeMap: Map
   const drawItemsTable = (title: string, items: any[], type: 'sale' | 'return' | 'deposit', titleColor: [number, number, number]) => {
     if (items.length === 0) return;
 
-    if (yPosition > pageHeight - 60) {
+    if (yPosition > pageHeight - 90) {
       doc.addPage();
       yPosition = 20;
     }
@@ -207,7 +207,7 @@ async function generatePDF(transaction: any, customer: any, cylinderTypeMap: Map
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.text(title, margin + 3, yPosition + 4.5);
-    yPosition += 10;
+    yPosition += 8;
 
     let headers: string[];
     let tableData: any[];
@@ -263,7 +263,7 @@ async function generatePDF(transaction: any, customer: any, cylinderTypeMap: Map
       head: [headers],
       body: tableData,
       theme: 'striped',
-      margin: { left: margin, right: margin },
+      margin: { left: margin, right: margin, bottom: 35 },
       headStyles: {
         fillColor: titleColor,
         textColor: [255, 255, 255],
@@ -309,7 +309,7 @@ async function generatePDF(transaction: any, customer: any, cylinderTypeMap: Map
   // Summary Section
   yPosition += 5;
 
-  if (yPosition > pageHeight - 60) {
+  if (yPosition > pageHeight - 120) {
     doc.addPage();
     yPosition = 20;
   }
