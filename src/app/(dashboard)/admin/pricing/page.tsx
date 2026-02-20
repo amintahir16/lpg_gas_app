@@ -51,7 +51,11 @@ export default function PricingManagementPage() {
   const [plantPrices, setPlantPrices] = useState<PlantPrice[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({
+  const [editForm, setEditForm] = useState<{
+    name: string;
+    marginPerKg: number | string;
+    description: string;
+  }>({
     name: '',
     marginPerKg: 0,
     description: ''
@@ -412,8 +416,9 @@ export default function PricingManagementPage() {
                           <td className="py-2 px-3">
                             <Input
                               type="number"
+                              step="0.01"
                               value={editForm.marginPerKg}
-                              onChange={(e) => setEditForm({ ...editForm, marginPerKg: parseFloat(e.target.value) })}
+                              onChange={(e) => setEditForm({ ...editForm, marginPerKg: e.target.value === '' ? '' : parseFloat(e.target.value) })}
                               className="h-8 py-1 px-2 text-sm text-right max-w-[100px] ml-auto"
                             />
                           </td>
@@ -613,8 +618,9 @@ export default function PricingManagementPage() {
                           <td className="py-2 px-3">
                             <Input
                               type="number"
+                              step="0.01"
                               value={editForm.marginPerKg}
-                              onChange={(e) => setEditForm({ ...editForm, marginPerKg: parseFloat(e.target.value) })}
+                              onChange={(e) => setEditForm({ ...editForm, marginPerKg: e.target.value === '' ? '' : parseFloat(e.target.value) })}
                               className="h-8 py-1 px-2 text-sm text-right max-w-[100px] ml-auto"
                             />
                           </td>

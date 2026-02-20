@@ -6,11 +6,12 @@ import { prisma } from '@/lib/db';
 // GET /api/admin/margin-categories/[id] - Get single margin category
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await context.params;
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user || !['ADMIN', 'SUPER_ADMIN'].includes(session.user.role)) {
       return NextResponse.json(
         { error: 'Unauthorized', message: 'Admin access required' },
@@ -19,7 +20,7 @@ export async function GET(
     }
 
     const category = await prisma.marginCategory.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         _count: {
           select: {
@@ -50,11 +51,12 @@ export async function GET(
 // PUT /api/admin/margin-categories/[id] - Update margin category
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await context.params;
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user || !['ADMIN', 'SUPER_ADMIN'].includes(session.user.role)) {
       return NextResponse.json(
         { error: 'Unauthorized', message: 'Admin access required' },
@@ -67,7 +69,7 @@ export async function PUT(
 
     // Check if category exists
     const existingCategory = await prisma.marginCategory.findUnique({
-      where: { id: params.id }
+      where: { id }
     });
 
     if (!existingCategory) {
@@ -82,8 +84,7 @@ export async function PUT(
       const nameConflict = await prisma.marginCategory.findFirst({
         where: {
           name,
-          customerType: existingCategory.customerType,
-          id: { not: params.id }
+          id: { not: id }
         }
       });
 
@@ -97,12 +98,21 @@ export async function PUT(
 
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
-    if (marginPerKg !== undefined) updateData.marginPerKg = parseFloat(marginPerKg);
+    if (marginPerKg !== undefined) {
+      const parsedMargin = parseFloat(marginPerKg);
+      if (isNaN(parsedMargin)) {
+        return NextResponse.json(
+          { error: 'Bad Request', message: 'Invalid margin value provided' },
+          { status: 400 }
+        );
+      }
+      updateData.marginPerKg = parsedMargin;
+    }
     if (description !== undefined) updateData.description = description;
     if (isActive !== undefined) updateData.isActive = isActive;
 
     const category = await prisma.marginCategory.update({
-      where: { id: params.id },
+      where: { id },
       data: updateData,
       include: {
         _count: {
@@ -127,11 +137,12 @@ export async function PUT(
 // DELETE /api/admin/margin-categories/[id] - Deactivate margin category
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await context.params;
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user || !['ADMIN', 'SUPER_ADMIN'].includes(session.user.role)) {
       return NextResponse.json(
         { error: 'Unauthorized', message: 'Admin access required' },
@@ -141,7 +152,7 @@ export async function DELETE(
 
     // Check if category exists
     const existingCategory = await prisma.marginCategory.findUnique({
-      where: { id: params.id }
+      where: { id }
     });
 
     if (!existingCategory) {
@@ -153,7 +164,7 @@ export async function DELETE(
 
     // Deactivate instead of delete to preserve data integrity
     const category = await prisma.marginCategory.update({
-      where: { id: params.id },
+      where: { id },
       data: { isActive: false }
     });
 
