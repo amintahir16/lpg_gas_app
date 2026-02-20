@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { signIn, useSession } from 'next-auth/react';
-import { logoBase64 } from '@/lib/logoBase64';
+import FlamoraAnimatedLogo from '@/components/ui/FlamoraAnimatedLogo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -86,15 +86,11 @@ function LoginForm() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+      <div className="max-w-md w-full space-y-4">
         {/* Header */}
         <div className="text-center">
-          <div className="flex justify-center mb-0">
-            <img
-              src={`data:image/png;base64,${logoBase64}`}
-              alt="Flamora Logo"
-              className="w-64 sm:w-72 h-auto object-contain drop-shadow-sm"
-            />
+          <div className="flex justify-center mb-2 pl-4">
+            <FlamoraAnimatedLogo className="w-72 sm:w-80" />
           </div>
         </div>
 
