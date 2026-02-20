@@ -1398,6 +1398,10 @@ export default function B2BCustomerDetailPage() {
                 <p className="text-xs font-medium text-gray-500">Phone</p>
                 <p className="text-base font-semibold text-gray-900">{customer.phone}</p>
               </div>
+              <div className="md:col-span-2">
+                <p className="text-xs font-medium text-gray-500">Email</p>
+                <p className="text-base font-semibold text-gray-900">{customer.email || '-'}</p>
+              </div>
 
               <div>
                 <p className="text-xs font-medium text-gray-500">Payment Terms</p>

@@ -304,6 +304,11 @@ async function generatePDF(
   doc.text(`Phone: ${customer.phone}`, 20, yPosition);
   yPosition += 7;
 
+  if (customer.email) {
+    doc.text(`Email: ${customer.email}`, 20, yPosition);
+    yPosition += 7;
+  }
+
   if (customer.address) {
     doc.text(`Address: ${customer.address}`, 20, yPosition);
     yPosition += 7;

@@ -807,10 +807,14 @@ export default function B2BCustomersPage() {
                     <Input name="phone" type="tel" required className="h-9" />
                   </div>
 
-                  {/* Row 3: Address */}
-                  <div className="col-span-12">
+                  {/* Row 3: Address & Email */}
+                  <div className="col-span-6">
                     <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Address</label>
                     <Input name="address" type="text" className="h-9" />
+                  </div>
+                  <div className="col-span-6">
+                    <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Email</label>
+                    <Input name="email" type="email" className="h-9" />
                   </div>
 
                   {/* Row 4: Margin, Credit, Terms */}
@@ -916,12 +920,18 @@ export default function B2BCustomersPage() {
                     <Input name="phone" type="tel" defaultValue={editingCustomer.phone} required className="h-9" />
                   </div>
 
-                  {/* Row 3: Address & Status */}
-                  <div className="col-span-8">
+                  {/* Row 3: Address & Email */}
+                  <div className="col-span-6">
                     <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Address</label>
                     <Input name="address" type="text" defaultValue={editingCustomer.address || ''} className="h-9" />
                   </div>
-                  <div className="col-span-4">
+                  <div className="col-span-6">
+                    <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Email</label>
+                    <Input name="email" type="email" defaultValue={editingCustomer.email || ''} className="h-9" />
+                  </div>
+
+                  {/* Row 4: Status */}
+                  <div className="col-span-12">
                     <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Status</label>
                     <CustomSelect
                       name="isActive"
