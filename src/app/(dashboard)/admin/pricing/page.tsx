@@ -8,8 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { 
-  PencilIcon, 
+import {
+  PencilIcon,
   PlusIcon,
   CheckCircleIcon,
   XCircleIcon,
@@ -75,7 +75,7 @@ export default function PricingManagementPage() {
         fetch('/api/admin/margin-categories?activeOnly=true'),
         fetch('/api/admin/plant-prices?limit=10')
       ]);
-      
+
       if (!categoriesRes.ok) {
         const errorText = await categoriesRes.text();
         console.error('Categories API error:', errorText);
@@ -84,7 +84,7 @@ export default function PricingManagementPage() {
         }
         throw new Error(`Categories API failed: ${categoriesRes.status} - ${errorText}`);
       }
-      
+
       if (!pricesRes.ok) {
         const errorText = await pricesRes.text();
         console.error('Prices API error:', errorText);
@@ -93,12 +93,12 @@ export default function PricingManagementPage() {
         }
         throw new Error(`Prices API failed: ${pricesRes.status} - ${errorText}`);
       }
-      
+
       const [categoriesData, pricesData] = await Promise.all([
         categoriesRes.json(),
         pricesRes.json()
       ]);
-      
+
       setCategories(categoriesData);
       setPlantPrices(pricesData);
     } catch (error) {
@@ -202,7 +202,7 @@ export default function PricingManagementPage() {
 
   const handleInitializeCategories = async (customerType: 'B2C' | 'B2B') => {
     const setLoading = customerType === 'B2C' ? setInitializingB2C : setInitializingB2B;
-    
+
     try {
       setLoading(true);
       const response = await fetch(`/api/admin/margin-categories/initialize?customerType=${customerType}`, {
@@ -216,7 +216,7 @@ export default function PricingManagementPage() {
 
       const result = await response.json();
       showMessage('success', result.message || `Default ${customerType} categories initialized successfully`);
-      
+
       // Refresh data to show newly created categories
       fetchData();
     } catch (error) {
@@ -240,17 +240,18 @@ export default function PricingManagementPage() {
   }
 
   return (
-    <div className="p-8 space-y-8">
+    <div className="p-4 md:p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold mb-2">Margin-Based Pricing Management</h1>
-          <p className="text-gray-600">
+          <h1 className="text-2xl font-bold mb-1">Margin-Based Pricing Management</h1>
+          <p className="text-sm text-gray-600">
             Manage pricing categories, margins, and daily plant prices
           </p>
         </div>
         <Button
           variant="outline"
+          size="sm"
           onClick={() => router.push('/settings')}
           className="flex items-center gap-2 hover:bg-gray-50 transition-colors"
         >
@@ -261,9 +262,8 @@ export default function PricingManagementPage() {
 
       {/* Message */}
       {message && (
-        <div className={`p-4 rounded-lg ${
-          message.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
-        }`}>
+        <div className={`p-4 rounded-lg ${message.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+          }`}>
           {message.text}
         </div>
       )}
@@ -281,27 +281,29 @@ export default function PricingManagementPage() {
           <form onSubmit={handleSetPlantPrice} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="plantPrice118kg">Plant Price (11.8kg) - PKR</Label>
+                <Label htmlFor="plantPrice118kg" className="text-sm">Plant Price (11.8kg) - PKR</Label>
                 <Input
                   id="plantPrice118kg"
                   type="number"
                   value={newPriceForm.plantPrice118kg}
                   onChange={(e) => setNewPriceForm({ ...newPriceForm, plantPrice118kg: e.target.value })}
+                  className="h-8 px-3 py-1 text-sm mt-1"
                   placeholder="2750"
                   required
                 />
               </div>
               <div>
-                <Label htmlFor="notes">Notes (Optional)</Label>
+                <Label htmlFor="notes" className="text-sm">Notes (Optional)</Label>
                 <Input
                   id="notes"
                   value={newPriceForm.notes}
                   onChange={(e) => setNewPriceForm({ ...newPriceForm, notes: e.target.value })}
+                  className="h-8 px-3 py-1 text-sm mt-1"
                   placeholder="Market conditions, supplier notes..."
                 />
               </div>
             </div>
-            <Button type="submit" className="w-full md:w-auto">
+            <Button size="sm" type="submit" className="w-full md:w-auto">
               Set Today's Plant Price
             </Button>
           </form>
@@ -321,6 +323,7 @@ export default function PricingManagementPage() {
             </div>
             {b2cCategories.length === 0 && (
               <Button
+                size="sm"
                 onClick={() => handleInitializeCategories('B2C')}
                 disabled={initializingB2C}
                 className="flex items-center gap-2"
@@ -361,6 +364,7 @@ export default function PricingManagementPage() {
                     </ul>
                   </div>
                   <Button
+                    size="sm"
                     onClick={() => handleInitializeCategories('B2C')}
                     disabled={initializingB2C}
                     className="w-full"
@@ -382,117 +386,123 @@ export default function PricingManagementPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left p-3">Category Name</th>
-                  <th className="text-right p-3">Margin (Rs/kg)</th>
-                  <th className="text-left p-3">Description</th>
-                  <th className="text-center p-3">Customers</th>
-                  <th className="text-center p-3">Status</th>
-                  <th className="text-center p-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {b2cCategories.map(category => (
-                  <tr key={category.id} className="border-b hover:bg-gray-50">
-                    {editingCategoryId === category.id ? (
-                      <>
-                        <td className="p-3">
-                          <Input
-                            value={editForm.name}
-                            onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                          />
-                        </td>
-                        <td className="p-3">
-                          <Input
-                            type="number"
-                            value={editForm.marginPerKg}
-                            onChange={(e) => setEditForm({ ...editForm, marginPerKg: parseFloat(e.target.value) })}
-                            className="text-right"
-                          />
-                        </td>
-                        <td className="p-3">
-                          <Input
-                            value={editForm.description}
-                            onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                            placeholder="Description (optional)"
-                          />
-                        </td>
-                        <td className="p-3 text-center">
-                          {category._count.b2cCustomers}
-                        </td>
-                        <td className="p-3 text-center">
-                          {category.isActive ? (
-                            <CheckCircleIcon className="w-5 h-5 text-green-500 mx-auto" />
-                          ) : (
-                            <XCircleIcon className="w-5 h-5 text-red-500 mx-auto" />
-                          )}
-                        </td>
-                        <td className="p-3">
-                          <div className="flex gap-2 justify-center">
-                            <Button
-                              size="sm"
-                              onClick={() => handleUpdateCategory(category.id)}
-                            >
-                              Save
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={cancelEditingCategory}
-                            >
-                              Cancel
-                            </Button>
-                          </div>
-                        </td>
-                      </>
-                    ) : (
-                      <>
-                        <td className="p-3 font-medium">{category.name}</td>
-                        <td className="p-3 text-right font-bold text-green-600">
-                          Rs {category.marginPerKg}
-                        </td>
-                        <td className="p-3 text-sm text-gray-600">
-                          {category.description || '-'}
-                        </td>
-                        <td className="p-3 text-center">
-                          <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm">
-                            {category._count.b2cCustomers}
-                          </span>
-                        </td>
-                        <td className="p-3 text-center">
-                          {category.isActive ? (
-                            <CheckCircleIcon className="w-5 h-5 text-green-500 mx-auto" />
-                          ) : (
-                            <XCircleIcon className="w-5 h-5 text-red-500 mx-auto" />
-                          )}
-                        </td>
-                        <td className="p-3">
-                          <div className="flex gap-2 justify-center">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => startEditingCategory(category)}
-                            >
-                              <PencilIcon className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant={category.isActive ? "destructive" : "default"}
-                              onClick={() => handleToggleCategoryActive(category.id, category.isActive)}
-                            >
-                              {category.isActive ? 'Deactivate' : 'Activate'}
-                            </Button>
-                          </div>
-                        </td>
-                      </>
-                    )}
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b bg-gray-50/50">
+                    <th className="text-left font-semibold text-sm py-2 px-3 text-gray-600">Category Name</th>
+                    <th className="text-right font-semibold text-sm py-2 px-3 text-gray-600">Margin (Rs/kg)</th>
+                    <th className="text-left font-semibold text-sm py-2 px-3 text-gray-600">Description</th>
+                    <th className="text-center font-semibold text-sm py-2 px-3 text-gray-600">Customers</th>
+                    <th className="text-center font-semibold text-sm py-2 px-3 text-gray-600">Status</th>
+                    <th className="text-center font-semibold text-sm py-2 px-3 text-gray-600">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {b2cCategories.map(category => (
+                    <tr key={category.id} className="border-b hover:bg-gray-50">
+                      {editingCategoryId === category.id ? (
+                        <>
+                          <td className="py-2 px-3">
+                            <Input
+                              value={editForm.name}
+                              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                              className="h-8 py-1 px-2 text-sm max-w-[180px]"
+                            />
+                          </td>
+                          <td className="py-2 px-3">
+                            <Input
+                              type="number"
+                              value={editForm.marginPerKg}
+                              onChange={(e) => setEditForm({ ...editForm, marginPerKg: parseFloat(e.target.value) })}
+                              className="h-8 py-1 px-2 text-sm text-right max-w-[100px] ml-auto"
+                            />
+                          </td>
+                          <td className="py-2 px-3">
+                            <Input
+                              value={editForm.description}
+                              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                              placeholder="Description (optional)"
+                              className="h-8 py-1 px-2 text-sm"
+                            />
+                          </td>
+                          <td className="py-2 px-3 text-center text-sm">
+                            {category._count.b2cCustomers}
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            {category.isActive ? (
+                              <CheckCircleIcon className="w-5 h-5 text-green-500 mx-auto" />
+                            ) : (
+                              <XCircleIcon className="w-5 h-5 text-red-500 mx-auto" />
+                            )}
+                          </td>
+                          <td className="py-2 px-3">
+                            <div className="flex gap-2 justify-center">
+                              <Button
+                                size="sm"
+                                className="h-8 text-xs px-3"
+                                onClick={() => handleUpdateCategory(category.id)}
+                              >
+                                Save
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 text-xs px-3"
+                                onClick={cancelEditingCategory}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="py-2 px-3 text-sm font-medium">{category.name}</td>
+                          <td className="py-2 px-3 text-sm text-right font-bold text-green-600">
+                            Rs {category.marginPerKg}
+                          </td>
+                          <td className="py-2 px-3 text-sm text-gray-600">
+                            {category.description || '-'}
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs font-semibold">
+                              {category._count.b2cCustomers}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            {category.isActive ? (
+                              <CheckCircleIcon className="w-4 h-4 text-green-500 mx-auto" />
+                            ) : (
+                              <XCircleIcon className="w-4 h-4 text-red-500 mx-auto" />
+                            )}
+                          </td>
+                          <td className="py-2 px-3">
+                            <div className="flex gap-2 justify-center">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 w-7 p-0"
+                                onClick={() => startEditingCategory(category)}
+                              >
+                                <PencilIcon className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant={category.isActive ? "destructive" : "default"}
+                                className="h-7 text-xs px-2"
+                                onClick={() => handleToggleCategoryActive(category.id, category.isActive)}
+                              >
+                                {category.isActive ? 'Deactivate' : 'Activate'}
+                              </Button>
+                            </div>
+                          </td>
+                        </>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -510,6 +520,7 @@ export default function PricingManagementPage() {
             </div>
             {b2bCategories.length === 0 && (
               <Button
+                size="sm"
                 onClick={() => handleInitializeCategories('B2B')}
                 disabled={initializingB2B}
                 className="flex items-center gap-2"
@@ -554,6 +565,7 @@ export default function PricingManagementPage() {
                     </ul>
                   </div>
                   <Button
+                    size="sm"
                     onClick={() => handleInitializeCategories('B2B')}
                     disabled={initializingB2B}
                     className="w-full"
@@ -575,117 +587,123 @@ export default function PricingManagementPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left p-3">Category Name</th>
-                  <th className="text-right p-3">Margin (Rs/kg)</th>
-                  <th className="text-left p-3">Description</th>
-                  <th className="text-center p-3">Customers</th>
-                  <th className="text-center p-3">Status</th>
-                  <th className="text-center p-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {b2bCategories.map(category => (
-                  <tr key={category.id} className="border-b hover:bg-gray-50">
-                    {editingCategoryId === category.id ? (
-                      <>
-                        <td className="p-3">
-                          <Input
-                            value={editForm.name}
-                            onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                          />
-                        </td>
-                        <td className="p-3">
-                          <Input
-                            type="number"
-                            value={editForm.marginPerKg}
-                            onChange={(e) => setEditForm({ ...editForm, marginPerKg: parseFloat(e.target.value) })}
-                            className="text-right"
-                          />
-                        </td>
-                        <td className="p-3">
-                          <Input
-                            value={editForm.description}
-                            onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                            placeholder="Description (optional)"
-                          />
-                        </td>
-                        <td className="p-3 text-center">
-                          {category._count.b2bCustomers}
-                        </td>
-                        <td className="p-3 text-center">
-                          {category.isActive ? (
-                            <CheckCircleIcon className="w-5 h-5 text-green-500 mx-auto" />
-                          ) : (
-                            <XCircleIcon className="w-5 h-5 text-red-500 mx-auto" />
-                          )}
-                        </td>
-                        <td className="p-3">
-                          <div className="flex gap-2 justify-center">
-                            <Button
-                              size="sm"
-                              onClick={() => handleUpdateCategory(category.id)}
-                            >
-                              Save
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={cancelEditingCategory}
-                            >
-                              Cancel
-                            </Button>
-                          </div>
-                        </td>
-                      </>
-                    ) : (
-                      <>
-                        <td className="p-3 font-medium">{category.name}</td>
-                        <td className="p-3 text-right font-bold text-green-600">
-                          Rs {category.marginPerKg}
-                        </td>
-                        <td className="p-3 text-sm text-gray-600">
-                          {category.description || '-'}
-                        </td>
-                        <td className="p-3 text-center">
-                          <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-sm">
-                            {category._count.b2bCustomers}
-                          </span>
-                        </td>
-                        <td className="p-3 text-center">
-                          {category.isActive ? (
-                            <CheckCircleIcon className="w-5 h-5 text-green-500 mx-auto" />
-                          ) : (
-                            <XCircleIcon className="w-5 h-5 text-red-500 mx-auto" />
-                          )}
-                        </td>
-                        <td className="p-3">
-                          <div className="flex gap-2 justify-center">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => startEditingCategory(category)}
-                            >
-                              <PencilIcon className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant={category.isActive ? "destructive" : "default"}
-                              onClick={() => handleToggleCategoryActive(category.id, category.isActive)}
-                            >
-                              {category.isActive ? 'Deactivate' : 'Activate'}
-                            </Button>
-                          </div>
-                        </td>
-                      </>
-                    )}
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b bg-gray-50/50">
+                    <th className="text-left font-semibold text-sm py-2 px-3 text-gray-600">Category Name</th>
+                    <th className="text-right font-semibold text-sm py-2 px-3 text-gray-600">Margin (Rs/kg)</th>
+                    <th className="text-left font-semibold text-sm py-2 px-3 text-gray-600">Description</th>
+                    <th className="text-center font-semibold text-sm py-2 px-3 text-gray-600">Customers</th>
+                    <th className="text-center font-semibold text-sm py-2 px-3 text-gray-600">Status</th>
+                    <th className="text-center font-semibold text-sm py-2 px-3 text-gray-600">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {b2bCategories.map(category => (
+                    <tr key={category.id} className="border-b hover:bg-gray-50">
+                      {editingCategoryId === category.id ? (
+                        <>
+                          <td className="py-2 px-3">
+                            <Input
+                              value={editForm.name}
+                              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                              className="h-8 py-1 px-2 text-sm max-w-[180px]"
+                            />
+                          </td>
+                          <td className="py-2 px-3">
+                            <Input
+                              type="number"
+                              value={editForm.marginPerKg}
+                              onChange={(e) => setEditForm({ ...editForm, marginPerKg: parseFloat(e.target.value) })}
+                              className="h-8 py-1 px-2 text-sm text-right max-w-[100px] ml-auto"
+                            />
+                          </td>
+                          <td className="py-2 px-3">
+                            <Input
+                              value={editForm.description}
+                              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                              placeholder="Description (optional)"
+                              className="h-8 py-1 px-2 text-sm"
+                            />
+                          </td>
+                          <td className="py-2 px-3 text-center text-sm">
+                            {category._count.b2bCustomers}
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            {category.isActive ? (
+                              <CheckCircleIcon className="w-5 h-5 text-green-500 mx-auto" />
+                            ) : (
+                              <XCircleIcon className="w-5 h-5 text-red-500 mx-auto" />
+                            )}
+                          </td>
+                          <td className="py-2 px-3">
+                            <div className="flex gap-2 justify-center">
+                              <Button
+                                size="sm"
+                                className="h-8 text-xs px-3"
+                                onClick={() => handleUpdateCategory(category.id)}
+                              >
+                                Save
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 text-xs px-3"
+                                onClick={cancelEditingCategory}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="py-2 px-3 text-sm font-medium">{category.name}</td>
+                          <td className="py-2 px-3 text-sm text-right font-bold text-green-600">
+                            Rs {category.marginPerKg}
+                          </td>
+                          <td className="py-2 px-3 text-sm text-gray-600">
+                            {category.description || '-'}
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full text-xs font-semibold">
+                              {category._count.b2bCustomers}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            {category.isActive ? (
+                              <CheckCircleIcon className="w-4 h-4 text-green-500 mx-auto" />
+                            ) : (
+                              <XCircleIcon className="w-4 h-4 text-red-500 mx-auto" />
+                            )}
+                          </td>
+                          <td className="py-2 px-3">
+                            <div className="flex gap-2 justify-center">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 w-7 p-0"
+                                onClick={() => startEditingCategory(category)}
+                              >
+                                <PencilIcon className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant={category.isActive ? "destructive" : "default"}
+                                className="h-7 text-xs px-2"
+                                onClick={() => handleToggleCategoryActive(category.id, category.isActive)}
+                              >
+                                {category.isActive ? 'Deactivate' : 'Activate'}
+                              </Button>
+                            </div>
+                          </td>
+                        </>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -703,24 +721,24 @@ export default function PricingManagementPage() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b">
-                  <th className="text-left p-3">Date</th>
-                  <th className="text-right p-3">Price (11.8kg)</th>
-                  <th className="text-left p-3">Notes</th>
-                  <th className="text-left p-3">Set By</th>
+                <tr className="border-b bg-gray-50/50">
+                  <th className="text-left font-semibold text-sm py-2 px-3 text-gray-600">Date</th>
+                  <th className="text-right font-semibold text-sm py-2 px-3 text-gray-600">Price (11.8kg)</th>
+                  <th className="text-left font-semibold text-sm py-2 px-3 text-gray-600">Notes</th>
+                  <th className="text-left font-semibold text-sm py-2 px-3 text-gray-600">Set By</th>
                 </tr>
               </thead>
               <tbody>
                 {plantPrices.map(price => (
                   <tr key={price.id} className="border-b hover:bg-gray-50">
-                    <td className="p-3">{new Date(price.date).toLocaleDateString()}</td>
-                    <td className="p-3 text-right font-bold text-green-600">
+                    <td className="py-2 px-3 text-sm">{new Date(price.date).toLocaleDateString()}</td>
+                    <td className="py-2 px-3 text-right font-bold text-green-600 text-sm">
                       Rs {price.plantPrice118kg}
                     </td>
-                    <td className="p-3 text-sm text-gray-600">
+                    <td className="py-2 px-3 text-sm text-gray-600">
                       {price.notes || '-'}
                     </td>
-                    <td className="p-3 text-sm">
+                    <td className="py-2 px-3 text-xs text-gray-500">
                       {price.createdByUser.name}
                     </td>
                   </tr>

@@ -5,6 +5,9 @@ export default function FlamoraAnimatedLogo({ className = '' }: { className?: st
     const flameOffsetX = -23;   // positive = right, negative = left
     const flameOffsetY = -5;   // positive = down,  negative = up
     const flameScale = 1.3;     // 1.0 = normal, 1.5 = 50% bigger, 0.8 = 20% smaller
+
+    // ======= TWEAK THIS TO RESIZE THE 'O' AS A WHOLE =======
+    const oScale = 1.0;         // 1.0 = normal, 1.2 = 20% bigger, 0.8 = 20% smaller
     // =========================================================
 
     return (
@@ -76,7 +79,7 @@ export default function FlamoraAnimatedLogo({ className = '' }: { className?: st
                 </g>
 
                 {/* ========== THE 'O' - GAS CYLINDER IN RING ========== */}
-                <g transform="translate(322, 117)">
+                <g transform={`translate(322, 115) scale(${oScale})`}>
                     {/* Thick outer ring - matches letter cap height */}
                     <circle cx="0" cy="0" r="25" fill="none" stroke="#1d2932" strokeWidth="8" />
 
@@ -106,18 +109,36 @@ export default function FlamoraAnimatedLogo({ className = '' }: { className?: st
 
                 {/* Subtitle Slogan */}
                 <text
-                    x="270" y="172"
+                    x="270" y="165"
                     fontFamily='"Montserrat", "Arial", sans-serif'
                     fontSize="15"
                     fontWeight="bold"
                     fill="#1d2932"
                     textAnchor="middle"
-                    letterSpacing="4"
-                    textLength="380"
+                    letterSpacing="5"
+                    textLength="410"
                     lengthAdjust="spacing"
                 >
                     GAS RIGHT TO YOUR DOORSTEP
                 </text>
+
+                {/* LPG DISTRIBUTION Badge Area */}
+                <g transform="translate(270, 186)">
+                    {/* Black Background */}
+                    <rect x="-120" y="-14" width="240" height="20" rx="4" fill="#1d2932" />
+                    {/* White Text */}
+                    <text
+                        x="3" y="0"
+                        fontFamily='"Montserrat", "Arial", sans-serif'
+                        fontSize="11"
+                        fontWeight="bold"
+                        fill="#ffffff"
+                        textAnchor="middle"
+                        letterSpacing="8"
+                    >
+                        LPG DISTRIBUTION
+                    </text>
+                </g>
 
             </svg>
         </div>

@@ -41,7 +41,7 @@ export default function SettingsPage() {
       setLoading(true);
       setError(null);
       const response = await fetch('/api/settings');
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Failed to fetch settings');
@@ -90,7 +90,7 @@ export default function SettingsPage() {
       setSettings(formData as SystemSettings);
       setIsEditing(false);
       toast.success('Settings updated successfully!');
-      
+
       // Refresh settings to get updated data
       await fetchSettings();
     } catch (err) {
@@ -152,17 +152,17 @@ export default function SettingsPage() {
         </div>
         {!isEditing ? (
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => router.push('/admin/pricing')}>
+            <Button variant="outline" size="sm" onClick={() => router.push('/admin/pricing')}>
               Price Management
             </Button>
-            <Button onClick={() => setIsEditing(true)}>Edit Settings</Button>
+            <Button size="sm" onClick={() => setIsEditing(true)}>Edit Settings</Button>
           </div>
         ) : (
           <div className="flex gap-2">
-            <Button onClick={handleSave} disabled={saving}>
+            <Button size="sm" onClick={handleSave} disabled={saving}>
               {saving ? 'Saving...' : 'Save Changes'}
             </Button>
-            <Button variant="outline" onClick={handleCancel} disabled={saving}>
+            <Button variant="outline" size="sm" onClick={handleCancel} disabled={saving}>
               Cancel
             </Button>
           </div>
@@ -211,7 +211,7 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle className="text-lg font-semibold text-gray-900">Company Information</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-2">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Company Name
@@ -220,7 +220,7 @@ export default function SettingsPage() {
                 <Input
                   value={formData.companyName || ''}
                   onChange={(e) => handleInputChange('companyName', e.target.value)}
-                  className="w-full"
+                  className="w-full h-8 px-3 py-1 text-sm"
                   placeholder="Enter company name"
                 />
               ) : (
@@ -237,7 +237,7 @@ export default function SettingsPage() {
                   type="email"
                   value={formData.contactEmail || ''}
                   onChange={(e) => handleInputChange('contactEmail', e.target.value)}
-                  className="w-full"
+                  className="w-full h-8 px-3 py-1 text-sm"
                   placeholder="Enter contact email"
                 />
               ) : (
@@ -254,7 +254,7 @@ export default function SettingsPage() {
                   type="tel"
                   value={formData.contactPhone || ''}
                   onChange={(e) => handleInputChange('contactPhone', e.target.value)}
-                  className="w-full"
+                  className="w-full h-8 px-3 py-1 text-sm"
                   placeholder="Enter contact phone"
                 />
               ) : (
@@ -270,8 +270,8 @@ export default function SettingsPage() {
                 <Textarea
                   value={formData.address || ''}
                   onChange={(e) => handleInputChange('address', e.target.value)}
-                  className="w-full"
-                  rows={3}
+                  className="w-full py-1.5 px-3 text-sm"
+                  rows={2}
                   placeholder="Enter company address"
                 />
               ) : (
@@ -287,8 +287,8 @@ export default function SettingsPage() {
                 <Textarea
                   value={formData.businessHours || ''}
                   onChange={(e) => handleInputChange('businessHours', e.target.value)}
-                  className="w-full"
-                  rows={2}
+                  className="w-full py-1.5 px-3 text-sm"
+                  rows={1}
                   placeholder="Enter business hours"
                 />
               ) : (
@@ -303,7 +303,7 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle className="text-lg font-semibold text-gray-900">Business Configuration</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-2">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Delivery Radius (miles)
@@ -314,7 +314,7 @@ export default function SettingsPage() {
                   min="0"
                   value={formData.deliveryRadius || 0}
                   onChange={(e) => handleInputChange('deliveryRadius', Number(e.target.value))}
-                  className="w-full"
+                  className="w-full h-8 px-3 py-1 text-sm"
                   placeholder="Enter delivery radius"
                 />
               ) : (
@@ -333,7 +333,7 @@ export default function SettingsPage() {
                   step="0.01"
                   value={formData.defaultCreditLimit || 0}
                   onChange={(e) => handleInputChange('defaultCreditLimit', Number(e.target.value))}
-                  className="w-full"
+                  className="w-full h-8 px-3 py-1 text-sm"
                   placeholder="Enter default credit limit"
                 />
               ) : (
@@ -353,7 +353,7 @@ export default function SettingsPage() {
                   step="0.1"
                   value={formData.taxRate || 0}
                   onChange={(e) => handleInputChange('taxRate', Number(e.target.value))}
-                  className="w-full"
+                  className="w-full h-8 px-3 py-1 text-sm"
                   placeholder="Enter tax rate"
                 />
               ) : (
@@ -369,6 +369,7 @@ export default function SettingsPage() {
                 <Select
                   value={formData.currency || ''}
                   onChange={(e) => handleInputChange('currency', e.target.value)}
+                  className="w-full h-8 px-3 py-1 text-sm"
                 >
                   <option value="">Select currency</option>
                   <option value="USD">USD ($)</option>
@@ -390,6 +391,7 @@ export default function SettingsPage() {
                 <Select
                   value={formData.timezone || ''}
                   onChange={(e) => handleInputChange('timezone', e.target.value)}
+                  className="w-full h-8 px-3 py-1 text-sm"
                 >
                   <option value="">Select timezone</option>
                   <option value="America/New_York">Eastern Time (ET)</option>
@@ -423,7 +425,7 @@ export default function SettingsPage() {
                     min="1"
                     value={formData.maintenanceInterval || 0}
                     onChange={(e) => handleInputChange('maintenanceInterval', Number(e.target.value))}
-                    className="w-full"
+                    className="w-full h-8 px-3 py-1 text-sm"
                     placeholder="Enter maintenance interval"
                   />
                 ) : (
@@ -441,7 +443,7 @@ export default function SettingsPage() {
                     min="1"
                     value={formData.safetyInspectionInterval || 0}
                     onChange={(e) => handleInputChange('safetyInspectionInterval', Number(e.target.value))}
-                    className="w-full"
+                    className="w-full h-8 px-3 py-1 text-sm"
                     placeholder="Enter safety inspection interval"
                   />
                 ) : (
