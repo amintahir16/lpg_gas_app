@@ -61,6 +61,9 @@ export default function CustomersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
 
+  const [filterStatus, setFilterStatus] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [filterType, setFilterType] = useState<'ALL' | 'B2B' | 'B2C'>('ALL');
+
   // Debounce search term
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -70,20 +73,22 @@ export default function CustomersPage() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Reset pagination when search changes
+  // Reset pagination when search or filters change
   useEffect(() => {
     setPagination(prev => ({ ...prev, page: 1 }));
-  }, [debouncedSearchTerm]);
+  }, [debouncedSearchTerm, filterStatus, filterType]);
 
   useEffect(() => {
     fetchCustomers();
-  }, [debouncedSearchTerm, pagination.page]);
+  }, [debouncedSearchTerm, pagination.page, filterStatus, filterType]);
 
   const fetchCustomers = async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams({
         search: debouncedSearchTerm,
+        status: filterStatus,
+        type: filterType,
         page: pagination.page.toString(),
         limit: pagination.limit.toString()
       });
@@ -144,17 +149,15 @@ export default function CustomersPage() {
         <div className="mt-4 sm:mt-0 flex gap-2">
           <Button
             onClick={() => router.push('/customers/b2c')}
-            variant="outline"
             size="sm"
-            className="font-semibold h-9"
+            className="font-semibold h-9 bg-green-600 hover:bg-green-700 text-white shadow-sm"
           >
             B2C Customers
           </Button>
           <Button
             onClick={() => router.push('/customers/b2b')}
-            variant="outline"
             size="sm"
-            className="font-semibold h-9"
+            className="font-semibold h-9 bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
           >
             B2B Customers
           </Button>
@@ -227,7 +230,7 @@ export default function CustomersPage() {
 
       {/* Search and Filters */}
       <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-        <CardContent className="p-4">
+        <CardContent className="p-4 space-y-4">
           <div className="flex gap-4">
             <div className="flex-1">
               <div className="relative">
@@ -240,6 +243,42 @@ export default function CustomersPage() {
                   className="pl-9 h-9 text-sm bg-gray-50/50"
                   onFocus={(e) => e.target.select()}
                 />
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-4 border-t border-gray-100 pt-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-600">Filters:</span>
+              <div className="flex bg-gray-100/50 p-1 rounded-lg">
+                {(['ALL', 'ACTIVE', 'INACTIVE'] as const).map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => setFilterStatus(status)}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${filterStatus === status
+                      ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200'
+                      : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                      }`}
+                  >
+                    {status === 'ALL' ? 'All Status' : status === 'ACTIVE' ? 'Active' : 'Inactive'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex bg-gray-100/50 p-1 rounded-lg">
+                {(['ALL', 'B2B', 'B2C'] as const).map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => setFilterType(type)}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${filterType === type
+                      ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200'
+                      : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                      }`}
+                  >
+                    {type === 'ALL' ? 'All Categories' : type === 'B2B' ? 'B2B Industries' : 'B2C Homes'}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
@@ -279,6 +318,7 @@ export default function CustomersPage() {
                 <TableHead className="font-semibold text-gray-700">Phone</TableHead>
                 <TableHead className="font-semibold text-gray-700">Type</TableHead>
                 <TableHead className="font-semibold text-gray-700">Credit Limit</TableHead>
+                <TableHead className="font-semibold text-gray-700 text-center">Status</TableHead>
 
               </TableRow>
             </TableHeader>
@@ -305,6 +345,12 @@ export default function CustomersPage() {
                   </TableCell>
                   <TableCell className="font-semibold text-gray-900">
                     Rs {(Number(customer.creditLimit) || 0).toFixed(2)}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${customer.isActive ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${customer.isActive ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+                      {customer.isActive ? 'Active' : 'Inactive'}
+                    </div>
                   </TableCell>
 
                 </TableRow>

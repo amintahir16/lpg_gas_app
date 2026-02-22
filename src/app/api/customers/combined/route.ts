@@ -15,20 +15,24 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || '';
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
+    const filterStatus = searchParams.get('status') || 'ALL'; // 'ACTIVE' | 'INACTIVE' | 'ALL'
+    const filterType = searchParams.get('type') || 'ALL'; // 'B2B' | 'B2C' | 'ALL'
     const skip = (page - 1) * limit;
 
     // Build search conditions for both B2B and B2C customers
-    const b2bWhere = search ? {
-      OR: [
+    let b2bWhere: any = {};
+    if (search) {
+      b2bWhere.OR = [
         { name: { contains: search, mode: 'insensitive' as const } },
         { contactPerson: { contains: search, mode: 'insensitive' as const } },
         { phone: { contains: search, mode: 'insensitive' as const } },
         { email: { contains: search, mode: 'insensitive' as const } }
-      ]
-    } : {};
+      ];
+    }
 
-    const b2cWhere = search ? {
-      OR: [
+    let b2cWhere: any = {};
+    if (search) {
+      b2cWhere.OR = [
         { name: { contains: search, mode: 'insensitive' as const } },
         { phone: { contains: search, mode: 'insensitive' as const } },
         { address: { contains: search, mode: 'insensitive' as const } },
@@ -37,58 +41,80 @@ export async function GET(request: NextRequest) {
         { street: { contains: search, mode: 'insensitive' as const } },
         { phase: { contains: search, mode: 'insensitive' as const } },
         { area: { contains: search, mode: 'insensitive' as const } }
-      ]
-    } : {};
+      ];
+    }
 
-    // Fetch B2B customers
-    const [b2bCustomers, b2bTotal, b2bAllBalance] = await Promise.all([
-      prisma.customer.findMany({
-        where: b2bWhere,
-        select: {
-          id: true,
-          name: true,
-          contactPerson: true,
-          email: true,
-          phone: true,
-          creditLimit: true,
-          isActive: true,
-          createdAt: true,
-          notes: true
-        },
-        orderBy: { createdAt: 'desc' }
-      }),
-      prisma.customer.count({ where: b2bWhere }),
-      // To get global receivables, we don't paginate
-      prisma.customer.aggregate({
-        _sum: {
-          ledgerBalance: true
-        }
-      })
-    ]);
+    // Apply Status Filter
+    if (filterStatus === 'ACTIVE') {
+      b2bWhere.isActive = true;
+      b2cWhere.isActive = true;
+    } else if (filterStatus === 'INACTIVE') {
+      b2bWhere.isActive = false;
+      b2cWhere.isActive = false;
+    }
 
-    // Fetch B2C customers
-    const [b2cCustomers, b2cTotal, b2cSecurity] = await Promise.all([
-      prisma.b2CCustomer.findMany({
-        where: b2cWhere,
-        select: {
-          id: true,
-          name: true,
-          phone: true,
-          email: true,
-          address: true,
-          totalProfit: true,
-          isActive: true,
-          createdAt: true
-        },
-        orderBy: { createdAt: 'desc' }
-      }),
-      prisma.b2CCustomer.count({ where: b2cWhere }),
-      // Sum all B2C security on cylinders with customers
-      prisma.b2CCylinderHolding.aggregate({
-        where: { isReturned: false },
-        _sum: { securityAmount: true }
-      })
-    ]);
+    // Fetch B2B customers if filterType is 'ALL' or 'B2B'
+    let b2bCustomers: any[] = [];
+    let b2bTotal = 0;
+
+    if (filterType === 'ALL' || filterType === 'B2B') {
+      const results = await Promise.all([
+        prisma.customer.findMany({
+          where: b2bWhere,
+          select: {
+            id: true,
+            name: true,
+            contactPerson: true,
+            email: true,
+            phone: true,
+            creditLimit: true,
+            isActive: true,
+            createdAt: true,
+            notes: true
+          },
+          orderBy: { createdAt: 'desc' }
+        }),
+        prisma.customer.count({ where: b2bWhere })
+      ]);
+      b2bCustomers = results[0];
+      b2bTotal = results[1];
+    }
+
+    // Fetch B2C customers if filterType is 'ALL' or 'B2C'
+    let b2cCustomers: any[] = [];
+    let b2cTotal = 0;
+    let b2cSecurity = { _sum: { securityAmount: 0 } };
+
+    if (filterType === 'ALL' || filterType === 'B2C') {
+      const results = await Promise.all([
+        prisma.b2CCustomer.findMany({
+          where: b2cWhere,
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true,
+            address: true,
+            totalProfit: true,
+            isActive: true,
+            createdAt: true
+          },
+          orderBy: { createdAt: 'desc' }
+        }),
+        prisma.b2CCustomer.count({ where: b2cWhere }),
+        // Sum all B2C security on cylinders with filtered customers
+        prisma.b2CCylinderHolding.aggregate({
+          where: {
+            isReturned: false,
+            customer: b2cWhere // Respect filters exactly like the route
+          },
+          _sum: { securityAmount: true }
+        })
+      ]);
+      b2cCustomers = results[0] as any;
+      b2cTotal = results[1] as number;
+      b2cSecurity = results[2] as any;
+    }
 
     // Transform B2B customers to unified format
     const transformedB2bCustomers = b2bCustomers.map(customer => ({
@@ -132,26 +158,77 @@ export async function GET(request: NextRequest) {
     const totalB2cCustomers = b2cTotal;
 
     // Ledger balance in B2B is negative if they owe money usually, wait, let's check B2B route:
-    // It assumes: (Number(c.ledgerBalance) > 0 ? Number(c.ledgerBalance) : 0) -> Wait, B2B route logic has `-customer.ledgerBalance` displayed in red to mean they owe.
-    // Let's do raw ledger balance sum and assume > 0 means they owe based on your schema or < 0 means they owe (B2B frontend uses `-c.ledgerBalance`).
     // Actually the B2B dashboard does: totalReceivables = sum(ledgerBalance > 0). It displays formatCurrency(-totalReceivables). Let's stick to the same logic:
     // Actually, B2B sum logic iterates. We just use the raw sum of ALL minus ledger balances for B2B.
-    const allB2b = await prisma.customer.findMany({
-      select: { ledgerBalance: true }
-    });
+    let totalReceivables = 0;
+    if (filterType === 'ALL' || filterType === 'B2B') {
+      const allB2b = await prisma.customer.findMany({
+        where: b2bWhere, // filter by status/search
+        select: { ledgerBalance: true }
+      });
 
-    const totalReceivables = allB2b.reduce((sum, c) => {
-      return sum + (Number(c.ledgerBalance) > 0 ? Number(c.ledgerBalance) : 0);
-    }, 0);
+      totalReceivables = allB2b.reduce((sum, c) => {
+        return sum + (Number(c.ledgerBalance) > 0 ? Number(c.ledgerBalance) : 0);
+      }, 0);
+    }
 
     const totalSecurityHoldings = Number(b2cSecurity._sum.securityAmount || 0);
 
-    // Fetch total cylinders in circulation (any cylinder attached to a customer and not returned, or specifically WITH_CUSTOMER in status)
-    const totalCylindersCount = await prisma.cylinder.count({
-      where: {
-        currentStatus: 'WITH_CUSTOMER'
-      }
-    });
+    // Fetch total cylinders in circulation (any cylinder attached to a customer and not returned)
+    // To respect the filtered customers, we might just query the total cylinders if filter is ALL, but if applying status filters, we'd need to filter cylinders.
+    // For simplicity, we just count the `WITH_CUSTOMER` global cylinders, or we can filter by the combined customers.
+    // To match B2C dashboard, we just keep totalCylindersCount as global unless specified, wait user said "these filters should work on the stat card too".
+
+    let b2cCylindersHeld = 0;
+    if (filterType === 'ALL' || filterType === 'B2C') {
+      const b2cCylinderAgg = await prisma.b2CCylinderHolding.aggregate({
+        where: { isReturned: false, customer: b2cWhere },
+        _sum: { quantity: true }
+      });
+      b2cCylindersHeld = b2cCylinderAgg._sum.quantity || 0;
+    }
+
+    let b2bCylindersHeld = 0;
+    if (filterType === 'ALL' || filterType === 'B2B') {
+      // Just grab the B2B customers IDs
+      const b2bIds = b2bCustomers.map(c => c.id);
+      const b2bCylAgg = await prisma.cylinderRental.count({
+        where: {
+          status: 'ACTIVE',
+          customerId: { in: b2bIds }
+        }
+      });
+
+      // And search by location containing ID
+      const locMatches = b2bIds.map(id => ({ location: { contains: id } }));
+      const nameMatches = b2bCustomers.map(c => ({ location: { contains: c.name, mode: 'insensitive' as const } }));
+
+      const b2bCylsLocationCount = await prisma.cylinder.count({
+        where: {
+          currentStatus: 'WITH_CUSTOMER',
+          OR: [
+            ...locMatches,
+            ...nameMatches
+          ]
+        }
+      });
+      // Roughly picking the max or combining logic
+      // As implemented in B2B route:
+      const assignedCylinders = await prisma.cylinder.findMany({
+        where: {
+          currentStatus: 'WITH_CUSTOMER',
+          OR: [
+            { cylinderRentals: { some: { customerId: { in: b2bIds }, status: 'ACTIVE' } } },
+            ...locMatches,
+            ...nameMatches
+          ]
+        },
+        select: { cylinderType: true }
+      });
+      b2bCylindersHeld = assignedCylinders.length;
+    }
+
+    const totalCylindersCount = b2cCylindersHeld + b2bCylindersHeld;
 
     const summary = {
       totalCustomers,

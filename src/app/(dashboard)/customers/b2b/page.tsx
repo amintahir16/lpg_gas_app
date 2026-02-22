@@ -384,14 +384,17 @@ export default function B2BCustomersPage() {
           <Button
             onClick={fetchB2BCustomers}
             variant="outline"
+            size="sm"
             disabled={loading}
+            className="h-9"
           >
             <MagnifyingGlassIcon className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
           <Button
             onClick={() => setShowAddForm(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm h-9"
           >
             <PlusIcon className="w-4 h-4 mr-2" />
             Add B2B Customer

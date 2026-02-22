@@ -359,13 +359,15 @@ export default function B2CCustomersPage() {
           <Button
             onClick={() => router.push('/customers/b2c/ledger')}
             variant="outline"
-            className="font-semibold"
+            size="sm"
+            className="font-semibold h-9"
           >
             View Ledger
           </Button>
           <Button
             onClick={() => setShowAddForm(true)}
-            className="bg-green-600 hover:bg-green-700 text-white shadow-sm"
+            size="sm"
+            className="bg-green-600 hover:bg-green-700 text-white shadow-sm h-9"
           >
             <PlusIcon className="w-4 h-4 mr-2" />
             Add Customer
