@@ -6,7 +6,7 @@ import { authOptions } from '@/lib/auth';
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user || (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     } : {};
 
     // Fetch B2B customers
-    const [b2bCustomers, b2bTotal] = await Promise.all([
+    const [b2bCustomers, b2bTotal, b2bAllBalance] = await Promise.all([
       prisma.customer.findMany({
         where: b2bWhere,
         select: {
@@ -57,11 +57,17 @@ export async function GET(request: NextRequest) {
         },
         orderBy: { createdAt: 'desc' }
       }),
-      prisma.customer.count({ where: b2bWhere })
+      prisma.customer.count({ where: b2bWhere }),
+      // To get global receivables, we don't paginate
+      prisma.customer.aggregate({
+        _sum: {
+          ledgerBalance: true
+        }
+      })
     ]);
 
     // Fetch B2C customers
-    const [b2cCustomers, b2cTotal] = await Promise.all([
+    const [b2cCustomers, b2cTotal, b2cSecurity] = await Promise.all([
       prisma.b2CCustomer.findMany({
         where: b2cWhere,
         select: {
@@ -76,7 +82,12 @@ export async function GET(request: NextRequest) {
         },
         orderBy: { createdAt: 'desc' }
       }),
-      prisma.b2CCustomer.count({ where: b2cWhere })
+      prisma.b2CCustomer.count({ where: b2cWhere }),
+      // Sum all B2C security on cylinders with customers
+      prisma.b2CCylinderHolding.aggregate({
+        where: { isReturned: false },
+        _sum: { securityAmount: true }
+      })
     ]);
 
     // Transform B2B customers to unified format
@@ -115,8 +126,45 @@ export async function GET(request: NextRequest) {
     const total = b2bTotal + b2cTotal;
     const paginatedCustomers = allCustomers.slice(skip, skip + limit);
 
+    // Calculate summary statistics
+    const totalCustomers = b2bTotal + b2cTotal;
+    const totalB2bCustomers = b2bTotal;
+    const totalB2cCustomers = b2cTotal;
+
+    // Ledger balance in B2B is negative if they owe money usually, wait, let's check B2B route:
+    // It assumes: (Number(c.ledgerBalance) > 0 ? Number(c.ledgerBalance) : 0) -> Wait, B2B route logic has `-customer.ledgerBalance` displayed in red to mean they owe.
+    // Let's do raw ledger balance sum and assume > 0 means they owe based on your schema or < 0 means they owe (B2B frontend uses `-c.ledgerBalance`).
+    // Actually the B2B dashboard does: totalReceivables = sum(ledgerBalance > 0). It displays formatCurrency(-totalReceivables). Let's stick to the same logic:
+    // Actually, B2B sum logic iterates. We just use the raw sum of ALL minus ledger balances for B2B.
+    const allB2b = await prisma.customer.findMany({
+      select: { ledgerBalance: true }
+    });
+
+    const totalReceivables = allB2b.reduce((sum, c) => {
+      return sum + (Number(c.ledgerBalance) > 0 ? Number(c.ledgerBalance) : 0);
+    }, 0);
+
+    const totalSecurityHoldings = Number(b2cSecurity._sum.securityAmount || 0);
+
+    // Fetch total cylinders in circulation (any cylinder attached to a customer and not returned, or specifically WITH_CUSTOMER in status)
+    const totalCylindersCount = await prisma.cylinder.count({
+      where: {
+        currentStatus: 'WITH_CUSTOMER'
+      }
+    });
+
+    const summary = {
+      totalCustomers,
+      totalB2bCustomers,
+      totalB2cCustomers,
+      totalReceivables,
+      totalSecurityHoldings,
+      totalCylindersCount
+    };
+
     return NextResponse.json({
       customers: paginatedCustomers,
+      summary,
       pagination: {
         page,
         limit,

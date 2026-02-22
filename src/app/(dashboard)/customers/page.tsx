@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 
+import { BanknotesIcon, BriefcaseIcon, CubeIcon, HomeIcon, UserGroupIcon } from '@heroicons/react/24/outline';
+
 interface Customer {
   id: string;
   name: string;
@@ -22,8 +24,18 @@ interface Customer {
   notes?: string | null;
 }
 
+interface Summary {
+  totalCustomers: number;
+  totalB2bCustomers: number;
+  totalB2cCustomers: number;
+  totalReceivables: number;
+  totalSecurityHoldings: number;
+  totalCylindersCount: number;
+}
+
 interface CustomersResponse {
   customers: Customer[];
+  summary: Summary;
   pagination: {
     page: number;
     limit: number;
@@ -36,6 +48,7 @@ export default function CustomersPage() {
   const router = useRouter();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pagination, setPagination] = useState({
@@ -83,6 +96,7 @@ export default function CustomersPage() {
 
       const data: CustomersResponse = await response.json();
       setCustomers(data.customers);
+      setSummary(data.summary);
       setPagination(data.pagination);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -106,55 +120,114 @@ export default function CustomersPage() {
     // Always return the simplified type (B2B or B2C)
     return customer.type;
   };
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-PK', {
+      style: 'currency',
+      currency: 'PKR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
 
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="space-y-4">
+      {/* Header and Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Customer Management</h1>
-          <p className="mt-2 text-gray-600 font-medium">
+          <h1 className="text-2xl font-bold text-gray-900">Customer Management</h1>
+          <p className="mt-1 text-sm text-gray-600 font-medium">
             Manage your customer database and relationships
           </p>
         </div>
-        <div className="mt-4 sm:mt-0 flex space-x-3">
+
+        <div className="mt-4 sm:mt-0 flex gap-2">
           <Button
             onClick={() => router.push('/customers/b2c')}
             variant="outline"
-            className="font-semibold"
+            size="sm"
+            className="font-semibold h-9"
           >
             B2C Customers
           </Button>
           <Button
             onClick={() => router.push('/customers/b2b')}
             variant="outline"
-            className="font-semibold"
+            size="sm"
+            className="font-semibold h-9"
           >
             B2B Customers
           </Button>
         </div>
       </div>
 
+      {/* Stats Summary Card */}
+      {summary && (
+        <Card className="border-0 shadow-sm bg-white overflow-hidden">
+          <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-y md:divide-y-0 border-gray-100">
+            {/* Total Customers */}
+            <div className="p-3 sm:p-4 flex flex-col items-center justify-center text-center hover:bg-gray-50/50 transition-colors">
+              <span className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 flex items-center">
+                <UserGroupIcon className="w-3.5 h-3.5 mr-1" /> All Customers
+              </span>
+              <span className="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">
+                {summary.totalCustomers}
+              </span>
+              <div className="flex gap-2 mt-1.5 text-[10px] text-gray-500 font-medium">
+                <span className="flex items-center"><HomeIcon className="w-3 h-3 mr-0.5 text-green-600" /> {summary.totalB2cCustomers}</span>
+                <span className="flex items-center"><BriefcaseIcon className="w-3 h-3 mr-0.5 text-blue-600" /> {summary.totalB2bCustomers}</span>
+              </div>
+            </div>
+
+            {/* Total Cylinders */}
+            <div className="p-3 sm:p-4 flex flex-col items-center justify-center text-center hover:bg-orange-50/50 transition-colors">
+              <span className="text-[10px] sm:text-xs font-semibold text-orange-600 uppercase tracking-wider mb-1 flex items-center">
+                <CubeIcon className="w-3.5 h-3.5 mr-1" /> Total Cylinders
+              </span>
+              <span className="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">
+                {summary.totalCylindersCount}
+              </span>
+              <span className="text-[10px] text-gray-500 mt-1.5 font-medium">Currently in circulation</span>
+            </div>
+
+            {/* Total Receivables */}
+            <div className="p-3 sm:p-4 flex flex-col items-center justify-center text-center hover:bg-red-50/50 transition-colors">
+              <span className="text-[10px] sm:text-xs font-semibold text-red-600 uppercase tracking-wider mb-1 flex items-center">
+                <BanknotesIcon className="w-3.5 h-3.5 mr-1" /> B2B Receivables
+              </span>
+              <span className="text-xl sm:text-2xl font-bold text-red-600 leading-tight">
+                {formatCurrency(summary.totalReceivables)}
+              </span>
+              <span className="text-[10px] text-gray-500 mt-1.5 font-medium">Total outstanding</span>
+            </div>
+
+            {/* Security Held */}
+            <div className="p-3 sm:p-4 flex flex-col items-center justify-center text-center hover:bg-purple-50/50 transition-colors">
+              <span className="text-[10px] sm:text-xs font-semibold text-purple-600 uppercase tracking-wider mb-1 flex items-center">
+                <BanknotesIcon className="w-3.5 h-3.5 mr-1" /> Security Held
+              </span>
+              <span className="text-xl sm:text-2xl font-bold text-purple-600 leading-tight">
+                {formatCurrency(summary.totalSecurityHoldings)}
+              </span>
+              <span className="text-[10px] text-gray-500 mt-1.5 font-medium">From Homes (B2C)</span>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Loading State */}
       {loading && customers.length === 0 && !error && (
-        <div className="flex items-center justify-center py-12">
+        <div className="flex items-center justify-center py-10">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600 font-medium">Loading customers...</p>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-sm text-gray-600 font-medium">Loading customers...</p>
           </div>
         </div>
       )}
 
       {/* Search and Filters */}
       <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold text-gray-900">Search & Filters</CardTitle>
-          <CardDescription className="text-gray-600 font-medium">
-            Find specific customers or filter by type
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="p-4">
           <div className="flex gap-4">
             <div className="flex-1">
               <div className="relative">
@@ -164,7 +237,7 @@ export default function CustomersPage() {
                   placeholder="Search customers..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="pl-9 h-9 text-sm bg-gray-50/50"
                   onFocus={(e) => e.target.select()}
                 />
               </div>
@@ -196,14 +269,8 @@ export default function CustomersPage() {
       )}
 
       {/* Customers Table */}
-      <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold text-gray-900">Customer Database</CardTitle>
-          <CardDescription className="text-gray-600 font-medium">
-            Complete list of all customers and their details
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm overflow-hidden">
+        <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
@@ -247,7 +314,7 @@ export default function CustomersPage() {
 
           {/* Pagination */}
           {pagination.pages > 1 && (
-            <div className="flex items-center justify-between mt-6">
+            <div className="flex items-center justify-between p-4 border-t border-gray-100">
               <p className="text-sm text-gray-700">
                 Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
                 {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}

@@ -15,10 +15,13 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || '';
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
+    const filterStatus = searchParams.get('status') || 'ALL'; // 'ACTIVE' | 'INACTIVE' | 'ALL'
+    const sortBy = searchParams.get('sortBy') || 'createdAt'; // 'PROFIT' | 'NAME' | 'createdAt'
+    const sortOrder = (searchParams.get('sortOrder') || 'desc') as 'asc' | 'desc';
     const skip = (page - 1) * limit;
 
     // Build where clause for search
-    const whereClause = search ? {
+    const whereClause: any = search ? {
       OR: [
         { name: { contains: search, mode: 'insensitive' as const } },
         { phone: { contains: search, mode: 'insensitive' as const } },
@@ -30,6 +33,21 @@ export async function GET(request: NextRequest) {
         { area: { contains: search, mode: 'insensitive' as const } }
       ]
     } : {};
+
+    if (filterStatus === 'ACTIVE') {
+      whereClause.isActive = true;
+    } else if (filterStatus === 'INACTIVE') {
+      whereClause.isActive = false;
+    }
+
+    let orderByClause: any = { createdAt: 'desc' };
+    if (sortBy === 'PROFIT') {
+      orderByClause = { totalProfit: sortOrder };
+    } else if (sortBy === 'NAME') {
+      orderByClause = { name: sortOrder };
+    } else {
+      orderByClause = { createdAt: sortOrder };
+    }
 
     // Get customers with pagination
     const [customers, total] = await Promise.all([
@@ -44,7 +62,7 @@ export async function GET(request: NextRequest) {
             }
           }
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: orderByClause,
         skip,
         take: limit
       }),
@@ -53,12 +71,16 @@ export async function GET(request: NextRequest) {
 
     // Calculate summary data
     const [totalCustomers, profitSummary, cylinderSummary] = await Promise.all([
-      prisma.b2CCustomer.count(),
+      prisma.b2CCustomer.count({ where: whereClause }), // Total Customers should respect filters
       prisma.b2CCustomer.aggregate({
+        where: whereClause, // Profit should respect filters
         _sum: { totalProfit: true }
       }),
       prisma.b2CCylinderHolding.aggregate({
-        where: { isReturned: false },
+        where: {
+          isReturned: false,
+          customer: whereClause // Only include holdings for filtered customers
+        },
         _sum: { quantity: true, securityAmount: true }
       })
     ]);
@@ -67,7 +89,10 @@ export async function GET(request: NextRequest) {
     // Get cylinder distribution by type dynamically
     const cylinderHoldings = await prisma.b2CCylinderHolding.groupBy({
       by: ['cylinderType'],
-      where: { isReturned: false },
+      where: {
+        isReturned: false,
+        customer: whereClause // Only include holdings for filtered customers
+      },
       _sum: { quantity: true }
     });
 
