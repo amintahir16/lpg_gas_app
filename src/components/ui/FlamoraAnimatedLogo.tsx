@@ -65,21 +65,20 @@ export default function FlamoraAnimatedLogo({ className = '' }: { className?: st
                     fontSize="78"
                     fontWeight="900"
                     fill="#1d2932"
-                    letterSpacing="-1.5"
                 >
                     {/* Text FLAM - ends right before the O ring */}
-                    <text x="291" y="142" textAnchor="end">
+                    <text x="291" y="142" textAnchor="end" textLength="210" lengthAdjust="spacingAndGlyphs">
                         FLAM
                     </text>
 
                     {/* Text RA - starts right after the O ring */}
-                    <text x="350" y="142" textAnchor="start">
+                    <text x="350" y="142" textAnchor="start" textLength="109" lengthAdjust="spacingAndGlyphs">
                         RA
                     </text>
                 </g>
 
                 {/* ========== THE 'O' - GAS CYLINDER IN RING ========== */}
-                <g transform={`translate(322, 115) scale(${oScale})`}>
+                <g transform={`translate(321, 115) scale(${oScale})`}>
                     {/* Thick outer ring - matches letter cap height */}
                     <circle cx="0" cy="0" r="25" fill="none" stroke="#1d2932" strokeWidth="8" />
 
@@ -109,14 +108,14 @@ export default function FlamoraAnimatedLogo({ className = '' }: { className?: st
 
                 {/* Subtitle Slogan */}
                 <text
-                    x="270" y="165"
+                    x="274" y="165"
                     fontFamily='"Montserrat", "Arial", sans-serif'
                     fontSize="15"
                     fontWeight="bold"
                     fill="#1d2932"
                     textAnchor="middle"
                     letterSpacing="5"
-                    textLength="410"
+                    textLength="378"
                     lengthAdjust="spacing"
                 >
                     GAS RIGHT TO YOUR DOORSTEP
