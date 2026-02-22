@@ -4,10 +4,10 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-  CubeIcon, 
-  BuildingStorefrontIcon, 
-  TruckIcon, 
+import {
+  CubeIcon,
+  BuildingStorefrontIcon,
+  TruckIcon,
   UserGroupIcon,
   WrenchScrewdriverIcon,
   ChartBarIcon
@@ -42,7 +42,7 @@ export default function InventoryDashboard() {
     vehicleInventory: 0,
     accessoriesCount: 0
   });
-  
+
   const [cylinderTypeStats, setCylinderTypeStats] = useState<CylinderTypeStats[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -102,13 +102,13 @@ export default function InventoryDashboard() {
       details: `${stats.cylindersByType.domestic} Domestic | ${stats.cylindersByType.standard} Standard | ${stats.cylindersByType.commercial} Commercial`
     },
     {
-      title: "Store & Vehicle Inventory",
-      value: stats.storeInventory + stats.vehicleInventory,
-      subtitle: "Distributed Inventory",
-      icon: BuildingStorefrontIcon,
-      href: "/inventory/store-vehicles",
+      title: "Total System Cylinders",
+      value: stats.totalCylinders + stats.cylindersWithCustomers,
+      subtitle: "Inventory & Rented",
+      icon: CubeIcon,
+      href: null,
       color: "bg-green-500",
-      details: `${stats.storeInventory} in Stores | ${stats.vehicleInventory} in Vehicles`
+      details: `${stats.totalCylinders} in Inventory | ${stats.cylindersWithCustomers} with Customers`
     },
     {
       title: "Cylinders with Customers",
@@ -141,7 +141,7 @@ export default function InventoryDashboard() {
           </p>
         </div>
         <div className="mt-4 sm:mt-0">
-          <Button 
+          <Button
             onClick={() => window.location.href = '/inventory/cylinders'}
             className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-lg"
           >
@@ -154,10 +154,10 @@ export default function InventoryDashboard() {
       {/* Dashboard Cards */}
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-2">
         {dashboardCards.map((card, index) => (
-          <Card 
-            key={index} 
-            className="border-0 shadow-sm bg-white/80 backdrop-blur-sm hover:shadow-md transition-shadow cursor-pointer"
-            onClick={() => window.location.href = card.href}
+          <Card
+            key={index}
+            className={`border-0 shadow-sm bg-white/80 backdrop-blur-sm transition-shadow ${card.href ? 'hover:shadow-md cursor-pointer' : ''}`}
+            onClick={() => card.href ? window.location.href = card.href : null}
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-semibold text-gray-600">
@@ -248,32 +248,32 @@ export default function InventoryDashboard() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="h-20 flex flex-col items-center justify-center space-y-2"
               onClick={() => window.location.href = '/inventory/cylinders/add'}
             >
               <CubeIcon className="w-6 h-6" />
               <span className="text-sm font-medium">Add Cylinder</span>
             </Button>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="h-20 flex flex-col items-center justify-center space-y-2"
               onClick={() => window.location.href = '/inventory/store-vehicles'}
             >
               <BuildingStorefrontIcon className="w-6 h-6" />
               <span className="text-sm font-medium">Manage Stores</span>
             </Button>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="h-20 flex flex-col items-center justify-center space-y-2"
               onClick={() => window.location.href = '/inventory/accessories'}
             >
               <WrenchScrewdriverIcon className="w-6 h-6" />
               <span className="text-sm font-medium">Add Equipment</span>
             </Button>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="h-20 flex flex-col items-center justify-center space-y-2"
               onClick={() => window.location.href = '/inventory/reports'}
             >
