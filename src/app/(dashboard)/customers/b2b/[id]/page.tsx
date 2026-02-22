@@ -1985,17 +1985,20 @@ export default function B2BCustomerDetailPage() {
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Method</label>
-                        <select
+                        <CustomSelect
+                          name="salePaymentMethod"
                           value={salePaymentMethod}
-                          onChange={(e) => setSalePaymentMethod(e.target.value)}
-                          className="w-full px-3 py-1 text-sm cursor-pointer border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-9"
-                        >
-                          <option value="CASH">Cash</option>
-                          <option value="BANK_TRANSFER">Bank Transfer</option>
-                          <option value="CHECK">Check</option>
-                          <option value="CREDIT_CARD">Credit Card</option>
-                          <option value="DEBIT_CARD">Debit Card</option>
-                        </select>
+                          onChange={(val) => setSalePaymentMethod(val as string)}
+                          placeholder="Select method"
+                          options={[
+                            { value: 'CASH', label: 'Cash' },
+                            { value: 'BANK_TRANSFER', label: 'Bank Transfer' },
+                            { value: 'CHECK', label: 'Check' },
+                            { value: 'CREDIT_CARD', label: 'Credit Card' },
+                            { value: 'DEBIT_CARD', label: 'Debit Card' }
+                          ]}
+                          className="h-9"
+                        />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Reference (Optional)</label>
@@ -2715,20 +2718,26 @@ export default function B2BCustomerDetailPage() {
 
       {/* Margin Category Edit Modal */}
       {showCategoryEdit && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Change Margin Category</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Select a new margin category for <strong>{customer?.name}</strong>. This will affect pricing for all future transactions.
-              </p>
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+          <div className="relative mx-auto p-0 border w-full max-w-sm shadow-2xl rounded-xl bg-white animate-in zoom-in-95 duration-200">
+            <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center rounded-t-xl">
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Change Margin Category</h3>
+                <p className="text-[11px] text-gray-500 mt-0.5">Select a new margin category for {customer?.name}</p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setShowCategoryEdit(false)} className="h-8 w-8 p-0 rounded-full">
+                <span className="sr-only">Close</span>
+                <span className="text-xl">×</span>
+              </Button>
+            </div>
 
+            <div className="p-5">
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
                     Current Category
                   </label>
-                  <div className="p-3 bg-gray-50 rounded-md border">
+                  <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-200">
                     <p className="text-sm font-medium text-gray-900">
                       {customer?.marginCategory ?
                         `${customer.marginCategory.name} (Rs ${customer.marginCategory.marginPerKg}/kg)` :
@@ -2739,43 +2748,47 @@ export default function B2BCustomerDetailPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
                     New Category *
                   </label>
-                  <Select
+                  <CustomSelect
+                    name="marginCategoryId"
                     disabled={loadingCategories || updatingCategory}
                     value={selectedCategoryId}
-                    onChange={(e) => {
-                      setSelectedCategoryId(e.target.value);
+                    onChange={(val) => {
+                      setSelectedCategoryId(val as string);
                     }}
-                  >
-                    <option value="">Select new margin category</option>
-                    {marginCategories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name} - Rs {category.marginPerKg}/kg
-                      </option>
-                    ))}
-                  </Select>
-                  <p className="text-xs text-gray-500 mt-1">
+                    className="h-9 text-sm"
+                    placeholder="Select new margin category"
+                    options={marginCategories.map((category) => ({
+                      value: category.id,
+                      label: `${category.name} - Rs ${category.marginPerKg}/kg`
+                    }))}
+                  />
+                  <p className="text-[11px] text-gray-500 mt-1.5">
                     This will immediately affect pricing for new transactions
                   </p>
                 </div>
               </div>
 
-              <div className="flex justify-end space-x-3 mt-6">
+              <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-50">
                 <Button
                   variant="outline"
+                  size="sm"
                   onClick={() => {
                     setShowCategoryEdit(false);
                     setSelectedCategoryId('');
                   }}
                   disabled={updatingCategory}
+                  className="font-medium h-9"
                 >
                   Cancel
                 </Button>
                 <Button
+                  size="sm"
                   onClick={updateCustomerCategory}
                   disabled={updatingCategory || !selectedCategoryId}
+                  className="font-medium bg-blue-600 hover:bg-blue-700 text-white h-9"
                 >
                   {updatingCategory ? 'Updating...' : 'Update Category'}
                 </Button>
