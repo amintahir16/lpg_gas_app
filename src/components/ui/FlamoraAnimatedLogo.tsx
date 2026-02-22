@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function FlamoraAnimatedLogo({ className = '' }: { className?: string }) {
+export default function FlamoraAnimatedLogo({ className = '', hideBadge = false }: { className?: string, hideBadge?: boolean }) {
     // ======= TWEAK THESE TO MOVE THE FLAME AS A WHOLE =======
     const flameOffsetX = -23;   // positive = right, negative = left
     const flameOffsetY = -5;   // positive = down,  negative = up
@@ -122,22 +122,24 @@ export default function FlamoraAnimatedLogo({ className = '' }: { className?: st
                 </text>
 
                 {/* LPG DISTRIBUTION Badge Area */}
-                <g transform="translate(270, 186)">
-                    {/* Black Background */}
-                    <rect x="-120" y="-14" width="240" height="20" rx="4" fill="#1d2932" />
-                    {/* White Text */}
-                    <text
-                        x="3" y="0"
-                        fontFamily='"Montserrat", "Arial", sans-serif'
-                        fontSize="11"
-                        fontWeight="bold"
-                        fill="#ffffff"
-                        textAnchor="middle"
-                        letterSpacing="8"
-                    >
-                        LPG DISTRIBUTION
-                    </text>
-                </g>
+                {!hideBadge && (
+                    <g transform="translate(270, 186)">
+                        {/* Black Background */}
+                        <rect x="-120" y="-14" width="240" height="20" rx="4" fill="#1d2932" />
+                        {/* White Text */}
+                        <text
+                            x="3" y="0"
+                            fontFamily='"Montserrat", "Arial", sans-serif'
+                            fontSize="11"
+                            fontWeight="bold"
+                            fill="#ffffff"
+                            textAnchor="middle"
+                            letterSpacing="8"
+                        >
+                            LPG DISTRIBUTION
+                        </text>
+                    </g>
+                )}
 
             </svg>
         </div>

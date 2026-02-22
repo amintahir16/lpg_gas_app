@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Footer } from '@/components/ui/footer';
 import { NotificationBell } from '@/components/ui/notification-bell';
+import FlamoraAnimatedLogo from '@/components/ui/FlamoraAnimatedLogo';
 
 import { cn } from '@/lib/utils';
 
@@ -137,13 +138,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       )}>
         {/* Sidebar Header */}
         <div className="flex h-16 items-center justify-between px-6 border-b border-gray-200 bg-white/80">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-lg flex items-center justify-center shadow-sm">
-              <CubeIcon className="w-5 h-5 text-white" />
-            </div>
-            <h1 className="text-xl font-bold text-gray-900">
-              LPG Gas
-            </h1>
+          <div className="flex items-center pt-2">
+            <FlamoraAnimatedLogo className="w-32" hideBadge />
           </div>
           <Button
             variant="ghost"

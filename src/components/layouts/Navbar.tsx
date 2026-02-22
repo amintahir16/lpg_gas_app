@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, ShoppingCart, ChevronDown, User, ChevronRight } from 'lucide-react';
 import { useSession } from 'next-auth/react';
+import FlamoraAnimatedLogo from '@/components/ui/FlamoraAnimatedLogo';
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -26,17 +27,24 @@ export default function Navbar() {
     { name: 'Distribution', href: '/services#distribution' },
   ];
 
+  // ======= TWEAK THESE TO ADJUST LOGO ON LANDING PAGE =======
+  const logoWidth = 189;     // Default was around 144. Increase this to make it bigger, decrease for smaller
+  const logoMoveX = 20;       // positive = move right, negative = move left (in pixels)
+  const logoMoveY = 0;       // positive = move down, negative = move up (in pixels)
+  // ==========================================================
+
   return (
     <nav className="bg-white shadow-lg sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
-          <Link href="/" className="flex items-center space-x-2">
-            <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
-              <span className="text-white font-bold text-xl">LPG</span>
-            </div>
-            <span className="text-xl font-bold text-gray-900">Gas Company</span>
-          </Link>
+          <div style={{ transform: `translate(${logoMoveX}px, ${logoMoveY}px)` }}>
+            <Link href="/" className="flex items-center space-x-2">
+              <div style={{ width: `${logoWidth}px` }}>
+                <FlamoraAnimatedLogo hideBadge />
+              </div>
+            </Link>
+          </div>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8">
@@ -95,7 +103,7 @@ export default function Navbar() {
                 0
               </span>
             </Link>
-            
+
             {session && (
               <Link
                 href="/dashboard"
@@ -106,7 +114,7 @@ export default function Navbar() {
                 <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" />
               </Link>
             )}
-            
+
             <button
               onClick={() => setIsOpen(!isOpen)}
               className="md:hidden p-2 text-gray-700 hover:text-blue-600 transition-colors"
@@ -163,7 +171,7 @@ export default function Navbar() {
                     )}
                   </div>
                 ))}
-                
+
                 {session && (
                   <Link
                     href="/dashboard"
