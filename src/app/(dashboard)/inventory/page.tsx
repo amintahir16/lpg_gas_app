@@ -99,7 +99,9 @@ export default function InventoryDashboard() {
       icon: CubeIcon,
       href: "/inventory/cylinders",
       color: "bg-blue-500",
-      details: `${stats.cylindersByType.domestic} Domestic | ${stats.cylindersByType.standard} Standard | ${stats.cylindersByType.commercial} Commercial`
+      details: cylinderTypeStats.length > 0
+        ? cylinderTypeStats.map(stat => `${stat.total} ${stat.type.replace(/Cylinder \((.*?)\)/, '$1').split(' (')[0]}`).join(' | ')
+        : "No cylinder data"
     },
     {
       title: "Total System Cylinders",
@@ -190,49 +192,70 @@ export default function InventoryDashboard() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+          <div className="overflow-hidden rounded-xl border border-gray-100 shadow-sm">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+                  <th className="px-6 py-4 text-left font-semibold text-gray-700 tracking-wide">
                     Cylinder Type
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-center font-semibold text-gray-700 tracking-wide">
                     Full
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-center font-semibold text-gray-700 tracking-wide">
                     Empty
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-center font-semibold text-gray-700 tracking-wide">
                     Total
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {cylinderTypeStats.map((stat, index) => (
-                  <tr key={index} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <Badge variant="secondary" className="font-semibold">
-                        {stat.type}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-semibold text-green-600">
-                        {stat.full}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-semibold text-orange-600">
-                        {stat.empty}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-semibold text-gray-900">
-                        {stat.total}
-                      </span>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {cylinderTypeStats.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-8 text-center text-gray-500 italic">
+                      No cylinder data available
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  cylinderTypeStats.map((stat, index) => {
+                    // Simple logic to give different badge colors based on cylinder type name
+                    const name = stat.type.toLowerCase();
+                    let badgeColor = "bg-gray-100 text-gray-700 border-gray-200";
+                    if (name.includes('domestic')) badgeColor = "bg-blue-50 text-blue-700 border-blue-200";
+                    else if (name.includes('commercial')) badgeColor = "bg-purple-50 text-purple-700 border-purple-200";
+                    else if (name.includes('standard')) badgeColor = "bg-emerald-50 text-emerald-700 border-emerald-200";
+
+                    return (
+                      <tr key={index} className="hover:bg-slate-50 transition-colors duration-150 group">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <Badge
+                            variant="outline"
+                            className={`px-3 py-1 font-medium shadow-sm border ${badgeColor}`}
+                          >
+                            <CubeIcon className="w-3.5 h-3.5 mr-1.5 opacity-70" />
+                            {stat.type}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-green-50 text-green-700 font-semibold text-sm group-hover:bg-green-100 transition-colors">
+                            {stat.full}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-50 text-orange-700 font-semibold text-sm group-hover:bg-orange-100 transition-colors">
+                            {stat.empty}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <span className="inline-flex items-center justify-center w-10 h-8 rounded-md bg-gray-50 text-gray-900 font-bold text-sm border border-gray-100 group-hover:border-gray-300 transition-colors">
+                            {stat.total}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>

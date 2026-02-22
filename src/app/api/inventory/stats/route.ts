@@ -52,12 +52,12 @@ export async function GET(request: NextRequest) {
       where: { isActive: true },
       select: { quantity: true }
     });
-    
+
     const accessoriesCount = accessoriesData.reduce((sum, item) => sum + Number(item.quantity), 0);
 
     // Get cylinder type stats
     const cylinderTypeStats = await prisma.cylinder.groupBy({
-      by: ['cylinderType', 'currentStatus'],
+      by: ['cylinderType', 'typeName', 'capacity', 'currentStatus'],
       _count: {
         id: true
       }
@@ -65,15 +65,29 @@ export async function GET(request: NextRequest) {
 
     // Process cylinder type stats dynamically (handles any cylinder type)
     const uniqueTypes = [...new Set(cylinderTypeStats.map(stat => stat.cylinderType))];
-    
+
     const processedStats = uniqueTypes.map(type => {
+      // Find all stats for this exact cylinderType
       const typeStats = cylinderTypeStats.filter(stat => stat.cylinderType === type);
-      const full = typeStats.find(stat => stat.currentStatus === 'FULL')?._count.id || 0;
-      const empty = typeStats.find(stat => stat.currentStatus === 'EMPTY')?._count.id || 0;
-      
-      // Format type name for display using dynamic utility - works for any cylinder type
-      const displayType = getCylinderTypeDisplayName(type);
-      
+
+      // Calculate full and empty counts by aggregating across potentially different typeNames/capacities
+      const full = typeStats
+        .filter(stat => stat.currentStatus === 'FULL')
+        .reduce((sum, stat) => sum + stat._count.id, 0);
+
+      const empty = typeStats
+        .filter(stat => stat.currentStatus === 'EMPTY')
+        .reduce((sum, stat) => sum + stat._count.id, 0);
+
+      // Try to find the typeName and capacity for this cylinder type
+      // We take the first one found for this cylinderType, since the enum/type string usually correlates 1:1
+      const representativeStat = typeStats.find(stat => stat.typeName || stat.capacity);
+      const typeName = representativeStat?.typeName || null;
+      const capacity = representativeStat?.capacity ? Number(representativeStat.capacity) : null;
+
+      // Format type name for display using dynamic utility - passes typeName and capacity now
+      const displayType = getCylinderTypeDisplayName(type, typeName, capacity);
+
       return {
         type: displayType,
         typeEnum: type, // Keep original enum for reference

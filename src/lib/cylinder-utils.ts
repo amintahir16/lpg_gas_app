@@ -8,24 +8,40 @@
  * Fully dynamic - formats any cylinder type enum value
  * Note: For better display with typeName, use the typeName + capacity from database
  */
-export function getCylinderTypeDisplayName(type: string | null): string {
-  if (!type) return 'N/A';
-  
-  // Extract capacity from enum name (e.g., "CYLINDER_6KG" -> "6", "DOMESTIC_11_8KG" -> "11.8", "CYLINDER_12_5KG" -> "12.5")
-  const capacityMatch = type.match(/(\d+)(?:_(\d+))?/);
-  
-  if (capacityMatch) {
-    // Handle both integer and decimal capacities
-    const wholePart = capacityMatch[1];
-    const decimalPart = capacityMatch[2];
-    const capacity = decimalPart ? `${wholePart}.${decimalPart}` : wholePart;
-    
-    // Format dynamically - works for any capacity
-    return `Cylinder (${capacity}kg)`;
+export function getCylinderTypeDisplayName(type: string | null, typeName?: string | null, capacity?: number | null): string {
+  if (!type && !typeName) return 'N/A';
+
+  // Use typeName and capacity if provided (this is the preferred way)
+  if (typeName) {
+    // If capacity is provided, append it, e.g., "Domestic (11.8kg)"
+    if (capacity) {
+      // Format capacity avoiding unnecessary decimals (e.g., 15.00 -> 15)
+      const formattedCapacity = Number.isInteger(Number(capacity))
+        ? capacity
+        : Number(capacity).toString();
+
+      // Ensure the typeName is nicely capitalized
+      const normalizedName = normalizeTypeName(typeName) || typeName;
+      return `${normalizedName} (${formattedCapacity}kg)`;
+    }
+
+    // Fallback just to typeName if no capacity available
+    return normalizeTypeName(typeName) || typeName;
   }
-  
-  // Fallback: format enum name by replacing underscores with spaces
-  return type.replace(/_/g, ' ').replace(/\b(\w)/g, (match) => match.toUpperCase());
+
+  // Legacy fallback: extract capacity from enum name (e.g., "CYLINDER_6KG" -> "Cylinder (6kg)")
+  if (type) {
+    const capacityMatch = type.match(/(\d+)(?:_(\d+))?/);
+    if (capacityMatch) {
+      const wholePart = capacityMatch[1];
+      const decimalPart = capacityMatch[2];
+      const parsedCapacity = decimalPart ? `${wholePart}.${decimalPart}` : wholePart;
+      return `Cylinder (${parsedCapacity}kg)`;
+    }
+    return type.replace(/_/g, ' ').replace(/\b(\w)/g, (match) => match.toUpperCase());
+  }
+
+  return 'Unknown Cylinder';
 }
 
 /**
@@ -54,10 +70,10 @@ export function isValidCylinderType(type: string): boolean {
 export function generateCylinderTypeFromCapacity(capacity: number): string {
   // Round to 1 decimal place for consistency
   const roundedCapacity = Math.round(capacity * 10) / 10;
-  
+
   // Convert to string and replace decimal point with underscore for enum format
   const capacityStr = roundedCapacity.toString().replace('.', '_');
-  
+
   // Generate enum name: CYLINDER_12KG or CYLINDER_12_5KG
   return `CYLINDER_${capacityStr}KG`;
 }
@@ -79,11 +95,11 @@ export function getCapacityFromTypeString(type: string): number {
   // Extract capacity from enum - handles both integer and decimal formats
   // Examples: "CYLINDER_12KG" -> 12, "CYLINDER_12_5KG" -> 12.5, "DOMESTIC_11_8KG" -> 11.8
   const capacityMatch = type.match(/(\d+)(?:_(\d+))?/);
-  
+
   if (capacityMatch) {
     const wholePart = capacityMatch[1];
     const decimalPart = capacityMatch[2];
-    
+
     if (decimalPart) {
       // Decimal capacity (e.g., 11_8 -> 11.8, 12_5 -> 12.5)
       return parseFloat(`${wholePart}.${decimalPart}`);
@@ -92,7 +108,7 @@ export function getCapacityFromTypeString(type: string): number {
       return parseFloat(wholePart);
     }
   }
-  
+
   // Fallback: try simple number extraction
   const simpleMatch = type.match(/(\d+\.?\d*)/);
   return simpleMatch ? parseFloat(simpleMatch[1]) : 15.0; // Default to 15 if can't determine
@@ -110,10 +126,10 @@ export function normalizeTypeName(typeName: string | null | undefined): string |
   if (!typeName) return null;
   const trimmed = typeName.trim();
   if (!trimmed) return null;
-  
+
   // Normalize to lowercase first, then capitalize first letter of each word
   const normalized = trimmed.toLowerCase();
-  
+
   // Map to standard names for consistency (case-insensitive matching)
   if (normalized.includes('domestic')) {
     return 'Domestic';
@@ -140,7 +156,7 @@ export function normalizeTypeName(typeName: string | null | undefined): string |
  */
 export function getCylinderCodePrefix(input: string, isTypeName: boolean = true): string {
   const normalized = input.trim().toLowerCase();
-  
+
   if (isTypeName) {
     // Input is a type name (e.g., "Domestic", "Standard", "Special")
     if (normalized.includes('domestic')) {
