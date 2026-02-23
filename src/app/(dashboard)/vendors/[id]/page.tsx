@@ -2872,37 +2872,37 @@ export default function VendorDetailPage() {
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <Card>
-                  <CardContent className="p-6">
-                    <p className="text-sm text-gray-500 mb-1">Cash Out</p>
-                    <p className="text-2xl font-bold text-red-600">
+                  <CardContent className="pb-3 px-4 pt-4">
+                    <p className="text-[10px] text-gray-500 mb-1 uppercase tracking-wider font-semibold">Cash Out</p>
+                    <p className="text-xl font-bold text-red-600">
                       {formatCurrency(Math.round(financialReport.cashOut))}
                     </p>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-[10px] text-gray-400 mt-0.5">
                       Total Purchases
                     </p>
                   </CardContent>
                 </Card>
 
                 <Card>
-                  <CardContent className="p-6">
-                    <p className="text-sm text-gray-500 mb-1">Cash In</p>
-                    <p className="text-2xl font-bold text-green-600">
+                  <CardContent className="pb-3 px-4 pt-4">
+                    <p className="text-[10px] text-gray-500 mb-1 uppercase tracking-wider font-semibold">Cash In</p>
+                    <p className="text-xl font-bold text-green-600">
                       {formatCurrency(Math.round(financialReport.cashIn))}
                     </p>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-[10px] text-gray-400 mt-0.5">
                       Total Payments
                     </p>
                   </CardContent>
                 </Card>
 
                 <Card>
-                  <CardContent className="p-6">
-                    <p className="text-sm text-gray-500 mb-1">Net Balance</p>
-                    <p className={`text-2xl font-bold ${financialReport.netBalance > 0 ? 'text-green-600' : financialReport.netBalance < 0 ? 'text-red-600' : 'text-gray-900'
+                  <CardContent className="pb-3 px-4 pt-4">
+                    <p className="text-[10px] text-gray-500 mb-1 uppercase tracking-wider font-semibold">Net Balance</p>
+                    <p className={`text-xl font-bold ${financialReport.netBalance > 0 ? 'text-green-600' : financialReport.netBalance < 0 ? 'text-red-600' : 'text-gray-900'
                       }`}>
                       {formatCurrency(Math.round(financialReport.netBalance))}
                     </p>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-[10px] text-gray-400 mt-0.5">
                       Outstanding
                     </p>
                   </CardContent>
