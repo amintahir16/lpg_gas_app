@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { 
+import {
   ArrowLeftIcon,
   PlusIcon,
   MagnifyingGlassIcon,
@@ -46,7 +46,7 @@ export default function AccessoriesInventoryPage() {
   const [newItemName, setNewItemName] = useState('');
   const [showRenameCategoryForm, setShowRenameCategoryForm] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
-  
+
   // Form calculation states
   const [formValues, setFormValues] = useState({
     type: '',
@@ -54,7 +54,7 @@ export default function AccessoriesInventoryPage() {
     costPerPiece: '',
     totalCost: ''
   });
-  
+
   const [editFormValues, setEditFormValues] = useState({
     type: '',
     quantity: '',
@@ -72,25 +72,25 @@ export default function AccessoriesInventoryPage() {
 
   const handleFormInputChange = (field: string, value: string) => {
     const newValues = { ...formValues, [field]: value };
-    
+
     if (field === 'quantity' || field === 'costPerPiece') {
       const quantity = field === 'quantity' ? value : newValues.quantity;
       const costPerPiece = field === 'costPerPiece' ? value : newValues.costPerPiece;
       newValues.totalCost = calculateTotalCost(quantity, costPerPiece);
     }
-    
+
     setFormValues(newValues);
   };
 
   const handleEditFormInputChange = (field: string, value: string) => {
     const newValues = { ...editFormValues, [field]: value };
-    
+
     if (field === 'quantity' || field === 'costPerPiece') {
       const quantity = field === 'quantity' ? value : newValues.quantity;
       const costPerPiece = field === 'costPerPiece' ? value : newValues.costPerPiece;
       newValues.totalCost = calculateTotalCost(quantity, costPerPiece);
     }
-    
+
     setEditFormValues(newValues);
   };
 
@@ -108,16 +108,16 @@ export default function AccessoriesInventoryPage() {
       const response = await fetch('/api/inventory/custom-items', {
         credentials: 'include'
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         const items: CustomItem[] = data.customItems || [];
         setCustomItems(items);
-        
+
         // Extract unique categories
         const uniqueCategories: string[] = [...new Set(items.map((item: CustomItem) => item.name))];
         setCategories(uniqueCategories);
-        
+
         // Set active tab to first category if none selected
         if (uniqueCategories.length > 0 && !activeTab) {
           setActiveTab(uniqueCategories[0]);
@@ -153,7 +153,7 @@ export default function AccessoriesInventoryPage() {
   };
 
   const activeTabItems = getActiveTabItems();
-  
+
   const filteredCustomItems = activeTabItems.filter(item =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.type.toLowerCase().includes(searchTerm.toLowerCase())
@@ -229,12 +229,12 @@ export default function AccessoriesInventoryPage() {
   // Normalize and format category name
   const normalizeAndFormatCategoryName = (categoryName: string): string => {
     if (!categoryName) return '';
-    
+
     // First normalize: trim and lowercase
     const normalized = categoryName.trim().toLowerCase();
-    
+
     if (!normalized) return '';
-    
+
     // Handle common variations
     if (normalized === 'stove' || normalized === 'stoves') {
       return 'Stoves';
@@ -258,12 +258,12 @@ export default function AccessoriesInventoryPage() {
   const handleCreateCustomItem = async (itemName: string) => {
     // First normalize the category name, then format it
     const normalizedCategoryName = normalizeAndFormatCategoryName(itemName);
-    
+
     if (!normalizedCategoryName) {
       alert('Please enter a valid category name');
       return;
     }
-    
+
     try {
       const response = await fetch('/api/inventory/custom-items', {
         method: 'POST',
@@ -338,7 +338,7 @@ export default function AccessoriesInventoryPage() {
       alert('No category selected');
       return;
     }
-    
+
     if (!confirm(`Are you sure you want to delete the entire "${activeTab}" category and all its items? This action cannot be undone.`)) {
       return;
     }
@@ -420,22 +420,23 @@ export default function AccessoriesInventoryPage() {
             variant="ghost"
             size="sm"
             onClick={() => window.location.href = '/inventory'}
-            className="flex items-center space-x-2"
+            className="text-gray-500 hover:text-gray-900 -ml-2"
           >
-            <ArrowLeftIcon className="w-4 h-4" />
-            <span>Back to Dashboard</span>
+            <ArrowLeftIcon className="w-4 h-4 mr-1" />
+            Back
           </Button>
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Accessories & Equipment</h1>
-            <p className="mt-2 text-gray-600 font-medium">
+            <p className="mt-1 text-gray-500 text-sm">
               Manage your inventory items
             </p>
           </div>
         </div>
         <div className="mt-4 sm:mt-0">
-          <Button 
+          <Button
             onClick={() => setShowAddItemForm(true)}
-            className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold shadow-lg"
+            size="sm"
+            className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold shadow-sm h-9"
           >
             <PlusIcon className="w-4 h-4 mr-2" />
             {customItems.length > 0 ? 'Add New Category' : 'Add Item'}
@@ -445,54 +446,54 @@ export default function AccessoriesInventoryPage() {
 
       {/* Statistics - Dynamic Cards for Each Category */}
       {categories.length > 0 && (
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {categories.map((category) => {
             const categoryItems = customItems.filter(item => item.name === category);
             const totalQuantity = categoryItems.reduce((sum, item) => sum + item.quantity, 0);
             const totalValue = categoryItems.reduce((sum, item) => sum + parseFloat(item.totalCost.toString()), 0);
-            
+
             return (
               <Card key={category} className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-semibold text-gray-600 capitalize">{category}</CardTitle>
-                  <WrenchScrewdriverIcon className="w-5 h-5 text-green-500" />
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-3">
+                  <CardTitle className="text-xs font-semibold text-gray-600 capitalize truncate pr-1">{category}</CardTitle>
+                  <WrenchScrewdriverIcon className="w-4 h-4 text-green-500 flex-shrink-0" />
                 </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-gray-900">{totalQuantity}</div>
-                  <p className="text-xs text-gray-500 mt-1">Total pieces</p>
-                  <div className="mt-2">
-                    <div className="text-sm font-semibold text-gray-700">PKR {totalValue.toLocaleString()}</div>
-                    <p className="text-xs text-gray-500">Value</p>
+                <CardContent className="px-3 pb-3">
+                  <div className="text-lg font-bold text-gray-900 mb-1">{totalQuantity}</div>
+                  <p className="text-[11px] text-gray-500 mb-2">Total pieces</p>
+                  <div>
+                    <div className="text-xs font-semibold text-gray-700">PKR {totalValue.toLocaleString()}</div>
+                    <p className="text-[11px] text-gray-500 pt-0.5">Value</p>
                   </div>
                 </CardContent>
               </Card>
             );
           })}
-          
+
           {/* Overall Total Value Card */}
           <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-semibold text-gray-600">Total Value</CardTitle>
-              <CurrencyDollarIcon className="w-5 h-5 text-purple-500" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-3">
+              <CardTitle className="text-xs font-semibold text-gray-600 truncate pr-1">Total Value</CardTitle>
+              <CurrencyDollarIcon className="w-4 h-4 text-purple-500 flex-shrink-0" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900">PKR {stats.totalValue.toLocaleString()}</div>
-              <p className="text-xs text-gray-500 mt-1">Equipment value</p>
+            <CardContent className="px-3 pb-3">
+              <div className="text-lg font-bold text-gray-900 mb-1">PKR {stats.totalValue.toLocaleString()}</div>
+              <p className="text-[11px] text-gray-500 mb-2">Equipment value</p>
             </CardContent>
           </Card>
         </div>
       )}
 
       {/* Search */}
-      <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-        <CardContent className="p-6">
+      <Card className="border shadow-sm bg-white">
+        <CardContent className="p-5">
           <div className="relative">
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
               placeholder={`Search ${activeTab || 'items'}...`}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
+              className="pl-10 h-9 border-gray-300 focus:border-blue-500 focus:ring-blue-500 text-sm"
             />
           </div>
         </CardContent>
@@ -500,23 +501,23 @@ export default function AccessoriesInventoryPage() {
 
       {/* Navigation Tabs */}
       {categories.length > 0 && (
-        <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-          <CardContent className="p-6">
+        <Card className="border shadow-sm bg-white">
+          <CardContent className="p-4 sm:p-5">
             <div className="flex flex-wrap gap-2">
               {categories.map((category) => {
                 const categoryItems = customItems.filter(item => item.name === category);
                 const totalQuantity = categoryItems.reduce((sum, item) => sum + item.quantity, 0);
-                
+
                 return (
                   <Button
                     key={category}
                     variant={activeTab === category ? "default" : "outline"}
+                    size="sm"
                     onClick={() => setActiveTab(category)}
-                    className={`${
-                      activeTab === category
-                        ? 'bg-blue-600 text-white hover:bg-blue-700'
-                        : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'
-                    } px-4 py-2 rounded-lg font-medium transition-colors`}
+                    className={`${activeTab === category
+                      ? 'bg-blue-600 text-white hover:bg-blue-700 border-none'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'
+                      } h-9 px-4 text-xs font-medium transition-colors`}
                   >
                     {category} ({totalQuantity})
                   </Button>
@@ -528,36 +529,39 @@ export default function AccessoriesInventoryPage() {
       )}
 
       {/* Custom Items Table */}
-      <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-        <CardHeader className="flex flex-row items-center justify-between">
+      <Card className="border shadow-sm bg-white">
+        <CardHeader className="flex flex-row items-center justify-between p-5 pb-4 border-b border-gray-100">
           <CardTitle className="text-lg font-semibold text-gray-900">
             {activeTab ? `${activeTab} Inventory` : 'Custom Items Inventory'}
           </CardTitle>
           <div className="flex space-x-2">
             {activeTab && (
               <>
-                <Button 
+                <Button
                   onClick={() => setShowRenameCategoryForm(true)}
                   variant="outline"
-                  className="border-orange-500 text-orange-600 hover:bg-orange-50"
+                  size="sm"
+                  className="border-orange-500 text-orange-600 hover:bg-orange-50 h-9 text-xs"
                 >
                   Rename Category
                 </Button>
-                <Button 
+                <Button
                   onClick={handleDeleteCategory}
                   variant="outline"
-                  className="border-red-500 text-red-600 hover:bg-red-50"
+                  size="sm"
+                  className="border-red-500 text-red-600 hover:bg-red-50 h-9 text-xs"
                 >
                   Delete Category
                 </Button>
               </>
             )}
             {activeTab && (
-              <Button 
+              <Button
                 onClick={() => setShowAddForm(true)}
-                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-lg"
+                size="sm"
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-sm h-9 text-xs"
               >
-                <PlusIcon className="w-4 h-4 mr-2" />
+                <PlusIcon className="w-4 h-4 mr-1.5" />
                 Add {activeTab}
               </Button>
             )}
@@ -568,63 +572,65 @@ export default function AccessoriesInventoryPage() {
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Type
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Cost per Piece (PKR)
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Quantity in Store
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Total Cost
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-white">
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-4 text-center">
+                    <td colSpan={5} className="px-4 py-2 text-center border-b">
                       <div className="animate-pulse">Loading items...</div>
                     </td>
                   </tr>
                 ) : filteredCustomItems.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
+                    <td colSpan={5} className="px-4 py-2 text-center text-gray-500 border-b">
                       No items found.
                     </td>
                   </tr>
                 ) : (
                   filteredCustomItems.map((item) => (
-                    <tr key={item.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
+                    <tr key={item.id} className="hover:bg-gray-50 border-b">
+                      <td className="px-4 py-2 whitespace-nowrap">
                         <div className="text-sm font-semibold text-gray-900">{item.type}</div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                      <td className="px-4 py-2 whitespace-nowrap text-xs text-gray-700">
                         PKR {item.costPerPiece.toLocaleString()}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                      <td className="px-4 py-2 whitespace-nowrap text-xs text-gray-700">
                         {item.quantity}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                      <td className="px-4 py-2 whitespace-nowrap text-sm font-semibold text-gray-900">
                         PKR {item.totalCost.toLocaleString()}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
-                          <Button 
-                            variant="outline" 
+                          <Button
+                            variant="outline"
                             size="sm"
+                            className="h-7 text-xs px-2"
                             onClick={() => handleEditCustomItem(item)}
                           >
                             Edit
                           </Button>
-                          <Button 
-                            variant="ghost" 
+                          <Button
+                            variant="ghost"
                             size="sm"
+                            className="h-7 text-xs px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
                             onClick={() => handleDeleteCustomItem(item.id)}
                           >
                             Delete
@@ -636,21 +642,21 @@ export default function AccessoriesInventoryPage() {
                 )}
                 {/* Totals Row */}
                 {filteredCustomItems.length > 0 && (
-                  <tr className="bg-blue-50 border-t-2 border-blue-200">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-bold text-blue-900">Total</div>
+                  <tr className="bg-gray-50/80 border-t border-gray-200">
+                    <td className="px-4 py-2.5 whitespace-nowrap">
+                      <div className="text-sm font-bold text-gray-900">Total</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-900">
+                    <td className="px-4 py-2.5 whitespace-nowrap text-sm font-bold text-gray-500">
                       -
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-900">
+                    <td className="px-4 py-2.5 whitespace-nowrap text-sm font-bold text-gray-900">
                       {filteredCustomItems.reduce((sum, item) => sum + Number(item.quantity), 0)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-900">
+                    <td className="px-4 py-2.5 whitespace-nowrap text-sm font-bold text-gray-900">
                       PKR {filteredCustomItems.reduce((sum, item) => sum + Number(item.totalCost), 0).toLocaleString()}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-bold text-blue-900">-</div>
+                    <td className="px-4 py-2.5 whitespace-nowrap">
+                      <div className="text-sm font-bold text-gray-500">-</div>
                     </td>
                   </tr>
                 )}
@@ -662,39 +668,49 @@ export default function AccessoriesInventoryPage() {
 
       {/* Rename Category Modal */}
       {showRenameCategoryForm && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Rename Category
-              </h3>
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+          <div className="relative mx-auto p-0 border w-full max-w-md shadow-2xl rounded-xl bg-white animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center rounded-t-xl">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Rename Category</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Update the name for this category</p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setShowRenameCategoryForm(false)} className="h-8 w-8 p-0 rounded-full">
+                <span className="sr-only">Close</span>
+                <span className="text-xl">×</span>
+              </Button>
+            </div>
+            <div className="p-6">
               <form className="space-y-4" onSubmit={(e) => {
                 e.preventDefault();
                 handleRenameCategory();
               }}>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Current Name</label>
-                  <Input 
-                    type="text" 
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Current Name</label>
+                  <Input
+                    type="text"
                     value={activeTab || 'No category selected'}
                     disabled
-                    className="bg-gray-100"
+                    className="bg-gray-50 h-9"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">New Name</label>
-                  <Input 
-                    type="text" 
-                    placeholder="Enter new category name" 
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">New Name</label>
+                  <Input
+                    type="text"
+                    placeholder="Enter new category name"
                     value={newCategoryName}
                     onChange={(e) => setNewCategoryName(e.target.value)}
-                    required 
+                    required
+                    className="h-9"
                   />
                 </div>
-                <div className="flex justify-end space-x-3">
+                <div className="flex justify-end gap-3 pt-2 mt-2">
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
+                    size="sm"
+                    className="h-9"
                     onClick={() => {
                       setShowRenameCategoryForm(false);
                       setNewCategoryName('');
@@ -702,7 +718,7 @@ export default function AccessoriesInventoryPage() {
                   >
                     Cancel
                   </Button>
-                  <Button type="submit">
+                  <Button type="submit" size="sm" className="bg-blue-600 h-9">
                     Rename Category
                   </Button>
                 </div>
@@ -714,12 +730,21 @@ export default function AccessoriesInventoryPage() {
 
       {/* Add Item Modal */}
       {showAddItemForm && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                {customItems.length > 0 ? 'Add New Category' : 'Add Item Category'}
-              </h3>
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+          <div className="relative mx-auto p-0 border w-full max-w-md shadow-2xl rounded-xl bg-white animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center rounded-t-xl">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">
+                  {customItems.length > 0 ? 'Add New Category' : 'Add Item Category'}
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">Create a new inventory category</p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setShowAddItemForm(false)} className="h-8 w-8 p-0 rounded-full">
+                <span className="sr-only">Close</span>
+                <span className="text-xl">×</span>
+              </Button>
+            </div>
+            <div className="p-6">
               <form className="space-y-4" onSubmit={(e) => {
                 e.preventDefault();
                 if (newItemName.trim()) {
@@ -727,22 +752,22 @@ export default function AccessoriesInventoryPage() {
                 }
               }}>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Category Name</label>
-                  <Input 
-                    type="text" 
-                    placeholder="Enter category name (e.g., Pipes, Fittings, Regulators, etc.)" 
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Category Name</label>
+                  <Input
+                    type="text"
+                    placeholder="e.g., Pipes, Regulators, etc."
                     value={newItemName}
                     onChange={(e) => setNewItemName(e.target.value)}
-                    required 
+                    required
+                    className="h-9"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
-                    This will create a new inventory category
-                  </p>
                 </div>
-                <div className="flex justify-end space-x-3">
+                <div className="flex justify-end gap-3 pt-2 mt-2">
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
+                    size="sm"
+                    className="h-9"
                     onClick={() => {
                       setShowAddItemForm(false);
                       setNewItemName('');
@@ -750,7 +775,7 @@ export default function AccessoriesInventoryPage() {
                   >
                     Cancel
                   </Button>
-                  <Button type="submit">
+                  <Button type="submit" size="sm" className="bg-blue-600 h-9">
                     Create Category
                   </Button>
                 </div>
@@ -762,71 +787,85 @@ export default function AccessoriesInventoryPage() {
 
       {/* Edit Form Modal */}
       {showEditForm && selectedItem && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Edit Item
-              </h3>
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+          <div className="relative mx-auto p-0 border w-full max-w-md shadow-2xl rounded-xl bg-white animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center rounded-t-xl">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Edit Item</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Update {activeTab} item details</p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => { setShowEditForm(false); setSelectedItem(null); }} className="h-8 w-8 p-0 rounded-full">
+                <span className="sr-only">Close</span>
+                <span className="text-xl">×</span>
+              </Button>
+            </div>
+            <div className="p-6">
               <form className="space-y-4" onSubmit={(e) => {
                 e.preventDefault();
-                
+
                 const data = {
-                  name: activeTab, // Use the active tab as the category name
+                  name: activeTab,
                   type: editFormValues.type,
                   costPerPiece: parseFloat(editFormValues.costPerPiece),
                   quantity: parseInt(editFormValues.quantity),
                   totalCost: parseFloat(editFormValues.totalCost)
                 };
-                
+
                 handleUpdateCustomItem(selectedItem.id, data);
                 setEditFormValues({ type: '', quantity: '', costPerPiece: '', totalCost: '' });
               }}>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Type</label>
-                  <Input 
-                    name="type" 
-                    type="text" 
-                    value={editFormValues.type}
-                    onChange={(e) => handleEditFormInputChange('type', e.target.value)}
-                    required 
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Type</label>
+                    <Input
+                      name="type"
+                      type="text"
+                      value={editFormValues.type}
+                      onChange={(e) => handleEditFormInputChange('type', e.target.value)}
+                      required
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="col-span-1">
+                    <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Cost / Piece (PKR)</label>
+                    <Input
+                      name="costPerPiece"
+                      type="number"
+                      value={editFormValues.costPerPiece}
+                      onChange={(e) => handleEditFormInputChange('costPerPiece', e.target.value)}
+                      required
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="col-span-1">
+                    <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Quantity</label>
+                    <Input
+                      name="quantity"
+                      type="number"
+                      value={editFormValues.quantity}
+                      onChange={(e) => handleEditFormInputChange('quantity', e.target.value)}
+                      required
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Total Cost (PKR)</label>
+                    <Input
+                      name="totalCost"
+                      type="number"
+                      value={editFormValues.totalCost}
+                      readOnly
+                      className="bg-gray-50 h-9 font-semibold text-gray-700"
+                      required
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Cost per Piece (PKR)</label>
-                  <Input 
-                    name="costPerPiece" 
-                    type="number" 
-                    value={editFormValues.costPerPiece}
-                    onChange={(e) => handleEditFormInputChange('costPerPiece', e.target.value)}
-                    required 
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity</label>
-                  <Input 
-                    name="quantity" 
-                    type="number" 
-                    value={editFormValues.quantity}
-                    onChange={(e) => handleEditFormInputChange('quantity', e.target.value)}
-                    required 
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Total Cost (PKR)</label>
-                  <Input 
-                    name="totalCost" 
-                    type="number" 
-                    value={editFormValues.totalCost}
-                    readOnly
-                    className="bg-gray-50"
-                    required 
-                  />
-                </div>
-                <div className="flex justify-end space-x-3">
+                <div className="flex justify-end gap-3 pt-2 mt-2">
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
+                    size="sm"
+                    className="h-9"
                     onClick={() => {
                       setShowEditForm(false);
                       setSelectedItem(null);
@@ -835,7 +874,7 @@ export default function AccessoriesInventoryPage() {
                   >
                     Cancel
                   </Button>
-                  <Button type="submit">
+                  <Button type="submit" size="sm" className="bg-blue-600 h-9">
                     Update Item
                   </Button>
                 </div>
@@ -847,75 +886,89 @@ export default function AccessoriesInventoryPage() {
 
       {/* Add Form Modal */}
       {showAddForm && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Add {activeTab || 'New Item'}
-              </h3>
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+          <div className="relative mx-auto p-0 border w-full max-w-md shadow-2xl rounded-xl bg-white animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center rounded-t-xl">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Add {activeTab || 'New Item'}</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Enter item details below</p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setShowAddForm(false)} className="h-8 w-8 p-0 rounded-full">
+                <span className="sr-only">Close</span>
+                <span className="text-xl">×</span>
+              </Button>
+            </div>
+            <div className="p-6">
               <form className="space-y-4" onSubmit={(e) => {
                 e.preventDefault();
-                
+
                 const data = {
-                  name: activeTab, // Use the active tab as the category name
+                  name: activeTab,
                   type: formValues.type,
                   quantity: parseInt(formValues.quantity),
                   costPerPiece: parseFloat(formValues.costPerPiece),
                   totalCost: parseFloat(formValues.totalCost)
                 };
-                
+
                 handleAddItem(data);
                 setFormValues({ type: '', quantity: '', costPerPiece: '', totalCost: '' });
               }}>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Type</label>
-                  <Input 
-                    name="type" 
-                    type="text" 
-                    placeholder="Item Type" 
-                    value={formValues.type}
-                    onChange={(e) => handleFormInputChange('type', e.target.value)}
-                    required 
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Type</label>
+                    <Input
+                      name="type"
+                      type="text"
+                      placeholder="Item Type (e.g., 20mm)"
+                      value={formValues.type}
+                      onChange={(e) => handleFormInputChange('type', e.target.value)}
+                      required
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="col-span-1">
+                    <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Quantity</label>
+                    <Input
+                      name="quantity"
+                      type="number"
+                      placeholder="e.g. 10"
+                      value={formValues.quantity}
+                      onChange={(e) => handleFormInputChange('quantity', e.target.value)}
+                      required
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="col-span-1">
+                    <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Cost / Piece (PKR)</label>
+                    <Input
+                      name="costPerPiece"
+                      type="number"
+                      placeholder="e.g. 500"
+                      value={formValues.costPerPiece}
+                      onChange={(e) => handleFormInputChange('costPerPiece', e.target.value)}
+                      required
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Total Cost (PKR)</label>
+                    <Input
+                      name="totalCost"
+                      type="number"
+                      placeholder="0"
+                      value={formValues.totalCost}
+                      readOnly
+                      className="bg-gray-50 h-9 font-semibold text-gray-700"
+                      required
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity</label>
-                  <Input 
-                    name="quantity" 
-                    type="number" 
-                    placeholder="10" 
-                    value={formValues.quantity}
-                    onChange={(e) => handleFormInputChange('quantity', e.target.value)}
-                    required 
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Cost per Piece (PKR)</label>
-                  <Input 
-                    name="costPerPiece" 
-                    type="number" 
-                    placeholder="500" 
-                    value={formValues.costPerPiece}
-                    onChange={(e) => handleFormInputChange('costPerPiece', e.target.value)}
-                    required 
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Total Cost (PKR)</label>
-                  <Input 
-                    name="totalCost" 
-                    type="number" 
-                    placeholder="5000" 
-                    value={formValues.totalCost}
-                    readOnly
-                    className="bg-gray-50"
-                    required 
-                  />
-                </div>
-                <div className="flex justify-end space-x-3">
+                <div className="flex justify-end gap-3 pt-2 mt-2">
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
+                    size="sm"
+                    className="h-9"
                     onClick={() => {
                       setShowAddForm(false);
                       setFormValues({ type: '', quantity: '', costPerPiece: '', totalCost: '' });
@@ -923,7 +976,7 @@ export default function AccessoriesInventoryPage() {
                   >
                     Cancel
                   </Button>
-                  <Button type="submit">
+                  <Button type="submit" size="sm" className="bg-blue-600 h-9">
                     Add {activeTab || 'Item'}
                   </Button>
                 </div>

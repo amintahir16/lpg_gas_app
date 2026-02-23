@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
     const type = searchParams.get('type') || '';
-    const status = searchParams.get('status') || '';
+    const customerType = searchParams.get('customerType') || 'ALL';
 
     // Build where clause
     const where: any = {
@@ -32,8 +32,21 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    if (type) {
-      where.cylinderType = type;
+    // Build type filter condition
+    if (type && type !== 'ALL') {
+      if (type.includes('(') && type.includes('kg)')) {
+        const nameMatch = type.match(/^([^(]+)\s*\((\d+\.?\d*)kg\)/);
+        if (nameMatch) {
+          const extractedTypeName = nameMatch[1].trim();
+          const capacity = parseFloat(nameMatch[2]);
+          where.typeName = extractedTypeName;
+          where.capacity = capacity;
+        } else {
+          where.cylinderType = type;
+        }
+      } else {
+        where.cylinderType = type;
+      }
     }
 
     // Get cylinders with customers
@@ -114,17 +127,19 @@ export async function GET(request: NextRequest) {
       ]);
 
       // Build customer map (B2B first, then B2C)
-      b2bCustomers.forEach(c => customerMap.set(c.name.toLowerCase(), c));
+      b2bCustomers.forEach(c => customerMap.set(c.name.toLowerCase(), { data: c, isB2B: true }));
       b2cCustomers.forEach(c => {
-        const mapped = {
-          id: c.id,
-          name: c.name,
-          contactPerson: c.name,
-          phone: c.phone,
-          email: c.email,
-          address: c.address
-        };
-        customerMap.set(c.name.toLowerCase(), mapped);
+        if (!customerMap.has(c.name.toLowerCase())) { // Don't override if already matched as B2B
+          const mapped = {
+            id: c.id,
+            name: c.name,
+            contactPerson: c.name,
+            phone: c.phone,
+            email: c.email,
+            address: c.address
+          };
+          customerMap.set(c.name.toLowerCase(), { data: mapped, isB2B: false });
+        }
       });
     }
 
@@ -159,7 +174,9 @@ export async function GET(request: NextRequest) {
           customerName = location.split('Customer:')[1]?.trim() || '';
         }
 
-        const customerInfo = customerName ? customerMap.get(customerName.toLowerCase()) : null;
+        const customerEntry = customerName ? customerMap.get(customerName.toLowerCase()) : null;
+        const customerInfo = customerEntry ? customerEntry.data : null;
+        const actualIsB2B = customerEntry ? customerEntry.isB2B : false; // Use the stored flag
 
         return {
           id: cylinder.id,
@@ -183,18 +200,17 @@ export async function GET(request: NextRequest) {
             depositAmount: undefined,
             status: 'ACTIVE'
           },
-          isB2B: false
+          isB2B: actualIsB2B
         };
       }
     });
 
-    // Apply status filter (only for B2B rentals)
-    const filteredCylinders = status ?
+    // Apply customer type filter (B2B vs B2C)
+    const filteredCylinders = customerType !== 'ALL' ?
       customerCylinders.filter(item => {
-        if (item.isB2B) {
-          return item.rental.status === status;
-        }
-        return status === 'ACTIVE'; // B2C cylinders are always considered active
+        if (customerType === 'B2B') return item.isB2B === true;
+        if (customerType === 'B2C') return item.isB2B === false;
+        return true;
       }) :
       customerCylinders;
 

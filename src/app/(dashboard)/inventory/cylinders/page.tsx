@@ -14,6 +14,7 @@ import {
   CubeIcon,
   TrashIcon
 } from '@heroicons/react/24/outline';
+import { CustomSelect } from '@/components/ui/select-custom';
 import { getCylinderTypeDisplayName, getCylinderWeight, generateCylinderTypeFromCapacity, isValidCylinderCapacity, normalizeTypeName } from '@/lib/cylinder-utils';
 import { getCylinderTypeOptions } from '@/lib/cylinder-types';
 
@@ -623,41 +624,40 @@ export default function CylindersInventoryPage() {
               />
             </div>
             <div className="flex gap-2 min-w-48 items-center">
-              <div className="flex-1">
-                <select
+              <div className="flex-1 min-w-[140px]">
+                <CustomSelect
                   value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-9 text-sm"
-                >
-                  <option value="ALL">All Status</option>
-                  <option value="FULL">Full</option>
-                  <option value="EMPTY">Empty</option>
-                </select>
+                  onChange={setStatusFilter}
+                  options={[
+                    { value: "ALL", label: "All Status" },
+                    { value: "FULL", label: "Full" },
+                    { value: "EMPTY", label: "Empty" }
+                  ]}
+                  placeholder="All Status"
+                />
               </div>
-              <div className="flex-1">
-                <select
+              <div className="flex-1 min-w-[140px]">
+                <CustomSelect
                   value={typeFilter}
-                  onChange={(e) => setTypeFilter(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-9 text-sm"
-                >
-                  <option value="ALL">All Types</option>
-                  {typeFilterOptions.map((option) => (
-                    <option key={option.key || option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setTypeFilter}
+                  options={[
+                    { value: "ALL", label: "All Types" },
+                    ...typeFilterOptions.map(opt => ({ value: opt.value, label: opt.label }))
+                  ]}
+                  placeholder="All Types"
+                />
               </div>
-              <div className="flex-1">
-                <select
+              <div className="flex-1 min-w-[140px]">
+                <CustomSelect
                   value={locationFilter}
-                  onChange={(e) => setLocationFilter(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-9 text-sm"
-                >
-                  <option value="ALL">All Locations</option>
-                  <option value="STORE">In Store</option>
-                  <option value="VEHICLE">In Vehicle</option>
-                </select>
+                  onChange={setLocationFilter}
+                  options={[
+                    { value: "ALL", label: "All Locations" },
+                    { value: "STORE", label: "In Store" },
+                    { value: "VEHICLE", label: "In Vehicle" }
+                  ]}
+                  placeholder="All Locations"
+                />
               </div>
             </div>
           </div>

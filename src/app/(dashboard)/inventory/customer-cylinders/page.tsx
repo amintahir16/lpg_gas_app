@@ -14,6 +14,7 @@ import {
   MapPinIcon,
   CalendarIcon
 } from '@heroicons/react/24/outline';
+import { CustomSelect } from '@/components/ui/select-custom';
 import { getCylinderTypeDisplayName, getCapacityFromTypeString } from '@/lib/cylinder-utils';
 import { getCylinderTypeOptions } from '@/lib/cylinder-types';
 
@@ -39,11 +40,13 @@ interface CustomerCylinder {
     depositAmount?: number;
     status: string;
   };
+  isB2B?: boolean;
 }
 
 interface CustomerCylinderStats {
   type: string;
   typeName?: string | null;
+  capacity?: number;
   count: number;
   totalValue: number;
 }
@@ -54,12 +57,12 @@ export default function CustomerCylindersPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('ALL');
-  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [customerTypeFilter, setCustomerTypeFilter] = useState('ALL');
 
   useEffect(() => {
     fetchCustomerCylinders();
     fetchStats();
-  }, [searchTerm, typeFilter, statusFilter]);
+  }, [searchTerm, typeFilter, customerTypeFilter]);
 
   const fetchCustomerCylinders = async () => {
     try {
@@ -67,7 +70,7 @@ export default function CustomerCylindersPage() {
       const params = new URLSearchParams({
         search: searchTerm,
         type: typeFilter === 'ALL' ? '' : typeFilter,
-        status: statusFilter === 'ALL' ? '' : statusFilter
+        customerType: customerTypeFilter === 'ALL' ? '' : customerTypeFilter
       });
 
       const response = await fetch(`/api/inventory/customer-cylinders?${params}`, {
@@ -126,7 +129,25 @@ export default function CustomerCylindersPage() {
     }
   };
 
-  const cylinderTypeOptions = getCylinderTypeOptions();
+  // Get cylinder type options for dropdowns - use stats to get all actual types including custom ones
+  // Create a unique key for each type combination to enable proper filtering
+  const typeFilterOptions = stats.length > 0
+    ? stats.map((stat, index) => {
+      const displayLabel = stat.typeName
+        ? `${stat.typeName} (${stat.capacity || getCapacityFromTypeString(stat.type)}kg)`
+        : getTypeDisplayName(stat.type);
+      const uniqueKey = `type-${stat.type}-${index}`;
+      return {
+        value: displayLabel, // Use display type for API filtering to match capacity and name pairs
+        label: displayLabel,
+        key: uniqueKey
+      };
+    })
+    : getCylinderTypeOptions().map((opt, index) => ({
+      value: opt.value,
+      label: opt.label,
+      key: `static-type-${opt.value}-${index}`
+    }));
 
   const getTypeDisplayName = (type: string) => {
     return getCylinderTypeDisplayName(type);
@@ -242,31 +263,28 @@ Address: ${customer.address || 'N/A'}
               />
             </div>
             <div className="flex gap-2 min-w-48 items-center">
-              <div className="flex-1">
-                <select
+              <div className="flex-1 min-w-[140px]">
+                <CustomSelect
                   value={typeFilter}
-                  onChange={(e) => setTypeFilter(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-9 text-sm"
-                >
-                  <option value="ALL">All Cylinder Types</option>
-                  {cylinderTypeOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setTypeFilter}
+                  options={[
+                    { value: "ALL", label: "All Cylinder Types" },
+                    ...typeFilterOptions.map(opt => ({ value: opt.value, label: opt.label }))
+                  ]}
+                  placeholder="All Cylinder Types"
+                />
               </div>
-              <div className="flex-1">
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-9 text-sm"
-                >
-                  <option value="ALL">All Rental Status</option>
-                  <option value="ACTIVE">Active</option>
-                  <option value="OVERDUE">Overdue</option>
-                  <option value="RETURNED">Returned</option>
-                </select>
+              <div className="flex-1 min-w-[140px]">
+                <CustomSelect
+                  value={customerTypeFilter}
+                  onChange={setCustomerTypeFilter}
+                  options={[
+                    { value: "ALL", label: "All Customers" },
+                    { value: "B2B", label: "B2B Only" },
+                    { value: "B2C", label: "B2C Only" }
+                  ]}
+                  placeholder="All Customers"
+                />
               </div>
             </div>
           </div>
