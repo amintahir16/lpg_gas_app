@@ -135,48 +135,39 @@ export default function InventoryDashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Inventory Management</h1>
-          <p className="mt-2 text-gray-600 font-medium">
+          <h1 className="text-2xl font-bold text-gray-900">Inventory Management</h1>
+          <p className="mt-1 text-sm text-gray-600 font-medium">
             Comprehensive inventory overview and management
           </p>
-        </div>
-        <div className="mt-4 sm:mt-0">
-          <Button
-            onClick={() => window.location.href = '/inventory/cylinders'}
-            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-lg"
-          >
-            <ChartBarIcon className="w-4 h-4 mr-2" />
-            View Detailed Reports
-          </Button>
         </div>
       </div>
 
       {/* Dashboard Cards */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-2">
         {dashboardCards.map((card, index) => (
           <Card
             key={index}
             className={`border-0 shadow-sm bg-white/80 backdrop-blur-sm transition-shadow ${card.href ? 'hover:shadow-md cursor-pointer' : ''}`}
             onClick={() => card.href ? window.location.href = card.href : null}
           >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-semibold text-gray-600">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-4">
+              <CardTitle className="text-xs font-semibold text-gray-600">
                 {card.title}
               </CardTitle>
-              <div className={`p-2 rounded-lg ${card.color}`}>
-                <card.icon className="w-5 h-5 text-white" />
+              <div className={`p-1.5 rounded-lg ${card.color}`}>
+                <card.icon className="w-4 h-4 text-white" />
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-gray-900 mb-1">
+            <CardContent className="pb-3 px-4 pt-1">
+              <div className="text-xl font-bold text-gray-900 mb-0.5">
                 {card.value.toLocaleString()}
               </div>
-              <p className="text-sm text-gray-500 mb-2 font-medium">
+              <p className="text-xs text-gray-500 mb-1 font-medium">
                 {card.subtitle}
               </p>
-              <p className="text-xs text-gray-400">
+              <p className="text-[10px] text-gray-400">
                 {card.details}
               </p>
             </CardContent>
@@ -185,27 +176,27 @@ export default function InventoryDashboard() {
       </div>
 
       {/* Cylinder Type Breakdown */}
-      <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold text-gray-900">
+      <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm mt-4">
+        <CardHeader className="pb-3 pt-4 px-4">
+          <CardTitle className="text-sm font-semibold text-gray-900">
             Cylinder Inventory by Type & Status
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-hidden rounded-xl border border-gray-100 shadow-sm">
-            <table className="w-full text-sm">
+        <CardContent className="p-0">
+          <div className="overflow-hidden rounded-md border border-gray-100 shadow-sm mx-4 mb-4">
+            <table className="w-full text-xs">
               <thead>
                 <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
-                  <th className="px-6 py-4 text-left font-semibold text-gray-700 tracking-wide">
+                  <th className="px-4 py-2 text-left font-semibold text-gray-700 tracking-wide">
                     Cylinder Type
                   </th>
-                  <th className="px-6 py-4 text-center font-semibold text-gray-700 tracking-wide">
+                  <th className="px-4 py-2 text-center font-semibold text-gray-700 tracking-wide w-24">
                     Full
                   </th>
-                  <th className="px-6 py-4 text-center font-semibold text-gray-700 tracking-wide">
+                  <th className="px-4 py-2 text-center font-semibold text-gray-700 tracking-wide w-24">
                     Empty
                   </th>
-                  <th className="px-6 py-4 text-center font-semibold text-gray-700 tracking-wide">
+                  <th className="px-4 py-2 text-center font-semibold text-gray-700 tracking-wide w-24">
                     Total
                   </th>
                 </tr>
@@ -213,7 +204,7 @@ export default function InventoryDashboard() {
               <tbody className="divide-y divide-gray-100 bg-white">
                 {cylinderTypeStats.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-6 py-8 text-center text-gray-500 italic">
+                    <td colSpan={4} className="px-4 py-4 text-center text-gray-500 italic">
                       No cylinder data available
                     </td>
                   </tr>
@@ -228,27 +219,27 @@ export default function InventoryDashboard() {
 
                     return (
                       <tr key={index} className="hover:bg-slate-50 transition-colors duration-150 group">
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-2 whitespace-nowrap">
                           <Badge
                             variant="outline"
-                            className={`px-3 py-1 font-medium shadow-sm border ${badgeColor}`}
+                            className={`px-2 py-0.5 font-medium shadow-sm border text-xs h-6 ${badgeColor}`}
                           >
-                            <CubeIcon className="w-3.5 h-3.5 mr-1.5 opacity-70" />
+                            <CubeIcon className="w-3 h-3 mr-1 opacity-70" />
                             {stat.type}
                           </Badge>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-green-50 text-green-700 font-semibold text-sm group-hover:bg-green-100 transition-colors">
+                        <td className="px-4 py-2 whitespace-nowrap text-center">
+                          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-50 text-green-700 font-semibold text-xs group-hover:bg-green-100 transition-colors">
                             {stat.full}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-orange-50 text-orange-700 font-semibold text-sm group-hover:bg-orange-100 transition-colors">
+                        <td className="px-4 py-2 whitespace-nowrap text-center">
+                          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-orange-50 text-orange-700 font-semibold text-xs group-hover:bg-orange-100 transition-colors">
                             {stat.empty}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <span className="inline-flex items-center justify-center w-10 h-8 rounded-md bg-gray-50 text-gray-900 font-bold text-sm border border-gray-100 group-hover:border-gray-300 transition-colors">
+                        <td className="px-4 py-2 whitespace-nowrap text-center">
+                          <span className="inline-flex items-center justify-center w-8 h-6 rounded-md bg-gray-50 text-gray-900 font-bold text-xs border border-gray-100 group-hover:border-gray-300 transition-colors">
                             {stat.total}
                           </span>
                         </td>
@@ -263,45 +254,45 @@ export default function InventoryDashboard() {
       </Card>
 
       {/* Quick Actions */}
-      <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold text-gray-900">
+      <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm mt-4">
+        <CardHeader className="pb-3 pt-4 px-4">
+          <CardTitle className="text-sm font-semibold text-gray-900">
             Quick Actions
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <CardContent className="pb-4 px-4 pt-0">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-4">
             <Button
               variant="outline"
-              className="h-20 flex flex-col items-center justify-center space-y-2"
+              className="h-16 flex flex-col items-center justify-center space-y-1.5"
               onClick={() => window.location.href = '/inventory/cylinders/add'}
             >
-              <CubeIcon className="w-6 h-6" />
-              <span className="text-sm font-medium">Add Cylinder</span>
+              <CubeIcon className="w-5 h-5 text-gray-600" />
+              <span className="text-[10px] sm:text-xs font-medium text-gray-600">Add Cylinder</span>
             </Button>
             <Button
               variant="outline"
-              className="h-20 flex flex-col items-center justify-center space-y-2"
+              className="h-16 flex flex-col items-center justify-center space-y-1.5"
               onClick={() => window.location.href = '/inventory/store-vehicles'}
             >
-              <BuildingStorefrontIcon className="w-6 h-6" />
-              <span className="text-sm font-medium">Manage Stores</span>
+              <BuildingStorefrontIcon className="w-5 h-5 text-gray-600" />
+              <span className="text-[10px] sm:text-xs font-medium text-gray-600">Manage Stores</span>
             </Button>
             <Button
               variant="outline"
-              className="h-20 flex flex-col items-center justify-center space-y-2"
+              className="h-16 flex flex-col items-center justify-center space-y-1.5"
               onClick={() => window.location.href = '/inventory/accessories'}
             >
-              <WrenchScrewdriverIcon className="w-6 h-6" />
-              <span className="text-sm font-medium">Add Equipment</span>
+              <WrenchScrewdriverIcon className="w-5 h-5 text-gray-600" />
+              <span className="text-[10px] sm:text-xs font-medium text-gray-600">Add Equipment</span>
             </Button>
             <Button
               variant="outline"
-              className="h-20 flex flex-col items-center justify-center space-y-2"
+              className="h-16 flex flex-col items-center justify-center space-y-1.5"
               onClick={() => window.location.href = '/inventory/reports'}
             >
-              <ChartBarIcon className="w-6 h-6" />
-              <span className="text-sm font-medium">View Reports</span>
+              <ChartBarIcon className="w-5 h-5 text-gray-600" />
+              <span className="text-[10px] sm:text-xs font-medium text-gray-600">View Reports</span>
             </Button>
           </div>
         </CardContent>
