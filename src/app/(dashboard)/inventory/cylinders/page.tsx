@@ -651,18 +651,6 @@ export default function CylindersInventoryPage() {
                   placeholder="All Types"
                 />
               </div>
-              <div className="flex-1 min-w-[140px]">
-                <CustomSelect
-                  value={locationFilter}
-                  onChange={setLocationFilter}
-                  options={[
-                    { value: "ALL", label: "All Locations" },
-                    { value: "STORE", label: "In Store" },
-                    { value: "VEHICLE", label: "In Vehicle" }
-                  ]}
-                  placeholder="All Locations"
-                />
-              </div>
             </div>
           </div>
         </CardContent>
