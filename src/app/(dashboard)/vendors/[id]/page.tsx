@@ -3268,6 +3268,7 @@ export default function VendorDetailPage() {
           vendorId={vendorId}
           purchaseEntries={vendor.purchase_entries || []}
           paymentHistory={directPayments}
+          vendor={vendor}
         />
       )}
 

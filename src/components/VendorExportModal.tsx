@@ -15,6 +15,7 @@ interface VendorExportModalProps {
   vendorId: string;
   purchaseEntries: any[];
   paymentHistory: any[];
+  vendor: any;
 }
 
 export default function VendorExportModal({
@@ -23,7 +24,8 @@ export default function VendorExportModal({
   vendorName,
   vendorId,
   purchaseEntries,
-  paymentHistory
+  paymentHistory,
+  vendor
 }: VendorExportModalProps) {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -247,6 +249,41 @@ export default function VendorExportModal({
 
       let yPosition = 80;
 
+      // Vendor Information Section
+      doc.setFillColor(52, 73, 94);
+      doc.rect(15, yPosition, pageWidth - 30, 8, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('VENDOR INFORMATION', 20, yPosition + 6);
+
+      yPosition += 15;
+
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Name: ${vendorName}`, 20, yPosition);
+      yPosition += 7;
+
+      if (vendor.contactPerson) {
+        doc.text(`Contact Person: ${vendor.contactPerson}`, 20, yPosition);
+        yPosition += 7;
+      }
+      if (vendor.phone) {
+        doc.text(`Phone: ${vendor.phone}`, 20, yPosition);
+        yPosition += 7;
+      }
+      if (vendor.email) {
+        doc.text(`Email: ${vendor.email}`, 20, yPosition);
+        yPosition += 7;
+      }
+      if (vendor.address) {
+        doc.text(`Address: ${vendor.address}`, 20, yPosition);
+        yPosition += 7;
+      }
+
+      yPosition += 14;
+
       // Purchase Entries Section
       if (exportType === 'purchases' || exportType === 'both') {
         if (purchases.length > 0) {
@@ -258,7 +295,7 @@ export default function VendorExportModal({
           doc.setFont('helvetica', 'bold');
           doc.text('PURCHASE ENTRIES', 20, yPosition + 6);
 
-          yPosition += 15;
+          yPosition += 10;
 
           // Check if this is an accessories purchase vendor
           const isAccessoriesPurchase = vendorCategorySlug === 'accessories_purchase';
@@ -343,22 +380,25 @@ export default function VendorExportModal({
             head: [headerRow],
             body: purchaseData,
             startY: yPosition,
+            tableWidth: pageWidth - 30,
             styles: {
-              fontSize: 9,
-              cellPadding: 4,
+              fontSize: 7,
+              cellPadding: 2,
               lineColor: [200, 200, 200],
-              lineWidth: 0.5
+              lineWidth: 0.5,
+              overflow: 'linebreak'
             },
             headStyles: {
               fillColor: [41, 128, 185],
               textColor: [255, 255, 255],
               fontStyle: 'bold',
-              fontSize: 10
+              fontSize: 8
             },
             alternateRowStyles: {
               fillColor: [248, 249, 250]
             },
             columnStyles: columnStyles,
+            margin: { left: 15, right: 15, bottom: 35 }
           });
 
           yPosition = (doc as any).lastAutoTable.finalY + 25;
@@ -374,14 +414,14 @@ export default function VendorExportModal({
           }
 
           // Section Header
-          doc.setFillColor(39, 174, 96);
+          doc.setFillColor(52, 73, 94);
           doc.rect(15, yPosition, pageWidth - 30, 8, 'F');
           doc.setTextColor(255, 255, 255);
           doc.setFontSize(14);
           doc.setFont('helvetica', 'bold');
           doc.text('PAYMENT HISTORY', 20, yPosition + 6);
 
-          yPosition += 15;
+          yPosition += 10;
 
           const paymentData = payments.map((payment, index) => [
             index + 1,
@@ -409,43 +449,141 @@ export default function VendorExportModal({
             head: [['#', 'Date', 'Method', 'Amount (Rs)', 'Reference', 'Status', 'Description']],
             body: paymentData,
             startY: yPosition,
+            tableWidth: pageWidth - 30,
             styles: {
-              fontSize: 9,
-              cellPadding: 4,
+              fontSize: 7,
+              cellPadding: 2,
               lineColor: [200, 200, 200],
-              lineWidth: 0.5
+              lineWidth: 0.5,
+              overflow: 'linebreak'
             },
             headStyles: {
-              fillColor: [39, 174, 96],
+              fillColor: [41, 128, 185],
               textColor: [255, 255, 255],
               fontStyle: 'bold',
-              fontSize: 10
+              fontSize: 8
             },
             alternateRowStyles: {
               fillColor: [248, 249, 250]
             },
             columnStyles: {
-              0: { halign: 'center', cellWidth: 15 },
-              1: { cellWidth: 25 },
-              2: { halign: 'center', cellWidth: 20 },
-              3: { halign: 'right', cellWidth: 30, overflow: 'linebreak' },
-              4: { cellWidth: 30 },
-              5: { halign: 'center', cellWidth: 20 },
-              6: { cellWidth: 40 }
+              0: { halign: 'center', cellWidth: 8 },
+              1: { cellWidth: 16 },
+              2: { halign: 'center', cellWidth: 16 },
+              3: { halign: 'right', cellWidth: 26, overflow: 'linebreak' },
+              4: { cellWidth: 34 },
+              5: { halign: 'center', cellWidth: 18 },
+              6: { cellWidth: 62 }
             },
+            margin: { left: 15, right: 15, bottom: 35 }
           });
 
           yPosition = (doc as any).lastAutoTable.finalY + 25;
         }
       }
 
-      // Footer
-      yPosition += 20;
+
+      // Financial Summary Section check page break
+      // Height of financial summary is ~85 (Header 8 + Gap 12 + Box 65)
+      if (yPosition > pageHeight - 120) {
+        doc.addPage();
+        yPosition = 20;
+      }
+
+      // Summary Header
+      doc.setFillColor(155, 89, 182);
+      doc.rect(15, yPosition, pageWidth - 30, 8, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('FINANCIAL SUMMARY', 20, yPosition + 6);
+
+      yPosition += 10;
+
+      // Summary Box - Financial
+      doc.setFillColor(248, 249, 250);
+      doc.rect(15, yPosition, pageWidth - 30, 65, 'F');
+      doc.setDrawColor(200, 200, 200);
+      doc.rect(15, yPosition, pageWidth - 30, 65, 'S');
+
+      // Date Range Info
+      doc.setTextColor(100, 100, 100);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      const dateRangeText = startDate && endDate
+        ? `Summary for Period: ${formatDate(startDate)} - ${formatDate(endDate)}`
+        : 'Summary for All Time';
+      doc.text(dateRangeText, 25, yPosition + 10);
+
+      // Summary Content calculations
+      const totalOut = purchases.reduce((sum, p) => sum + Number(p.totalPrice), 0);
+      const totalIn = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+
+      // Total Records
+      doc.text('Total Entries (Purchases & Payments):', 25, yPosition + 22);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`${purchases.length + payments.length}`, pageWidth - 25, yPosition + 22, { align: 'right' });
+
+      // Total Out (Purchases)
+      doc.setFont('helvetica', 'bold');
+      doc.text('Total Out (-) [Purchases]:', 25, yPosition + 32);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(231, 76, 60); // Red color
+      doc.text(`Rs ${formatCurrencyForPDF(Math.round(totalOut))}`, pageWidth - 25, yPosition + 32, { align: 'right' });
+
+      // Total In (Payments)
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0, 0, 0);
+      doc.text('Total In (+) [Payments]:', 25, yPosition + 42);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(39, 174, 96); // Green color
+      doc.text(`Rs ${formatCurrencyForPDF(Math.round(totalIn))}`, pageWidth - 25, yPosition + 42, { align: 'right' });
+
+      // Net Balance (Outstanding)
+      const displayBalance = totalOut - totalIn;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.setTextColor(0, 0, 0);
+      doc.text('Net Balance:', 25, yPosition + 55);
+      doc.setTextColor(displayBalance > 0 ? 231 : 39, displayBalance > 0 ? 76 : 174, displayBalance > 0 ? 60 : 96);
+      const balanceValueText = displayBalance > 0 ? `Rs ${formatCurrencyForPDF(Math.round(displayBalance))}` : `-Rs ${formatCurrencyForPDF(Math.round(Math.abs(displayBalance)))}`;
+      doc.text(balanceValueText, pageWidth - 25, yPosition + 55, { align: 'right' });
+
+      // Balance Interpretation
       doc.setTextColor(100, 100, 100);
       doc.setFontSize(8);
-      doc.setFont('helvetica', 'normal');
-      doc.text('This report was generated automatically by Flamora Gas Management System', pageWidth / 2, yPosition, { align: 'center' });
-      doc.text(`Page 1 of 1 | Confidential Document`, pageWidth / 2, yPosition + 5, { align: 'center' });
+      doc.setFont('helvetica', 'italic');
+      const balanceStatusText = displayBalance > 0
+        ? 'You owe vendor'
+        : displayBalance < 0
+          ? 'You have overpaid / credit'
+          : 'Balance settled';
+      doc.text(balanceStatusText, 25, yPosition + 62);
+
+
+      // Add Footer to All Pages
+      const pageCount = (doc as any).getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        const footerY = pageHeight - 25; // Moved up to fit more lines
+
+        doc.setTextColor(150, 150, 150);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+
+        doc.text('This report was generated automatically by Flamora Gas Management System', pageWidth / 2, footerY, { align: 'center' });
+        doc.text(`Page ${i} of ${pageCount} | Confidential Document`, pageWidth / 2, footerY + 5, { align: 'center' });
+
+        // Developer Credits
+        doc.setFontSize(7);
+        doc.setTextColor(180, 180, 180);
+        doc.text('Software by AMIN TAHIR', pageWidth / 2, footerY + 12, { align: 'center' });
+        doc.text('Contact No: 03339109535', pageWidth / 2, footerY + 16, { align: 'center' });
+      }
 
       // Save PDF
       const fileName = `${vendorName.replace(/\s+/g, '_')}_Report_${new Date().toISOString().split('T')[0]}.pdf`;
@@ -526,8 +664,8 @@ export default function VendorExportModal({
                 variant="outline"
                 onClick={() => setExportType('purchases')}
                 className={`h-9 border-2 font-semibold transition-all duration-200 ${exportType === 'purchases'
-                    ? 'bg-blue-600 border-blue-600 text-white hover:bg-blue-700 hover:border-blue-700'
-                    : 'border-blue-300 text-blue-700 hover:border-blue-500 hover:bg-blue-50'
+                  ? 'bg-blue-600 border-blue-600 text-white hover:bg-blue-700 hover:border-blue-700'
+                  : 'border-blue-300 text-blue-700 hover:border-blue-500 hover:bg-blue-50'
                   }`}
               >
                 Purchase Entries
@@ -537,8 +675,8 @@ export default function VendorExportModal({
                 variant="outline"
                 onClick={() => setExportType('payments')}
                 className={`h-9 border-2 font-semibold transition-all duration-200 ${exportType === 'payments'
-                    ? 'bg-green-600 border-green-600 text-white hover:bg-green-700 hover:border-green-700'
-                    : 'border-green-300 text-green-700 hover:border-green-500 hover:bg-green-50'
+                  ? 'bg-green-600 border-green-600 text-white hover:bg-green-700 hover:border-green-700'
+                  : 'border-green-300 text-green-700 hover:border-green-500 hover:bg-green-50'
                   }`}
               >
                 Payment History
@@ -548,8 +686,8 @@ export default function VendorExportModal({
                 variant="outline"
                 onClick={() => setExportType('both')}
                 className={`h-9 border-2 font-semibold transition-all duration-200 ${exportType === 'both'
-                    ? 'bg-purple-600 border-purple-600 text-white hover:bg-purple-700 hover:border-purple-700'
-                    : 'border-purple-300 text-purple-700 hover:border-purple-500 hover:bg-purple-50'
+                  ? 'bg-purple-600 border-purple-600 text-white hover:bg-purple-700 hover:border-purple-700'
+                  : 'border-purple-300 text-purple-700 hover:border-purple-500 hover:bg-purple-50'
                   }`}
               >
                 Both Reports
