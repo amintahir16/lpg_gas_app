@@ -181,10 +181,10 @@ Address: ${customer.address || 'N/A'}
             variant="ghost"
             size="sm"
             onClick={() => window.location.href = '/inventory'}
-            className="flex items-center space-x-2"
+            className="text-gray-500 hover:text-gray-900 -ml-2"
           >
-            <ArrowLeftIcon className="w-4 h-4" />
-            <span>Back to Dashboard</span>
+            <ArrowLeftIcon className="w-4 h-4 mr-1" />
+            Back
           </Button>
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Cylinders with Customers</h1>
@@ -196,60 +196,79 @@ Address: ${customer.address || 'N/A'}
       </div>
 
       {/* Statistics */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {stats.map((stat, index) => (
           <Card key={index} className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-semibold text-gray-600">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-3">
+              <CardTitle className="text-xs font-semibold text-gray-600 truncate pr-1">
                 {stat.typeName
                   ? `${stat.typeName} (${getCapacityFromTypeString(stat.type)}kg)`
                   : getTypeDisplayName(stat.type)}
               </CardTitle>
-              <UserGroupIcon className="w-5 h-5 text-blue-500" />
+              <UserGroupIcon className="w-4 h-4 text-blue-500 flex-shrink-0" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900 mb-1">{stat.count}</div>
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                <p className="text-sm text-blue-600 font-medium">With Customers</p>
+            <CardContent className="px-3 pb-3">
+              <div className="text-lg font-bold text-gray-900 mb-2">{stat.count}</div>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center space-x-1.5">
+                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                    <span className="text-blue-600 font-medium">With Customers</span>
+                  </div>
+                </div>
+                {stat.totalValue > 0 && (
+                  <div className="flex justify-between items-center text-gray-500 pt-0.5">
+                    <span>Value</span>
+                    <span className="font-semibold text-gray-700">PKR {stat.totalValue.toLocaleString()}</span>
+                  </div>
+                )}
               </div>
-              {stat.totalValue > 0 && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Total Value: PKR {stat.totalValue.toLocaleString()}
-                </p>
-              )}
             </CardContent>
           </Card>
         ))}
       </div>
 
       {/* Filters */}
-      <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-        <CardContent className="p-6">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="relative">
+      <Card className="border shadow-sm bg-white">
+        <CardContent className="p-5">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1 relative">
               <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
                 placeholder="Search customers or cylinders..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                className="pl-10 h-9 border-gray-300 focus:border-blue-500 focus:ring-blue-500 text-sm"
               />
             </div>
-            <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-              <option value="ALL">All Cylinder Types</option>
-              {cylinderTypeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
-            <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="ALL">All Rental Status</option>
-              <option value="ACTIVE">Active</option>
-              <option value="OVERDUE">Overdue</option>
-              <option value="RETURNED">Returned</option>
-            </Select>
+            <div className="flex gap-2 min-w-48 items-center">
+              <div className="flex-1">
+                <select
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-9 text-sm"
+                >
+                  <option value="ALL">All Cylinder Types</option>
+                  {cylinderTypeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex-1">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-9 text-sm"
+                >
+                  <option value="ALL">All Rental Status</option>
+                  <option value="ACTIVE">Active</option>
+                  <option value="OVERDUE">Overdue</option>
+                  <option value="RETURNED">Returned</option>
+                </select>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -266,113 +285,113 @@ Address: ${customer.address || 'N/A'}
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Cylinder
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Customer
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Contact
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Rental Details
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-white">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-4 text-center">
+                    <td colSpan={6} className="px-4 py-2 text-center border-b">
                       <div className="animate-pulse">Loading customer cylinders...</div>
                     </td>
                   </tr>
                 ) : customerCylinders.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
+                    <td colSpan={6} className="px-4 py-2 text-center text-gray-500 border-b">
                       No cylinders with customers found.
                     </td>
                   </tr>
                 ) : (
                   customerCylinders.map((item) => (
-                    <tr key={item.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
+                    <tr key={item.id} className="hover:bg-gray-50 border-b">
+                      <td className="px-4 py-2 whitespace-nowrap">
                         <div>
                           <div className="text-sm font-semibold text-gray-900">{item.code}</div>
-                          <div className="flex items-center space-x-2 mt-1">
-                            <Badge variant="secondary" className="text-xs">
+                          <div className="flex items-center space-x-2 mt-0.5">
+                            <Badge variant="secondary" className="font-semibold text-xs py-0 px-2 h-5">
                               {item.typeName
                                 ? `${item.typeName} (${getCapacityFromTypeString(item.cylinderType)}kg)`
                                 : getTypeDisplayName(item.cylinderType)}
                             </Badge>
-                            <Badge variant={getCylinderStatusColor(item.currentStatus) as any} className="text-xs">
+                            <Badge variant={getCylinderStatusColor(item.currentStatus) as any} className="font-semibold text-xs py-0 px-2 h-5">
                               {item.currentStatus.replace('_', ' ')}
                             </Badge>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-4 py-2 whitespace-nowrap">
                         <div>
                           <div className="text-sm font-semibold text-gray-900">
                             {item.customer.name}
                           </div>
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs text-gray-500 mt-0.5">
                             Contact: {item.customer.contactPerson}
                           </div>
                           {item.customer.email && (
-                            <div className="text-xs text-gray-500 mt-1">
+                            <div className="text-xs text-gray-500">
                               {item.customer.email}
                             </div>
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center text-sm text-gray-700">
+                      <td className="px-4 py-2 whitespace-nowrap">
+                        <div className="flex items-center text-xs text-gray-700">
                           <PhoneIcon className="w-3 h-3 mr-1" />
                           {item.customer.phone}
                         </div>
                         {item.customer.address && (
-                          <div className="text-xs text-gray-500 mt-1 max-w-xs truncate">
+                          <div className="text-xs text-gray-500 mt-0.5 max-w-[12rem] truncate">
                             {item.customer.address}
                           </div>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-700">
+                      <td className="px-4 py-2 whitespace-nowrap">
+                        <div className="text-xs text-gray-700">
                           <div className="flex items-center">
                             <CalendarIcon className="w-3 h-3 mr-1" />
                             {new Date(item.rental.rentalDate).toLocaleDateString()}
                           </div>
                           {item.rental.expectedReturnDate && (
-                            <div className={`text-xs mt-1 ${isOverdue(item.rental.expectedReturnDate) ? 'text-red-600' : 'text-gray-500'
-                              }`}>
+                            <div className={`mt-0.5 ${isOverdue(item.rental.expectedReturnDate) ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
                               Due: {new Date(item.rental.expectedReturnDate).toLocaleDateString()}
                               {isOverdue(item.rental.expectedReturnDate) && ' (Overdue)'}
                             </div>
                           )}
                           {item.rental.rentalAmount && (
-                            <div className="text-xs text-gray-500 mt-1">
-                              Amount: PKR {item.rental.rentalAmount.toLocaleString()}
+                            <div className="text-gray-500 mt-0.5">
+                              Value: PKR {item.rental.rentalAmount.toLocaleString()}
                             </div>
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge variant={getStatusColor(item.rental.status) as any} className="font-semibold">
+                      <td className="px-4 py-2 whitespace-nowrap">
+                        <Badge variant={getStatusColor(item.rental.status) as any} className="font-semibold text-xs py-0 px-2 h-5">
                           {item.rental.status}
                         </Badge>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
                           <Button
                             variant="outline"
                             size="sm"
+                            className="h-7 text-xs px-2"
                             onClick={() => handleViewDetails(item)}
                           >
                             View Details
@@ -380,6 +399,7 @@ Address: ${customer.address || 'N/A'}
                           <Button
                             variant="ghost"
                             size="sm"
+                            className="h-7 text-xs px-2"
                             onClick={() => handleContactCustomer(item.customer)}
                           >
                             Contact

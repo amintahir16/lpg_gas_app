@@ -525,10 +525,10 @@ export default function CylindersInventoryPage() {
             variant="ghost"
             size="sm"
             onClick={() => window.location.href = '/inventory'}
-            className="flex items-center space-x-2"
+            className="text-gray-500 hover:text-gray-900 -ml-2"
           >
-            <ArrowLeftIcon className="w-4 h-4" />
-            <span>Back to Dashboard</span>
+            <ArrowLeftIcon className="w-4 h-4 mr-1" />
+            Back
           </Button>
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Cylinders Inventory</h1>
@@ -540,7 +540,8 @@ export default function CylindersInventoryPage() {
         <div className="mt-4 sm:mt-0">
           <Button
             onClick={() => setShowAddForm(true)}
-            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-lg"
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm h-9"
           >
             <PlusIcon className="w-4 h-4 mr-2" />
             Add Cylinder
@@ -609,48 +610,56 @@ export default function CylindersInventoryPage() {
       )}
 
       {/* Filters */}
-      <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-        <CardContent className="p-6">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="relative">
+      <Card className="border shadow-sm bg-white">
+        <CardContent className="p-5">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1 relative">
               <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
                 placeholder="Search cylinders..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                className="pl-10 h-9 border-gray-300 focus:border-blue-500 focus:ring-blue-500 text-sm"
               />
             </div>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="ALL">All Status</option>
-              <option value="FULL">Full</option>
-              <option value="EMPTY">Empty</option>
-            </select>
-            <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="ALL">All Types</option>
-              {typeFilterOptions.map((option) => (
-                <option key={option.key || option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={locationFilter}
-              onChange={(e) => setLocationFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="ALL">All Locations</option>
-              <option value="STORE">In Store</option>
-              <option value="VEHICLE">In Vehicle</option>
-            </select>
+            <div className="flex gap-2 min-w-48 items-center">
+              <div className="flex-1">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-9 text-sm"
+                >
+                  <option value="ALL">All Status</option>
+                  <option value="FULL">Full</option>
+                  <option value="EMPTY">Empty</option>
+                </select>
+              </div>
+              <div className="flex-1">
+                <select
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-9 text-sm"
+                >
+                  <option value="ALL">All Types</option>
+                  {typeFilterOptions.map((option) => (
+                    <option key={option.key || option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex-1">
+                <select
+                  value={locationFilter}
+                  onChange={(e) => setLocationFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-9 text-sm"
+                >
+                  <option value="ALL">All Locations</option>
+                  <option value="STORE">In Store</option>
+                  <option value="VEHICLE">In Vehicle</option>
+                </select>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -667,25 +676,25 @@ export default function CylindersInventoryPage() {
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Cylinder Code
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Type
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Location
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Purchase Date
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Last Maintenance
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
@@ -705,35 +714,36 @@ export default function CylindersInventoryPage() {
                   </tr>
                 ) : (
                   cylinders.map((cylinder) => (
-                    <tr key={cylinder.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
+                    <tr key={cylinder.id} className="hover:bg-gray-50 border-b">
+                      <td className="px-4 py-2 whitespace-nowrap">
                         <div className="text-sm font-semibold text-gray-900">{cylinder.code}</div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge variant="secondary" className="font-semibold">
+                      <td className="px-4 py-2 whitespace-nowrap">
+                        <Badge variant="secondary" className="font-semibold text-xs py-0 px-2 h-5">
                           {getTypeDisplayName(cylinder.cylinderType, cylinder.capacity, cylinder.typeName)}
                         </Badge>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge variant={getStatusColor(cylinder.currentStatus) as any} className="font-semibold">
+                      <td className="px-4 py-2 whitespace-nowrap">
+                        <Badge variant={getStatusColor(cylinder.currentStatus) as any} className="font-semibold text-xs py-0 px-2 h-5">
                           {cylinder.currentStatus.replace('_', ' ')}
                         </Badge>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                      <td className="px-4 py-2 whitespace-nowrap text-xs text-gray-700">
                         {getLocationDisplay(cylinder)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                      <td className="px-4 py-2 whitespace-nowrap text-xs text-gray-700">
                         {cylinder.purchaseDate ? new Date(cylinder.purchaseDate).toLocaleDateString() : 'N/A'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                      <td className="px-4 py-2 whitespace-nowrap text-xs text-gray-700">
                         {cylinder.lastMaintenanceDate ? new Date(cylinder.lastMaintenanceDate).toLocaleDateString() : 'N/A'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => handleEditCylinder(cylinder)}
+                            className="h-7 text-xs px-2"
                           >
                             Edit
                           </Button>
@@ -741,6 +751,7 @@ export default function CylindersInventoryPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleViewCylinder(cylinder)}
+                            className="h-7 text-xs px-2"
                           >
                             View
                           </Button>
@@ -749,9 +760,9 @@ export default function CylindersInventoryPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleDeleteCylinder(cylinder)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              className="h-7 text-xs px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
                             >
-                              <TrashIcon className="w-4 h-4 mr-1" />
+                              <TrashIcon className="w-3 h-3 mr-1" />
                               Delete
                             </Button>
                           )}
@@ -813,10 +824,19 @@ export default function CylindersInventoryPage() {
 
       {/* Add Cylinder Modal */}
       {showAddForm && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Cylinder</h3>
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+          <div className="relative mx-auto p-0 border w-full max-w-md shadow-2xl rounded-xl bg-white animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center rounded-t-xl">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Add New Cylinder</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Enter cylinder details below</p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setShowAddForm(false)} className="h-8 w-8 p-0 rounded-full">
+                <span className="sr-only">Close</span>
+                <span className="text-xl">×</span>
+              </Button>
+            </div>
+            <div className="p-6">
               <form className="space-y-4" onSubmit={(e) => {
                 e.preventDefault();
                 console.log('Form submitted!');
@@ -922,7 +942,7 @@ export default function CylindersInventoryPage() {
                 }
               }}>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
                     Cylinder Type & Capacity <span className="text-red-500">*</span>
                   </label>
                   <Input
@@ -932,14 +952,14 @@ export default function CylindersInventoryPage() {
                     value={cylinderTypeAndCapacity}
                     onChange={(e) => setCylinderTypeAndCapacity(e.target.value)}
                     required
-                    className="w-full"
+                    className="w-full h-9"
                   />
-                  <p className="mt-1 text-xs text-gray-500">
+                  <p className="mt-1 text-xs text-gray-500 leading-tight">
                     Enter cylinder type name and capacity together (e.g., "Domestic 11.8", "Standard 15", "12kg", "Custom 12.5kg")
                   </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Quantity <span className="text-red-500">*</span></label>
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Quantity <span className="text-red-500">*</span></label>
                   <Input
                     name="quantity"
                     type="number"
@@ -952,18 +972,18 @@ export default function CylindersInventoryPage() {
                       setQuantity(Math.max(1, Math.min(1000, value)));
                     }}
                     required
-                    className="w-full"
+                    className="w-full h-9"
                   />
-                  <p className="mt-1 text-xs text-gray-500">
-                    Number of cylinders to add (1-1000). All will have the same type, capacity, status, and location.
+                  <p className="mt-1 text-xs text-gray-500 leading-tight">
+                    Number of cylinders to add (1-1000). All will share the same type, status, and location.
                   </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Status</label>
                   <select
                     name="currentStatus"
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-9 text-sm"
                   >
                     <option value="">Select Status</option>
                     <option value="FULL">Full</option>
@@ -971,21 +991,21 @@ export default function CylindersInventoryPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Location</label>
-                  <Input name="location" type="text" placeholder="Warehouse A" required />
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Location</label>
+                  <Input name="location" type="text" placeholder="Warehouse A" required className="h-9" />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Purchase Date</label>
-                  <Input name="purchaseDate" type="date" />
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Purchase Date</label>
+                  <Input name="purchaseDate" type="date" className="h-9" />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Purchase Price</label>
-                  <Input name="purchasePrice" type="number" placeholder="0.00" step="0.01" />
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Purchase Price</label>
+                  <Input name="purchasePrice" type="number" placeholder="0.00" step="0.01" className="h-9" />
                 </div>
-                <div className="flex justify-end space-x-3">
+                <div className="flex justify-end space-x-3 pt-2">
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                     onClick={() => {
                       setShowAddForm(false);
                       setCylinderTypeAndCapacity('');
@@ -998,7 +1018,7 @@ export default function CylindersInventoryPage() {
                   <Button
                     type="submit"
                     disabled={isAddingCylinder}
-                    className="min-w-[120px]"
+                    className="min-w-[120px] bg-blue-600 px-6"
                     onClick={(e) => {
                       console.log('Add Cylinder button clicked');
                       // Let the form handle the submission, but also trigger it manually as backup
@@ -1020,10 +1040,19 @@ export default function CylindersInventoryPage() {
 
       {/* Edit Cylinder Modal */}
       {showEditForm && selectedCylinder && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Cylinder</h3>
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+          <div className="relative mx-auto p-0 border w-full max-w-md shadow-2xl rounded-xl bg-white animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center rounded-t-xl">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Edit Cylinder</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Update cylinder details below</p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setShowEditForm(false)} className="h-8 w-8 p-0 rounded-full">
+                <span className="sr-only">Close</span>
+                <span className="text-xl">×</span>
+              </Button>
+            </div>
+            <div className="p-6">
               <form className="space-y-4" onSubmit={(e) => {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
@@ -1037,9 +1066,9 @@ export default function CylindersInventoryPage() {
                 });
               }}>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
                     Cylinder Type & Capacity
-                    <span className="text-xs text-gray-500 ml-2">(e.g., "Domestic 11.8", "Standard 15", "Special 10kg")</span>
+                    <span className="text-xs text-gray-400 font-normal ml-2 lowercase">(e.g. Domestic 11.8)</span>
                   </label>
                   <Input
                     name="cylinderTypeAndCapacity"
@@ -1048,63 +1077,67 @@ export default function CylindersInventoryPage() {
                     value={editTypeAndCapacity}
                     onChange={(e) => setEditTypeAndCapacity(e.target.value)}
                     required
-                    className="w-full"
+                    className="w-full h-9"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Status</label>
                   <select
                     name="currentStatus"
                     defaultValue={selectedCylinder.currentStatus}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-9 text-sm"
                   >
                     <option value="FULL">Full</option>
                     <option value="EMPTY">Empty</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Location</label>
-                  <Input name="location" type="text" defaultValue={selectedCylinder.location} required />
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Location</label>
+                  <Input name="location" type="text" defaultValue={selectedCylinder.location} required className="h-9" />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Purchase Date</label>
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Purchase Date</label>
                   <Input
                     name="purchaseDate"
                     type="date"
                     defaultValue={selectedCylinder.purchaseDate ? new Date(selectedCylinder.purchaseDate).toISOString().split('T')[0] : ''}
+                    className="h-9"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Purchase Price</label>
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Purchase Price</label>
                   <Input
                     name="purchasePrice"
                     type="number"
                     placeholder="0.00"
                     step="0.01"
                     defaultValue={selectedCylinder.purchasePrice || ''}
+                    className="h-9"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Last Maintenance Date</label>
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Last Maintenance</label>
                   <Input
                     name="lastMaintenanceDate"
                     type="date"
                     defaultValue={selectedCylinder.lastMaintenanceDate ? new Date(selectedCylinder.lastMaintenanceDate).toISOString().split('T')[0] : ''}
+                    className="h-9"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Next Maintenance Date</label>
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Next Maintenance</label>
                   <Input
                     name="nextMaintenanceDate"
                     type="date"
                     defaultValue={selectedCylinder.nextMaintenanceDate ? new Date(selectedCylinder.nextMaintenanceDate).toISOString().split('T')[0] : ''}
+                    className="h-9"
                   />
                 </div>
-                <div className="flex justify-end space-x-3">
+                <div className="flex justify-end space-x-3 pt-2">
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                     onClick={() => {
                       setShowEditForm(false);
                       setSelectedCylinder(null);
@@ -1113,7 +1146,7 @@ export default function CylindersInventoryPage() {
                   >
                     Cancel
                   </Button>
-                  <Button type="submit">
+                  <Button type="submit" className="bg-blue-600 px-6">
                     Update Cylinder
                   </Button>
                 </div>
@@ -1125,61 +1158,70 @@ export default function CylindersInventoryPage() {
 
       {/* View Cylinder Modal */}
       {showViewModal && selectedCylinder && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Cylinder Details</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700">Cylinder Code</label>
-                  <p className="text-sm text-gray-900 font-medium">{selectedCylinder.code}</p>
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+          <div className="relative mx-auto p-0 border w-full max-w-md shadow-2xl rounded-xl bg-white animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center rounded-t-xl">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Cylinder Details</h3>
+                <p className="text-xs text-gray-500 mt-0.5">View details for {selectedCylinder.code}</p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setShowViewModal(false)} className="h-8 w-8 p-0 rounded-full">
+                <span className="sr-only">Close</span>
+                <span className="text-xl">×</span>
+              </Button>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-1">
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Cylinder Code</label>
+                  <p className="text-sm text-gray-900 font-semibold">{selectedCylinder.code}</p>
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700">Type</label>
-                  <Badge variant="secondary" className="font-semibold">
-                    {getTypeDisplayName(selectedCylinder.cylinderType, selectedCylinder.capacity, selectedCylinder.typeName)}
-                  </Badge>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700">Capacity</label>
-                  <p className="text-sm text-gray-900">{selectedCylinder.capacity} KG</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700">Location</label>
-                  <p className="text-sm text-gray-900">{getLocationDisplay(selectedCylinder)}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700">Status</label>
-                  <Badge variant={getStatusColor(selectedCylinder.currentStatus) as any} className="font-semibold">
+                <div className="col-span-1">
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Status</label>
+                  <Badge variant={getStatusColor(selectedCylinder.currentStatus) as any} className="font-semibold text-xs py-0 px-2 h-5">
                     {selectedCylinder.currentStatus.replace('_', ' ')}
                   </Badge>
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700">Purchase Date</label>
-                  <p className="text-sm text-gray-900">
+                <div className="col-span-1">
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Type</label>
+                  <Badge variant="secondary" className="font-semibold text-xs py-0 px-2 h-5">
+                    {getTypeDisplayName(selectedCylinder.cylinderType, selectedCylinder.capacity, selectedCylinder.typeName)}
+                  </Badge>
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Capacity</label>
+                  <p className="text-sm text-gray-900 font-medium">{selectedCylinder.capacity} KG</p>
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Location</label>
+                  <p className="text-sm text-gray-900 font-medium">{getLocationDisplay(selectedCylinder)}</p>
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Purchase Date</label>
+                  <p className="text-sm text-gray-900 font-medium">
                     {selectedCylinder.purchaseDate ? new Date(selectedCylinder.purchaseDate).toLocaleDateString() : 'N/A'}
                   </p>
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700">Purchase Price</label>
+                <div className="col-span-1">
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Purchase Price</label>
                   <p className="text-sm text-gray-900 font-medium">
                     {selectedCylinder.purchasePrice ? `PKR ${selectedCylinder.purchasePrice.toLocaleString()}` : 'N/A'}
                   </p>
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700">Last Maintenance</label>
-                  <p className="text-sm text-gray-900">
+                <div className="col-span-1">
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Last Maintenance</label>
+                  <p className="text-sm text-gray-900 font-medium">
                     {selectedCylinder.lastMaintenanceDate ? new Date(selectedCylinder.lastMaintenanceDate).toLocaleDateString() : 'N/A'}
                   </p>
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700">Next Maintenance</label>
-                  <p className="text-sm text-gray-900">
+                <div className="col-span-1">
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Next Maintenance</label>
+                  <p className="text-sm text-gray-900 font-medium">
                     {selectedCylinder.nextMaintenanceDate ? new Date(selectedCylinder.nextMaintenanceDate).toLocaleDateString() : 'N/A'}
                   </p>
                 </div>
               </div>
-              <div className="flex justify-end space-x-3 mt-6">
+              <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-100">
                 <Button
                   variant="outline"
                   onClick={() => {
