@@ -175,36 +175,7 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* System Statistics */}
-      {settings.totalCustomers !== undefined && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="border-0 shadow-sm bg-blue-50/50">
-            <CardContent className="p-4">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-blue-600">{settings.totalCustomers}</p>
-                <p className="text-sm text-gray-600">Total Customers</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-sm bg-green-50/50">
-            <CardContent className="p-4">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-green-600">{settings.totalVendors}</p>
-                <p className="text-sm text-gray-600">Total Vendors</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-sm bg-purple-50/50">
-            <CardContent className="p-4">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-purple-600">{settings.totalCylinders}</p>
-                <p className="text-sm text-gray-600">Total Cylinders</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
+      {/* Main Settings Form */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Company Information */}
         <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">

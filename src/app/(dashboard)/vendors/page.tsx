@@ -364,7 +364,7 @@ export default function VendorsPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {categories.map((category, index) => {
               const IconComponent = getCategoryIcon(category.slug);
               const colorClass = getCategoryColor(category.slug);
@@ -375,39 +375,41 @@ export default function VendorsPage() {
                   href={`/vendors/category/${category.id}`}
                   className="block h-full"
                 >
-                  <Card className="hover:shadow-lg transition-all duration-200 h-full cursor-pointer group hover:border-blue-300 border-2 border-transparent">
-                    <CardContent className="p-6">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className={`p-3 rounded-lg bg-gray-50 border border-gray-200 group-hover:bg-gray-100 transition-colors`}>
-                          <IconComponent className={`w-8 h-8 ${colorClass.replace('bg-', 'text-')}`} />
+                  <Card className="hover:shadow-md transition-all duration-200 h-full flex flex-col cursor-pointer group hover:border-blue-300 border-gray-200">
+                    <CardContent className="p-4 sm:p-5 flex flex-col h-full flex-1">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className={`p-2 rounded-lg bg-gray-50 border border-gray-200 group-hover:bg-blue-50 group-hover:border-blue-100 transition-colors`}>
+                          <IconComponent className={`w-6 h-6 ${colorClass.replace('bg-', 'text-')}`} />
                         </div>
                         <div className="text-right">
-                          <div className="text-2xl font-bold text-gray-900">
+                          <div className="text-xl font-bold text-gray-900 leading-none mb-1">
                             {category.vendorCount}
                           </div>
-                          <div className="text-sm text-gray-500">
+                          <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                             {category.vendorCount === 1 ? 'Vendor' : 'Vendors'}
                           </div>
                         </div>
                       </div>
 
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
-                        {category.name}
-                      </h3>
-                      {category.description && (
-                        <p className="text-sm text-gray-600 line-clamp-2">
-                          {category.description}
-                        </p>
-                      )}
+                      <div className="flex-1">
+                        <h3 className="text-base font-semibold text-gray-900 mb-1 group-hover:text-blue-600 transition-colors line-clamp-1">
+                          {category.name}
+                        </h3>
+                        {category.description && (
+                          <p className="text-sm text-gray-500 line-clamp-2">
+                            {category.description}
+                          </p>
+                        )}
+                      </div>
 
-                      <div className="mt-4 pt-4 border-t border-gray-200">
+                      <div className="mt-4 pt-3 border-t border-gray-100">
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-blue-600 font-medium group-hover:text-blue-700 transition-colors">
-                            View Vendors →
+                            View Vendors &rarr;
                           </span>
 
                           <div
-                            className="flex gap-2"
+                            className="flex gap-1.5"
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
@@ -421,10 +423,10 @@ export default function VendorsPage() {
                                 e.stopPropagation();
                                 handleEditCategory(category);
                               }}
-                              className="h-7 w-7 p-0"
+                              className="h-7 w-7 p-0 flex items-center justify-center hover:bg-gray-100"
                               title="Edit Category"
                             >
-                              <PencilIcon className="w-3 h-3" />
+                              <PencilIcon className="w-3.5 h-3.5 text-gray-600" />
                             </Button>
                             <Button
                               size="sm"
@@ -434,10 +436,10 @@ export default function VendorsPage() {
                                 e.stopPropagation();
                                 handleDeleteCategory(category);
                               }}
-                              className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              className="h-7 w-7 p-0 flex items-center justify-center text-red-600 hover:bg-red-50 hover:text-red-700 border-transparent hover:border-red-200 transition-colors"
                               title="Delete Category"
                             >
-                              <TrashIcon className="w-3 h-3" />
+                              <TrashIcon className="w-3.5 h-3.5" />
                             </Button>
                           </div>
                         </div>
