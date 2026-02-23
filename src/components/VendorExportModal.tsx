@@ -288,7 +288,7 @@ export default function VendorExportModal({
       if (exportType === 'purchases' || exportType === 'both') {
         if (purchases.length > 0) {
           // Section Header
-          doc.setFillColor(52, 73, 94);
+          doc.setFillColor(41, 128, 185);
           doc.rect(15, yPosition, pageWidth - 30, 8, 'F');
           doc.setTextColor(255, 255, 255);
           doc.setFontSize(14);
@@ -414,7 +414,7 @@ export default function VendorExportModal({
           }
 
           // Section Header
-          doc.setFillColor(52, 73, 94);
+          doc.setFillColor(39, 174, 96);
           doc.rect(15, yPosition, pageWidth - 30, 8, 'F');
           doc.setTextColor(255, 255, 255);
           doc.setFontSize(14);
@@ -458,7 +458,7 @@ export default function VendorExportModal({
               overflow: 'linebreak'
             },
             headStyles: {
-              fillColor: [41, 128, 185],
+              fillColor: [39, 174, 96],
               textColor: [255, 255, 255],
               fontStyle: 'bold',
               fontSize: 8
