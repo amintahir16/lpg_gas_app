@@ -1,379 +1,270 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Award, Users, Target, Heart, Shield, Zap, Truck, Star } from 'lucide-react';
+import { Award, Users, Target, Heart, Shield, Zap, Truck, Star, ChevronRight, Flame } from 'lucide-react';
 import Link from 'next/link';
+
+/* ─── Animation Variants ─── */
+const fadeUp = {
+  hidden: { opacity: 0, y: 40 },
+  visible: (i: number = 0) => ({
+    opacity: 1, y: 0,
+    transition: { duration: 0.6, delay: i * 0.12, ease: [0.25, 0.46, 0.45, 0.94] as const }
+  })
+};
+const scaleIn = {
+  hidden: { opacity: 0, scale: 0.9 },
+  visible: (i: number = 0) => ({
+    opacity: 1, scale: 1,
+    transition: { duration: 0.5, delay: i * 0.12, ease: 'easeOut' as const }
+  })
+};
 
 export default function AboutPage() {
   const values = [
-    {
-      icon: Shield,
-      title: "Safety First",
-      description: "We prioritize safety in every aspect of our operations"
-    },
-    {
-      icon: Heart,
-      title: "Customer Focus",
-      description: "Our customers are at the heart of everything we do"
-    },
-    {
-      icon: Zap,
-      title: "Innovation",
-      description: "Continuously improving our services and technology"
-    },
-    {
-      icon: Truck,
-      title: "Reliability",
-      description: "Consistent and dependable service delivery"
-    }
-  ];
-
-  const team = [
-    {
-      name: "Ahmed Al Mansouri",
-      role: "CEO & Founder",
-      image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=687&q=80",
-      description: "Leading the company with over 20 years of experience in the energy sector"
-    },
-    {
-      name: "Fatima Al Zahra",
-      role: "Operations Director",
-      image: "https://images.unsplash.com/photo-1494790108755-2616b612b786?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=687&q=80",
-      description: "Expert in logistics and supply chain management"
-    },
-    {
-      name: "Mohammed Al Rashid",
-      role: "Safety Manager",
-      image: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1170&q=80",
-      description: "Certified safety professional ensuring compliance with all regulations"
-    },
-    {
-      name: "Aisha Al Qasimi",
-      role: "Customer Relations",
-      image: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1170&q=80",
-      description: "Dedicated to providing exceptional customer service and support"
-    }
+    { icon: Shield, title: 'Safety First', description: 'Every operation follows strict Pakistani safety standards', color: '#f8a11b' },
+    { icon: Heart, title: 'Customer Focus', description: 'Our customers are at the heart of everything we do', color: '#f36523' },
+    { icon: Zap, title: 'Innovation', description: 'Continuously improving our services and delivery', color: '#e1382b' },
+    { icon: Truck, title: 'Reliability', description: 'Consistent, on-time delivery you can count on', color: '#f8a11b' }
   ];
 
   const achievements = [
-    {
-      title: "ISO 9001:2015 Certified",
-      description: "Quality Management System",
-      icon: Award
-    },
-    {
-      title: "Safety Excellence Award",
-      description: "Pakistan Standards Authority 2023",
-      icon: Shield
-    },
-    {
-      title: "Best LPG Provider",
-      description: "Pakistan Energy Awards 2022",
-      icon: Star
-    },
-    {
-      title: "Customer Satisfaction",
-      description: "98% Rating for 5 Years",
-      icon: Heart
-    }
+    { title: 'Safety Excellence', description: 'Pakistan Standards Authority', icon: Award, color: '#f8a11b' },
+    { title: 'Certified Provider', description: 'Licensed LPG Distributor', icon: Shield, color: '#f36523' },
+    { title: 'Best Service Award', description: 'Customer Satisfaction 2024', icon: Star, color: '#e1382b' },
+    { title: '98% Satisfaction', description: 'Consistent 5-Year Rating', icon: Heart, color: '#f8a11b' }
+  ];
+
+  const stats = [
+    { value: '10+', label: 'Years of Service' },
+    { value: '5,000+', label: 'Happy Customers' },
+    { value: '3', label: 'Cylinder Types' },
+    { value: '24/7', label: 'Support' },
   ];
 
   return (
-    <div className="min-h-screen">
-      {/* Hero Section */}
-      <section className="relative py-20 bg-gradient-to-r from-blue-900 to-blue-700">
-        <div className="absolute inset-0 bg-black/40"></div>
-        <div className="relative z-10 max-w-7xl mx-auto px-4 text-center text-white">
-          <motion.h1 
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="text-5xl md:text-6xl font-bold mb-6"
+    <div className="landing-page min-h-screen bg-[#0a0e14]">
+
+      {/* ═══ HERO ═══ */}
+      <section className="relative pt-32 pb-20 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-[#0d1117] via-[#0a0e14] to-[#0a0e14]" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-[#f36523]/5 rounded-full blur-[150px]" />
+
+        <div className="relative max-w-5xl mx-auto px-4 text-center">
+          <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={0}>
+            <span className="inline-block px-4 py-1.5 text-xs font-bold uppercase tracking-[0.2em] text-[#f8a11b] bg-[#f8a11b]/10 rounded-full mb-6 border border-[#f8a11b]/20">
+              About Flamora
+            </span>
+          </motion.div>
+          <motion.h1
+            variants={fadeUp} initial="hidden" animate="visible" custom={1}
+            className="text-5xl md:text-7xl font-black text-white mb-6 leading-tight"
           >
-            About Us
+            Powering Pakistan with <span className="text-gradient-flamora">Clean Energy</span>
           </motion.h1>
-          <motion.p 
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-            className="text-xl md:text-2xl text-gray-200 max-w-3xl mx-auto"
+          <motion.p
+            variants={fadeUp} initial="hidden" animate="visible" custom={2}
+            className="text-lg md:text-xl text-white/50 max-w-2xl mx-auto"
           >
-            Your trusted partner in LPG solutions since 2005
+            Your trusted LPG distribution partner since 2015 — delivering safe, affordable energy to homes and businesses across Pakistan.
           </motion.p>
         </div>
       </section>
 
-      {/* Company History */}
-      <section className="py-20 bg-white">
+
+      {/* ═══ STATS STRIP ═══ */}
+      <section className="py-10 bg-[#0d1117] border-y border-white/5">
+        <div className="max-w-5xl mx-auto px-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {stats.map((stat, i) => (
+              <motion.div
+                key={stat.label}
+                variants={scaleIn} initial="hidden" whileInView="visible" viewport={{ once: true }} custom={i}
+                className="text-center"
+              >
+                <p className="text-3xl md:text-4xl font-black text-gradient-flamora">{stat.value}</p>
+                <p className="text-white/30 text-sm mt-1">{stat.label}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+
+      {/* ═══ OUR STORY ═══ */}
+      <section className="py-24 bg-[#0a0e14]">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.8 }}
-              viewport={{ once: true }}
-            >
-              <h2 className="text-4xl font-bold text-gray-900 mb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+            <motion.div variants={fadeUp} initial="hidden" whileInView="visible" viewport={{ once: true }}>
+              <span className="inline-block px-4 py-1.5 text-xs font-bold uppercase tracking-[0.2em] text-[#f36523] bg-[#f36523]/10 rounded-full mb-6 border border-[#f36523]/20">
                 Our Story
+              </span>
+              <h2 className="text-4xl font-black text-white mb-6">
+                Built on Trust, Fueled by <span className="text-gradient-flamora">Dedication</span>
               </h2>
-              <p className="text-lg text-gray-600 mb-6">
-                Founded in 2005, LPG Gas Company began with a simple mission: to provide 
-                affordable, safe, and reliable energy solutions to homes and businesses 
-                across Pakistan.
+              <p className="text-white/50 text-lg leading-relaxed mb-6">
+                Flamora started with a simple belief: every home and business in Pakistan deserves
+                reliable, safe, and affordable access to clean LPG energy. What began as a small
+                local operation in Peshawar has grown into a trusted name across the region.
               </p>
-              <p className="text-lg text-gray-600 mb-6">
-                What started as a small family business has grown into one of the region's 
-                most trusted LPG providers, serving thousands of customers with dedication 
-                and excellence.
+              <p className="text-white/40 leading-relaxed mb-8">
+                Today, we serve thousands of customers — from families cooking daily meals to
+                restaurants and factories running large-scale operations — with the same care
+                and commitment to safety that defined us from day one.
               </p>
-              <p className="text-lg text-gray-600">
-                Today, we continue to expand our reach while maintaining the same commitment 
-                to quality and customer service that has been our foundation for nearly two decades.
-              </p>
+              <Link
+                href="/services"
+                className="inline-flex items-center gap-2 text-[#f8a11b] font-semibold hover:translate-x-1 transition-transform"
+              >
+                Explore Our Services <ChevronRight className="w-4 h-4" />
+              </Link>
             </motion.div>
+
             <motion.div
-              initial={{ opacity: 0, x: 30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.8 }}
-              viewport={{ once: true }}
-              className="relative"
+              variants={scaleIn} initial="hidden" whileInView="visible" viewport={{ once: true }}
+              className="glass-card p-10 text-center relative overflow-hidden"
             >
-              <div className="w-full h-96 bg-gray-200 rounded-lg overflow-hidden">
-                <img
-                  src="https://images.unsplash.com/photo-1581094794329-c8112a89af12?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80"
-                  alt="LPG Operations"
-                  className="w-full h-full object-cover"
-                />
-              </div>
+              <div className="absolute top-0 right-0 w-40 h-40 bg-[#f36523]/10 rounded-full blur-[80px]" />
+              <Flame className="w-24 h-24 mx-auto mb-6 text-[#f36523]/60 relative z-10" />
+              <h3 className="text-2xl font-bold text-white relative z-10 mb-2">Flamora LPG</h3>
+              <p className="text-white/40 text-sm relative z-10">Premium Energy Distribution</p>
             </motion.div>
           </div>
         </div>
       </section>
 
-      {/* Mission, Vision, Values */}
-      <section className="py-20 bg-gray-50">
+
+      {/* ═══ MISSION / VISION / PROMISE ═══ */}
+      <section className="py-24 bg-[#0d1117]">
         <div className="max-w-7xl mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            viewport={{ once: true }}
-            className="text-center mb-16"
-          >
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">
-              Our Mission, Vision & Values
+          <motion.div variants={fadeUp} initial="hidden" whileInView="visible" viewport={{ once: true }} className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-black text-white mb-4">
+              What Drives <span className="text-gradient-flamora">Flamora</span>
             </h2>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Guiding principles that drive our success and shape our future
-            </p>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.1 }}
-              viewport={{ once: true }}
-              className="bg-white p-8 rounded-lg shadow-lg text-center"
-            >
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Target className="w-8 h-8 text-blue-600" />
-              </div>
-              <h3 className="text-2xl font-semibold text-gray-900 mb-4">Our Mission</h3>
-              <p className="text-gray-600">
-                To provide clean, safe, and affordable energy solutions while maintaining 
-                the highest standards of safety and customer service.
-              </p>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.2 }}
-              viewport={{ once: true }}
-              className="bg-white p-8 rounded-lg shadow-lg text-center"
-            >
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Users className="w-8 h-8 text-blue-600" />
-              </div>
-              <h3 className="text-2xl font-semibold text-gray-900 mb-4">Our Vision</h3>
-              <p className="text-gray-600">
-                To become the leading LPG provider in Pakistan, known for innovation, 
-                sustainability, and exceptional customer experience.
-              </p>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.3 }}
-              viewport={{ once: true }}
-              className="bg-white p-8 rounded-lg shadow-lg text-center"
-            >
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Heart className="w-8 h-8 text-blue-600" />
-              </div>
-              <h3 className="text-2xl font-semibold text-gray-900 mb-4">Our Promise</h3>
-              <p className="text-gray-600">
-                We promise to deliver reliable service, maintain safety standards, and 
-                provide value to our customers every day.
-              </p>
-            </motion.div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {[
+              { title: 'Our Mission', icon: Target, desc: 'To provide clean, safe, and affordable energy solutions while maintaining the highest standards of safety and customer service.', color: '#f8a11b' },
+              { title: 'Our Vision', icon: Users, desc: 'To become the leading LPG distributor in Pakistan, known for innovation, reliability, and exceptional customer experience.', color: '#f36523' },
+              { title: 'Our Promise', icon: Heart, desc: 'We promise reliable service, certified safety, and real value to every customer — from the first delivery to the thousandth.', color: '#e1382b' }
+            ].map((item, i) => (
+              <motion.div
+                key={item.title}
+                variants={scaleIn} initial="hidden" whileInView="visible" viewport={{ once: true }} custom={i}
+                className="glass-card p-8 text-center group"
+              >
+                <div
+                  className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-500"
+                  style={{ background: `${item.color}15`, border: `1px solid ${item.color}20` }}
+                >
+                  <item.icon className="w-8 h-8" style={{ color: item.color }} />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-3">{item.title}</h3>
+                <p className="text-white/40 text-sm leading-relaxed">{item.desc}</p>
+              </motion.div>
+            ))}
           </div>
+        </div>
+      </section>
 
-          {/* Values Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {values.map((value, index) => (
+
+      {/* ═══ VALUES ═══ */}
+      <section className="py-24 bg-[#0a0e14]">
+        <div className="max-w-7xl mx-auto px-4">
+          <motion.div variants={fadeUp} initial="hidden" whileInView="visible" viewport={{ once: true }} className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-black text-white mb-4">
+              Our Core <span className="text-gradient-flamora">Values</span>
+            </h2>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {values.map((value, i) => (
               <motion.div
                 key={value.title}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: index * 0.1 }}
-                viewport={{ once: true }}
-                className="text-center p-6"
+                variants={scaleIn} initial="hidden" whileInView="visible" viewport={{ once: true }} custom={i}
+                className="glass-card p-8 text-center group"
               >
-                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <value.icon className="w-8 h-8 text-blue-600" />
+                <div
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-5 group-hover:scale-110 transition-transform duration-500"
+                  style={{ background: `${value.color}15`, border: `1px solid ${value.color}20` }}
+                >
+                  <value.icon className="w-7 h-7" style={{ color: value.color }} />
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                  {value.title}
-                </h3>
-                <p className="text-gray-600">
-                  {value.description}
-                </p>
+                <h3 className="text-lg font-bold text-white mb-2">{value.title}</h3>
+                <p className="text-white/40 text-sm">{value.description}</p>
               </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Team Section */}
-      <section className="py-20 bg-white">
+
+      {/* ═══ ACHIEVEMENTS ═══ */}
+      <section className="py-24 bg-[#0d1117]">
         <div className="max-w-7xl mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            viewport={{ once: true }}
-            className="text-center mb-16"
-          >
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">
-              Meet Our Team
+          <motion.div variants={fadeUp} initial="hidden" whileInView="visible" viewport={{ once: true }} className="text-center mb-16">
+            <span className="inline-block px-4 py-1.5 text-xs font-bold uppercase tracking-[0.2em] text-[#f8a11b] bg-[#f8a11b]/10 rounded-full mb-6 border border-[#f8a11b]/20">
+              Recognition
+            </span>
+            <h2 className="text-4xl md:text-5xl font-black text-white mb-4">
+              Certificates & <span className="text-gradient-flamora">Achievements</span>
             </h2>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Experienced professionals dedicated to serving you
-            </p>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {team.map((member, index) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {achievements.map((a, i) => (
               <motion.div
-                key={member.name}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: index * 0.1 }}
-                viewport={{ once: true }}
-                className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300"
+                key={a.title}
+                variants={scaleIn} initial="hidden" whileInView="visible" viewport={{ once: true }} custom={i}
+                className="glass-card p-8 text-center group"
               >
-                <div className="h-64 overflow-hidden">
-                  <img
-                    src={member.image}
-                    alt={member.name}
-                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-                  />
+                <div
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-5 group-hover:scale-110 transition-transform duration-500"
+                  style={{ background: `${a.color}15`, border: `1px solid ${a.color}20` }}
+                >
+                  <a.icon className="w-7 h-7" style={{ color: a.color }} />
                 </div>
-                <div className="p-6">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                    {member.name}
-                  </h3>
-                  <p className="text-blue-600 font-medium mb-3">
-                    {member.role}
-                  </p>
-                  <p className="text-gray-600 text-sm">
-                    {member.description}
-                  </p>
-                </div>
+                <h3 className="text-lg font-bold text-white mb-1">{a.title}</h3>
+                <p className="text-white/40 text-sm">{a.description}</p>
               </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Achievements Section */}
-      <section className="py-20 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            viewport={{ once: true }}
-            className="text-center mb-16"
-          >
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">
-              Certificates & Achievements
-            </h2>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Recognition of our commitment to excellence and safety
-            </p>
-          </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {achievements.map((achievement, index) => (
-              <motion.div
-                key={achievement.title}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: index * 0.1 }}
-                viewport={{ once: true }}
-                className="bg-white p-8 rounded-lg shadow-lg text-center hover:shadow-xl transition-shadow duration-300"
-              >
-                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <achievement.icon className="w-8 h-8 text-blue-600" />
-                </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-3">
-                  {achievement.title}
-                </h3>
-                <p className="text-gray-600">
-                  {achievement.description}
-                </p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* ═══ CTA ═══ */}
+      <section className="relative py-24 overflow-hidden">
+        <div className="absolute inset-0 flame-gradient animate-gradient opacity-90" />
+        <div className="absolute inset-0 bg-[url('/images/section-pattern.png')] bg-cover opacity-10 mix-blend-overlay" />
 
-      {/* CTA Section */}
-      <section className="py-20 bg-blue-900">
-        <div className="max-w-4xl mx-auto text-center px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            viewport={{ once: true }}
-          >
-            <h2 className="text-4xl font-bold text-white mb-6">
-              Ready to Work With Us?
+        <div className="relative max-w-4xl mx-auto text-center px-4">
+          <motion.div variants={fadeUp} initial="hidden" whileInView="visible" viewport={{ once: true }}>
+            <h2 className="text-4xl md:text-5xl font-black text-white mb-6">
+              Ready to Partner with Flamora?
             </h2>
-            <p className="text-xl text-gray-200 mb-8">
-              Join thousands of satisfied customers who trust us with their energy needs
+            <p className="text-xl text-white/80 mb-10 max-w-xl mx-auto">
+              Join thousands of satisfied customers who trust us with their energy needs.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link
-                href="/landing/contact"
-                className="bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-4 px-8 rounded-lg text-lg transition-colors duration-300"
+                href="/contact"
+                className="group inline-flex items-center justify-center px-10 py-5 text-lg font-bold bg-white text-[#e1382b] rounded-2xl shadow-2xl hover:-translate-y-1 transition-all duration-300"
               >
-                Get Started
+                Get Started <ChevronRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
               </Link>
               <Link
-                href="/landing/services"
-                className="border-2 border-white text-white hover:bg-white hover:text-blue-900 font-bold py-4 px-8 rounded-lg text-lg transition-colors duration-300"
+                href="/services"
+                className="inline-flex items-center justify-center px-10 py-5 text-lg font-bold text-white bg-black/20 border-2 border-white/30 hover:bg-black/30 rounded-2xl backdrop-blur-sm transition-all duration-300 hover:-translate-y-1"
               >
-                Learn More
+                Our Services
               </Link>
             </div>
           </motion.div>
         </div>
       </section>
+
     </div>
   );
-} 
+}

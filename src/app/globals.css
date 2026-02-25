@@ -100,19 +100,27 @@ html {
 }
 
 /* Better form elements - ENFORCE DARK TEXT */
-input, textarea, select {
-  color: #1f2937 !important; /* Dark gray - very readable */
+input,
+textarea,
+select {
+  color: #1f2937 !important;
+  /* Dark gray - very readable */
   font-weight: 500;
 }
 
-input::placeholder, textarea::placeholder {
-  color: #6b7280 !important; /* Medium gray for placeholders */
+input::placeholder,
+textarea::placeholder {
+  color: #6b7280 !important;
+  /* Medium gray for placeholders */
   font-weight: 400;
 }
 
 /* Input focus states */
-input:focus, textarea:focus, select:focus {
-  color: #111827 !important; /* Even darker when focused */
+input:focus,
+textarea:focus,
+select:focus {
+  color: #111827 !important;
+  /* Even darker when focused */
   font-weight: 600;
 }
 
@@ -252,4 +260,223 @@ select::-ms-expand {
 
 .select-wrapper:focus-within::after {
   border-top-color: #3b82f6;
+}
+
+/* ============================================
+   FLAMORA LANDING PAGE — PREMIUM STYLES
+   ============================================ */
+
+/* Glassmorphism Card */
+.glass-card {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.25rem;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(243, 101, 35, 0.25);
+  box-shadow: 0 8px 32px rgba(243, 101, 35, 0.08);
+  transform: translateY(-4px);
+}
+
+/* Glassmorphism Navbar */
+.glass-navbar {
+  background: rgba(13, 17, 23, 0.82);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Flamora Brand Gradient */
+.flame-gradient {
+  background: linear-gradient(135deg, #e1382b 0%, #f36523 40%, #f8a11b 100%);
+}
+
+/* Text Gradient */
+.text-gradient-flamora {
+  background: linear-gradient(135deg, #f8a11b, #f36523, #e1382b);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Floating Animation */
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+.animate-float {
+  animation: float 5s ease-in-out infinite;
+}
+
+/* Glow Pulse */
+@keyframes glow-pulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(243, 101, 35, 0.15);
+  }
+
+  50% {
+    box-shadow: 0 0 40px rgba(243, 101, 35, 0.35), 0 0 60px rgba(248, 161, 27, 0.1);
+  }
+}
+
+.animate-glow {
+  animation: glow-pulse 3s ease-in-out infinite;
+}
+
+/* Background Gradient Shift */
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient-shift 8s ease-in-out infinite;
+}
+
+/* Ember Particle Rise */
+@keyframes ember-rise {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 0.7;
+  }
+
+  100% {
+    transform: translateY(-120px) scale(0);
+    opacity: 0;
+  }
+}
+
+/* Subtle Pulse */
+@keyframes subtle-pulse {
+
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Section Reveal Slide Up */
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Stat Counter */
+.stat-counter {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Product Card Glow Border */
+.product-card-glow {
+  position: relative;
+  overflow: hidden;
+}
+
+.product-card-glow::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, transparent 40%, #f36523 50%, #f8a11b 60%, transparent 70%);
+  background-size: 300% 300%;
+  animation: gradient-shift 6s ease-in-out infinite;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.product-card-glow:hover::before {
+  opacity: 1;
+}
+
+/* Step connector line animation */
+@keyframes draw-line {
+  from {
+    width: 0;
+  }
+
+  to {
+    width: 100%;
+  }
+}
+
+/* Testimonials marquee */
+@keyframes marquee-scroll {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.marquee-track:hover {
+  animation-play-state: paused !important;
+}
+
+/* Scroll indicator bounce */
+@keyframes scroll-bounce {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(8px);
+  }
+}
+
+.animate-scroll-bounce {
+  animation: scroll-bounce 2s ease-in-out infinite;
+}
+
+/* Landing page link reset — prevent underlining */
+.landing-page a {
+  text-decoration: none !important;
+}
+
+.landing-page a:hover {
+  text-decoration: none !important;
 }

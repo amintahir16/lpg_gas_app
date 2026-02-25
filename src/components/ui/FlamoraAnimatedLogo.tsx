@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function FlamoraAnimatedLogo({ className = '', hideBadge = false }: { className?: string, hideBadge?: boolean }) {
+export default function FlamoraAnimatedLogo({ className = '', hideBadge = false, textColor = '#1d2932' }: { className?: string, hideBadge?: boolean, textColor?: string }) {
     // ======= TWEAK THESE TO MOVE THE FLAME AS A WHOLE =======
     const flameOffsetX = -23;   // positive = right, negative = left
     const flameOffsetY = -5;   // positive = down,  negative = up
@@ -64,7 +64,7 @@ export default function FlamoraAnimatedLogo({ className = '', hideBadge = false 
                     fontFamily='"Montserrat", "Arial Black", "Impact", sans-serif'
                     fontSize="78"
                     fontWeight="900"
-                    fill="#1d2932"
+                    fill={textColor}
                 >
                     {/* Text FLAM - ends right before the O ring */}
                     <text x="291" y="142" textAnchor="end" textLength="210" lengthAdjust="spacingAndGlyphs">
@@ -80,30 +80,30 @@ export default function FlamoraAnimatedLogo({ className = '', hideBadge = false 
                 {/* ========== THE 'O' - GAS CYLINDER IN RING ========== */}
                 <g transform={`translate(321, 115) scale(${oScale})`}>
                     {/* Thick outer ring - matches letter cap height */}
-                    <circle cx="0" cy="0" r="25" fill="none" stroke="#1d2932" strokeWidth="8" />
+                    <circle cx="0" cy="0" r="25" fill="none" stroke={textColor} strokeWidth="8" />
 
                     {/* Gas cylinder inside the ring */}
                     {/* Handle/Guard arch on top */}
                     <path
                         d="M -7 -8 L -7 -15 C -7 -20, 7 -20, 7 -15 L 7 -8"
                         fill="none"
-                        stroke="#1d2932"
+                        stroke={textColor}
                         strokeWidth="2"
                         strokeLinecap="round"
                     />
 
                     {/* Valve block on top */}
-                    <rect x="-3" y="-16" width="6" height="5" rx="1" fill="#1d2932" />
+                    <rect x="-3" y="-16" width="6" height="5" rx="1" fill={textColor} />
 
                     {/* Main cylinder body (pill shape) */}
-                    <rect x="-10" y="-6" width="20" height="24" rx="7" fill="#1d2932" />
+                    <rect x="-10" y="-6" width="20" height="24" rx="7" fill={textColor} />
 
                     {/* Horizontal stripe cutouts on body */}
                     <line x1="-8" y1="2" x2="8" y2="2" stroke="#F0F4F8" strokeWidth="1.5" />
                     <line x1="-8" y1="7" x2="8" y2="7" stroke="#F0F4F8" strokeWidth="1.5" />
 
                     {/* Base/foot stand */}
-                    <path d="M -6 18 L -8 22 H 8 L 6 18 Z" fill="#1d2932" />
+                    <path d="M -6 18 L -8 22 H 8 L 6 18 Z" fill={textColor} />
                 </g>
 
                 {/* Subtitle Slogan */}
@@ -112,7 +112,7 @@ export default function FlamoraAnimatedLogo({ className = '', hideBadge = false 
                     fontFamily='"Montserrat", "Arial", sans-serif'
                     fontSize="15"
                     fontWeight="bold"
-                    fill="#1d2932"
+                    fill={textColor}
                     textAnchor="middle"
                     letterSpacing="5"
                     textLength="378"
@@ -125,7 +125,7 @@ export default function FlamoraAnimatedLogo({ className = '', hideBadge = false 
                 {!hideBadge && (
                     <g transform="translate(270, 186)">
                         {/* Black Background */}
-                        <rect x="-120" y="-14" width="240" height="20" rx="4" fill="#1d2932" />
+                        <rect x="-120" y="-14" width="240" height="20" rx="4" fill={textColor} />
                         {/* White Text */}
                         <text
                             x="3" y="0"

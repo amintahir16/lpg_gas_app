@@ -1,59 +1,67 @@
 'use client';
 
 import Link from 'next/link';
-import { Facebook, Twitter, Instagram, Linkedin, Mail, Phone, MapPin } from 'lucide-react';
+import { Facebook, Instagram, Linkedin, Mail, Phone, MapPin, Flame, ArrowUp } from 'lucide-react';
+import FlamoraAnimatedLogo from '@/components/ui/FlamoraAnimatedLogo';
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
 
   const quickLinks = [
     { name: 'Home', href: '/' },
-    { name: 'About Us', href: '/about' },
+    { name: 'About Us', href: '#about' },
+    { name: 'Products', href: '#products' },
     { name: 'Services', href: '/services' },
-    { name: 'Shop', href: '/shop' },
-    { name: 'Blog', href: '/blog' },
-    { name: 'Contact', href: '/contact' },
+    { name: 'Contact', href: '#contact' },
   ];
 
-  const services = [
-    { name: 'LPG Refill', href: '/services#refill' },
-    { name: 'Bulk Deliveries', href: '/services#bulk' },
-    { name: 'Distribution', href: '/services#distribution' },
-    { name: 'Safety Training', href: '/services#training' },
+  const products = [
+    { name: 'Domestic 11.8KG', href: '/shop' },
+    { name: 'Standard 15KG', href: '/shop' },
+    { name: 'Commercial 44.5KG', href: '/shop' },
+    { name: 'Bulk Orders', href: '/contact' },
   ];
 
   const socialLinks = [
     { name: 'Facebook', href: '#', icon: Facebook },
-    { name: 'Twitter', href: '#', icon: Twitter },
     { name: 'Instagram', href: '#', icon: Instagram },
     { name: 'LinkedIn', href: '#', icon: Linkedin },
   ];
 
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
-    <footer className="bg-gray-900 text-white">
-      <div className="max-w-7xl mx-auto px-4 py-16">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+    <footer className="landing-page bg-[#080b10] text-white relative overflow-hidden">
+      {/* Top Gradient Line */}
+      <div className="h-[2px] w-full flame-gradient" />
+
+      {/* Subtle Background Elements */}
+      <div className="absolute top-0 right-0 w-72 h-72 bg-[#f36523]/3 rounded-full blur-[120px]" />
+      <div className="absolute bottom-0 left-0 w-72 h-72 bg-[#f8a11b]/3 rounded-full blur-[120px]" />
+
+      <div className="relative max-w-7xl mx-auto px-4 pt-16 pb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-16">
+
           {/* Company Info */}
           <div className="lg:col-span-1">
-            <div className="flex items-center space-x-2 mb-4">
-              <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
-                <span className="text-white font-bold text-xl">LPG</span>
-              </div>
-              <span className="text-xl font-bold">Pakistan</span>
+            <div className="w-44 mb-6">
+              <FlamoraAnimatedLogo hideBadge textColor="#ffffff" />
             </div>
-            <p className="text-gray-300 mb-4">
-              Providing clean, safe, and affordable energy solutions across Pakistan since 2005. 
-              Your trusted partner for all LPG needs nationwide.
+            <p className="text-white/40 text-sm leading-relaxed mb-6">
+              Premium LPG distribution — delivering clean, safe, and affordable
+              energy solutions to homes and businesses across Pakistan.
             </p>
-            <div className="flex space-x-4">
+            <div className="flex gap-3">
               {socialLinks.map((social) => (
                 <a
                   key={social.name}
                   href={social.href}
-                  className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors"
+                  className="w-10 h-10 bg-white/5 border border-white/8 rounded-xl flex items-center justify-center hover:bg-[#f36523]/15 hover:border-[#f36523]/30 hover:text-[#f8a11b] transition-all duration-300 text-white/40"
                   aria-label={social.name}
                 >
-                  <social.icon className="w-5 h-5" />
+                  <social.icon className="w-4 h-4" />
                 </a>
               ))}
             </div>
@@ -61,13 +69,13 @@ export default function Footer() {
 
           {/* Quick Links */}
           <div>
-            <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
-            <ul className="space-y-2">
+            <h3 className="text-sm font-bold uppercase tracking-[0.15em] text-white/80 mb-6">Quick Links</h3>
+            <ul className="space-y-3">
               {quickLinks.map((link) => (
                 <li key={link.name}>
                   <Link
                     href={link.href}
-                    className="text-gray-300 hover:text-white transition-colors"
+                    className="text-white/40 hover:text-[#f8a11b] transition-colors duration-300 text-sm"
                   >
                     {link.name}
                   </Link>
@@ -76,17 +84,18 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Services */}
+          {/* Products */}
           <div>
-            <h3 className="text-lg font-semibold mb-4">Our Services</h3>
-            <ul className="space-y-2">
-              {services.map((service) => (
-                <li key={service.name}>
+            <h3 className="text-sm font-bold uppercase tracking-[0.15em] text-white/80 mb-6">Our Cylinders</h3>
+            <ul className="space-y-3">
+              {products.map((product) => (
+                <li key={product.name}>
                   <Link
-                    href={service.href}
-                    className="text-gray-300 hover:text-white transition-colors"
+                    href={product.href}
+                    className="text-white/40 hover:text-[#f8a11b] transition-colors duration-300 text-sm flex items-center gap-2"
                   >
-                    {service.name}
+                    <Flame className="w-3 h-3 text-[#f36523]/50" />
+                    {product.name}
                   </Link>
                 </li>
               ))}
@@ -95,51 +104,63 @@ export default function Footer() {
 
           {/* Contact Info */}
           <div>
-            <h3 className="text-lg font-semibold mb-4">Contact Info</h3>
-            <div className="space-y-3">
-              <div className="flex items-center space-x-3">
-                <Phone className="w-5 h-5 text-blue-400" />
-                <span className="text-gray-300">+92 300 1234567</span>
+            <h3 className="text-sm font-bold uppercase tracking-[0.15em] text-white/80 mb-6">Contact</h3>
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-[#f36523]/10 flex items-center justify-center shrink-0">
+                  <Phone className="w-4 h-4 text-[#f36523]" />
+                </div>
+                <div>
+                  <p className="text-white/60 text-sm">+92 300 1234567</p>
+                  <p className="text-white/30 text-xs">WhatsApp Available</p>
+                </div>
               </div>
-              <div className="flex items-center space-x-3">
-                <Phone className="w-5 h-5 text-blue-400" />
-                <span className="text-gray-300">+92 301 9876543</span>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-[#f36523]/10 flex items-center justify-center shrink-0">
+                  <Mail className="w-4 h-4 text-[#f36523]" />
+                </div>
+                <div>
+                  <p className="text-white/60 text-sm">info@flamora.pk</p>
+                  <p className="text-white/30 text-xs">24hr Response</p>
+                </div>
               </div>
-              <div className="flex items-center space-x-3">
-                <Mail className="w-5 h-5 text-blue-400" />
-                <span className="text-gray-300">info@lpgpakistan.com</span>
-              </div>
-              <div className="flex items-center space-x-3">
-                <Mail className="w-5 h-5 text-blue-400" />
-                <span className="text-gray-300">sales@lpgpakistan.com</span>
-              </div>
-              <div className="flex items-start space-x-3">
-                <MapPin className="w-5 h-5 text-blue-400 mt-1" />
-                <span className="text-gray-300">
-                  Karachi, Pakistan
-                </span>
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-[#f36523]/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <MapPin className="w-4 h-4 text-[#f36523]" />
+                </div>
+                <div>
+                  <p className="text-white/60 text-sm">Peshawar, Pakistan</p>
+                  <p className="text-white/30 text-xs">Nationwide Coverage</p>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
         {/* Bottom Bar */}
-        <div className="border-t border-gray-800 mt-12 pt-8">
-          <div className="flex flex-col md:flex-row justify-between items-center">
-            <p className="text-gray-400 text-sm">
-              © {currentYear} LPG Pakistan. All rights reserved.
+        <div className="border-t border-white/5 pt-8">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+            <p className="text-white/25 text-sm">
+              © {currentYear} Flamora LPG Distribution. All rights reserved.
             </p>
-            <div className="flex space-x-6 mt-4 md:mt-0">
-              <Link href="/privacy" className="text-gray-400 hover:text-white text-sm transition-colors">
-                Privacy Policy
+            <div className="flex items-center gap-6">
+              <Link href="/privacy" className="text-white/25 hover:text-white/50 text-sm transition-colors">
+                Privacy
               </Link>
-              <Link href="/terms" className="text-gray-400 hover:text-white text-sm transition-colors">
-                Terms of Service
+              <Link href="/terms" className="text-white/25 hover:text-white/50 text-sm transition-colors">
+                Terms
               </Link>
+              <button
+                onClick={scrollToTop}
+                className="w-9 h-9 rounded-xl bg-white/5 border border-white/8 flex items-center justify-center hover:bg-[#f36523]/15 hover:border-[#f36523]/30 text-white/30 hover:text-[#f8a11b] transition-all duration-300"
+                aria-label="Scroll to top"
+              >
+                <ArrowUp className="w-4 h-4" />
+              </button>
             </div>
           </div>
         </div>
       </div>
     </footer>
   );
-} 
+}
