@@ -6,7 +6,7 @@ import { prisma } from '@/lib/db';
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -20,11 +20,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
     // Create category-specific prefixes
-    const categoryPrefixes = {
+    const categoryPrefixes: Record<string, string> = {
       'cylinder_purchase': 'CYL',
       'gas_purchase': 'GAS',
       'vaporizer_purchase': 'VAP',
@@ -32,22 +29,45 @@ export async function POST(request: NextRequest) {
       'valves_purchase': 'VAL'
     };
 
-    const prefix = categoryPrefixes[categorySlug as keyof typeof categoryPrefixes] || 'VEN';
+    const prefix = categoryPrefixes[categorySlug as string] || 'VEN';
 
-    // Get or create today's sequence for this vendor category
-    const sequenceKey = `${prefix}_${today.toISOString().slice(0, 10)}`;
-    
-    // Use BillSequence table but with category-specific keys
-    const billSequence = await prisma.billSequence.upsert({
-      where: { date: today },
-      update: { sequence: { increment: 1 } },
-      create: { date: today, sequence: 1 },
+    // Map categorySlug to VendorCategory enum string
+    const categoryEnumStr = (categorySlug as string).toUpperCase();
+
+    // Get all invoice numbers for this vendor and category that start with the prefix
+    const purchases = await prisma.purchaseEntry.findMany({
+      where: {
+        vendorId: vendorId,
+        category: categoryEnumStr as any,
+        invoiceNumber: {
+          startsWith: `${prefix}-`
+        }
+      },
+      select: {
+        invoiceNumber: true
+      },
+      distinct: ['invoiceNumber']
     });
 
-    // Format: PREFIX-YYYYMMDD-000000
-    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
-    const sequenceStr = String(billSequence.sequence).padStart(6, '0');
-    const invoiceNumber = `${prefix}-${dateStr}-${sequenceStr}`;
+    let maxSequence = 0;
+    for (const p of purchases) {
+      if (p.invoiceNumber) {
+        // Extract sequence part (e.g., CYL-000001 -> 1, or CYL-20260225-000001 -> 1)
+        const parts = p.invoiceNumber.split('-');
+        if (parts.length > 1) {
+          const numPart = parts[parts.length - 1];
+          const seq = parseInt(numPart, 10);
+          if (!isNaN(seq) && seq > maxSequence) {
+            maxSequence = seq;
+          }
+        }
+      }
+    }
+
+    const nextSequence = maxSequence + 1;
+    // Format: PREFIX-000001
+    const sequenceStr = String(nextSequence).padStart(6, '0');
+    const invoiceNumber = `${prefix}-${sequenceStr}`;
 
     return NextResponse.json({ invoiceNumber });
   } catch (error) {

@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { XMarkIcon, BanknotesIcon, CreditCardIcon, CheckIcon } from '@heroicons/react/24/outline';
+import { CustomSelect } from '@/components/ui/select-custom';
 
 interface VendorPaymentModalProps {
   isOpen: boolean;
@@ -130,8 +131,8 @@ export default function VendorPaymentModal({
         <form onSubmit={handleSubmit} className="px-8 py-6 space-y-8">
           {/* Outstanding Balance Display */}
           <div className={`rounded-xl p-6 shadow-sm ${outstandingBalance < 0
-              ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200'
-              : 'bg-gradient-to-r from-red-50 to-pink-50 border-2 border-red-200'
+            ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200'
+            : 'bg-gradient-to-r from-red-50 to-pink-50 border-2 border-red-200'
             }`}>
             <div className="flex justify-between items-center">
               <div>
@@ -273,8 +274,8 @@ export default function VendorPaymentModal({
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-600 font-medium">Remaining Balance:</span>
                   <span className={`font-bold text-lg ${(invoiceNumber && purchaseEntryTotal ? purchaseEntryTotal : Math.abs(outstandingBalance)) - parseFloat(amount) > 0
-                      ? 'text-red-600'
-                      : 'text-green-600'
+                    ? 'text-red-600'
+                    : 'text-green-600'
                     }`}>
                     {formatCurrency(Math.round(Math.max(0, (invoiceNumber && purchaseEntryTotal ? purchaseEntryTotal : Math.abs(outstandingBalance)) - parseFloat(amount))))}
                   </span>
@@ -301,23 +302,22 @@ export default function VendorPaymentModal({
             </div>
 
             {/* Payment Method */}
-            <div>
+            <div className="flex flex-col flex-1">
               <label htmlFor="paymentMethod" className="block text-sm font-semibold text-gray-700 mb-2">
                 Payment Method <span className="text-red-500">*</span>
               </label>
-              <select
-                id="paymentMethod"
+              <CustomSelect
                 value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-                className="w-full px-4 h-9 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 font-medium text-sm"
-                required
-              >
-                <option value="CASH">💵 Cash</option>
-                <option value="BANK_TRANSFER">🏦 Bank Transfer</option>
-                <option value="CHECK">📄 Check</option>
-                <option value="CREDIT_CARD">💳 Credit Card</option>
-                <option value="DEBIT_CARD">💳 Debit Card</option>
-              </select>
+                onChange={setPaymentMethod}
+                options={[
+                  { value: "CASH", label: "💵 Cash" },
+                  { value: "BANK_TRANSFER", label: "🏦 Bank Transfer" },
+                  { value: "CHECK", label: "📄 Check" },
+                  { value: "CREDIT_CARD", label: "💳 Credit Card" },
+                  { value: "DEBIT_CARD", label: "💳 Debit Card" }
+                ]}
+                placeholder="Select Payment Method"
+              />
             </div>
           </div>
 

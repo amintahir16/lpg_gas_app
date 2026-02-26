@@ -1403,18 +1403,18 @@ export default function VendorDetailPage() {
               <div className="flex-1 min-w-0 mr-2">
                 <p className="text-xs text-gray-500 font-medium mb-0.5 uppercase tracking-wide">Net Balance</p>
                 <div className="flex items-baseline flex-wrap gap-2">
-                  <p className={`text-lg font-bold truncate ${vendor.financialSummary.netBalance > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  <p className={`text-lg font-bold truncate ${vendor.financialSummary.netBalance < 0 ? 'text-red-600' : 'text-green-600'}`}>
                     {formatCurrency(Math.round(vendor.financialSummary.netBalance))}
                   </p>
                   {(vendor.financialSummary.netBalance !== 0) && (
-                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${vendor.financialSummary.netBalance > 0 ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
-                      {vendor.financialSummary.netBalance > 0 ? 'You Owe' : 'Owes You'}
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${vendor.financialSummary.netBalance < 0 ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                      {vendor.financialSummary.netBalance < 0 ? 'You Owe' : 'Owes You'}
                     </span>
                   )}
                 </div>
               </div>
-              <div className={`p-2 rounded-md ${vendor.financialSummary.netBalance > 0 ? 'bg-yellow-50' : 'bg-gray-50'}`}>
-                <CurrencyDollarIcon className={`w-5 h-5 ${vendor.financialSummary.netBalance > 0 ? 'text-yellow-600' : 'text-gray-500'}`} />
+              <div className={`p-2 rounded-md ${vendor.financialSummary.netBalance < 0 ? 'bg-red-50' : vendor.financialSummary.netBalance > 0 ? 'bg-green-50' : 'bg-gray-50'}`}>
+                <CurrencyDollarIcon className={`w-5 h-5 ${vendor.financialSummary.netBalance < 0 ? 'text-red-600' : vendor.financialSummary.netBalance > 0 ? 'text-green-600' : 'text-gray-500'}`} />
               </div>
             </div>
             {vendor.financialSummary.outstandingBalance < 0 && (
@@ -2460,7 +2460,7 @@ export default function VendorDetailPage() {
                               setSelectedEntryTotal(entryTotal);
                               setShowPaymentModal(true);
                             }}
-                            className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs px-2"
+                            className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs px-4"
                             size="sm"
                           >
                             <BanknotesIcon className="h-3 w-3 mr-1" />
@@ -2574,56 +2574,6 @@ export default function VendorDetailPage() {
                         </div>
                       </div>
 
-                      {/* Net Running Balance */}
-                      <div>
-                        <div className="text-xs text-gray-500 mb-1">Net Running Balance</div>
-                        <div className={`text-lg font-semibold ${(() => {
-                          // Calculate running balance up to this transaction
-                          // Find the index of the first entry with this invoice number
-                          const firstEntryId = purchase.items?.[0]?.id || purchase.id;
-                          const currentIndex = vendor.purchase_entries?.findIndex(p => p.id === firstEntryId) || 0;
-                          const transactionsUpToThis = vendor.purchase_entries?.slice(currentIndex) || [];
-
-                          // Calculate total purchases up to this point
-                          const totalPurchasesUpToThis = transactionsUpToThis.reduce(
-                            (sum, p) => sum + Number(p.totalPrice), 0
-                          );
-
-                          // Calculate total payments up to this point
-                          const totalPaymentsUpToThis = vendor.payments?.reduce(
-                            (sum, payment) => sum + Number(payment.amount), 0
-                          ) || 0;
-
-                          // Running balance = payments - purchases
-                          const runningBalance = totalPaymentsUpToThis - totalPurchasesUpToThis;
-
-                          return runningBalance < 0 ? 'text-red-600' : 'text-green-600';
-                        })()
-                          }`}>
-                          {(() => {
-                            // Calculate running balance up to this transaction
-                            // Find the index of the first entry with this invoice number
-                            const firstEntryId = purchase.items?.[0]?.id || purchase.id;
-                            const currentIndex = vendor.purchase_entries?.findIndex(p => p.id === firstEntryId) || 0;
-                            const transactionsUpToThis = vendor.purchase_entries?.slice(currentIndex) || [];
-
-                            // Calculate total purchases up to this point
-                            const totalPurchasesUpToThis = transactionsUpToThis.reduce(
-                              (sum, p) => sum + Number(p.totalPrice), 0
-                            );
-
-                            // Calculate total payments up to this point
-                            const totalPaymentsUpToThis = vendor.payments?.reduce(
-                              (sum, payment) => sum + Number(payment.amount), 0
-                            ) || 0;
-
-                            // Running balance = payments - purchases
-                            const runningBalance = totalPaymentsUpToThis - totalPurchasesUpToThis;
-
-                            return formatCurrency(Math.round(runningBalance));
-                          })()}
-                        </div>
-                      </div>
                     </div>
 
                     {/* Notes */}
