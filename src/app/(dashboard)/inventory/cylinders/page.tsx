@@ -67,7 +67,7 @@ export default function CylindersInventoryPage() {
   const [isAddingCylinder, setIsAddingCylinder] = useState(false);
   const [cylinderTypeAndCapacity, setCylinderTypeAndCapacity] = useState('');
   const [editTypeAndCapacity, setEditTypeAndCapacity] = useState('');
-  const [quantity, setQuantity] = useState<number>(1);
+  const [quantity, setQuantity] = useState<number | ''>('');
   const [newCylinderStatus, setNewCylinderStatus] = useState('');
   const [pagination, setPagination] = useState({
     page: 1,
@@ -414,7 +414,7 @@ export default function CylindersInventoryPage() {
 
       setShowAddForm(false);
       setCylinderTypeAndCapacity('');
-      setQuantity(1);
+      setQuantity('');
       setNewCylinderStatus('');
 
       // Show appropriate success message
@@ -908,7 +908,7 @@ export default function CylindersInventoryPage() {
                   const capacity = capacityValue;
 
                   // Validate quantity
-                  const qty = quantity || 1;
+                  const qty = typeof quantity === 'number' ? quantity : 0;
                   if (qty < 1 || qty > 1000) {
                     alert('Quantity must be between 1 and 1000.');
                     return;
@@ -955,13 +955,19 @@ export default function CylindersInventoryPage() {
                   <Input
                     name="quantity"
                     type="number"
-                    placeholder="1"
+                    placeholder="0"
                     min="1"
                     max="1000"
                     value={quantity}
                     onChange={(e) => {
-                      const value = parseInt(e.target.value) || 1;
-                      setQuantity(Math.max(1, Math.min(1000, value)));
+                      if (e.target.value === '') {
+                        setQuantity('');
+                        return;
+                      }
+                      const value = parseInt(e.target.value, 10);
+                      if (!isNaN(value)) {
+                        setQuantity(Math.min(1000, value));
+                      }
                     }}
                     required
                     className="w-full h-9"
@@ -993,7 +999,7 @@ export default function CylindersInventoryPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Purchase Price</label>
-                  <Input name="purchasePrice" type="number" placeholder="0.00" step="0.01" className="h-9" />
+                  <Input name="purchasePrice" type="number" placeholder="0" step="1" min="0" className="h-9" />
                 </div>
                 <div className="flex justify-end space-x-3 pt-2">
                   <Button
@@ -1002,7 +1008,7 @@ export default function CylindersInventoryPage() {
                     onClick={() => {
                       setShowAddForm(false);
                       setCylinderTypeAndCapacity('');
-                      setQuantity(1);
+                      setQuantity('');
                       setNewCylinderStatus('');
                     }}
                     disabled={isAddingCylinder}
@@ -1110,8 +1116,9 @@ export default function CylindersInventoryPage() {
                   <Input
                     name="purchasePrice"
                     type="number"
-                    placeholder="0.00"
-                    step="0.01"
+                    placeholder="0"
+                    step="1"
+                    min="0"
                     defaultValue={selectedCylinder.purchasePrice || ''}
                     className="h-9"
                   />
