@@ -2438,186 +2438,198 @@ export default function VendorDetailPage() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {getFilteredPurchaseEntries().map((purchase: any, index: number) => (
-                <Card key={purchase.id}>
-                  <CardContent className="p-3">
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <h3 className="font-semibold text-gray-900 leading-tight">
-                          {purchase.invoiceNumber || 'No Invoice Number'}
-                        </h3>
-                        <p className="text-xs text-gray-500">
-                          {formatDate(purchase.purchaseDate)}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {/* Make Payment Button for Unpaid/Partial Entries */}
-                        {(purchase.status === 'PENDING' || purchase.status === 'PARTIAL') && (
-                          <Button
-                            onClick={() => {
-                              const entryTotal = Number(purchase.totalPrice || purchase.items?.reduce((sum: number, item: any) => sum + Number(item.totalPrice), 0) || 0);
-                              setSelectedInvoiceNumber(purchase.invoiceNumber || null);
-                              setSelectedEntryTotal(entryTotal);
-                              setShowPaymentModal(true);
-                            }}
-                            className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs px-4"
-                            size="sm"
+              {getFilteredPurchaseEntries().map((purchase: any, index: number) => {
+                // Find the globally most recent payment across the whole vendor
+                const latestPayment = vendor.payments && vendor.payments.length > 0
+                  ? [...vendor.payments].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]
+                  : null;
+
+                // Check if the most recent payment was made for THIS purchase entry
+                const hasMostRecentPayment = latestPayment && purchase.invoiceNumber
+                  ? latestPayment.description?.includes(purchase.invoiceNumber)
+                  : false;
+
+                return (
+                  <Card key={purchase.id}>
+                    <CardContent className="p-3">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <h3 className="font-semibold text-gray-900 leading-tight">
+                            {purchase.invoiceNumber || 'No Invoice Number'}
+                          </h3>
+                          <p className="text-xs text-gray-500">
+                            {formatDate(purchase.purchaseDate)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {/* Make Payment Button for Unpaid/Partial Entries */}
+                          {(purchase.status === 'PENDING' || purchase.status === 'PARTIAL') && (
+                            <Button
+                              onClick={() => {
+                                const entryTotal = Number(purchase.totalPrice || purchase.items?.reduce((sum: number, item: any) => sum + Number(item.totalPrice), 0) || 0);
+                                setSelectedInvoiceNumber(purchase.invoiceNumber || null);
+                                setSelectedEntryTotal(entryTotal);
+                                setShowPaymentModal(true);
+                              }}
+                              className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs px-4"
+                              size="sm"
+                            >
+                              <BanknotesIcon className="h-3 w-3 mr-1" />
+                              Pay
+                            </Button>
+                          )}
+                          <span
+                            className={`px-2 py-0.5 text-xs font-medium rounded-full ${purchase.status === 'PAID'
+                              ? 'bg-green-100 text-green-700'
+                              : purchase.status === 'PARTIAL'
+                                ? 'bg-yellow-100 text-yellow-700'
+                                : 'bg-red-100 text-red-700'
+                              }`}
                           >
-                            <BanknotesIcon className="h-3 w-3 mr-1" />
-                            Pay
-                          </Button>
-                        )}
-                        <span
-                          className={`px-2 py-0.5 text-xs font-medium rounded-full ${purchase.status === 'PAID'
-                            ? 'bg-green-100 text-green-700'
-                            : purchase.status === 'PARTIAL'
-                              ? 'bg-yellow-100 text-yellow-700'
-                              : 'bg-red-100 text-red-700'
-                            }`}
-                        >
-                          {purchase.status}
-                        </span>
+                            {purchase.status}
+                          </span>
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Items Table */}
-                    <div className="mb-2">
-                      <table className="w-full text-xs">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            {vendor?.category?.slug === 'accessories_purchase' && (
+                      {/* Items Table */}
+                      <div className="mb-2">
+                        <table className="w-full text-xs">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              {vendor?.category?.slug === 'accessories_purchase' && (
+                                <th className="px-4 py-1 text-left font-medium text-gray-700">
+                                  Category
+                                </th>
+                              )}
                               <th className="px-4 py-1 text-left font-medium text-gray-700">
-                                Category
+                                Item
                               </th>
-                            )}
-                            <th className="px-4 py-1 text-left font-medium text-gray-700">
-                              Item
-                            </th>
-                            <th className="px-4 py-1 text-right font-medium text-gray-700">
-                              Qty
-                            </th>
-                            <th className="px-4 py-1 text-right font-medium text-gray-700">
-                              Unit Price
-                            </th>
+                              <th className="px-4 py-1 text-right font-medium text-gray-700">
+                                Qty
+                              </th>
+                              <th className="px-4 py-1 text-right font-medium text-gray-700">
+                                Unit Price
+                              </th>
 
-                            <th className="px-4 py-1 text-right font-medium text-gray-700">
-                              Total
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(purchase.items || [purchase]).map((item: any, itemIndex: number) => {
-                            // For accessories purchases, get category from itemDescription
-                            // itemDescription stores the category name for accessories purchases (just like itemName stores the item name)
-                            // This ensures category is always available even if vendor item is deleted
-                            let categoryDisplay = '-';
-                            if (vendor?.category?.slug === 'accessories_purchase') {
-                              // itemDescription contains the category for accessories purchases
-                              // This is stored when the purchase is created, so it persists even if vendor item is deleted
-                              if (item.itemDescription && item.itemDescription.trim()) {
-                                categoryDisplay = item.itemDescription;
+                              <th className="px-4 py-1 text-right font-medium text-gray-700">
+                                Total
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(purchase.items || [purchase]).map((item: any, itemIndex: number) => {
+                              // For accessories purchases, get category from itemDescription
+                              // itemDescription stores the category name for accessories purchases (just like itemName stores the item name)
+                              // This ensures category is always available even if vendor item is deleted
+                              let categoryDisplay = '-';
+                              if (vendor?.category?.slug === 'accessories_purchase') {
+                                // itemDescription contains the category for accessories purchases
+                                // This is stored when the purchase is created, so it persists even if vendor item is deleted
+                                if (item.itemDescription && item.itemDescription.trim()) {
+                                  categoryDisplay = item.itemDescription;
+                                }
                               }
-                            }
 
-                            return (
-                              <tr key={itemIndex} className="border-t border-gray-200">
-                                {vendor?.category?.slug === 'accessories_purchase' && (
-                                  <td className="px-4 py-1 text-gray-600 font-medium">
-                                    {categoryDisplay}
+                              return (
+                                <tr key={itemIndex} className="border-t border-gray-200">
+                                  {vendor?.category?.slug === 'accessories_purchase' && (
+                                    <td className="px-4 py-1 text-gray-600 font-medium">
+                                      {categoryDisplay}
+                                    </td>
+                                  )}
+                                  <td className="px-4 py-1">{item.itemName}</td>
+                                  <td className="px-4 py-1 text-right">{item.quantity}</td>
+                                  <td className="px-4 py-1 text-right">
+                                    {formatCurrency(Math.round(Number(item.unitPrice)))}
                                   </td>
-                                )}
-                                <td className="px-4 py-1">{item.itemName}</td>
-                                <td className="px-4 py-1 text-right">{item.quantity}</td>
-                                <td className="px-4 py-1 text-right">
-                                  {formatCurrency(Math.round(Number(item.unitPrice)))}
-                                </td>
 
-                                <td className="px-4 py-1 text-right font-medium">
-                                  {formatCurrency(Math.round(Number(item.totalPrice)))}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Purchase Summary */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pt-2 border-t border-gray-200">
-                      <div>
-                        <div className="text-xs text-gray-500 mb-1">Total Amount</div>
-                        <div className="text-lg font-semibold text-gray-900">
-                          {formatCurrency(Math.round(Number(purchase.totalPrice || purchase.items?.reduce((sum: number, item: any) => sum + Number(item.totalPrice), 0) || 0)))}
-                        </div>
+                                  <td className="px-4 py-1 text-right font-medium">
+                                    {formatCurrency(Math.round(Number(item.totalPrice)))}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
 
-                      {/* Recent Payment Total */}
-                      <div>
-                        <div className="text-xs text-gray-500 mb-1">Recent Payment Total</div>
-                        <div className="text-lg font-semibold text-green-600">
-                          {(() => {
-                            // Calculate total payments for this specific purchase
-                            const purchasePayments = vendor.payments?.filter(payment =>
-                              payment.description?.includes(purchase.invoiceNumber || '')
-                            ) || [];
-
-                            // Debug logging
-                            console.log('Purchase invoice:', purchase.invoiceNumber);
-                            console.log('All payments:', vendor.payments);
-                            console.log('Filtered payments:', purchasePayments);
-
-                            const totalPaid = purchasePayments.reduce((sum, payment) =>
-                              sum + Number(payment.amount), 0
-                            );
-                            return formatCurrency(Math.round(totalPaid));
-                          })()}
-                        </div>
-                      </div>
-
-                    </div>
-
-                    {/* Notes */}
-                    {purchase.notes && (
-                      <div className="mt-2 pt-2 border-t border-gray-200">
-                        <h4 className="text-xs font-medium text-gray-700 mb-1">
-                          Notes
-                        </h4>
-                        <p className="text-xs text-gray-600">{purchase.notes}</p>
-                      </div>
-                    )}
-
-                    {/* Payments - Show payments specific to this purchase entry */}
-                    {(() => {
-                      const purchasePayments = vendor.payments?.filter(payment =>
-                        payment.description?.includes(purchase.invoiceNumber || '')
-                      ) || [];
-
-                      return purchasePayments.length > 0 && (
-                        <div className="mt-2 pt-2 border-t border-gray-200">
-                          <h4 className="text-xs font-medium text-gray-700 mb-1">
-                            Recent Payments
-                          </h4>
-                          <div className="space-y-1">
-                            {purchasePayments.slice(0, 3).map((payment) => (
-                              <div
-                                key={payment.id}
-                                className="flex justify-between text-xs"
-                              >
-                                <span className="text-gray-600">
-                                  {formatDate(payment.paymentDate)} - {payment.method}
-                                </span>
-                                <span className="font-medium text-green-600">
-                                  {formatCurrency(Math.round(Number(payment.amount)))}
-                                </span>
-                              </div>
-                            ))}
+                      {/* Purchase Summary */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pt-2 border-t border-gray-200">
+                        <div>
+                          <div className="text-xs text-gray-500 mb-1">Total Amount</div>
+                          <div className="text-lg font-semibold text-gray-900">
+                            {formatCurrency(Math.round(Number(purchase.totalPrice || purchase.items?.reduce((sum: number, item: any) => sum + Number(item.totalPrice), 0) || 0)))}
                           </div>
                         </div>
-                      );
-                    })()}
-                  </CardContent>
-                </Card>
-              ))}
+
+                        {/* Recent Payment Total */}
+                        <div>
+                          <div className="text-xs text-gray-500 mb-1">{hasMostRecentPayment ? 'Recent Payment Total' : 'Payment Total'}</div>
+                          <div className="text-lg font-semibold text-green-600">
+                            {(() => {
+                              // Calculate total payments for this specific purchase
+                              const purchasePayments = vendor.payments?.filter(payment =>
+                                payment.description?.includes(purchase.invoiceNumber || '')
+                              ) || [];
+
+                              // Debug logging
+                              console.log('Purchase invoice:', purchase.invoiceNumber);
+                              console.log('All payments:', vendor.payments);
+                              console.log('Filtered payments:', purchasePayments);
+
+                              const totalPaid = purchasePayments.reduce((sum, payment) =>
+                                sum + Number(payment.amount), 0
+                              );
+                              return formatCurrency(Math.round(totalPaid));
+                            })()}
+                          </div>
+                        </div>
+
+                      </div>
+
+                      {/* Notes */}
+                      {purchase.notes && (
+                        <div className="mt-2 pt-2 border-t border-gray-200">
+                          <h4 className="text-xs font-medium text-gray-700 mb-1">
+                            Notes
+                          </h4>
+                          <p className="text-xs text-gray-600">{purchase.notes}</p>
+                        </div>
+                      )}
+
+                      {/* Payments - Show payments specific to this purchase entry */}
+                      {(() => {
+                        const purchasePayments = vendor.payments?.filter(payment =>
+                          payment.description?.includes(purchase.invoiceNumber || '')
+                        ) || [];
+
+                        return purchasePayments.length > 0 && (
+                          <div className="mt-2 pt-2 border-t border-gray-200">
+                            <h4 className="text-xs font-medium text-gray-700 mb-1">
+                              {hasMostRecentPayment ? 'Recent Payments' : 'Payments'}
+                            </h4>
+                            <div className="space-y-1">
+                              {purchasePayments.slice(0, 3).map((payment) => (
+                                <div
+                                  key={payment.id}
+                                  className="flex justify-between text-xs"
+                                >
+                                  <span className="text-gray-600">
+                                    {formatDate(payment.paymentDate)} - {payment.method}
+                                  </span>
+                                  <span className="font-medium text-green-600">
+                                    {formatCurrency(Math.round(Number(payment.amount)))}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </div>
