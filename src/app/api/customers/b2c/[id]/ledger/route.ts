@@ -125,7 +125,7 @@ export async function GET(
             transactions: paginatedTransactions,
             summary: {
                 netBalance: 0,
-                totalTransactions: allTransactions.length,
+                totalTransactions: allTransactions.filter(tx => !tx.voided).length,
                 totalIn,
                 totalOut,
                 totalProfit,
