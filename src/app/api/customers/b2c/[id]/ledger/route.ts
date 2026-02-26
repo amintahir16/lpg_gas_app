@@ -80,10 +80,16 @@ export async function GET(
             const finalAmount = parseFloat(tx.finalAmount.toString());
             const profit = parseFloat(tx.actualProfit.toNumber().toString());
 
-            // B2C Transaction is a SALE
-            totalOut += finalAmount;
+            // Subtract security deposit/return amounts from sales (they are liabilities, not revenue)
+            const securityTotal = (tx.securityItems || []).reduce((sum, item) => {
+                return sum + parseFloat(item.totalPrice.toString());
+            }, 0);
+
+            // B2C Transaction is a SALE (excluding security deposits)
+            const salesAmount = finalAmount - securityTotal;
+            totalOut += salesAmount;
             // Assume fully paid for B2C
-            totalIn += finalAmount;
+            totalIn += salesAmount;
 
             totalProfit += profit;
         });

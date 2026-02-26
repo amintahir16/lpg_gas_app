@@ -47,7 +47,7 @@ const superAdminNavigation: NavigationItem[] = [
 ];
 
 const adminNavigation: NavigationItem[] = [
-  { name: 'Admin Dashboard', href: '/admin', icon: HomeIcon, roles: ['ADMIN'] },
+  { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, roles: ['ADMIN'] },
   { name: 'Customers', href: '/customers', icon: UsersIcon, roles: ['ADMIN'] },
   { name: 'Inventory', href: '/inventory', icon: CubeIcon, roles: ['ADMIN'] },
   { name: 'Financial', href: '/financial', icon: CurrencyDollarIcon, roles: ['ADMIN'] },

@@ -5,24 +5,33 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { CustomSelect } from '@/components/ui/select-custom';
 import {
   UsersIcon,
   CubeIcon,
   CurrencyDollarIcon,
+  ChartBarIcon,
   ExclamationTriangleIcon,
   ArrowUpIcon,
   ArrowDownIcon,
-  ClockIcon
+  ClockIcon,
+  CheckCircleIcon,
+  ArrowPathIcon
 } from '@heroicons/react/24/outline';
-
-interface StatCard {
-  title: string;
-  value: string;
-  change: string;
-  changeType: 'positive' | 'negative';
-  icon: React.ComponentType<{ className?: string }>;
-  description: string;
-}
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts';
+import { format, subDays, startOfMonth, endOfMonth } from 'date-fns';
 
 interface RecentActivity {
   id: string;
@@ -30,14 +39,19 @@ interface RecentActivity {
   title: string;
   description: string;
   time: string;
+  amount: number;
   status: 'success' | 'warning' | 'error';
 }
 
 interface DashboardStats {
-  totalCustomers: number;
-  activeCylinders: number;
-  monthlyRevenue: number;
-  pendingOrders: number;
+  kpis: {
+    totalCustomers: number;
+    activeCylinders: number;
+    rangeRevenue: number;
+    rangeProfit: number;
+  };
+  revenueChartData: any[];
+  cylinderStatusData: any[];
   recentActivities: RecentActivity[];
 }
 
@@ -46,19 +60,44 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchDashboardStats();
-  }, []);
+  // Date Filter State
+  const [dateRangeFilter, setDateRangeFilter] = useState('30days');
 
-  const fetchDashboardStats = async () => {
+  useEffect(() => {
+    fetchDashboardStats(dateRangeFilter);
+  }, [dateRangeFilter]);
+
+  const fetchDashboardStats = async (filter: string) => {
     try {
       setLoading(true);
-      const response = await fetch('/api/dashboard/stats');
-      
+
+      let startDateStr = '';
+      let endDateStr = new Date().toISOString();
+      const today = new Date();
+
+      if (filter === '7days') {
+        startDateStr = subDays(today, 7).toISOString();
+      } else if (filter === '30days') {
+        startDateStr = subDays(today, 30).toISOString();
+      } else if (filter === 'thisMonth') {
+        startDateStr = startOfMonth(today).toISOString();
+        endDateStr = endOfMonth(today).toISOString();
+      } else if (filter === '6months') {
+        startDateStr = subDays(today, 180).toISOString();
+      } else if (filter === 'allTime') {
+        startDateStr = new Date('2020-01-01').toISOString();
+      }
+
+      const params = new URLSearchParams();
+      if (startDateStr) params.append('startDate', startDateStr);
+      if (endDateStr) params.append('endDate', endDateStr);
+
+      const response = await fetch(`/api/dashboard/stats?${params.toString()}`);
+
       if (!response.ok) {
         throw new Error('Failed to fetch dashboard statistics');
       }
-      
+
       const data = await response.json();
       setStats(data);
     } catch (err) {
@@ -71,13 +110,13 @@ export default function DashboardPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'success':
-        return 'success';
+        return 'bg-green-100 text-green-800';
       case 'warning':
-        return 'warning';
+        return 'bg-yellow-100 text-yellow-800';
       case 'error':
-        return 'destructive';
+        return 'bg-red-100 text-red-800';
       default:
-        return 'secondary';
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -85,19 +124,40 @@ export default function DashboardPage() {
     const date = new Date(timeString);
     const now = new Date();
     const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
-    
+
     if (diffInHours < 1) return 'Just now';
     if (diffInHours < 24) return `${diffInHours} hours ago`;
     if (diffInHours < 48) return 'Yesterday';
     return date.toLocaleDateString();
   };
 
-  if (loading) {
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-PK', {
+      style: 'currency',
+      currency: 'PKR',
+      maximumFractionDigits: 0
+    }).format(amount);
+  };
+
+  // Custom Tooltip for Pie Chart
+  const CustomPieTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white p-3 border border-gray-100 shadow-lg rounded-lg">
+          <p className="font-semibold text-gray-800">{payload[0].name}</p>
+          <p className="text-blue-600 font-bold">{payload[0].value} Cylinders</p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  if (loading && !stats) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50/50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600 font-medium">Loading dashboard...</p>
+          <p className="mt-4 text-gray-500 font-medium">Loading analytics...</p>
         </div>
       </div>
     );
@@ -106,157 +166,239 @@ export default function DashboardPage() {
   if (error) {
     return (
       <div className="space-y-6">
-        <div className="text-center">
+        <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="mt-2 text-gray-600 font-medium">
-            Business overview and key metrics
-          </p>
         </div>
-        
-        <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-          <CardContent className="p-6">
-            <div className="text-center">
-              <ExclamationTriangleIcon className="w-12 h-12 text-red-500 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Error Loading Dashboard</h3>
-              <p className="text-gray-600 mb-4">{error}</p>
-              <Button onClick={fetchDashboardStats} className="font-medium">
-                Try Again
-              </Button>
-            </div>
+
+        <Card className="border-0 shadow-sm bg-white">
+          <CardContent className="p-8 text-center">
+            <ExclamationTriangleIcon className="w-12 h-12 text-red-500 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Error Loading Dashboard</h3>
+            <p className="text-gray-500 mb-6">{error}</p>
+            <Button onClick={() => fetchDashboardStats(dateRangeFilter)}>Try Again</Button>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  if (!stats) {
-    return null;
-  }
-
-  const statCards: StatCard[] = [
-    {
-      title: 'Total Customers',
-      value: stats.totalCustomers.toLocaleString(),
-      change: '+12%',
-      changeType: 'positive',
-      icon: UsersIcon,
-      description: 'Active customers this month'
-    },
-    {
-      title: 'Active Cylinders',
-      value: stats.activeCylinders.toLocaleString(),
-      change: '+5%',
-      changeType: 'positive',
-      icon: CubeIcon,
-      description: 'Cylinders currently rented'
-    },
-    {
-      title: 'Monthly Revenue',
-      value: `$${stats.monthlyRevenue.toLocaleString()}`,
-      change: '+8%',
-      changeType: 'positive',
-      icon: CurrencyDollarIcon,
-      description: 'Revenue this month'
-    },
-    {
-      title: 'Pending Orders',
-      value: stats.pendingOrders.toLocaleString(),
-      change: '-3%',
-      changeType: 'negative',
-      icon: ExclamationTriangleIcon,
-      description: 'Orders awaiting processing'
-    }
-  ];
+  if (!stats) return null;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-6 max-w-[1600px] mx-auto pb-10">
+      {/* Header & Filters */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="mt-2 text-gray-600 font-medium">
-            Business overview and key metrics
+          <h1 className="text-3xl font-bold text-gray-900 flex items-center">
+            <ChartBarIcon className="w-8 h-8 mr-3 text-blue-600" />
+            Business Overview
+          </h1>
+          <p className="mt-1 text-gray-500">
+            Analytics and key metrics for selected period
           </p>
         </div>
-        <div className="mt-4 sm:mt-0">
-          <Button 
-            onClick={fetchDashboardStats}
+        <div className="flex items-center space-x-3">
+          <CustomSelect
+            value={dateRangeFilter}
+            onChange={(val) => setDateRangeFilter(val)}
+            options={[
+              { value: '7days', label: 'Last 7 Days' },
+              { value: '30days', label: 'Last 30 Days' },
+              { value: 'thisMonth', label: 'This Month' },
+              { value: '6months', label: 'Last 6 Months' },
+              { value: 'allTime', label: 'All Time' },
+            ]}
+            className="w-[160px]"
+          />
+          <Button
+            onClick={() => fetchDashboardStats(dateRangeFilter)}
             variant="outline"
-            className="font-medium"
+            size="sm"
+            className="h-9"
+            disabled={loading}
           >
-            Refresh Data
+            <ArrowPathIcon className={`w-4 h-4 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
+            {loading ? 'Refreshing...' : 'Refresh Data'}
           </Button>
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {statCards.map((stat, index) => (
-          <Card key={index} className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-semibold text-gray-600">{stat.title}</CardTitle>
-              <stat.icon className="h-4 w-4 text-gray-400" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-              <div className="flex items-center space-x-2 mt-2">
-                {stat.changeType === 'positive' ? (
-                  <ArrowUpIcon className="h-3 w-3 text-green-600" />
-                ) : (
-                  <ArrowDownIcon className="h-3 w-3 text-red-600" />
-                )}
-                <p className={`text-xs font-medium ${
-                  stat.changeType === 'positive' ? 'text-green-600' : 'text-red-600'
-                }`}>
-                  {stat.change}
-                </p>
-              </div>
-              <p className="text-xs text-gray-500 mt-1 font-medium">{stat.description}</p>
-            </CardContent>
-          </Card>
-        ))}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="border shadow-sm bg-white relative overflow-hidden group hover:shadow-md transition-shadow">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <UsersIcon className="w-16 h-16 text-blue-600" />
+          </div>
+          <CardContent className="p-6 relative z-10">
+            <p className="text-sm font-medium text-gray-500 mb-1">Total Active Customers</p>
+            <h3 className="text-3xl font-bold text-gray-900">{stats.kpis.totalCustomers.toLocaleString()}</h3>
+            <p className="text-xs text-gray-400 mt-2">Combined B2B & B2C</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border shadow-sm bg-white relative overflow-hidden group hover:shadow-md transition-shadow">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <CurrencyDollarIcon className="w-16 h-16 text-green-600" />
+          </div>
+          <CardContent className="p-6 relative z-10">
+            <p className="text-sm font-medium text-gray-500 mb-1">Period Revenue</p>
+            <h3 className="text-3xl font-bold text-gray-900">{formatCurrency(stats.kpis.rangeRevenue)}</h3>
+            <p className="text-xs text-gray-400 mt-2">Selected date range</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border shadow-sm bg-white relative overflow-hidden group hover:shadow-md transition-shadow">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <ChartBarIcon className="w-16 h-16 text-purple-600" />
+          </div>
+          <CardContent className="p-6 relative z-10">
+            <p className="text-sm font-medium text-gray-500 mb-1">Est. Period Profit</p>
+            <h3 className="text-3xl font-bold text-gray-900">{formatCurrency(stats.kpis.rangeProfit)}</h3>
+            <p className="text-xs text-gray-400 mt-2">Gross margins applied</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border shadow-sm bg-white relative overflow-hidden group hover:shadow-md transition-shadow">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <CubeIcon className="w-16 h-16 text-orange-600" />
+          </div>
+          <CardContent className="p-6 relative z-10">
+            <p className="text-sm font-medium text-gray-500 mb-1">Cylinders With Customers</p>
+            <h3 className="text-3xl font-bold text-gray-900">{stats.kpis.activeCylinders.toLocaleString()}</h3>
+            <p className="text-xs text-gray-400 mt-2">Active in market</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Revenue Trend Chart */}
+        <Card className="border shadow-sm bg-white lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-lg font-bold text-gray-900">Revenue Trend (B2B vs B2C)</CardTitle>
+            <CardDescription>Visualizing revenue across sales channels over time.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[350px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={stats.revenueChartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                  <XAxis
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#6B7280', fontSize: 12 }}
+                    dy={10}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#6B7280', fontSize: 12 }}
+                    tickFormatter={(value) => `Rs${(value / 1000)}k`}
+                  />
+                  <Tooltip
+                    cursor={{ fill: 'transparent' }}
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    formatter={(value: number) => formatCurrency(value)}
+                  />
+                  <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
+                  <Bar dataKey="b2b" name="B2B Industries" stackId="a" fill="#3b82f6" radius={[0, 0, 4, 4]} />
+                  <Bar dataKey="b2c" name="B2C Homes" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Cylinder Inventory Status */}
+        <Card className="border shadow-sm bg-white">
+          <CardHeader>
+            <CardTitle className="text-lg font-bold text-gray-900">Cylinder Master Status</CardTitle>
+            <CardDescription>Live overview of physical cylinder assets.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[350px] w-full flex items-center justify-center">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={stats.cylinderStatusData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={70}
+                    outerRadius={100}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {stats.cylinderStatusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} stroke="transparent" />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<CustomPieTooltip />} />
+                  <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Recent Activities */}
-      <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
+      <Card className="border shadow-sm bg-white">
         <CardHeader>
-          <CardTitle className="text-lg font-semibold text-gray-900">Recent Activities</CardTitle>
-          <CardDescription className="text-gray-600 font-medium">
-            Latest business activities and transactions
-          </CardDescription>
+          <CardTitle className="text-lg font-bold text-gray-900 flex items-center">
+            <ClockIcon className="w-5 h-5 mr-2 text-gray-500" />
+            Most Recent Sales Activities
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="font-semibold text-gray-700">Activity</TableHead>
-                <TableHead className="font-semibold text-gray-700">Description</TableHead>
-                <TableHead className="font-semibold text-gray-700">Time</TableHead>
-                <TableHead className="font-semibold text-gray-700">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {stats.recentActivities.map((activity) => (
-                <TableRow key={activity.id}>
-                  <TableCell className="font-semibold text-gray-900">{activity.title}</TableCell>
-                  <TableCell className="text-gray-700">{activity.description}</TableCell>
-                  <TableCell className="text-gray-700">
-                    <div className="flex items-center space-x-2" suppressHydrationWarning>
-                      <ClockIcon className="h-4 w-4 text-gray-400" />
-                      <span>{formatTime(activity.time)}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={getStatusColor(activity.status) as any} className="font-semibold">
-                      {activity.status.charAt(0).toUpperCase() + activity.status.slice(1)}
-                    </Badge>
-                  </TableCell>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader className="bg-gray-50/50">
+                <TableRow>
+                  <TableHead className="font-semibold text-gray-700">Type</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Description</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Amount</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Time</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Status</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {stats.recentActivities.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                      No recent sales found.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  stats.recentActivities.map((activity) => (
+                    <TableRow key={activity.id} className="hover:bg-gray-50/50">
+                      <TableCell>
+                        <Badge variant="outline" className={`font-semibold ${activity.type === 'b2b_sale' ? 'text-blue-700 border-blue-200 bg-blue-50' : 'text-green-700 border-green-200 bg-green-50'}`}>
+                          {activity.title}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-gray-700 font-medium">{activity.description}</TableCell>
+                      <TableCell className="font-bold text-gray-900">{formatCurrency(activity.amount)}</TableCell>
+                      <TableCell className="text-gray-500 text-sm">
+                        {formatTime(activity.time)}
+                      </TableCell>
+                      <TableCell>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${activity.status === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          }`}>
+                          {activity.status === 'success' ? (
+                            <><CheckCircleIcon className="w-3 h-3 mr-1" /> Success</>
+                          ) : (
+                            <><ExclamationTriangleIcon className="w-3 h-3 mr-1" /> Voided</>
+                          )}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
   );
-} 
+}
