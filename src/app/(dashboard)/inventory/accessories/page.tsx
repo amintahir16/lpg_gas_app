@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,6 +31,7 @@ interface EquipmentStats {
 }
 
 export default function AccessoriesInventoryPage() {
+  const { data: session } = useSession();
   const [activeTab, setActiveTab] = useState<string>('');
   const [customItems, setCustomItems] = useState<CustomItem[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -535,7 +537,7 @@ export default function AccessoriesInventoryPage() {
             {activeTab ? `${activeTab} Inventory` : 'Custom Items Inventory'}
           </CardTitle>
           <div className="flex space-x-2">
-            {activeTab && (
+            {activeTab && session?.user?.role === 'SUPER_ADMIN' && (
               <>
                 <Button
                   onClick={() => setShowRenameCategoryForm(true)}
@@ -627,14 +629,16 @@ export default function AccessoriesInventoryPage() {
                           >
                             Edit
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 text-xs px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                            onClick={() => handleDeleteCustomItem(item.id)}
-                          >
-                            Delete
-                          </Button>
+                          {session?.user?.role === 'SUPER_ADMIN' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => handleDeleteCustomItem(item.id)}
+                            >
+                              Delete
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>

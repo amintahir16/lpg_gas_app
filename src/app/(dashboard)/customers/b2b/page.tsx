@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -97,6 +98,7 @@ interface B2BCustomersResponse {
 
 export default function B2BCustomersPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [customers, setCustomers] = useState<B2BCustomer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -680,17 +682,19 @@ export default function B2BCustomersPage() {
                           >
                             <PencilIcon className="w-4 h-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeleteConfirm(customer.id);
-                            }}
-                            className="h-8 w-8 p-0 text-red-600 hover:text-red-800 hover:bg-red-50"
-                          >
-                            <TrashIcon className="w-4 h-4" />
-                          </Button>
+                          {session?.user?.role === 'SUPER_ADMIN' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteConfirm(customer.id);
+                              }}
+                              className="h-8 w-8 p-0 text-red-600 hover:text-red-800 hover:bg-red-50"
+                            >
+                              <TrashIcon className="w-4 h-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

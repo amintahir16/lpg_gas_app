@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -122,6 +123,7 @@ const normalizeCategoryName = (category: string): string => {
 export default function VendorDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { data: session } = useSession();
   const vendorId = params?.id as string;
 
   const [vendor, setVendor] = useState<Vendor | null>(null);
@@ -1313,18 +1315,20 @@ export default function VendorDetailPage() {
               <PencilIcon className="w-4 h-4 mr-1" />
               Edit Vendor
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setDeleteConfirmationName('');
-                setShowDeleteConfirm(true);
-              }}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50 h-9"
-            >
-              <PencilIcon className="w-4 h-4 mr-1" />
-              Delete Vendor
-            </Button>
+            {session?.user?.role === 'SUPER_ADMIN' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setDeleteConfirmationName('');
+                  setShowDeleteConfirm(true);
+                }}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50 h-9"
+              >
+                <TrashIcon className="w-4 h-4 mr-1" />
+                Delete Vendor
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -2768,13 +2772,15 @@ export default function VendorDetailPage() {
                         >
                           <PencilIcon className="w-3 h-3" />
                         </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => handleDeleteItem(item.id)}
-                          className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <TrashIcon className="w-3 h-3" />
-                        </Button>
+                        {session?.user?.role === 'SUPER_ADMIN' && (
+                          <Button
+                            variant="outline"
+                            onClick={() => handleDeleteItem(item.id)}
+                            className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <TrashIcon className="w-3 h-3" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                     {item.category && (

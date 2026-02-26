@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -53,6 +54,7 @@ interface CylinderTypeStats {
 }
 
 export default function CylindersInventoryPage() {
+  const { data: session } = useSession();
   const [cylinders, setCylinders] = useState<Cylinder[]>([]);
   const [cylinderTypeStats, setCylinderTypeStats] = useState<CylinderTypeStats[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -747,7 +749,7 @@ export default function CylindersInventoryPage() {
                           >
                             View
                           </Button>
-                          {cylinder.currentStatus === 'EMPTY' && (
+                          {cylinder.currentStatus === 'EMPTY' && session?.user?.role === 'SUPER_ADMIN' && (
                             <Button
                               variant="ghost"
                               size="sm"

@@ -428,19 +428,21 @@ export default function VendorsPage() {
                             >
                               <PencilIcon className="w-3.5 h-3.5 text-gray-600" />
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleDeleteCategory(category);
-                              }}
-                              className="h-7 w-7 p-0 flex items-center justify-center text-red-600 hover:bg-red-50 hover:text-red-700 border-transparent hover:border-red-200 transition-colors"
-                              title="Delete Category"
-                            >
-                              <TrashIcon className="w-3.5 h-3.5" />
-                            </Button>
+                            {session?.user?.role === 'SUPER_ADMIN' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleDeleteCategory(category);
+                                }}
+                                className="h-7 w-7 p-0 flex items-center justify-center text-red-600 hover:bg-red-50 hover:text-red-700 border-transparent hover:border-red-200 transition-colors"
+                                title="Delete Category"
+                              >
+                                <TrashIcon className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </div>

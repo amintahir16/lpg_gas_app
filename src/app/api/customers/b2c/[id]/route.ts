@@ -9,7 +9,7 @@ export async function GET(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user || (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -76,7 +76,7 @@ export async function PUT(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user || (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -108,7 +108,7 @@ export async function PUT(
 
     // Check if another customer with same phone already exists
     const existingCustomer = await prisma.b2CCustomer.findFirst({
-      where: { 
+      where: {
         phone,
         id: { not: customerId }
       }
@@ -156,26 +156,21 @@ export async function DELETE(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user || (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { id: customerId } = await params;
 
-    // Check if customer has any transactions or cylinder holdings
-    const [transactions, holdings] = await Promise.all([
-      prisma.b2CTransaction.count({
-        where: { customerId }
-      }),
-      prisma.b2CCylinderHolding.count({
-        where: { customerId, isReturned: false }
-      })
-    ]);
+    // Check if customer has any active cylinder holdings
+    const holdings = await prisma.b2CCylinderHolding.count({
+      where: { customerId, isReturned: false }
+    });
 
-    if (transactions > 0 || holdings > 0) {
+    if (holdings > 0) {
       return NextResponse.json(
-        { error: 'Cannot delete customer with existing transactions or active cylinder holdings' },
+        { error: 'Cannot delete customer with active cylinder holdings' },
         { status: 400 }
       );
     }

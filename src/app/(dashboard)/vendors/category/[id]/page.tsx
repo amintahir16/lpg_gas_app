@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -40,6 +41,7 @@ interface Category {
 export default function CategoryVendorsPage() {
   const params = useParams();
   const router = useRouter();
+  const { data: session } = useSession();
   const categoryId = params?.id as string;
 
   const [category, setCategory] = useState<Category | null>(null);
@@ -387,18 +389,20 @@ export default function CategoryVendorsPage() {
                           Debt
                         </span>
                       )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          confirmDeleteVendor(vendor.id);
-                        }}
-                        className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                      </Button>
+                      {session?.user?.role === 'SUPER_ADMIN' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            confirmDeleteVendor(vendor.id);
+                          }}
+                          className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
 

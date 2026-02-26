@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -95,6 +96,7 @@ interface B2CCustomersResponse {
 
 export default function B2CCustomersPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [customers, setCustomers] = useState<B2CCustomer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -126,6 +128,8 @@ export default function B2CCustomersPage() {
   const [showEditForm, setShowEditForm] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<B2CCustomer | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleteConfirmationName, setDeleteConfirmationName] = useState('');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [marginCategories, setMarginCategories] = useState<any[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
@@ -615,17 +619,19 @@ export default function B2CCustomersPage() {
                           >
                             <PencilIcon className="w-4 h-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeleteConfirm(customer.id);
-                            }}
-                            className="h-8 w-8 p-0 text-red-600 hover:text-red-800 hover:bg-red-50"
-                          >
-                            <TrashIcon className="w-4 h-4" />
-                          </Button>
+                          {session?.user?.role === 'SUPER_ADMIN' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteConfirm(customer.id);
+                              }}
+                              className="h-8 w-8 p-0 text-red-600 hover:text-red-800 hover:bg-red-50"
+                            >
+                              <TrashIcon className="w-4 h-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -776,34 +782,45 @@ export default function B2CCustomersPage() {
 
       {/* Delete Confirmation Modal */}
       {deleteConfirm && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
-          <div className="relative mx-auto p-0 border w-96 shadow-2xl rounded-xl bg-white animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95">
             <div className="p-6 text-center">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <TrashIcon className="w-6 h-6 text-red-600" />
               </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Customer</h3>
-              <p className="text-sm text-gray-500 mb-6">
-                Are you sure you want to delete this customer? This action cannot be undone.
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Customer?</h3>
+              <p className="text-gray-500 text-sm mb-6">
+                To confirm deletion, please type the customer name: <span className="font-bold text-gray-900">{customers.find(c => c.id === deleteConfirm)?.name}</span>.
+                <br /><span className="text-red-500 text-xs mt-2 block">This action cannot be undone and will remove all associated records.</span>
               </p>
-              <div className="flex justify-center space-x-3">
+
+              <Input
+                placeholder="Type customer name..."
+                value={deleteConfirmationName}
+                onChange={(e) => {
+                  setDeleteConfirmationName(e.target.value);
+                  setDeleteError(null);
+                }}
+                className={`mb-4 ${deleteError ? 'border-red-500 focus:ring-red-500' : ''}`}
+              />
+
+              {deleteError && (
+                <div className="mb-4 p-3 rounded-md bg-red-50 border border-red-200 text-left animate-in fade-in-50">
+                  <div className="flex gap-2">
+                    <TrashIcon className="h-5 w-5 text-red-600 shrink-0" />
+                    <p className="text-sm text-red-700 font-medium">{deleteError}</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-center gap-3">
+                <Button variant="outline" onClick={() => { setDeleteConfirm(null); setDeleteConfirmationName(''); setDeleteError(null); }}>Cancel</Button>
                 <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setDeleteConfirm(null)}
-                  className="font-medium"
-                  disabled={isLoading}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
                   variant="destructive"
                   onClick={() => handleDeleteCustomer(deleteConfirm)}
-                  className="font-medium bg-red-600 hover:bg-red-700"
-                  disabled={isLoading}
+                  disabled={isLoading || deleteConfirmationName !== customers.find(c => c.id === deleteConfirm)?.name}
                 >
-                  {isLoading ? 'Deleting...' : 'Delete'}
+                  {isLoading ? 'Deleting...' : 'Delete Customer'}
                 </Button>
               </div>
             </div>
