@@ -122,7 +122,13 @@ export default function B2BCustomersPage() {
   const [cylinderTypes, setCylinderTypes] = useState<string[]>([]);
   const [typeDefinitions, setTypeDefinitions] = useState<Record<string, { name: string; capacity: number }>>({});
 
-  const [summary, setSummary] = useState<B2BSummary | null>(null);
+  const [summary, setSummary] = useState<B2BSummary>({
+    totalCylinders: 0,
+    cylinderBreakdown: {},
+    totalCustomers: 0,
+    totalProfit: 0,
+    totalReceivables: 0
+  });
 
   // Filters State
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
@@ -211,7 +217,13 @@ export default function B2BCustomersPage() {
 
       setCustomers(data.customers || []);
       setPagination(data.pagination || { page: 1, limit: 10, total: 0, pages: 0 });
-      setSummary(data.summary || null);
+      setSummary(data.summary || {
+        totalCylinders: 0,
+        cylinderBreakdown: {},
+        totalCustomers: 0,
+        totalProfit: 0,
+        totalReceivables: 0
+      });
 
       if (data.cylinderTypes) {
         setCylinderTypes(data.cylinderTypes);
@@ -397,53 +409,51 @@ export default function B2BCustomersPage() {
       </div>
 
       {/* Summary Cards */}
-      {summary && (
-        <Card className="border shadow-sm bg-white overflow-hidden">
-          <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x border-gray-100">
-            {/* Total Cylinders */}
-            <div className="p-2 flex flex-col items-center text-center hover:bg-red-50/50 transition-colors">
-              <span className="text-[10px] font-medium text-red-600 uppercase tracking-wider mb-0.5">Total Cylinders With Customers</span>
-              <span className="text-xl font-bold text-gray-900 mb-0.5">{summary.totalCylinders}</span>
-              <div className="flex flex-wrap justify-center gap-1 mt-1 max-h-[60px] overflow-y-auto w-full px-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
-                {Object.entries(summary.cylinderBreakdown).length > 0 ? (
-                  Object.entries(summary.cylinderBreakdown).map(([type, count]) => (
-                    <Badge key={type} variant="secondary" className={`${getCylinderColor(type)} font-normal text-[9px] py-0 px-1.5 h-4 whitespace-nowrap hover:opacity-80`}>
-                      {formatCylinderHeader(type)}: <span className="font-bold ml-1">{count}</span>
-                    </Badge>
-                  ))
-                ) : (
-                  <span className="text-[10px] text-gray-400">No cylinders held</span>
-                )}
-              </div>
-            </div>
-
-            {/* Total Customers */}
-            <div className="p-2 flex flex-col items-center text-center hover:bg-blue-50/50 transition-colors">
-              <span className="text-[10px] font-medium text-blue-600 uppercase tracking-wider mb-0.5">Total Customers</span>
-              <span className="text-xl font-bold text-gray-900 mb-0.5">{summary.totalCustomers}</span>
-              <span className="text-[10px] text-gray-500">
-                {filterStatus === 'ACTIVE' ? 'Active in last 7 days' :
-                  filterStatus === 'INACTIVE' ? 'No recent activity' : 'All Registered'}
-              </span>
-            </div>
-
-            {/* Total Profit */}
-            <div className="p-2 flex flex-col items-center text-center hover:bg-purple-50/50 transition-colors">
-              <span className="text-[10px] font-medium text-purple-600 uppercase tracking-wider mb-0.5">Total Profit</span>
-              <span className="text-xl font-bold text-green-600 mb-0.5">{formatCurrency(summary.totalProfit || 0)}</span>
-              <span className="text-[10px] text-gray-500">Estimated Gross Profit</span>
-            </div>
-
-            {/* Total Receivables */}
-            <div className="p-2 flex flex-col items-center text-center hover:bg-green-50/50 transition-colors">
-              <span className="text-[10px] font-medium text-green-600 uppercase tracking-wider mb-0.5">Total Account Receivables</span>
-              {/* Logic: Receivables (Customer owes) shown as negative red to match Net Balance logic */}
-              <span className="text-xl font-bold text-red-600 mb-0.5">{formatCurrency(-summary.totalReceivables)}</span>
-              <span className="text-[10px] text-gray-500">Outstanding Balance</span>
+      <Card className="border shadow-sm bg-white overflow-hidden">
+        <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x border-gray-100">
+          {/* Total Cylinders */}
+          <div className="p-2 flex flex-col items-center text-center hover:bg-red-50/50 transition-colors">
+            <span className="text-[10px] font-medium text-red-600 uppercase tracking-wider mb-0.5">Total Cylinders With Customers</span>
+            <span className="text-xl font-bold text-gray-900 mb-0.5">{summary.totalCylinders}</span>
+            <div className="flex flex-wrap justify-center gap-1 mt-1 max-h-[60px] overflow-y-auto w-full px-1 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+              {Object.entries(summary.cylinderBreakdown).length > 0 ? (
+                Object.entries(summary.cylinderBreakdown).map(([type, count]) => (
+                  <Badge key={type} variant="secondary" className={`${getCylinderColor(type)} font-normal text-[9px] py-0 px-1.5 h-4 whitespace-nowrap hover:opacity-80`}>
+                    {formatCylinderHeader(type)}: <span className="font-bold ml-1">{count}</span>
+                  </Badge>
+                ))
+              ) : (
+                <span className="text-[10px] text-gray-400">No cylinders held</span>
+              )}
             </div>
           </div>
-        </Card>
-      )}
+
+          {/* Total Customers */}
+          <div className="p-2 flex flex-col items-center text-center hover:bg-blue-50/50 transition-colors">
+            <span className="text-[10px] font-medium text-blue-600 uppercase tracking-wider mb-0.5">Total Customers</span>
+            <span className="text-xl font-bold text-gray-900 mb-0.5">{summary.totalCustomers}</span>
+            <span className="text-[10px] text-gray-500">
+              {filterStatus === 'ACTIVE' ? 'Active in last 7 days' :
+                filterStatus === 'INACTIVE' ? 'No recent activity' : 'All Registered'}
+            </span>
+          </div>
+
+          {/* Total Profit */}
+          <div className="p-2 flex flex-col items-center text-center hover:bg-purple-50/50 transition-colors">
+            <span className="text-[10px] font-medium text-purple-600 uppercase tracking-wider mb-0.5">Total Profit</span>
+            <span className="text-xl font-bold text-green-600 mb-0.5">{formatCurrency(summary.totalProfit || 0)}</span>
+            <span className="text-[10px] text-gray-500">Estimated Gross Profit</span>
+          </div>
+
+          {/* Total Receivables */}
+          <div className="p-2 flex flex-col items-center text-center hover:bg-green-50/50 transition-colors">
+            <span className="text-[10px] font-medium text-green-600 uppercase tracking-wider mb-0.5">Total Account Receivables</span>
+            {/* Logic: Receivables (Customer owes) shown as negative red to match Net Balance logic */}
+            <span className="text-xl font-bold text-red-600 mb-0.5">{formatCurrency(-summary.totalReceivables)}</span>
+            <span className="text-[10px] text-gray-500">Outstanding Balance</span>
+          </div>
+        </div>
+      </Card>
 
       {/* Search and Filters */}
       <Card className="border shadow-sm bg-white">
