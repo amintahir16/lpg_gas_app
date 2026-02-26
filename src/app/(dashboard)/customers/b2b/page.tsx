@@ -349,14 +349,6 @@ export default function B2BCustomersPage() {
     }
   };
 
-  // Only show loading screen on initial load if we have NO data
-  if (loading && customers.length === 0 && !error && !summary) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto pb-10">
