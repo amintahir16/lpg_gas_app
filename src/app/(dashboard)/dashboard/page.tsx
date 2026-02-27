@@ -228,47 +228,47 @@ export default function DashboardPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="border shadow-sm bg-white relative overflow-hidden group hover:shadow-md transition-shadow">
-          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-            <UsersIcon className="w-12 h-12 text-blue-600" />
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-500 to-blue-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
+          <div className="absolute top-0 right-0 p-3 opacity-20 group-hover:opacity-30 transition-opacity">
+            <UsersIcon className="w-12 h-12 text-white" />
           </div>
           <CardContent className="p-4 relative z-10">
-            <p className="text-sm font-medium text-gray-500 mb-1">Total Active Customers</p>
-            <h3 className="text-2xl font-bold text-gray-900">{stats.kpis.totalCustomers.toLocaleString()}</h3>
-            <p className="text-xs text-gray-400 mt-1">Combined B2B & B2C</p>
+            <p className="text-sm font-medium text-blue-100 mb-1">Total Active Customers</p>
+            <h3 className="text-2xl font-bold text-white">{stats.kpis.totalCustomers.toLocaleString()}</h3>
+            <p className="text-xs text-blue-200 mt-1">Combined B2B & B2C</p>
           </CardContent>
         </Card>
 
-        <Card className="border shadow-sm bg-white relative overflow-hidden group hover:shadow-md transition-shadow">
-          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-            <CurrencyDollarIcon className="w-12 h-12 text-green-600" />
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-500 to-emerald-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
+          <div className="absolute top-0 right-0 p-3 opacity-20 group-hover:opacity-30 transition-opacity">
+            <CurrencyDollarIcon className="w-12 h-12 text-white" />
           </div>
           <CardContent className="p-4 relative z-10">
-            <p className="text-sm font-medium text-gray-500 mb-1">Period Revenue</p>
-            <h3 className="text-2xl font-bold text-gray-900">{formatCurrency(stats.kpis.rangeRevenue)}</h3>
-            <p className="text-xs text-gray-400 mt-1">Selected date range</p>
+            <p className="text-sm font-medium text-emerald-100 mb-1">Period Revenue</p>
+            <h3 className="text-2xl font-bold text-white">{formatCurrency(stats.kpis.rangeRevenue)}</h3>
+            <p className="text-xs text-emerald-200 mt-1">Selected date range</p>
           </CardContent>
         </Card>
 
-        <Card className="border shadow-sm bg-white relative overflow-hidden group hover:shadow-md transition-shadow">
-          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-            <ChartBarIcon className="w-12 h-12 text-purple-600" />
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-violet-500 to-violet-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
+          <div className="absolute top-0 right-0 p-3 opacity-20 group-hover:opacity-30 transition-opacity">
+            <ChartBarIcon className="w-12 h-12 text-white" />
           </div>
           <CardContent className="p-4 relative z-10">
-            <p className="text-sm font-medium text-gray-500 mb-1">Est. Period Profit</p>
-            <h3 className="text-2xl font-bold text-gray-900">{formatCurrency(stats.kpis.rangeProfit)}</h3>
-            <p className="text-xs text-gray-400 mt-1">Gross margins applied</p>
+            <p className="text-sm font-medium text-violet-100 mb-1">Est. Period Profit</p>
+            <h3 className="text-2xl font-bold text-white">{formatCurrency(stats.kpis.rangeProfit)}</h3>
+            <p className="text-xs text-violet-200 mt-1">Gross margins applied</p>
           </CardContent>
         </Card>
 
-        <Card className="border shadow-sm bg-white relative overflow-hidden group hover:shadow-md transition-shadow">
-          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-            <CubeIcon className="w-12 h-12 text-orange-600" />
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-500 to-amber-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
+          <div className="absolute top-0 right-0 p-3 opacity-20 group-hover:opacity-30 transition-opacity">
+            <CubeIcon className="w-12 h-12 text-white" />
           </div>
           <CardContent className="p-4 relative z-10">
-            <p className="text-sm font-medium text-gray-500 mb-1">Cylinders With Customers</p>
-            <h3 className="text-2xl font-bold text-gray-900">{stats.kpis.activeCylinders.toLocaleString()}</h3>
-            <p className="text-xs text-gray-400 mt-1">Active in market</p>
+            <p className="text-sm font-medium text-amber-100 mb-1">Cylinders With Customers</p>
+            <h3 className="text-2xl font-bold text-white">{stats.kpis.activeCylinders.toLocaleString()}</h3>
+            <p className="text-xs text-amber-200 mt-1">Active in market</p>
           </CardContent>
         </Card>
       </div>
