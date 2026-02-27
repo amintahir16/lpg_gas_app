@@ -228,6 +228,38 @@ export async function GET(request: NextRequest) {
       }))
     ].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 8);
 
+    // 6. Accessories Inventory (individual items per category)
+    const accessoryColors = ['#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#84cc16', '#14b8a6', '#a855f7', '#f43f5e'];
+    const customItems = await prisma.customItem.findMany({
+      where: { isActive: true, quantity: { gt: 0 } },
+      select: { name: true, type: true, quantity: true }
+    });
+
+    // Helper to adjust hex color brightness
+    const adjustColor = (hex: string, percent: number): string => {
+      const num = parseInt(hex.replace('#', ''), 16);
+      const r = Math.min(255, Math.max(0, (num >> 16) + Math.round(2.55 * percent)));
+      const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00FF) + Math.round(2.55 * percent)));
+      const b = Math.min(255, Math.max(0, (num & 0x0000FF) + Math.round(2.55 * percent)));
+      return `#${(0x1000000 + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+    };
+
+    // Assign a base color per category, then shift shade per item within that category
+    const categorySet = [...new Set(customItems.map(i => i.name))];
+    const categoryColorMap: Record<string, string> = {};
+    categorySet.forEach((cat, i) => { categoryColorMap[cat] = accessoryColors[i % accessoryColors.length]; });
+
+    const categoryItemIndex: Record<string, number> = {};
+    const accessoryInventoryData = customItems.map(item => {
+      categoryItemIndex[item.name] = (categoryItemIndex[item.name] || 0);
+      const shade = adjustColor(categoryColorMap[item.name], categoryItemIndex[item.name] * -12);
+      categoryItemIndex[item.name]++;
+      return {
+        name: `${item.name} - ${item.type}`,
+        value: item.quantity,
+        fill: shade
+      };
+    });
 
     const stats = {
       kpis: {
@@ -238,6 +270,7 @@ export async function GET(request: NextRequest) {
       },
       revenueChartData,
       cylinderStatusData,
+      accessoryInventoryData,
       recentActivities: activities
     };
 
