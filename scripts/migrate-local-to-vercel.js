@@ -3,14 +3,12 @@ const { Client } = require('pg');
 // ==========================================================
 // CONFIGURATION
 // ==========================================================
-const sourceUrl = 'postgresql://postgres:GXVmszfYSGHHeJfAawREEEJEannRGhmO@caboose.proxy.rlwy.net:22256/railway';
+const sourceUrl = 'postgresql://postgres:9535@localhost:5432/lpg_gas_app';
 const targetUrl = 'postgres://5ad26fbc8db728818d5e855560652e39e0c5f6f4a86e76a5b7c2a5b8a9e1aabe:sk_9tzrAXrhsMBhEA5w0vXAU@db.prisma.io:5432/postgres?sslmode=require'; 
 
 async function migrateData() {
-  const sourceClient = new Client({ 
-    connectionString: sourceUrl,
-    ssl: sourceUrl.includes('sslmode=require') || sourceUrl.includes('railway') ? { rejectUnauthorized: false } : false
-  });
+  // Source is local, target is Vercel
+  const sourceClient = new Client({ connectionString: sourceUrl });
   const targetClient = new Client({ 
     connectionString: targetUrl,
     ssl: { rejectUnauthorized: false }
@@ -19,8 +17,9 @@ async function migrateData() {
   try {
     console.log('🔗 Connecting to databases...');
     await sourceClient.connect();
+    console.log('✅ Connected to Source (Local).');
     await targetClient.connect();
-    console.log('✅ Connected to both Source (Railway) and Target (Vercel).');
+    console.log('✅ Connected to Target (Vercel).');
 
     // 1. Get all user tables in public schema
     const tablesRes = await sourceClient.query(`
@@ -35,7 +34,7 @@ async function migrateData() {
     console.log(`📊 Found ${tables.length} tables to migrate: ${tables.join(', ')}`);
 
     // Disable triggers (to avoid foreign key constraints during migration)
-    console.log('🔓 Temporarily disabling foreign key constraints...');
+    console.log('🔓 Temporarily disabling foreign key constraints on target...');
     await targetClient.query('SET session_replication_role = "replica";');
 
     for (const table of tables) {
@@ -84,11 +83,10 @@ async function migrateData() {
     console.log('🔒 Re-enabling foreign key constraints...');
     await targetClient.query('SET session_replication_role = "origin";');
     
-    console.log('\n✨ ALL DATA MIGRATED SUCCESSFULLY FROM RAILWAY TO VERCEL! ✨');
+    console.log('\n✨ ALL DATA MIGRATED SUCCESSFULLY FROM LOCAL TO VERCEL! ✨');
     
   } catch (err) {
     console.error('\n❌ MIGRATION FAILED:', err);
-    // Ensure triggers are back to origin even on failure
     try { 
       console.log('Attempting to restore foreign key constraints...');
       await targetClient.query('SET session_replication_role = "origin";'); 
@@ -100,4 +98,3 @@ async function migrateData() {
 }
 
 migrateData();
-

@@ -518,23 +518,43 @@ async function generatePDF(
 
     // Prepare table data
     const historyData: any[] = [];
+    let hasAnyBuyback = false;
+    
+    // Check if any cylinder has buyback weight or credit
+    cylinderStats.forEach(stats => {
+      if (stats.buybackWeight > 0 || stats.buybackCredit > 0) {
+        hasAnyBuyback = true;
+      }
+    });
+
     cylinderStats.forEach((stats, type) => {
       if (stats.delivered > 0 || stats.returned > 0 || stats.buyback > 0 || stats.held !== 0) {
         const typeName = getCylinderTypeDisplay(type, cylinderTypeMap);
-        historyData.push([
+        const row = [
           typeName,
           stats.delivered.toString(),
-          stats.returned.toString(),
-          stats.buybackWeight > 0 ? `${stats.buybackWeight.toFixed(1)}kg` : '-',
-          stats.buybackCredit > 0 ? formatCurrencyRsRounded(stats.buybackCredit) : '-',
-          stats.held.toString()
-        ]);
+          stats.returned.toString()
+        ];
+        
+        if (hasAnyBuyback) {
+          row.push(stats.buybackWeight > 0 ? `${stats.buybackWeight.toFixed(1)}kg` : '-');
+          row.push(stats.buybackCredit > 0 ? formatCurrencyRsRounded(stats.buybackCredit) : '-');
+        }
+        
+        row.push(stats.held.toString());
+        historyData.push(row);
       }
     });
 
     if (historyData.length > 0) {
+      const historyHeader = ['Type', 'Delivered', 'Returned'];
+      if (hasAnyBuyback) {
+        historyHeader.push('Bought Back Gas', 'Total Credit');
+      }
+      historyHeader.push('Holding Qty');
+
       autoTable(doc, {
-        head: [['Type', 'Delivered', 'Returned', 'Bought Back Gas', 'Total Credit', 'Holding Qty']],
+        head: [historyHeader],
         body: historyData,
         startY: yPosition,
         tableWidth: pageWidth - 30,
@@ -555,13 +575,18 @@ async function generatePDF(
         alternateRowStyles: {
           fillColor: [248, 249, 250]
         },
-        columnStyles: {
+        columnStyles: hasAnyBuyback ? {
           0: { halign: 'left', cellWidth: 40 },
           1: { cellWidth: 20 },
           2: { cellWidth: 20 },
           3: { cellWidth: 35 },
           4: { cellWidth: 35 },
           5: { fontStyle: 'bold', cellWidth: 30 } // Emphasize Holding Qty
+        } : {
+          0: { halign: 'left', cellWidth: 110 },
+          1: { cellWidth: 20 },
+          2: { cellWidth: 20 },
+          3: { fontStyle: 'bold', cellWidth: 30 }
         },
         margin: { left: 15, right: 15, bottom: 35 }
       });
