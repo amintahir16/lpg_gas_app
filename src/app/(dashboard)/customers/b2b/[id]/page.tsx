@@ -205,6 +205,8 @@ export default function B2BCustomerDetailPage() {
     cylinderType: string;
     displayName: string;
     count: number;
+    buybackWeight?: number;
+    buybackCredit?: number;
   }>>([]);
   const [loadingCylinderDues, setLoadingCylinderDues] = useState(false);
 
@@ -320,7 +322,11 @@ export default function B2BCustomerDetailPage() {
 
       try {
         setLoadingCylinderDues(true);
-        const response = await fetch(`/api/customers/b2b/${customerId}/cylinder-dues`);
+        const params = new URLSearchParams();
+        if (dateFilter.startDate) params.append('startDate', dateFilter.startDate);
+        if (dateFilter.endDate) params.append('endDate', dateFilter.endDate);
+        
+        const response = await fetch(`/api/customers/b2b/${customerId}/cylinder-dues?${params.toString()}`);
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.cylinderDues) {
@@ -337,7 +343,7 @@ export default function B2BCustomerDetailPage() {
     if (customer) {
       fetchCylinderDues();
     }
-  }, [customerId, customer]);
+  }, [customerId, customer, dateFilter.startDate, dateFilter.endDate]);
 
 
   // Update gas items with current cylinder dues when customer data loads
@@ -1276,9 +1282,11 @@ export default function B2BCustomerDetailPage() {
 
       // Refresh customer data
       await fetchCustomerLedger();
-
       // Refresh cylinder dues after transaction
-      const duesResponse = await fetch(`/api/customers/b2b/${customerId}/cylinder-dues`);
+      const duesParams = new URLSearchParams();
+      if (dateFilter.startDate) duesParams.append('startDate', dateFilter.startDate);
+      if (dateFilter.endDate) duesParams.append('endDate', dateFilter.endDate);
+      const duesResponse = await fetch(`/api/customers/b2b/${customerId}/cylinder-dues?${duesParams.toString()}`);
       if (duesResponse.ok) {
         const duesData = await duesResponse.json();
         if (duesData.success && duesData.cylinderDues) {
@@ -1388,45 +1396,103 @@ export default function B2BCustomerDetailPage() {
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="space-y-3 p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
-              <div>
-                <p className="text-xs font-medium text-gray-500">Contact Person</p>
-                <p className="text-base font-semibold text-gray-900">{customer.contactPerson}</p>
+          <CardContent className="space-y-4 p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 border-b border-gray-100 pb-3">
+              <div className="space-y-0.5">
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Contact Person</p>
+                <p className="text-sm font-bold text-gray-900">{customer.contactPerson}</p>
               </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500">Phone</p>
-                <p className="text-base font-semibold text-gray-900">{customer.phone}</p>
+              <div className="space-y-0.5">
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Phone Number</p>
+                <p className="text-sm font-bold text-gray-900">{customer.phone}</p>
               </div>
-              <div className="md:col-span-2">
-                <p className="text-xs font-medium text-gray-500">Email</p>
-                <p className="text-base font-semibold text-gray-900">{customer.email || '-'}</p>
+              <div className="space-y-0.5">
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Payment Terms</p>
+                <p className="text-sm font-bold text-gray-900">{customer.paymentTermsDays} Days</p>
               </div>
-
-              <div>
-                <p className="text-xs font-medium text-gray-500">Payment Terms</p>
-                <p className="text-base font-semibold text-gray-900">{customer.paymentTermsDays} days</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500">Margin Category</p>
-                <p className="text-base font-semibold text-gray-900">
+              <div className="space-y-0.5">
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Margin Strategy</p>
+                <p className="text-sm font-bold text-gray-900">
                   {customer.marginCategory ?
                     `${customer.marginCategory.name} (Rs ${customer.marginCategory.marginPerKg}/kg)` :
-                    'Not assigned'
+                    'Standard Pricing'
                   }
                 </p>
               </div>
-              <div className="md:col-span-2">
-                <p className="text-xs font-medium text-gray-500">Address</p>
-                <p className="text-base font-semibold text-gray-900">{customer.address || '-'}</p>
+              <div className="md:col-span-2 space-y-0.5">
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Email Address</p>
+                <p className="text-sm font-bold text-gray-900">{customer.email || 'N/A'}</p>
+              </div>
+              <div className="md:col-span-2 space-y-0.5">
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Operational Address</p>
+                <p className="text-sm font-bold text-gray-900 font-medium group-hover:text-blue-600 transition-colors">
+                  {customer.address || 'No address provided'}
+                </p>
               </div>
               {customer.notes && (
-                <div className="md:col-span-2">
-                  <p className="text-xs font-medium text-gray-500">Notes</p>
-                  <p className="text-base font-semibold text-gray-900">{customer.notes}</p>
+                <div className="md:col-span-2 space-y-0.5 pt-1">
+                  <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest">Administrative Notes</p>
+                  <p className="text-xs font-medium text-gray-600 italic bg-gray-50 p-1.5 rounded-md border-l-2 border-indigo-200">
+                    {customer.notes}
+                  </p>
                 </div>
               )}
             </div>
+
+            {/* Robust Buyback Analytics Section */}
+            {(() => {
+              const buybackData = cylinderDues.filter(d => (d.buybackWeight || 0) > 0 || (d.buybackCredit || 0) > 0);
+              if (buybackData.length === 0) return null;
+
+              return (
+                <div className="pt-1 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-[11px] font-extrabold text-indigo-700 uppercase tracking-[0.2em] flex items-center gap-2">
+                       <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                       Buyback Analytics Summary
+                    </h4>
+                    {(dateFilter.startDate || dateFilter.endDate) && (
+                      <span className="text-[9px] font-medium bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full border border-indigo-100">
+                        Period Data
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Ultra-Compact Metric Cards */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-gradient-to-br from-white to-indigo-50/20 border border-indigo-100 rounded-lg p-2 shadow-sm hover:shadow-md transition-all relative overflow-hidden group flex flex-col items-center justify-center min-h-[65px]">
+                      <div className="absolute top-0 right-0 p-1.5 opacity-5 group-hover:scale-110 transition-transform">
+                        <ArrowPathIcon className="w-6 h-6 text-indigo-600" />
+                      </div>
+                      <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-0.5 text-center px-1">Total Gas Bought Back</p>
+                      <div className="flex items-baseline gap-1 justify-center">
+                        <span className="text-lg font-black text-indigo-700 tracking-tight">
+                          {buybackData.reduce((sum, d) => sum + (d.buybackWeight || 0), 0).toFixed(2)}
+                        </span>
+                        <span className="text-[9px] font-extrabold text-indigo-400 uppercase tracking-tighter">kg</span>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-gradient-to-br from-white to-emerald-50/20 border border-emerald-100 rounded-lg p-2 shadow-sm hover:shadow-md transition-all relative overflow-hidden group flex flex-col items-center justify-center min-h-[65px]">
+                      <div className="absolute top-0 right-0 p-1.5 opacity-5 group-hover:scale-110 transition-transform">
+                        <span className="text-lg font-black text-emerald-600">Rs</span>
+                      </div>
+                      <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-0.5 text-center px-1">Buyback Credits</p>
+                      <div className="flex items-baseline gap-1 justify-center">
+                        <span className="text-lg font-black text-emerald-600 tracking-tight">
+                          {Math.round(buybackData.reduce((sum, d) => sum + (d.buybackCredit || 0), 0)).toLocaleString('en-PK')}
+                        </span>
+                        <span className="text-[9px] font-extrabold text-emerald-400 uppercase tracking-tighter">Rs</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <p className="mt-3 text-[10px] text-gray-400 italic text-right font-medium">
+                    * Cumulative gas buyback activity summary for this client.
+                  </p>
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
 

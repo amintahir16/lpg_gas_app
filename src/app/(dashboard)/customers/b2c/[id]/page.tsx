@@ -372,39 +372,39 @@ export default function B2CCustomerDetailPage() {
           </CardHeader>
           <CardContent className="space-y-3 p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
-              <div>
-                <p className="text-xs font-medium text-gray-500">Phone</p>
-                <p className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                  <PhoneIcon className="w-4 h-4 text-gray-400" /> {customer.phone}
+              <div className="space-y-0.5">
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Phone Number</p>
+                <p className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
+                  <PhoneIcon className="w-3.5 h-3.5 text-gray-400" /> {customer.phone}
                 </p>
               </div>
               {customer.email && (
-                <div>
-                  <p className="text-xs font-medium text-gray-500">Email</p>
-                  <p className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                    <EnvelopeIcon className="w-4 h-4 text-gray-400" /> {customer.email}
+                <div className="space-y-0.5">
+                  <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Email Address</p>
+                  <p className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
+                    <EnvelopeIcon className="w-3.5 h-3.5 text-gray-400" /> {customer.email}
                   </p>
                 </div>
               )}
-              <div className="md:col-span-2">
-                <p className="text-xs font-medium text-gray-500">Address</p>
-                <div className="flex items-start gap-2">
-                  <MapPinIcon className="w-4 h-4 text-gray-400 mt-0.5" />
+              <div className="md:col-span-2 space-y-0.5">
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Operational Address</p>
+                <div className="flex items-start gap-1.5">
+                  <MapPinIcon className="w-3.5 h-3.5 text-gray-400 mt-0.5" />
                   <div>
-                    <p className="text-base font-semibold text-gray-900">{formatAddress(customer)}</p>
-                    <p className="text-sm text-gray-600">{customer.city}</p>
+                    <p className="text-sm font-bold text-gray-900">{formatAddress(customer)}</p>
+                    <p className="text-[11px] font-medium text-gray-500">{customer.city}</p>
                   </div>
                 </div>
               </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500">Status</p>
-                <Badge variant={customer.isActive ? 'success' : 'destructive'} className="mt-1 h-5 text-xs">
+              <div className="space-y-1">
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Status</p>
+                <Badge variant={customer.isActive ? 'success' : 'destructive'} className="h-4.5 px-1.5 text-[10px] font-bold uppercase tracking-wider">
                   {customer.isActive ? 'Active' : 'Inactive'}
                 </Badge>
               </div>
-              <div>
-                <p className="text-xs font-medium text-gray-500">Margin Category</p>
-                <p className="text-base font-semibold text-gray-900">
+              <div className="space-y-0.5">
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Margin Strategy</p>
+                <p className="text-sm font-bold text-gray-900">
                   {customer.marginCategory ? `${customer.marginCategory.name} (Rs ${customer.marginCategory.marginPerKg}/kg)` : 'Standard'}
                 </p>
               </div>

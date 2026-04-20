@@ -14,8 +14,10 @@ export async function GET(
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
     const { id: customerId } = await params;
+    const { searchParams } = new URL(request.url);
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
 
     // Get customer to find their name for location matching
     const customer = await prisma.customer.findUnique({
@@ -31,7 +33,6 @@ export async function GET(
     }
 
     // Get cylinders with this customer grouped by cylinderType, typeName, and capacity
-    // This matches the same grouping logic as the inventory stats API
     const cylinderDues = await prisma.cylinder.groupBy({
       by: ['cylinderType', 'typeName', 'capacity'],
       where: {
@@ -45,6 +46,63 @@ export async function GET(
       }
     });
 
+    // Build transaction filter
+    const transactionWhere: any = { customerId };
+    if (startDate || endDate) {
+      transactionWhere.date = {};
+      if (startDate) {
+        transactionWhere.date.gte = new Date(startDate);
+      }
+      if (endDate) {
+        const endDateObj = new Date(endDate);
+        endDateObj.setHours(23, 59, 59, 999);
+        transactionWhere.date.lte = endDateObj;
+      }
+    }
+
+    // Fetch transactions with items to calculate cumulative stats
+    const transactions = await prisma.b2BTransaction.findMany({
+      where: transactionWhere,
+      include: {
+        items: true,
+      },
+    });
+
+    // Helper to categorize items (replicated from report API for robustness)
+    const categorizeItems = (items: any[]) => {
+      const buybackItems: any[] = [];
+      items.forEach(item => {
+        // A buyback item is definitively identified by buybackRate being set
+        const hasBuybackRateSet = item.buybackRate !== null && item.buybackRate !== undefined;
+        if (hasBuybackRateSet) {
+          buybackItems.push(item);
+        }
+      });
+      return { buybackItems };
+    };
+
+    // Calculate cumulative stats per cylinder type
+    const cumulativeStats = new Map<string, { buybackWeight: number, buybackCredit: number }>();
+
+    transactions.forEach(transaction => {
+      const { buybackItems } = categorizeItems(transaction.items || []);
+      buybackItems.forEach((item: any) => {
+        if (item.cylinderType) {
+          const stats = cumulativeStats.get(item.cylinderType) || { buybackWeight: 0, buybackCredit: 0 };
+          const qty = item.quantity ? Number(item.quantity) : 0;
+          
+          if (item.remainingKg) {
+            stats.buybackWeight += Number(item.remainingKg) * qty;
+          }
+          if (item.totalPrice) {
+            stats.buybackCredit += Number(item.totalPrice);
+          }
+          
+          cumulativeStats.set(item.cylinderType, stats);
+        }
+      });
+    });
+
     // Process cylinder dues with proper display names (same logic as inventory stats)
     const uniqueCombinations = [...new Set(
       cylinderDues.map(stat => {
@@ -55,7 +113,17 @@ export async function GET(
       })
     )];
 
-    const processedDues = uniqueCombinations.map(combination => {
+    // Ensure we include cylinder types that had buybacks but might not be currently "WITH_CUSTOMER"
+    cumulativeStats.forEach((_, cylinderType) => {
+      const exists = cylinderDues.some(d => d.cylinderType === cylinderType);
+      if (!exists) {
+        uniqueCombinations.push(`${cylinderType}|||null|||null`);
+      }
+    });
+
+    const finalUniqueCombinations = [...new Set(uniqueCombinations)];
+
+    const processedDues = finalUniqueCombinations.map(combination => {
       const [type, capacityStr, normalizedTypeNameLower] = combination.split('|||');
       const capacity = capacityStr !== 'null' ? parseFloat(capacityStr) : null;
       const normalizedTypeNameLowercase = normalizedTypeNameLower !== 'null' ? normalizedTypeNameLower : null;
@@ -75,45 +143,46 @@ export async function GET(
 
       const totalCount = duesForCombination.reduce((sum, stat) => sum + stat._count.id, 0);
 
-      // Use same display logic as inventory stats API
+      // Get cumulative stats for this type
+      const stats = cumulativeStats.get(type) || { buybackWeight: 0, buybackCredit: 0 };
+
+      // Display logic
       let displayType: string;
       const normalizedTypeName = normalizeTypeName(normalizedTypeNameLowercase);
       const trimmedTypeName = normalizedTypeName ? String(normalizedTypeName).trim() : '';
       
       if (trimmedTypeName && trimmedTypeName !== '' && trimmedTypeName !== 'Cylinder') {
-        // Use normalized typeName with actual capacity from database
         displayType = `${trimmedTypeName} (${capacity !== null ? capacity : 'N/A'}kg)`;
       } else if (capacity !== null) {
-        // No typeName but have capacity - use generic format with actual capacity
         displayType = `Cylinder (${capacity}kg)`;
       } else {
-        // Fallback to utility function (extracts capacity from enum)
         displayType = getCylinderTypeDisplayName(type);
       }
 
       return {
         cylinderType: type,
         displayName: displayType,
-        count: totalCount
+        count: totalCount,
+        buybackWeight: stats.buybackWeight,
+        buybackCredit: stats.buybackCredit
       };
     });
 
-    // Deduplicate by display name and merge counts
-    const uniqueDuesMap = new Map<string, typeof processedDues[0]>();
+    // Deduplicate by display name and merge counts/stats
+    const uniqueDuesMap = new Map<string, any>();
     processedDues.forEach(due => {
       const key = due.displayName;
       if (!uniqueDuesMap.has(key)) {
         uniqueDuesMap.set(key, due);
       } else {
-        // Merge counts if duplicate exists
         const existing = uniqueDuesMap.get(key)!;
         existing.count += due.count;
+        existing.buybackWeight += due.buybackWeight;
+        existing.buybackCredit += due.buybackCredit;
       }
     });
 
     const dues = Array.from(uniqueDuesMap.values());
-
-    // Sort by display name for consistent ordering
     dues.sort((a, b) => a.displayName.localeCompare(b.displayName));
 
     return NextResponse.json({
