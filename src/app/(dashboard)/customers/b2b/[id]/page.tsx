@@ -1699,7 +1699,8 @@ export default function B2BCustomerDetailPage() {
                   <div className="p-4 border-t border-green-200">
 
 
-                    <table className="w-full table-fixed">
+                    <div className="overflow-x-auto -mx-4 px-4">
+                    <table className="w-full min-w-[600px]">
                       <thead>
                         <tr className="border-b border-gray-200 text-xs text-gray-500 uppercase tracking-wider">
                           <th className="text-left py-2 px-2 font-medium w-[35%]">Cylinder Type</th>
@@ -1778,6 +1779,7 @@ export default function B2BCustomerDetailPage() {
                         })}
                       </tbody>
                     </table>
+                    </div>
                     <Button
                       type="button"
                       onClick={addGasItemRow}
@@ -1824,7 +1826,8 @@ export default function B2BCustomerDetailPage() {
                       <strong>Empty Return:</strong> No credit • <strong>Buyback:</strong> Customer gets credit for remaining gas
                     </div>
 
-                    <table className="w-full">
+                    <div className="overflow-x-auto -mx-4 px-4">
+                    <table className="w-full min-w-[700px]">
                       <thead>
                         <tr className="border-b border-gray-200 text-xs text-gray-500 uppercase tracking-wider">
                           <th className="text-left py-2 px-2 font-medium">Cylinder Type</th>
@@ -1936,6 +1939,7 @@ export default function B2BCustomerDetailPage() {
                         ))}
                       </tbody>
                     </table>
+                    </div>
                     <Button
                       type="button"
                       onClick={addReturnItemRow}

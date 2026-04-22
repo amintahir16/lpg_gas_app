@@ -404,7 +404,7 @@ export function ProfessionalAccessorySelector({
       </div>
 
       <div className="rounded-md border">
-        <Table>
+        <Table className="min-w-[700px]">
           <TableHeader>
             <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
               <TableHead className="w-[20%]">Category</TableHead>

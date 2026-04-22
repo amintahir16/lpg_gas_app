@@ -731,7 +731,7 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                             {gasExpanded && (
                                 <div className="p-4 border-t border-green-200">
 
-                                    <Table>
+                                    <Table className="min-w-[600px]">
                                         <TableHeader>
                                             <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
                                                 <TableHead className="py-2 h-8 w-[40%]">Type</TableHead>
@@ -858,7 +858,7 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
 
                             {securityExpanded && (
                                 <div className="p-4 border-t border-orange-200">
-                                    <Table>
+                                    <Table className="min-w-[650px]">
                                         <TableHeader>
                                             <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
                                                 <TableHead className="py-2 h-8 w-[20%]">Action</TableHead>
