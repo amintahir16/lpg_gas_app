@@ -11,6 +11,8 @@ import {
   differenceInDays
 } from 'date-fns';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -138,6 +140,35 @@ export async function GET(request: NextRequest) {
         }
       });
     });
+
+    // 3.5. Expenses and Vendor Balance (within date range)
+    const [expensesSum, purchasesSum, paymentsSum] = await Promise.all([
+      prisma.officeExpense.aggregate({
+        where: {
+          expenseDate: { gte: startDate, lte: endDate }
+        },
+        _sum: { amount: true }
+      }),
+      prisma.purchaseEntry.aggregate({
+        where: {
+          purchaseDate: { gte: startDate, lte: endDate },
+          status: { not: 'CANCELLED' } // Purchases in period
+        },
+        _sum: { totalPrice: true }
+      }),
+      prisma.vendorPayment.aggregate({
+        where: {
+          paymentDate: { gte: startDate, lte: endDate },
+          status: 'COMPLETED' // Payments in period
+        },
+        _sum: { amount: true }
+      })
+    ]);
+
+    const rangeExpenses = Number(expensesSum._sum.amount || 0);
+    const rangePurchases = Number(purchasesSum._sum.totalPrice || 0);
+    const rangePayments = Number(paymentsSum._sum.amount || 0);
+    const vendorBalance = rangePurchases - rangePayments;
 
     // 4. Chart Data (Last 6 Months or Daily)
     const chartStartDate = isDaily ? startDate : startOfMonth(subMonths(endDate, 5));
@@ -267,6 +298,8 @@ export async function GET(request: NextRequest) {
         activeCylinders,
         rangeRevenue,
         rangeProfit,
+        rangeExpenses,
+        vendorBalance,
       },
       revenueChartData,
       cylinderStatusData,

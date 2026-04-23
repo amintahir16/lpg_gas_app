@@ -16,7 +16,9 @@ import {
   ArrowDownIcon,
   ClockIcon,
   CheckCircleIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  BuildingOfficeIcon,
+  BuildingStorefrontIcon
 } from '@heroicons/react/24/outline';
 import {
   BarChart,
@@ -49,6 +51,8 @@ interface DashboardStats {
     activeCylinders: number;
     rangeRevenue: number;
     rangeProfit: number;
+    rangeExpenses: number;
+    vendorBalance: number;
   };
   revenueChartData: any[];
   cylinderStatusData: any[];
@@ -92,6 +96,7 @@ export default function DashboardPage() {
       const params = new URLSearchParams();
       if (startDateStr) params.append('startDate', startDateStr);
       if (endDateStr) params.append('endDate', endDateStr);
+      params.append('_t', Date.now().toString()); // Cache buster
 
       const response = await fetch(`/api/dashboard/stats?${params.toString()}`);
 
@@ -227,48 +232,70 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-500 to-blue-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
-          <div className="absolute top-0 right-0 p-3 opacity-20 group-hover:opacity-30 transition-opacity">
-            <UsersIcon className="w-12 h-12 text-white" />
+          <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">
+            <UsersIcon className="w-10 h-10 text-white" />
           </div>
-          <CardContent className="p-4 relative z-10">
-            <p className="text-sm font-medium text-blue-100 mb-1">Total Active Customers</p>
-            <h3 className="text-2xl font-bold text-white">{stats.kpis.totalCustomers.toLocaleString()}</h3>
-            <p className="text-xs text-blue-200 mt-1">Combined B2B & B2C</p>
+          <CardContent className="p-3 relative z-10">
+            <p className="text-xs font-medium text-blue-100 mb-1 truncate">Active Customers</p>
+            <h3 className="text-xl font-bold text-white truncate">{stats.kpis.totalCustomers.toLocaleString()}</h3>
+            <p className="text-[10px] text-blue-200 mt-1 truncate">B2B & B2C</p>
           </CardContent>
         </Card>
 
         <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-500 to-emerald-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
-          <div className="absolute top-0 right-0 p-3 opacity-20 group-hover:opacity-30 transition-opacity">
-            <CurrencyDollarIcon className="w-12 h-12 text-white" />
+          <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">
+            <CurrencyDollarIcon className="w-10 h-10 text-white" />
           </div>
-          <CardContent className="p-4 relative z-10">
-            <p className="text-sm font-medium text-emerald-100 mb-1">Period Revenue</p>
-            <h3 className="text-2xl font-bold text-white">{formatCurrency(stats.kpis.rangeRevenue)}</h3>
-            <p className="text-xs text-emerald-200 mt-1">Selected date range</p>
+          <CardContent className="p-3 relative z-10">
+            <p className="text-xs font-medium text-emerald-100 mb-1 truncate">Period Revenue</p>
+            <h3 className="text-xl font-bold text-white truncate">{formatCurrency(stats.kpis.rangeRevenue)}</h3>
+            <p className="text-[10px] text-emerald-200 mt-1 truncate">Selected dates</p>
           </CardContent>
         </Card>
 
         <Card className="border-0 shadow-sm bg-gradient-to-br from-violet-500 to-violet-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
-          <div className="absolute top-0 right-0 p-3 opacity-20 group-hover:opacity-30 transition-opacity">
-            <ChartBarIcon className="w-12 h-12 text-white" />
+          <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">
+            <ChartBarIcon className="w-10 h-10 text-white" />
           </div>
-          <CardContent className="p-4 relative z-10">
-            <p className="text-sm font-medium text-violet-100 mb-1">Est. Period Profit</p>
-            <h3 className="text-2xl font-bold text-white">{formatCurrency(stats.kpis.rangeProfit)}</h3>
-            <p className="text-xs text-violet-200 mt-1">Gross margins applied</p>
+          <CardContent className="p-3 relative z-10">
+            <p className="text-xs font-medium text-violet-100 mb-1 truncate">Est. Profit</p>
+            <h3 className="text-xl font-bold text-white truncate">{formatCurrency(stats.kpis.rangeProfit)}</h3>
+            <p className="text-[10px] text-violet-200 mt-1 truncate">Gross margins</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-rose-500 to-orange-500 relative overflow-hidden group hover:shadow-lg transition-shadow">
+          <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">
+            <BuildingOfficeIcon className="w-10 h-10 text-white" />
+          </div>
+          <CardContent className="p-3 relative z-10">
+            <p className="text-xs font-medium text-rose-100 mb-1 truncate">Period Expenses</p>
+            <h3 className="text-xl font-bold text-white truncate">{formatCurrency(stats.kpis.rangeExpenses)}</h3>
+            <p className="text-[10px] text-rose-200 mt-1 truncate">Office & daily</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-cyan-500 to-cyan-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
+          <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">
+            <BuildingStorefrontIcon className="w-10 h-10 text-white" />
+          </div>
+          <CardContent className="p-3 relative z-10">
+            <p className="text-xs font-medium text-cyan-100 mb-1 truncate">Vendor Balance</p>
+            <h3 className="text-xl font-bold text-white truncate">{formatCurrency(stats.kpis.vendorBalance)}</h3>
+            <p className="text-[10px] text-cyan-200 mt-1 truncate">Owed in period</p>
           </CardContent>
         </Card>
 
         <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-500 to-amber-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
-          <div className="absolute top-0 right-0 p-3 opacity-20 group-hover:opacity-30 transition-opacity">
-            <CubeIcon className="w-12 h-12 text-white" />
+          <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">
+            <CubeIcon className="w-10 h-10 text-white" />
           </div>
-          <CardContent className="p-4 relative z-10">
-            <p className="text-sm font-medium text-amber-100 mb-1">Cylinders With Customers</p>
-            <h3 className="text-2xl font-bold text-white">{stats.kpis.activeCylinders.toLocaleString()}</h3>
-            <p className="text-xs text-amber-200 mt-1">Active in market</p>
+          <CardContent className="p-3 relative z-10">
+            <p className="text-xs font-medium text-amber-100 mb-1 truncate">Cylinders Out</p>
+            <h3 className="text-xl font-bold text-white truncate">{stats.kpis.activeCylinders.toLocaleString()}</h3>
+            <p className="text-[10px] text-amber-200 mt-1 truncate">With customers</p>
           </CardContent>
         </Card>
       </div>
