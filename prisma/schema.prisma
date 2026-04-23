@@ -30,6 +30,7 @@ model User {
   invoices         Invoice[]         @relation("UserInvoices")
   notifications    Notification[]    @relation("UserNotifications")
   purchaseEntries  PurchaseEntry[]   @relation("UserPurchaseEntries")
+  salaryRecords    SalaryRecord[]    @relation("SalaryRecords")
 
   @@map("users")
 }
@@ -890,4 +891,34 @@ model ActivityLog {
   user       User     @relation(fields: [userId], references: [id])
 
   @@map("activity_logs")
+}
+model OfficeExpense {
+  id          String   @id @default(cuid())
+  type        String   // "RENT" or "DAILY"
+  amount      Decimal  @db.Decimal(10, 2)
+  description String
+  expenseDate DateTime
+  month       Int?     // 1-12 (for RENT type, to enforce one rent per month)
+  year        Int?     // e.g. 2026 (for RENT type)
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@unique([type, month, year])
+  @@map("office_expenses")
+}
+model SalaryRecord {
+  id            String   @id @default(cuid())
+  userId        String
+  amount        Decimal  @db.Decimal(10, 2)
+  month         Int      // 1-12
+  year          Int      // e.g. 2026
+  paidDate      DateTime
+  paymentMethod String   @default("CASH")
+  notes         String?
+  createdBy     String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation("SalaryRecords", fields: [userId], references: [id])
+  @@unique([userId, month, year])
+  @@map("salary_records")
 }
