@@ -173,7 +173,7 @@ export async function GET(request: NextRequest) {
     // 4. Chart Data (Last 6 Months or Daily)
     const chartStartDate = isDaily ? startDate : startOfMonth(subMonths(endDate, 5));
 
-    const [b2cTransChart, b2bTransChart] = await Promise.all([
+    const [b2cTransChart, b2bTransChart, expensesChart] = await Promise.all([
       prisma.b2CTransaction.findMany({
         where: { date: { gte: chartStartDate, lte: endDate }, voided: false },
         select: {
@@ -185,10 +185,15 @@ export async function GET(request: NextRequest) {
       prisma.b2BTransaction.findMany({
         where: { date: { gte: chartStartDate, lte: endDate }, voided: false, transactionType: 'SALE' },
         select: { date: true, totalAmount: true }
+      }),
+      prisma.officeExpense.findMany({
+        where: { expenseDate: { gte: chartStartDate, lte: endDate } },
+        select: { expenseDate: true, amount: true }
       })
     ]);
 
     let revenueChartData: any[] = [];
+    let expensesChartData: any[] = [];
 
     if (isDaily) {
       const days = eachDayOfInterval({ start: chartStartDate, end: endDate });
@@ -206,6 +211,14 @@ export async function GET(request: NextRequest) {
         const b2bV = b2bTransChart.filter(t => format(new Date(t.date), 'MMM dd') === dateStr).reduce((s, t) => s + Number(t.totalAmount || 0), 0);
         return { name: dateStr, b2b: b2bV, b2c: b2cV };
       });
+      
+      expensesChartData = days.map(day => {
+        const dateStr = format(day, 'MMM dd');
+        const expensesV = expensesChart
+          .filter(e => format(new Date(e.expenseDate), 'MMM dd') === dateStr)
+          .reduce((s, e) => s + Number(e.amount || 0), 0);
+        return { name: dateStr, expenses: expensesV };
+      });
     } else {
       const months = eachMonthOfInterval({ start: chartStartDate, end: endDate });
       revenueChartData = months.map(m => {
@@ -221,6 +234,14 @@ export async function GET(request: NextRequest) {
           }, 0);
         const b2bV = b2bTransChart.filter(t => format(new Date(t.date), 'MMM yyyy') === monthStr).reduce((s, t) => s + Number(t.totalAmount || 0), 0);
         return { name: monthStr, b2b: b2bV, b2c: b2cV };
+      });
+
+      expensesChartData = months.map(m => {
+        const monthStr = format(m, 'MMM yyyy');
+        const expensesV = expensesChart
+          .filter(e => format(new Date(e.expenseDate), 'MMM yyyy') === monthStr)
+          .reduce((s, e) => s + Number(e.amount || 0), 0);
+        return { name: monthStr, expenses: expensesV };
       });
     }
 
@@ -302,6 +323,7 @@ export async function GET(request: NextRequest) {
         vendorBalance,
       },
       revenueChartData,
+      expensesChartData,
       cylinderStatusData,
       accessoryInventoryData,
       recentActivities: activities

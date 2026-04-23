@@ -23,6 +23,8 @@ import {
 import {
   BarChart,
   Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -55,6 +57,7 @@ interface DashboardStats {
     vendorBalance: number;
   };
   revenueChartData: any[];
+  expensesChartData: any[];
   cylinderStatusData: any[];
   accessoryInventoryData: any[];
   recentActivities: RecentActivity[];
@@ -300,43 +303,91 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Revenue Trend - Full Width */}
-      <Card className="border shadow-sm bg-white">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base font-bold text-gray-900">Revenue Trend (B2B vs B2C)</CardTitle>
-          <CardDescription className="text-xs">Visualizing revenue across sales channels over time.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="h-[260px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.revenueChartData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                <XAxis
-                  dataKey="name"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: '#6B7280', fontSize: 11 }}
-                  dy={10}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: '#6B7280', fontSize: 11 }}
-                  tickFormatter={(value) => `Rs${(value / 1000)}k`}
-                />
-                <Tooltip
-                  cursor={{ fill: 'transparent' }}
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  formatter={(value: number) => formatCurrency(value)}
-                />
-                <Legend iconType="circle" wrapperStyle={{ paddingTop: '8px', fontSize: '12px' }} />
-                <Bar dataKey="b2b" name="B2B Industries" stackId="a" fill="#3b82f6" radius={[0, 0, 4, 4]} />
-                <Bar dataKey="b2c" name="B2C Homes" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Charts Row - 2 Columns */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Revenue Trend */}
+        <Card className="border shadow-sm bg-white">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-bold text-gray-900">Revenue Trend (B2B vs B2C)</CardTitle>
+            <CardDescription className="text-xs">Visualizing revenue across sales channels over time.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[260px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={stats.revenueChartData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                  <XAxis
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#6B7280', fontSize: 11 }}
+                    dy={10}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#6B7280', fontSize: 11 }}
+                    tickFormatter={(value) => `Rs${(value / 1000)}k`}
+                  />
+                  <Tooltip
+                    cursor={{ fill: 'transparent' }}
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    formatter={(value: number) => formatCurrency(value)}
+                  />
+                  <Legend iconType="circle" wrapperStyle={{ paddingTop: '8px', fontSize: '12px' }} />
+                  <Bar dataKey="b2b" name="B2B Industries" stackId="a" fill="#3b82f6" radius={[0, 0, 4, 4]} />
+                  <Bar dataKey="b2c" name="B2C Homes" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Expenses Trend */}
+        <Card className="border shadow-sm bg-white">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-bold text-gray-900">Expenses Trend</CardTitle>
+            <CardDescription className="text-xs">Tracking office and daily operational expenses over time.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[260px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={stats.expensesChartData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                  <XAxis
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#6B7280', fontSize: 11 }}
+                    dy={10}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#6B7280', fontSize: 11 }}
+                    tickFormatter={(value) => `Rs${(value / 1000)}k`}
+                  />
+                  <Tooltip
+                    cursor={{ stroke: '#f97316', strokeWidth: 1, strokeDasharray: '3 3' }}
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    formatter={(value: number) => formatCurrency(value)}
+                  />
+                  <Legend iconType="circle" wrapperStyle={{ paddingTop: '8px', fontSize: '12px' }} />
+                  <Line 
+                    type="monotone" 
+                    dataKey="expenses" 
+                    name="Period Expenses" 
+                    stroke="#f97316" 
+                    strokeWidth={3}
+                    dot={{ fill: '#f97316', strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6, fill: '#f97316', stroke: '#fff', strokeWidth: 2 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Cylinder Inventory Status */}
