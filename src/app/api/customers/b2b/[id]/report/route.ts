@@ -733,7 +733,7 @@ export async function GET(
     }
 
     // Build date filter
-    const transactionWhere: any = { customerId };
+    const transactionWhere: any = { customerId, voided: false };
     if (startDate || endDate) {
       transactionWhere.date = {};
       if (startDate) {
@@ -748,7 +748,7 @@ export async function GET(
 
     // Get ALL transactions first to calculate running balance correctly
     const allTransactions = await prisma.b2BTransaction.findMany({
-      where: { customerId },
+      where: { customerId, voided: false },
       include: {
         items: true,
       },
