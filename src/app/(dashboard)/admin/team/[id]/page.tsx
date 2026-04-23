@@ -12,12 +12,14 @@ import {
     ClockIcon,
     PencilIcon,
     TrashIcon,
-    ArrowLeftIcon
+    ArrowLeftIcon,
+    BanknotesIcon
 } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
     Dialog,
     DialogContent,
@@ -34,6 +36,17 @@ interface ActivityLog {
     action: string;
     details: string;
     createdAt: string;
+}
+
+interface SalaryRecord {
+    id: string;
+    amount: number;
+    month: number;
+    year: number;
+    monthLabel: string;
+    paidDate: string;
+    paymentMethod: string;
+    notes: string | null;
 }
 
 interface TeamMember {
@@ -57,6 +70,7 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
     const router = useRouter();
     const [member, setMember] = useState<TeamMember | null>(null);
     const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+    const [salaryRecords, setSalaryRecords] = useState<SalaryRecord[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -77,9 +91,10 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
     const fetchMemberDetails = async () => {
         setIsLoading(true);
         try {
-            const [memberRes, logsRes] = await Promise.all([
+            const [memberRes, logsRes, salaryRes] = await Promise.all([
                 fetch(`/api/admin/team/${id}`),
-                fetch(`/api/admin/team/${id}/activity`)
+                fetch(`/api/admin/team/${id}/activity`),
+                fetch(`/api/admin/team/${id}/salaries`)
             ]);
 
             if (memberRes.ok) {
@@ -104,6 +119,11 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
             if (logsRes.ok) {
                 const logs = await logsRes.json();
                 setActivityLogs(logs);
+            }
+
+            if (salaryRes.ok) {
+                const salaries = await salaryRes.json();
+                setSalaryRecords(salaries);
             }
         } catch (error) {
             console.error('Failed to fetch member details', error);
@@ -445,6 +465,53 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
                     </CardContent>
                 </Card >
             </div >
+
+            {/* Salary Payment History */}
+            {salaryRecords.length > 0 && (
+                <Card className="shadow-sm border-t-4 border-t-emerald-500">
+                    <CardHeader>
+                        <CardTitle className="text-lg flex items-center">
+                            <BanknotesIcon className="w-5 h-5 mr-2 text-emerald-600" />
+                            Salary Payment History
+                        </CardTitle>
+                        <CardDescription>
+                            All salary payments recorded for {member.name}
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="overflow-x-auto">
+                            <Table className="min-w-[550px]">
+                                <TableHeader>
+                                    <TableRow className="bg-gray-50/50">
+                                        <TableHead className="font-semibold">Month</TableHead>
+                                        <TableHead className="font-semibold text-right">Amount</TableHead>
+                                        <TableHead className="font-semibold">Payment Method</TableHead>
+                                        <TableHead className="font-semibold">Paid Date</TableHead>
+                                        <TableHead className="font-semibold">Notes</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {salaryRecords.map((record) => (
+                                        <TableRow key={record.id}>
+                                            <TableCell className="font-medium">{record.monthLabel}</TableCell>
+                                            <TableCell className="text-right font-bold text-emerald-700">
+                                                {new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(record.amount)}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant="outline">{record.paymentMethod}</Badge>
+                                            </TableCell>
+                                            <TableCell className="text-gray-600" suppressHydrationWarning>
+                                                {new Date(record.paidDate).toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' })}
+                                            </TableCell>
+                                            <TableCell className="text-gray-500 text-sm">{record.notes || '—'}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
         </div >
     );
 }
