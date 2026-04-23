@@ -403,17 +403,17 @@ export function ProfessionalAccessorySelector({
         </div>
       </div>
 
-      <div className="rounded-md border">
-        <Table className="min-w-[700px]">
+      <div className="rounded-md border overflow-x-auto">
+        <Table className="min-w-[800px]">
           <TableHeader>
             <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
-              <TableHead className="w-[20%]">Category</TableHead>
-              <TableHead className="w-[20%]">Item Type</TableHead>
-              <TableHead className="w-[10%]">Quantity</TableHead>
-              <TableHead className="w-[15%]">Cost Price</TableHead>
-              <TableHead className="w-[15%]">Selling Price</TableHead>
-              <TableHead className="w-[15%]">Total</TableHead>
-              <TableHead className="w-[5%]"></TableHead>
+              <TableHead className="w-[22%] min-w-[140px]">Category</TableHead>
+              <TableHead className="w-[22%] min-w-[140px]">Item Type</TableHead>
+              <TableHead className="w-[12%] min-w-[90px]">Quantity</TableHead>
+              <TableHead className="w-[13%] min-w-[100px]">Cost Price</TableHead>
+              <TableHead className="w-[13%] min-w-[100px]">Selling Price</TableHead>
+              <TableHead className="w-[13%] min-w-[100px]">Total</TableHead>
+              <TableHead className="w-[5%] min-w-[40px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

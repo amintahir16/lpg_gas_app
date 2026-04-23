@@ -1627,7 +1627,7 @@ export default function VendorDetailPage() {
                         </div>
 
                         <div className="overflow-x-auto">
-                          <table className="w-full border-collapse border border-gray-300" style={{ tableLayout: 'fixed' }}>
+                          <table className="w-full min-w-[900px] border-collapse border border-gray-300" style={{ tableLayout: 'fixed' }}>
                             <colgroup>
                               <col style={{ width: '23%' }} />
                               <col style={{ width: '23%' }} />
@@ -1764,7 +1764,7 @@ export default function VendorDetailPage() {
                         </div>
 
                         <div className="overflow-x-auto">
-                          <table className="w-full border-collapse border border-gray-300" style={{ tableLayout: 'fixed' }}>
+                          <table className="w-full min-w-[900px] border-collapse border border-gray-300" style={{ tableLayout: 'fixed' }}>
                             <colgroup>
                               <col style={{ width: '30%' }} />
                               <col style={{ width: '15%' }} />
@@ -1941,7 +1941,7 @@ export default function VendorDetailPage() {
                         </div>
 
                         <div className="overflow-x-auto">
-                          <table className="w-full border-collapse border border-gray-300" style={{ tableLayout: 'fixed' }}>
+                          <table className="w-full min-w-[900px] border-collapse border border-gray-300" style={{ tableLayout: 'fixed' }}>
                             <colgroup>
                               <col style={{ width: '30%' }} />
                               <col style={{ width: '15%' }} />
@@ -2091,7 +2091,7 @@ export default function VendorDetailPage() {
                         </div>
 
                         <div className="overflow-x-auto">
-                          <table className="w-full border-collapse border border-gray-300" style={{ tableLayout: 'fixed' }}>
+                          <table className="w-full min-w-[900px] border-collapse border border-gray-300" style={{ tableLayout: 'fixed' }}>
                             <colgroup>
                               <col style={{ width: '30%' }} />
                               <col style={{ width: '15%' }} />
@@ -2222,7 +2222,7 @@ export default function VendorDetailPage() {
                         </div>
 
                         <div className="overflow-x-auto">
-                          <table className="w-full border-collapse border border-gray-300" style={{ tableLayout: 'fixed' }}>
+                          <table className="w-full min-w-[900px] border-collapse border border-gray-300" style={{ tableLayout: 'fixed' }}>
                             <colgroup>
                               <col style={{ width: '30%' }} />
                               <col style={{ width: '15%' }} />
