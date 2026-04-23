@@ -60,26 +60,7 @@ export async function checkAccessoryInventory(itemName: string, itemType: string
     let available = 0;
 
     switch (itemType) {
-      case 'stove':
-        const stove = await prisma.stove.findFirst({
-          where: { quality: quality || 'Standard' }
-        });
-        available = stove ? Number(stove.quantity) : 0;
-        break;
 
-      case 'regulator':
-        const regulator = await prisma.regulator.findFirst({
-          where: { type: itemName }
-        });
-        available = regulator ? Number(regulator.quantity) : 0;
-        break;
-
-      case 'gasPipe':
-        const gasPipe = await prisma.gasPipe.findFirst({
-          where: { type: itemName }
-        });
-        available = gasPipe ? Number(gasPipe.quantity) : 0;
-        break;
 
       case 'valve':
         // Valves are stored in CustomItem with name='Valves' (category) and type=itemName

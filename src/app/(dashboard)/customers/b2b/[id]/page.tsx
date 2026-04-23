@@ -786,7 +786,7 @@ export default function B2BCustomerDetailPage() {
     }
   };
 
-  // Handle inventory validation changes from CategoryAccessorySelector
+  // Handle inventory validation changes
   const handleInventoryValidationChange = (hasErrors: boolean, firstInvalidItem?: { category: string, index: number }) => {
     setHasInventoryErrors(hasErrors);
     setFirstInvalidInventoryItem(firstInvalidItem || null);
