@@ -117,7 +117,7 @@ export async function GET(request: NextRequest) {
             const chartMonth = subMonths(new Date(year, month - 1, 15), i);
             const chartStart = new Date(chartMonth.getFullYear(), chartMonth.getMonth(), 1);
             const chartEnd = new Date(chartMonth.getFullYear(), chartMonth.getMonth() + 1, 0, 23, 59, 59, 999);
-            const [b2cGas, b2cAcc, b2bTx] = await Promise.all([
+            const [b2cGas, b2cAcc, b2bCylinders, b2bAccessories] = await Promise.all([
                 prisma.b2CTransactionGasItem.aggregate({
                     where: { transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false } },
                     _sum: { totalPrice: true },
@@ -126,15 +126,27 @@ export async function GET(request: NextRequest) {
                     where: { transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false } },
                     _sum: { totalPrice: true },
                 }),
+                // B2B cylinder items (have cylinderType set)
                 prisma.b2BTransactionItem.aggregate({
-                    where: { transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false, transactionType: 'SALE' } },
+                    where: {
+                        transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false, transactionType: 'SALE' },
+                        cylinderType: { not: null },
+                    },
+                    _sum: { totalPrice: true },
+                }),
+                // B2B accessory items (no cylinderType)
+                prisma.b2BTransactionItem.aggregate({
+                    where: {
+                        transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false, transactionType: 'SALE' },
+                        cylinderType: null,
+                    },
                     _sum: { totalPrice: true },
                 }),
             ]);
             chartData.push({
                 name: format(chartStart, 'MMM yyyy'),
-                cylinders: Number(b2cGas._sum.totalPrice || 0) + Number(b2bTx._sum.totalPrice || 0),
-                accessories: Number(b2cAcc._sum.totalPrice || 0),
+                cylinders: Number(b2cGas._sum.totalPrice || 0) + Number(b2bCylinders._sum.totalPrice || 0),
+                accessories: Number(b2cAcc._sum.totalPrice || 0) + Number(b2bAccessories._sum.totalPrice || 0),
             });
         }
         return NextResponse.json({

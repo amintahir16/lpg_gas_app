@@ -141,19 +141,53 @@ export async function GET(request: NextRequest) {
             const chartMonth = subMonths(new Date(year, month - 1, 15), i);
             const chartStart = new Date(chartMonth.getFullYear(), chartMonth.getMonth(), 1);
             const chartEnd = new Date(chartMonth.getFullYear(), chartMonth.getMonth() + 1, 0, 23, 59, 59, 999);
-            // B2C profit
-            const b2cProfit = await prisma.b2CTransaction.aggregate({
-                where: { date: { gte: chartStart, lte: chartEnd }, voided: false },
-                _sum: { actualProfit: true },
+            // B2C profit from gas items
+            const b2cGasProfit = await prisma.b2CTransactionGasItem.aggregate({
+                where: { transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false } },
+                _sum: { profitMargin: true },
             });
-            // B2B revenue for simple approximation
-            const b2bRevenue = await prisma.b2BTransactionItem.aggregate({
+            // B2C profit from accessory items
+            const b2cAccProfit = await prisma.b2CTransactionAccessoryItem.aggregate({
+                where: { transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false } },
+                _sum: { profitMargin: true },
+            });
+            // B2B items — compute actual profit per item
+            const b2bChartItems = await prisma.b2BTransactionItem.findMany({
                 where: { transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false, transactionType: 'SALE' } },
-                _sum: { totalPrice: true },
+                select: {
+                    cylinderType: true,
+                    quantity: true,
+                    pricePerItem: true,
+                    totalPrice: true,
+                    costPrice: true,
+                    transaction: { select: { customerId: true } },
+                },
+            });
+            let b2bProfit = 0;
+            b2bChartItems.forEach((item) => {
+                const qty = Number(item.quantity);
+                const revenue = Number(item.totalPrice);
+                const costPrice = Number(item.costPrice || 0);
+                if (item.cylinderType) {
+                    const marginCategoryId = custMarginMap.get(item.transaction.customerId);
+                    const marginPerKg = marginCategoryId ? (marginMap.get(marginCategoryId) || 0) : 0;
+                    let capacity = 15;
+                    const match = item.cylinderType.match(/(\d+)(?:_(\d+))?/);
+                    if (match) {
+                        capacity = match[2] ? parseFloat(`${match[1]}.${match[2]}`) : parseFloat(match[1]);
+                    }
+                    b2bProfit += qty * capacity * marginPerKg;
+                } else {
+                    if (costPrice > 0) {
+                        b2bProfit += (Number(item.pricePerItem) - costPrice) * qty;
+                    } else {
+                        b2bProfit += revenue * 0.2;
+                    }
+                }
             });
             chartData.push({
                 name: format(chartStart, 'MMM yyyy'),
-                profit: Number(b2cProfit._sum.actualProfit || 0) + Number(b2bRevenue._sum.totalPrice || 0) * 0.15,
+                profit: Number(b2cGasProfit._sum.profitMargin || 0) + Number(b2cAccProfit._sum.profitMargin || 0) + b2bProfit,
             });
         }
         return NextResponse.json({
