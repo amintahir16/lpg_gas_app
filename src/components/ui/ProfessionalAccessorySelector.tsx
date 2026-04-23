@@ -466,8 +466,12 @@ export function ProfessionalAccessorySelector({
                         type="number"
                         min="0"
                         max={item.availableStock}
-                        value={item.quantity}
-                        onChange={(e) => updateAccessoryItem(item.id, 'quantity', parseInt(e.target.value) || 0)}
+                        value={item.quantity === 0 ? '' : item.quantity}
+                        placeholder="0"
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          updateAccessoryItem(item.id, 'quantity', val === '' ? 0 : parseInt(val, 10));
+                        }}
                         className={`h-9 text-sm ${item.quantity > item.availableStock
                           ? 'border-red-500 bg-red-50 text-red-700'
                           : 'border-gray-300'
