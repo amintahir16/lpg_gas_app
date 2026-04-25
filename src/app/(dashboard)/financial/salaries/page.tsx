@@ -10,6 +10,7 @@ import {
     ArrowLeftIcon, UserGroupIcon, CalendarIcon, CheckCircleIcon,
     XCircleIcon, BanknotesIcon, TrashIcon
 } from '@heroicons/react/24/outline';
+import { CustomSelect } from '@/components/ui/select-custom';
 interface Employee {
     id: string;
     name: string;
@@ -130,14 +131,23 @@ export default function SalariesPage() {
                         <p className="text-sm text-gray-600">Record and manage employee salary payments</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
-                    <CalendarIcon className="w-4 h-4 text-gray-500" />
-                    <select value={month} onChange={(e) => setMonth(parseInt(e.target.value))} className="text-sm font-medium text-gray-800 bg-transparent border-none outline-none cursor-pointer">
-                        {monthNames.map((name, i) => (<option key={i} value={i + 1}>{name}</option>))}
-                    </select>
-                    <select value={year} onChange={(e) => setYear(parseInt(e.target.value))} className="text-sm font-medium text-gray-800 bg-transparent border-none outline-none cursor-pointer">
-                        {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => (<option key={y} value={y}>{y}</option>))}
-                    </select>
+                <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-2 py-1 shadow-sm h-10">
+                    <CalendarIcon className="w-4 h-4 text-gray-400 ml-1" />
+                    <CustomSelect 
+                        value={month.toString()} 
+                        onChange={(val) => setMonth(parseInt(val))}
+                        options={monthNames.map((name, i) => ({ value: (i + 1).toString(), label: name }))}
+                        className="w-[120px]"
+                        buttonClassName="border-none focus:ring-0 shadow-none h-8"
+                    />
+                    <div className="w-[1px] h-4 bg-gray-200" />
+                    <CustomSelect 
+                        value={year.toString()} 
+                        onChange={(val) => setYear(parseInt(val))}
+                        options={Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => ({ value: y.toString(), label: y.toString() }))}
+                        className="w-[90px]"
+                        buttonClassName="border-none focus:ring-0 shadow-none h-8"
+                    />
                 </div>
             </div>
             {/* Error Display */}
@@ -306,12 +316,20 @@ export default function SalariesPage() {
             </Card>
             {/* Pay Salary Modal */}
             {showPayModal && selectedEmployee && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl">
-                        <h2 className="text-xl font-bold text-gray-900 mb-1">Pay Salary</h2>
-                        <p className="text-sm text-gray-600 mb-4">
-                            Recording salary for <span className="font-semibold text-gray-900">{selectedEmployee.name}</span> — {monthNames[month - 1]} {year}
-                        </p>
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl p-5 w-full max-w-md shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-between mb-3">
+                            <div>
+                                <h2 className="text-lg font-bold text-gray-900">Pay Salary</h2>
+                                <p className="text-[10px] text-gray-500 font-medium">
+                                    Employee: <span className="text-blue-600 font-bold">{selectedEmployee.name}</span> — {monthNames[month - 1]} {year}
+                                </p>
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => { setShowPayModal(false); setSelectedEmployee(null); setError(null); }} className="h-8 w-8 p-0 rounded-full">
+                                <span className="text-xl">×</span>
+                            </Button>
+                        </div>
+
                         <form onSubmit={(e) => {
                             e.preventDefault();
                             const fd = new FormData(e.target as HTMLFormElement);
@@ -321,26 +339,33 @@ export default function SalariesPage() {
                                 paymentMethod: fd.get('paymentMethod'),
                                 notes: fd.get('notes') || null,
                             });
-                        }} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1">Salary Amount (PKR)</label>
-                                <Input name="amount" type="number" placeholder="0" step="1" required />
+                        }} className="space-y-3">
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Salary Amount (PKR)</label>
+                                <Input name="amount" type="number" placeholder="Enter amount" step="1" required className="h-9 font-bold text-emerald-700" />
                             </div>
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1">Payment Method</label>
-                                <select name="paymentMethod" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" defaultValue="CASH">
-                                    <option value="CASH">Cash</option>
-                                    <option value="BANK_TRANSFER">Bank Transfer</option>
-                                    <option value="CHECK">Check</option>
-                                </select>
+                            
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Payment Method</label>
+                                <CustomSelect 
+                                    name="paymentMethod" 
+                                    defaultValue="CASH"
+                                    options={[
+                                        { value: 'CASH', label: 'Cash' },
+                                        { value: 'BANK_TRANSFER', label: 'Bank Transfer' },
+                                        { value: 'CHECK', label: 'Check' },
+                                    ]}
+                                />
                             </div>
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1">Notes (Optional)</label>
-                                <Input name="notes" type="text" placeholder="Any notes about this payment" />
+                            
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Notes (Optional)</label>
+                                <Input name="notes" type="text" placeholder="Any notes about this payment" className="h-9" />
                             </div>
+
                             <div className="flex justify-end gap-2 pt-2">
-                                <Button type="button" variant="outline" onClick={() => { setShowPayModal(false); setSelectedEmployee(null); setError(null); }}>Cancel</Button>
-                                <Button type="submit" disabled={submitting} className="bg-blue-600 hover:bg-blue-700 text-white">
+                                <Button type="button" variant="ghost" onClick={() => { setShowPayModal(false); setSelectedEmployee(null); setError(null); }} className="h-9 text-xs font-semibold">Cancel</Button>
+                                <Button type="submit" disabled={submitting} className="bg-blue-600 hover:bg-blue-700 text-white h-9 px-6 text-xs font-bold shadow-md shadow-blue-200">
                                     {submitting ? 'Processing...' : 'Record Payment'}
                                 </Button>
                             </div>

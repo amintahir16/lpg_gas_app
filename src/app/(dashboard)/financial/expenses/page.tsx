@@ -11,6 +11,7 @@ import {
     PencilIcon, TrashIcon, CheckCircleIcon, XCircleIcon
 } from '@heroicons/react/24/outline';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { CustomSelect } from '@/components/ui/select-custom';
 interface OfficeExpense {
     id: string;
     type: string;
@@ -316,9 +317,18 @@ export default function ExpensesPage() {
             )}
             {/* Record Rent Modal */}
             {showRentModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl">
-                        <h2 className="text-xl font-bold text-gray-900 mb-4">Record Office Rent</h2>
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl p-5 w-full max-w-md shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <h2 className="text-lg font-bold text-gray-900">Record Office Rent</h2>
+                                <p className="text-[10px] text-gray-500 font-medium">Add monthly operational rent payment</p>
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => { setShowRentModal(false); setError(null); }} className="h-8 w-8 p-0 rounded-full">
+                                <span className="text-xl">×</span>
+                            </Button>
+                        </div>
+                        
                         <form onSubmit={(e) => {
                             e.preventDefault();
                             const fd = new FormData(e.target as HTMLFormElement);
@@ -332,32 +342,41 @@ export default function ExpensesPage() {
                                 month: rentMonth,
                                 year: rentYear,
                             });
-                        }} className="space-y-4">
+                        }} className="space-y-3">
                             <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-1">Month</label>
-                                    <select name="month" defaultValue={now.getMonth() + 1} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" required>
-                                        {monthNames.map((name, i) => (<option key={i} value={i + 1}>{name}</option>))}
-                                    </select>
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Month</label>
+                                    <CustomSelect 
+                                        name="month" 
+                                        defaultValue={(now.getMonth() + 1).toString()}
+                                        options={monthNames.map((name, i) => ({ value: (i + 1).toString(), label: name }))}
+                                        required
+                                    />
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-1">Year</label>
-                                    <select name="year" defaultValue={now.getFullYear()} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" required>
-                                        {Array.from({ length: 5 }, (_, i) => now.getFullYear() - 2 + i).map(y => (<option key={y} value={y}>{y}</option>))}
-                                    </select>
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Year</label>
+                                    <CustomSelect 
+                                        name="year" 
+                                        defaultValue={now.getFullYear().toString()}
+                                        options={Array.from({ length: 5 }, (_, i) => now.getFullYear() - 2 + i).map(y => ({ value: y.toString(), label: y.toString() }))}
+                                        required
+                                    />
                                 </div>
                             </div>
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1">Amount (PKR)</label>
-                                <Input name="amount" type="number" placeholder="0" step="1" required />
+                            
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Amount (PKR)</label>
+                                <Input name="amount" type="number" placeholder="Enter rent amount" step="1" required className="h-9 font-bold text-amber-700" />
                             </div>
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1">Description</label>
-                                <Input name="description" type="text" placeholder="Office Rent" defaultValue="Office Rent" />
+                            
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Description</label>
+                                <Input name="description" type="text" placeholder="Office Rent" defaultValue="Office Rent" className="h-9" />
                             </div>
+
                             <div className="flex justify-end gap-2 pt-2">
-                                <Button type="button" variant="outline" onClick={() => { setShowRentModal(false); setError(null); }}>Cancel</Button>
-                                <Button type="submit" disabled={submitting} className="bg-amber-600 hover:bg-amber-700 text-white">
+                                <Button type="button" variant="ghost" onClick={() => { setShowRentModal(false); setError(null); }} className="h-9 text-xs font-semibold">Cancel</Button>
+                                <Button type="submit" disabled={submitting} className="bg-amber-600 hover:bg-amber-700 text-white h-9 px-6 text-xs font-bold shadow-md shadow-amber-200">
                                     {submitting ? 'Saving...' : 'Record Rent'}
                                 </Button>
                             </div>
@@ -367,9 +386,18 @@ export default function ExpensesPage() {
             )}
             {/* Add Daily Expense Modal */}
             {showDailyModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl">
-                        <h2 className="text-xl font-bold text-gray-900 mb-4">Add Daily Expense</h2>
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl p-5 w-full max-w-md shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <h2 className="text-lg font-bold text-gray-900">Add Daily Expense</h2>
+                                <p className="text-[10px] text-gray-500 font-medium">Record day-to-day operational cost</p>
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => { setShowDailyModal(false); setError(null); }} className="h-8 w-8 p-0 rounded-full">
+                                <span className="text-xl">×</span>
+                            </Button>
+                        </div>
+
                         <form onSubmit={(e) => {
                             e.preventDefault();
                             const fd = new FormData(e.target as HTMLFormElement);
@@ -379,22 +407,25 @@ export default function ExpensesPage() {
                                 description: fd.get('description'),
                                 expenseDate: fd.get('date'),
                             });
-                        }} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1">Date</label>
-                                <Input name="date" type="date" defaultValue={new Date().toISOString().split('T')[0]} required />
+                        }} className="space-y-3">
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Expense Date</label>
+                                <Input name="date" type="date" defaultValue={new Date().toISOString().split('T')[0]} required className="h-9" />
                             </div>
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1">Amount (PKR)</label>
-                                <Input name="amount" type="number" placeholder="0" step="1" required />
+                            
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Amount (PKR)</label>
+                                <Input name="amount" type="number" placeholder="Enter amount" step="1" required className="h-9 font-bold text-blue-700" />
                             </div>
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1">Description</label>
-                                <Input name="description" type="text" placeholder="Describe the expense" required />
+                            
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Description / Purpose</label>
+                                <Input name="description" type="text" placeholder="e.g., Tea, Stationery, etc." required className="h-9" />
                             </div>
+
                             <div className="flex justify-end gap-2 pt-2">
-                                <Button type="button" variant="outline" onClick={() => { setShowDailyModal(false); setError(null); }}>Cancel</Button>
-                                <Button type="submit" disabled={submitting} className="bg-blue-600 hover:bg-blue-700 text-white">
+                                <Button type="button" variant="ghost" onClick={() => { setShowDailyModal(false); setError(null); }} className="h-9 text-xs font-semibold">Cancel</Button>
+                                <Button type="submit" disabled={submitting} className="bg-blue-600 hover:bg-blue-700 text-white h-9 px-6 text-xs font-bold shadow-md shadow-blue-200">
                                     {submitting ? 'Saving...' : 'Add Expense'}
                                 </Button>
                             </div>
@@ -404,9 +435,18 @@ export default function ExpensesPage() {
             )}
             {/* Edit Expense Modal */}
             {showEditModal && editingExpense && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl">
-                        <h2 className="text-xl font-bold text-gray-900 mb-4">Edit Expense</h2>
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl p-5 w-full max-w-md shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <h2 className="text-lg font-bold text-gray-900">Edit Expense</h2>
+                                <p className="text-[10px] text-gray-500 font-medium">Update previously recorded expense</p>
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => { setShowEditModal(false); setEditingExpense(null); setError(null); }} className="h-8 w-8 p-0 rounded-full">
+                                <span className="text-xl">×</span>
+                            </Button>
+                        </div>
+
                         <form onSubmit={(e) => {
                             e.preventDefault();
                             const fd = new FormData(e.target as HTMLFormElement);
@@ -415,23 +455,26 @@ export default function ExpensesPage() {
                                 description: fd.get('description'),
                                 expenseDate: fd.get('date'),
                             });
-                        }} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1">Date</label>
-                                <Input name="date" type="date" defaultValue={new Date(editingExpense.expenseDate).toISOString().split('T')[0]} required />
+                        }} className="space-y-3">
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Date</label>
+                                <Input name="date" type="date" defaultValue={new Date(editingExpense.expenseDate).toISOString().split('T')[0]} required className="h-9" />
                             </div>
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1">Amount (PKR)</label>
-                                <Input name="amount" type="number" defaultValue={Number(editingExpense.amount)} step="1" required />
+                            
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Amount (PKR)</label>
+                                <Input name="amount" type="number" defaultValue={Number(editingExpense.amount)} step="1" required className="h-9 font-bold text-indigo-700" />
                             </div>
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-1">Description</label>
-                                <Input name="description" type="text" defaultValue={editingExpense.description} required />
+                            
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Description</label>
+                                <Input name="description" type="text" defaultValue={editingExpense.description} required className="h-9" />
                             </div>
+
                             <div className="flex justify-end gap-2 pt-2">
-                                <Button type="button" variant="outline" onClick={() => { setShowEditModal(false); setEditingExpense(null); setError(null); }}>Cancel</Button>
-                                <Button type="submit" disabled={submitting} className="bg-blue-600 hover:bg-blue-700 text-white">
-                                    {submitting ? 'Saving...' : 'Update'}
+                                <Button type="button" variant="ghost" onClick={() => { setShowEditModal(false); setEditingExpense(null); setError(null); }} className="h-9 text-xs font-semibold">Cancel</Button>
+                                <Button type="submit" disabled={submitting} className="bg-indigo-600 hover:bg-indigo-700 text-white h-9 px-6 text-xs font-bold shadow-md shadow-indigo-200">
+                                    {submitting ? 'Saving...' : 'Update Expense'}
                                 </Button>
                             </div>
                         </form>

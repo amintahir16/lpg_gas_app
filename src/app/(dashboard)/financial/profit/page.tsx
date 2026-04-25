@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowLeftIcon, ChartBarIcon, CalendarIcon } from '@heroicons/react/24/outline';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { CustomSelect } from '@/components/ui/select-custom';
 interface ProfitItem {
     name: string;
     type: string;
@@ -67,14 +68,23 @@ export default function ProfitPage() {
                         <p className="text-sm text-gray-600">Revenue, cost, and profit per product</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
-                    <CalendarIcon className="w-4 h-4 text-gray-500" />
-                    <select value={month} onChange={(e) => setMonth(parseInt(e.target.value))} className="text-sm font-medium text-gray-800 bg-transparent border-none outline-none cursor-pointer">
-                        {monthNames.map((name, i) => (<option key={i} value={i + 1}>{name}</option>))}
-                    </select>
-                    <select value={year} onChange={(e) => setYear(parseInt(e.target.value))} className="text-sm font-medium text-gray-800 bg-transparent border-none outline-none cursor-pointer">
-                        {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => (<option key={y} value={y}>{y}</option>))}
-                    </select>
+                <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-2 py-1 shadow-sm h-10">
+                    <CalendarIcon className="w-4 h-4 text-gray-400 ml-1" />
+                    <CustomSelect 
+                        value={month.toString()} 
+                        onChange={(val) => setMonth(parseInt(val))}
+                        options={monthNames.map((name, i) => ({ value: (i + 1).toString(), label: name }))}
+                        className="w-[120px]"
+                        buttonClassName="border-none focus:ring-0 shadow-none h-8"
+                    />
+                    <div className="w-[1px] h-4 bg-gray-200" />
+                    <CustomSelect 
+                        value={year.toString()} 
+                        onChange={(val) => setYear(parseInt(val))}
+                        options={Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => ({ value: y.toString(), label: y.toString() }))}
+                        className="w-[90px]"
+                        buttonClassName="border-none focus:ring-0 shadow-none h-8"
+                    />
                 </div>
             </div>
             {/* Summary Cards */}

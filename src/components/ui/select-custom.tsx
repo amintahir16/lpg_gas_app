@@ -17,12 +17,13 @@ interface CustomSelectProps {
     options: SelectOption[];
     placeholder?: string;
     className?: string;
+    buttonClassName?: string;
     name?: string;
     disabled?: boolean;
     required?: boolean;
 }
 
-export function CustomSelect({ value, defaultValue, onChange, options, placeholder = "Select...", className, name, disabled, required }: CustomSelectProps) {
+export function CustomSelect({ value, defaultValue, onChange, options, placeholder = "Select...", className, buttonClassName, name, disabled, required }: CustomSelectProps) {
     // Finds the selected option object based on the value prop (controlled) or matches internal state if uncontrolled (simplified here for controlled usage mostly)
     const selectedOption = options.find(o => o.value === value) || null;
     const [internalValue, setInternalValue] = useState<string>(defaultValue || '');
@@ -43,7 +44,10 @@ export function CustomSelect({ value, defaultValue, onChange, options, placehold
             {name && <input type="hidden" name={name} value={activeValue} required={required} />}
 
             <Listbox value={activeValue} onChange={handleChange} disabled={disabled}>
-                <Listbox.Button className="relative w-full cursor-pointer rounded-md bg-white py-2 pl-3 pr-10 text-left border border-gray-200 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-gray-50 h-9 sm:text-sm">
+                <Listbox.Button className={cn(
+                    "relative w-full cursor-pointer rounded-md bg-white py-2 pl-3 pr-10 text-left border border-gray-200 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-gray-50 h-9 sm:text-sm",
+                    buttonClassName
+                )}>
                     <span className={cn("block truncate", !selectedOption && !internalValue && "text-gray-400")}>
                         {displayLabel}
                     </span>
