@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -115,6 +116,7 @@ export default function B2CCustomerDetailPage() {
   const router = useRouter();
   const params = useParams();
   const customerId = params.id as string;
+  const { data: session } = useSession();
 
   const [customer, setCustomer] = useState<B2CCustomer | null>(null);
   const [transactions, setTransactions] = useState<B2CTransaction[]>([]);
@@ -441,12 +443,14 @@ export default function B2CCustomerDetailPage() {
                     {formatCurrency(summary.totalOut)}
                   </span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-medium text-green-600">Total Profit</span>
-                  <span className="text-sm font-bold text-green-600">
-                    {formatCurrency(summary.totalProfit)}
-                  </span>
-                </div>
+                {session?.user?.role === 'SUPER_ADMIN' && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-medium text-green-600">Total Profit</span>
+                    <span className="text-sm font-bold text-green-600">
+                      {formatCurrency(summary.totalProfit)}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -589,7 +593,9 @@ export default function B2CCustomerDetailPage() {
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Transaction Type</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Details</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Amount</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Profit</th>
+                  {session?.user?.role === 'SUPER_ADMIN' && (
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Profit</th>
+                  )}
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
@@ -687,10 +693,12 @@ export default function B2CCustomerDetailPage() {
                         {formatCurrency(tx.finalAmount)}
                         <div className="text-xs font-normal text-green-600 mt-1">{tx.paymentMethod}</div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
-                        {/* Show profit for this transaction if available */}
-                        {tx.actualProfit > 0 ? formatCurrency(tx.actualProfit) : '-'}
-                      </td>
+                      {session?.user?.role === 'SUPER_ADMIN' && (
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
+                          {/* Show profit for this transaction if available */}
+                          {tx.actualProfit > 0 ? formatCurrency(tx.actualProfit) : '-'}
+                        </td>
+                      )}
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                         <Button
                           variant="outline"

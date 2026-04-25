@@ -381,7 +381,7 @@ export default function B2CCustomersPage() {
 
       {/* Summary Cards */}
       <Card className="border shadow-sm bg-white overflow-hidden">
-        <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x border-gray-100">
+        <div className={`grid grid-cols-1 ${session?.user?.role === 'SUPER_ADMIN' ? 'md:grid-cols-4' : 'md:grid-cols-3'} divide-y md:divide-y-0 md:divide-x border-gray-100`}>
           {/* Total Cylinders */}
           <div className="p-2 flex flex-col items-center text-center hover:bg-orange-50/50 transition-colors">
             <span className="text-[10px] font-medium text-orange-600 uppercase tracking-wider mb-0.5">TOTAL CYLINDERS WITH CUSTOMERS AGAINST SECURITY</span>
@@ -415,11 +415,13 @@ export default function B2CCustomersPage() {
           </div>
 
           {/* Total Profit */}
-          <div className="p-2 flex flex-col items-center text-center hover:bg-green-50/50 transition-colors">
-            <span className="text-[10px] font-medium text-green-600 uppercase tracking-wider mb-0.5">Total Profit</span>
-            <span className="text-xl font-bold text-green-600 mb-0.5">{formatCurrency(summary.totalProfit)}</span>
-            <span className="text-[10px] text-gray-500">Estimated Gross Profit</span>
-          </div>
+          {session?.user?.role === 'SUPER_ADMIN' && (
+            <div className="p-2 flex flex-col items-center text-center hover:bg-green-50/50 transition-colors">
+              <span className="text-[10px] font-medium text-green-600 uppercase tracking-wider mb-0.5">Total Profit</span>
+              <span className="text-xl font-bold text-green-600 mb-0.5">{formatCurrency(summary.totalProfit)}</span>
+              <span className="text-[10px] text-gray-500">Estimated Gross Profit</span>
+            </div>
+          )}
         </div>
       </Card>
 
@@ -553,7 +555,9 @@ export default function B2CCustomersPage() {
                       </TableHead>
                     ))}
 
-                    <TableHead className="font-semibold text-gray-700 text-right w-[120px]">Profit</TableHead>
+                    {session?.user?.role === 'SUPER_ADMIN' && (
+                      <TableHead className="font-semibold text-gray-700 text-right w-[120px]">Profit</TableHead>
+                    )}
                     <TableHead className="font-semibold text-gray-700 text-center w-[100px]">Status</TableHead>
                     <TableHead className="font-semibold text-gray-700 text-center w-[100px]">Actions</TableHead>
                   </TableRow>
@@ -597,9 +601,11 @@ export default function B2CCustomersPage() {
                         );
                       })}
 
-                      <TableCell className="font-semibold text-gray-900 text-right">
-                        {formatCurrency(customer.totalProfit)}
-                      </TableCell>
+                      {session?.user?.role === 'SUPER_ADMIN' && (
+                        <TableCell className="font-semibold text-gray-900 text-right">
+                          {formatCurrency(customer.totalProfit)}
+                        </TableCell>
+                      )}
                       <TableCell className="text-center">
                         <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${customer.isActive ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
                           <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${customer.isActive ? 'bg-green-500' : 'bg-gray-400'}`}></span>

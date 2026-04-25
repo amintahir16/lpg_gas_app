@@ -410,7 +410,7 @@ export default function B2BCustomersPage() {
 
       {/* Summary Cards */}
       <Card className="border shadow-sm bg-white overflow-hidden">
-        <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x border-gray-100">
+        <div className={`grid grid-cols-1 ${session?.user?.role === 'SUPER_ADMIN' ? 'md:grid-cols-4' : 'md:grid-cols-3'} divide-y md:divide-y-0 md:divide-x border-gray-100`}>
           {/* Total Cylinders */}
           <div className="p-2 flex flex-col items-center text-center hover:bg-red-50/50 transition-colors">
             <span className="text-[10px] font-medium text-red-600 uppercase tracking-wider mb-0.5">Total Cylinders With Customers</span>
@@ -439,11 +439,13 @@ export default function B2BCustomersPage() {
           </div>
 
           {/* Total Profit */}
-          <div className="p-2 flex flex-col items-center text-center hover:bg-purple-50/50 transition-colors">
-            <span className="text-[10px] font-medium text-purple-600 uppercase tracking-wider mb-0.5">Total Profit</span>
-            <span className="text-xl font-bold text-green-600 mb-0.5">{formatCurrency(summary.totalProfit || 0)}</span>
-            <span className="text-[10px] text-gray-500">Estimated Gross Profit</span>
-          </div>
+          {session?.user?.role === 'SUPER_ADMIN' && (
+            <div className="p-2 flex flex-col items-center text-center hover:bg-purple-50/50 transition-colors">
+              <span className="text-[10px] font-medium text-purple-600 uppercase tracking-wider mb-0.5">Total Profit</span>
+              <span className="text-xl font-bold text-green-600 mb-0.5">{formatCurrency(summary.totalProfit || 0)}</span>
+              <span className="text-[10px] text-gray-500">Estimated Gross Profit</span>
+            </div>
+          )}
 
           {/* Total Receivables */}
           <div className="p-2 flex flex-col items-center text-center hover:bg-green-50/50 transition-colors">

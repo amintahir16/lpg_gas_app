@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -29,6 +30,7 @@ interface B2CLedgerResponse {
 
 export default function B2CLedgerPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [customers, setCustomers] = useState<B2CCustomer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -104,26 +106,28 @@ export default function B2CLedgerPage() {
       </div>
 
       {/* Summary Card */}
-      <Card className="border-0 shadow-sm bg-gradient-to-r from-green-50 to-blue-50">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">Total Profit Summary</h3>
-              <p className="text-3xl font-bold text-green-600 mt-2">
-                Rs {Number(summary.totalProfit).toFixed(2)}
-              </p>
-              <p className="text-sm text-gray-600 mt-1">
-                From {summary.totalCustomers} customers
-              </p>
-            </div>
-            <div className="text-right">
-              <div className="p-3 bg-green-100 rounded-full">
-                <span className="text-green-600 text-2xl font-bold">₹</span>
+      {session?.user?.role === 'SUPER_ADMIN' && (
+        <Card className="border-0 shadow-sm bg-gradient-to-r from-green-50 to-blue-50">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Total Profit Summary</h3>
+                <p className="text-3xl font-bold text-green-600 mt-2">
+                  Rs {Number(summary.totalProfit).toFixed(2)}
+                </p>
+                <p className="text-sm text-gray-600 mt-1">
+                  From {summary.totalCustomers} customers
+                </p>
+              </div>
+              <div className="text-right">
+                <div className="p-3 bg-green-100 rounded-full">
+                  <span className="text-green-600 text-2xl font-bold">₹</span>
+                </div>
               </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Loading State */}
       {loading && (
@@ -172,7 +176,9 @@ export default function B2CLedgerPage() {
                 <TableHead className="font-semibold text-gray-700">Customer Name</TableHead>
                 <TableHead className="font-semibold text-gray-700">Home Address</TableHead>
                 <TableHead className="font-semibold text-gray-700">Contact</TableHead>
-                <TableHead className="font-semibold text-gray-700">Profit</TableHead>
+                {session?.user?.role === 'SUPER_ADMIN' && (
+                  <TableHead className="font-semibold text-gray-700">Profit</TableHead>
+                )}
                 <TableHead className="font-semibold text-gray-700">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -192,9 +198,11 @@ export default function B2CLedgerPage() {
                     </div>
                   </TableCell>
                   <TableCell className="text-gray-700">{customer.phone}</TableCell>
-                  <TableCell className="font-semibold text-gray-900">
-                    Rs {Number(customer.totalProfit).toFixed(2)}
-                  </TableCell>
+                  {session?.user?.role === 'SUPER_ADMIN' && (
+                    <TableCell className="font-semibold text-gray-900">
+                      Rs {Number(customer.totalProfit).toFixed(2)}
+                    </TableCell>
+                  )}
                   <TableCell>
                     <Button
                       variant="outline"

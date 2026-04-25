@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -116,6 +117,7 @@ export default function B2BCustomerDetailPage() {
   const router = useRouter();
   const params = useParams();
   const customerId = params.id as string;
+  const { data: session } = useSession();
 
   const [customer, setCustomer] = useState<B2BCustomer | null>(null);
   const [transactions, setTransactions] = useState<B2BTransaction[]>([]);
@@ -1546,7 +1548,7 @@ export default function B2BCustomerDetailPage() {
                     {formatCurrency(summary.totalOut)}
                   </span>
                 </div>
-                {summary.totalProfit !== undefined && (
+                {summary.totalProfit !== undefined && session?.user?.role === 'SUPER_ADMIN' && (
                   <div className="flex justify-between items-center pt-2 border-t border-gray-100">
                     <span className="text-xs font-medium text-green-600">Total profit</span>
                     <span className="text-sm font-semibold text-green-600">
