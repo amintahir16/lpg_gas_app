@@ -1560,22 +1560,29 @@ export default function B2BCustomerDetailPage() {
             {/* Cylinders Due */}
             <div className="pt-2 border-t border-gray-100">
               <p className="text-xs font-medium text-gray-500 mb-2">Remaining Cylinders Due</p>
-              {loadingCylinderDues ? (
-                <div className="text-xs text-gray-500">Loading...</div>
-              ) : cylinderDues.length > 0 ? (
-                <div className="space-y-1.5">
-                  {cylinderDues.map((due) => (
-                    <div key={due.cylinderType} className="flex justify-between">
-                      <span className="text-xs text-gray-700">{due.displayName}</span>
-                      <Badge variant={due.count > 0 ? 'destructive' : 'secondary'} className="h-5 text-[10px] px-1.5">
-                        {due.count}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-xs text-gray-500">No cylinders due</div>
-              )}
+              {(() => {
+                if (loadingCylinderDues) {
+                  return <div className="text-xs text-gray-500">Loading...</div>;
+                }
+                // Hide buyback-history-only entries (count === 0) so a fully cleared
+                // customer shows "No cylinders due" instead of a generic 0-quantity row.
+                const visibleDues = cylinderDues.filter((due) => due.count > 0);
+                if (visibleDues.length === 0) {
+                  return <div className="text-xs text-gray-500">No cylinders due</div>;
+                }
+                return (
+                  <div className="space-y-1.5">
+                    {visibleDues.map((due) => (
+                      <div key={due.cylinderType} className="flex justify-between">
+                        <span className="text-xs text-gray-700">{due.displayName}</span>
+                        <Badge variant="destructive" className="h-5 text-[10px] px-1.5">
+                          {due.count}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Quick Actions - Unified Transaction */}
