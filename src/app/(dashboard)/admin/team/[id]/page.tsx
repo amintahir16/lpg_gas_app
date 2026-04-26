@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, useRef, use } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import {
@@ -164,6 +164,24 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
     });
     const [deleteConfirmationName, setDeleteConfirmationName] = useState('');
 
+    const profileCardRef = useRef<HTMLDivElement | null>(null);
+    const [profileCardHeight, setProfileCardHeight] = useState<number | null>(null);
+
+    useEffect(() => {
+        const node = profileCardRef.current;
+        if (!node) return;
+        if (typeof window === 'undefined' || typeof ResizeObserver === 'undefined') return;
+        const observer = new ResizeObserver((entries) => {
+            for (const entry of entries) {
+                const next = Math.round(entry.contentRect.height);
+                if (next > 0) setProfileCardHeight(next);
+            }
+        });
+        observer.observe(node);
+        setProfileCardHeight(node.getBoundingClientRect().height);
+        return () => observer.disconnect();
+    }, [member]);
+
     const fetchMemberDetails = async () => {
         setIsLoading(true);
         try {
@@ -295,9 +313,9 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
                 Back to Team
             </Button>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:items-start">
                 {/* Profile Card */}
-                <Card className="md:col-span-1 border-t-4 border-t-blue-600 shadow-sm">
+                <Card ref={profileCardRef} className="md:col-span-1 border-t-4 border-t-blue-600 shadow-sm">
                     <CardHeader>
                         <div className="flex justify-between items-start">
                             <div>
@@ -509,8 +527,11 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
                 </Card >
 
                 {/* Activity Log */}
-                < Card className="md:col-span-2 shadow-sm" >
-                    <CardHeader>
+                < Card
+                    className="md:col-span-2 shadow-sm flex flex-col"
+                    style={profileCardHeight ? { height: `${profileCardHeight}px` } : undefined}
+                >
+                    <CardHeader className="flex-shrink-0">
                         <div className="flex items-center justify-between">
                             <div>
                                 <CardTitle>Activity Log</CardTitle>
@@ -525,7 +546,7 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
                             )}
                         </div>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="flex-1 min-h-0 overflow-hidden">
                         {activityLogs.length === 0 ? (
                             <div className="text-center py-12 text-gray-500">
                                 <ClockIcon className="w-10 h-10 mx-auto text-gray-300 mb-2" />
@@ -533,7 +554,7 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
                                 <p className="text-xs text-gray-400 mt-1">Transactions and actions will appear here</p>
                             </div>
                         ) : (
-                            <div className="relative max-h-[640px] overflow-y-auto pr-1">
+                            <div className="relative h-full overflow-y-auto pr-1">
                                 <div className="absolute left-[15px] top-2 bottom-2 w-px bg-gray-100" />
                                 <ul className="space-y-4">
                                     {activityLogs.map((log) => {
