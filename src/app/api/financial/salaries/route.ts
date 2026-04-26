@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { format } from 'date-fns';
+import { logActivity, ActivityAction } from '@/lib/activityLogger';
+import { notifyUserActivity } from '@/lib/superAdminNotifier';
 export async function GET(request: NextRequest) {
     try {
         const session = await getServerSession(authOptions);
@@ -150,6 +152,45 @@ export async function POST(request: NextRequest) {
                 },
             },
         });
+        try {
+            const monthLabel = format(new Date(parseInt(year), parseInt(month) - 1, 1), 'MMMM yyyy');
+            const employeeName = salaryRecord.user.name || user.email || 'Employee';
+            const link = `/team/${userId}`;
+            await logActivity({
+                userId: session.user.id,
+                action: ActivityAction.SALARY_PAID,
+                entityType: 'SALARY_RECORD',
+                entityId: salaryRecord.id,
+                details: `Paid Rs ${parsedAmount.toLocaleString()} salary to ${employeeName} for ${monthLabel}`,
+                link,
+                metadata: {
+                    salaryId: salaryRecord.id,
+                    employeeId: userId,
+                    employeeName,
+                    amount: parsedAmount,
+                    month: parseInt(month),
+                    year: parseInt(year),
+                    paymentMethod: salaryRecord.paymentMethod,
+                },
+            });
+            await notifyUserActivity({
+                actorId: session.user.id,
+                actorName: session.user.name || session.user.email || 'A user',
+                title: 'Salary paid',
+                message: `${session.user.name || session.user.email} paid Rs ${parsedAmount.toLocaleString()} salary to ${employeeName} for ${monthLabel}.`,
+                link,
+                priority: 'MEDIUM',
+                metadata: {
+                    domain: 'SALARY_RECORD',
+                    salaryId: salaryRecord.id,
+                    employeeId: userId,
+                    employeeName,
+                    amount: parsedAmount,
+                },
+            });
+        } catch (sideEffectError) {
+            console.error('Salary side effects failed:', sideEffectError);
+        }
         return NextResponse.json(salaryRecord, { status: 201 });
     } catch (error) {
         console.error('Salary creation error:', error);

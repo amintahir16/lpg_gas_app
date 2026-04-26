@@ -5,6 +5,12 @@ import { InventoryDeductionService } from '@/lib/inventory-deduction';
 import { prisma } from '@/lib/db';
 import { CylinderStatus } from '@prisma/client';
 import { getCapacityFromTypeString } from '@/lib/cylinder-utils';
+import { logActivity, ActivityAction } from '@/lib/activityLogger';
+import {
+  notifyUserActivity,
+  checkAllCylinderTypesForLowStock,
+  checkAccessoriesForLowStock,
+} from '@/lib/superAdminNotifier';
 
 export async function POST(request: NextRequest) {
   try {
@@ -519,6 +525,89 @@ export async function POST(request: NextRequest) {
 
       return transaction;
     });
+
+    // ---- Post-commit side effects: activity log + super-admin notifications ----
+    try {
+      const customerForLog = await prisma.customer.findUnique({
+        where: { id: customerId },
+        select: { name: true },
+      });
+      const customerName = customerForLog?.name || 'Customer';
+      const total = parseFloat(totalAmount);
+      const transactionLink = `/customers/b2b/${customerId}?tx=${result.id}`;
+
+      const detailsParts: string[] = [
+        `Type: ${transactionType}`,
+        `Customer: ${customerName}`,
+        `Bill #: ${result.billSno}`,
+        `Total: Rs ${total.toLocaleString()}`,
+      ];
+      if (paidAmountValue !== null) detailsParts.push(`Paid: Rs ${paidAmountValue.toLocaleString()}`);
+      if (paymentMethod) detailsParts.push(`Method: ${paymentMethod}`);
+      if (gasItems.length) detailsParts.push(`Gas items: ${gasItems.length}`);
+      if (accessoryItems.length) detailsParts.push(`Accessories: ${accessoryItems.length}`);
+
+      await logActivity({
+        userId: session.user.id,
+        action: ActivityAction.B2B_TRANSACTION_CREATED,
+        entityType: 'B2B_TRANSACTION',
+        entityId: result.id,
+        details: detailsParts.join(' • '),
+        link: transactionLink,
+        metadata: {
+          customerId,
+          customerName,
+          billSno: result.billSno,
+          transactionType,
+          totalAmount: total,
+          paidAmount: paidAmountValue,
+          paymentMethod: paymentMethod || null,
+        },
+      });
+
+      await notifyUserActivity({
+        actorId: session.user.id,
+        actorName: session.user.name || session.user.email || 'A user',
+        title: `New B2B ${transactionType} transaction`,
+        message: `${session.user.name || session.user.email} recorded a B2B ${transactionType} of Rs ${total.toLocaleString()} for ${customerName} (Bill #${result.billSno}).`,
+        link: transactionLink,
+        priority: 'MEDIUM',
+        metadata: {
+          domain: 'B2B_TRANSACTION',
+          transactionId: result.id,
+          customerId,
+          customerName,
+          billSno: result.billSno,
+          totalAmount: total,
+        },
+      });
+
+      // Low-stock checks (cylinders + accessories) after the transaction
+      const cylinderTypesAffected = (gasItems as any[])
+        .map((g) => g?.cylinderType)
+        .filter(Boolean);
+      if (cylinderTypesAffected.length > 0) {
+        await checkAllCylinderTypesForLowStock(cylinderTypesAffected);
+      }
+      if (Array.isArray(accessoryItems) && accessoryItems.length > 0) {
+        const accessoriesForCheck = (accessoryItems as any[])
+          .filter((a) => (a?.delivered ?? a?.quantity ?? 0) > 0)
+          .map((a) => {
+            const productName: string = a?.name || a?.productName || '';
+            const [category, ...rest] = productName.split(' - ');
+            return {
+              category: (category || a?.category || '').trim(),
+              itemType: (rest.join(' - ') || a?.itemType || category || '').trim(),
+            };
+          })
+          .filter((it) => it.category && it.itemType);
+        if (accessoriesForCheck.length > 0) {
+          await checkAccessoriesForLowStock(accessoriesForCheck);
+        }
+      }
+    } catch (sideEffectError) {
+      console.error('B2B transaction post-commit side effects failed:', sideEffectError);
+    }
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {

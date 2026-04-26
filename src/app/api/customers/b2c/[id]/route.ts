@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { logActivity, ActivityAction } from '@/lib/activityLogger';
+import { notifyUserActivity } from '@/lib/superAdminNotifier';
 
 export async function GET(
   request: NextRequest,
@@ -139,6 +141,37 @@ export async function PUT(
       }
     });
 
+    try {
+      const link = `/customers/b2c/${customer.id}`;
+      await logActivity({
+        userId: session.user.id,
+        action: ActivityAction.B2C_CUSTOMER_UPDATED,
+        entityType: 'B2C_CUSTOMER',
+        entityId: customer.id,
+        details: `Updated B2C customer "${customer.name}"`,
+        link,
+        metadata: {
+          customerId: customer.id,
+          customerName: customer.name,
+        },
+      });
+      await notifyUserActivity({
+        actorId: session.user.id,
+        actorName: session.user.name || session.user.email || 'A user',
+        title: 'B2C customer updated',
+        message: `${session.user.name || session.user.email} updated B2C customer "${customer.name}".`,
+        link,
+        priority: 'LOW',
+        metadata: {
+          domain: 'B2C_CUSTOMER',
+          customerId: customer.id,
+          customerName: customer.name,
+        },
+      });
+    } catch (sideEffectError) {
+      console.error('B2C customer update side effects failed:', sideEffectError);
+    }
+
     return NextResponse.json(customer);
 
   } catch (error) {
@@ -175,9 +208,44 @@ export async function DELETE(
       );
     }
 
+    const existing = await prisma.b2CCustomer.findUnique({
+      where: { id: customerId },
+      select: { id: true, name: true }
+    });
+
     await prisma.b2CCustomer.delete({
       where: { id: customerId }
     });
+
+    try {
+      await logActivity({
+        userId: session.user.id,
+        action: ActivityAction.B2C_CUSTOMER_DELETED,
+        entityType: 'B2C_CUSTOMER',
+        entityId: customerId,
+        details: `Deleted B2C customer "${existing?.name ?? customerId}"`,
+        link: '/customers/b2c',
+        metadata: {
+          customerId,
+          customerName: existing?.name ?? null,
+        },
+      });
+      await notifyUserActivity({
+        actorId: session.user.id,
+        actorName: session.user.name || session.user.email || 'A user',
+        title: 'B2C customer deleted',
+        message: `${session.user.name || session.user.email} deleted B2C customer "${existing?.name ?? customerId}".`,
+        link: '/customers/b2c',
+        priority: 'HIGH',
+        metadata: {
+          domain: 'B2C_CUSTOMER',
+          customerId,
+          customerName: existing?.name ?? null,
+        },
+      });
+    } catch (sideEffectError) {
+      console.error('B2C customer delete side effects failed:', sideEffectError);
+    }
 
     return NextResponse.json({ message: 'Customer deleted successfully' });
 

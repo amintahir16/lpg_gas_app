@@ -4,6 +4,12 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { InventoryDeductionService } from '@/lib/inventory-deduction';
 import { getCapacityFromTypeString } from '@/lib/cylinder-utils';
+import { logActivity, ActivityAction } from '@/lib/activityLogger';
+import {
+  notifyUserActivity,
+  checkAllCylinderTypesForLowStock,
+  checkAccessoriesForLowStock,
+} from '@/lib/superAdminNotifier';
 
 // Define types for transaction items
 interface TransactionGasItem {
@@ -474,6 +480,84 @@ export async function POST(request: NextRequest) {
 
       return newTransaction;
     });
+
+    // ---- Post-commit side effects: activity log + super-admin notifications ----
+    try {
+      const customerName = customer?.name || 'B2C Customer';
+      const link = `/customers/b2c/${customerId}?tx=${transaction.id}`;
+
+      const detailsParts: string[] = [
+        `Customer: ${customerName}`,
+        `Bill #: ${billSno}`,
+        `Total: Rs ${Number(finalAmount).toLocaleString()}`,
+      ];
+      if (paymentMethod) detailsParts.push(`Method: ${paymentMethod}`);
+      if (gasItems.length) detailsParts.push(`Gas items: ${gasItems.length}`);
+      if (securityItems.length) detailsParts.push(`Security items: ${securityItems.length}`);
+      if (accessoryItems.length) detailsParts.push(`Accessories: ${accessoryItems.length}`);
+
+      await logActivity({
+        userId: session.user.id,
+        action: ActivityAction.B2C_TRANSACTION_CREATED,
+        entityType: 'B2C_TRANSACTION',
+        entityId: transaction.id,
+        details: detailsParts.join(' • '),
+        link,
+        metadata: {
+          customerId,
+          customerName,
+          billSno,
+          totalAmount: Number(totalAmount),
+          finalAmount: Number(finalAmount),
+          paymentMethod,
+        },
+      });
+
+      await notifyUserActivity({
+        actorId: session.user.id,
+        actorName: session.user.name || session.user.email || 'A user',
+        title: 'New B2C transaction',
+        message: `${session.user.name || session.user.email} recorded a B2C sale of Rs ${Number(finalAmount).toLocaleString()} for ${customerName} (Bill #${billSno}).`,
+        link,
+        priority: 'MEDIUM',
+        metadata: {
+          domain: 'B2C_TRANSACTION',
+          transactionId: transaction.id,
+          customerId,
+          customerName,
+          billSno,
+          finalAmount: Number(finalAmount),
+        },
+      });
+
+      // Low-stock checks
+      const cylinderTypesAffected = [
+        ...gasItems.map((g: TransactionGasItem) => g.cylinderType).filter(Boolean) as string[],
+        ...securityItems.map((s: TransactionSecurityItem) => s.cylinderType).filter(Boolean),
+      ];
+      if (cylinderTypesAffected.length > 0) {
+        await checkAllCylinderTypesForLowStock(cylinderTypesAffected);
+      }
+
+      if (accessoryItems.length > 0) {
+        const accessoriesForCheck = accessoryItems
+          .filter((a: TransactionAccessoryItem) => (a.quantity ?? 0) > 0)
+          .map((a: TransactionAccessoryItem) => {
+            const itemName = a.itemName || '';
+            const [category, ...rest] = itemName.split(' - ');
+            return {
+              category: (category || a.category || '').trim(),
+              itemType: (rest.join(' - ') || a.itemType || category || '').trim(),
+            };
+          })
+          .filter((it) => it.category && it.itemType);
+        if (accessoriesForCheck.length > 0) {
+          await checkAccessoriesForLowStock(accessoriesForCheck);
+        }
+      }
+    } catch (sideEffectError) {
+      console.error('B2C transaction post-commit side effects failed:', sideEffectError);
+    }
 
     return NextResponse.json(transaction, { status: 201 });
 

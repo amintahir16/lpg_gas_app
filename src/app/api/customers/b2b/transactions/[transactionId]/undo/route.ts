@@ -4,6 +4,11 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { CylinderType, CylinderStatus } from '@prisma/client';
 import { InventoryDeductionService } from '@/lib/inventory-deduction';
+import { logActivity, ActivityAction } from '@/lib/activityLogger';
+import {
+  notifyUserActivity,
+  checkAllCylinderTypesForLowStock,
+} from '@/lib/superAdminNotifier';
 
 export async function POST(
   request: NextRequest,
@@ -405,6 +410,56 @@ export async function POST(
         }
       }
     });
+
+    // ---- Post-commit side effects ----
+    try {
+      const customerName = transaction.customer?.name || 'Customer';
+      const total = parseFloat(transaction.totalAmount.toString());
+      const link = `/customers/b2b/${transaction.customerId}?tx=${transaction.id}`;
+
+      await logActivity({
+        userId: session.user.id,
+        action: ActivityAction.B2B_TRANSACTION_VOIDED,
+        entityType: 'B2B_TRANSACTION',
+        entityId: transaction.id,
+        details: `Voided B2B ${transaction.transactionType} • Customer: ${customerName} • Bill #: ${transaction.billSno} • Total: Rs ${total.toLocaleString()}${reason ? ` • Reason: ${reason}` : ''}`,
+        link,
+        metadata: {
+          customerId: transaction.customerId,
+          customerName,
+          billSno: transaction.billSno,
+          transactionType: transaction.transactionType,
+          totalAmount: total,
+          reason: reason || null,
+        },
+      });
+
+      await notifyUserActivity({
+        actorId: session.user.id,
+        actorName: session.user.name || session.user.email || 'A user',
+        title: `B2B ${transaction.transactionType} transaction voided`,
+        message: `${session.user.name || session.user.email} voided B2B ${transaction.transactionType} of Rs ${total.toLocaleString()} for ${customerName} (Bill #${transaction.billSno}).`,
+        link,
+        priority: 'HIGH',
+        metadata: {
+          domain: 'B2B_TRANSACTION_VOIDED',
+          transactionId: transaction.id,
+          customerId: transaction.customerId,
+          customerName,
+          billSno: transaction.billSno,
+          totalAmount: total,
+        },
+      });
+
+      const cylinderTypesAffected = transaction.items
+        .map((it: any) => it.cylinderType)
+        .filter(Boolean) as string[];
+      if (cylinderTypesAffected.length > 0) {
+        await checkAllCylinderTypesForLowStock(cylinderTypesAffected);
+      }
+    } catch (sideEffectError) {
+      console.error('B2B undo post-commit side effects failed:', sideEffectError);
+    }
 
     return NextResponse.json({
       success: true,

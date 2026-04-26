@@ -11,6 +11,7 @@ export interface Notification {
   isRead: boolean;
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   metadata?: Record<string, any>;
+  link?: string | null;
   createdAt: string;
   userId?: string;
 }

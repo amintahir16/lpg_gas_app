@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { logActivity, ActivityAction } from '@/lib/activityLogger';
+import { notifyUserActivity } from '@/lib/superAdminNotifier';
 
 export async function GET(
   request: NextRequest,
@@ -132,6 +134,40 @@ export async function PUT(
       include: { marginCategory: true }
     });
 
+    try {
+      const changedFields = Object.keys(updateData);
+      const link = `/customers/b2b/${customer.id}`;
+      await logActivity({
+        userId: session.user.id,
+        action: ActivityAction.B2B_CUSTOMER_UPDATED,
+        entityType: 'B2B_CUSTOMER',
+        entityId: customer.id,
+        details: `Updated B2B customer "${customer.name}"${changedFields.length ? ` • Fields: ${changedFields.join(', ')}` : ''}`,
+        link,
+        metadata: {
+          customerId: customer.id,
+          customerName: customer.name,
+          changedFields,
+        },
+      });
+      await notifyUserActivity({
+        actorId: session.user.id,
+        actorName: session.user.name || session.user.email || 'A user',
+        title: 'B2B customer updated',
+        message: `${session.user.name || session.user.email} updated B2B customer "${customer.name}".`,
+        link,
+        priority: 'LOW',
+        metadata: {
+          domain: 'B2B_CUSTOMER',
+          customerId: customer.id,
+          customerName: customer.name,
+          changedFields,
+        },
+      });
+    } catch (sideEffectError) {
+      console.error('B2B customer update side effects failed:', sideEffectError);
+    }
+
     return NextResponse.json(customer);
   } catch (error) {
     console.error('Error updating B2B customer:', error);
@@ -229,6 +265,36 @@ export async function DELETE(
     const customer = await prisma.customer.delete({
       where: { id: customerId }
     });
+
+    try {
+      await logActivity({
+        userId: session.user.id,
+        action: ActivityAction.B2B_CUSTOMER_DELETED,
+        entityType: 'B2B_CUSTOMER',
+        entityId: customer.id,
+        details: `Deleted B2B customer "${customer.name}"`,
+        link: '/customers/b2b',
+        metadata: {
+          customerId: customer.id,
+          customerName: customer.name,
+        },
+      });
+      await notifyUserActivity({
+        actorId: session.user.id,
+        actorName: session.user.name || session.user.email || 'A user',
+        title: 'B2B customer deleted',
+        message: `${session.user.name || session.user.email} deleted B2B customer "${customer.name}".`,
+        link: '/customers/b2b',
+        priority: 'HIGH',
+        metadata: {
+          domain: 'B2B_CUSTOMER',
+          customerId: customer.id,
+          customerName: customer.name,
+        },
+      });
+    } catch (sideEffectError) {
+      console.error('B2B customer delete side effects failed:', sideEffectError);
+    }
 
     return NextResponse.json({
       message: 'Customer deleted successfully',

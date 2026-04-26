@@ -13,7 +13,17 @@ import {
     PencilIcon,
     TrashIcon,
     ArrowLeftIcon,
-    BanknotesIcon
+    BanknotesIcon,
+    UserPlusIcon,
+    UserMinusIcon,
+    ShoppingCartIcon,
+    ArrowUturnLeftIcon,
+    CubeIcon,
+    WrenchScrewdriverIcon,
+    BuildingOfficeIcon,
+    CurrencyDollarIcon,
+    ArrowTopRightOnSquareIcon,
+    PencilSquareIcon,
 } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,7 +45,73 @@ interface ActivityLog {
     id: string;
     action: string;
     details: string;
+    link?: string | null;
+    entityType?: string | null;
+    entityId?: string | null;
+    metadata?: Record<string, any> | null;
     createdAt: string;
+}
+
+const ACTIVITY_ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+    B2B_CUSTOMER_CREATED: UserPlusIcon,
+    B2B_CUSTOMER_UPDATED: PencilSquareIcon,
+    B2B_CUSTOMER_DELETED: UserMinusIcon,
+    B2C_CUSTOMER_CREATED: UserPlusIcon,
+    B2C_CUSTOMER_UPDATED: PencilSquareIcon,
+    B2C_CUSTOMER_DELETED: UserMinusIcon,
+    B2B_TRANSACTION_CREATED: ShoppingCartIcon,
+    B2B_TRANSACTION_VOIDED: ArrowUturnLeftIcon,
+    B2C_TRANSACTION_CREATED: ShoppingCartIcon,
+    B2C_TRANSACTION_VOIDED: ArrowUturnLeftIcon,
+    CYLINDER_CREATED: CubeIcon,
+    CYLINDER_UPDATED: CubeIcon,
+    CYLINDER_DELETED: CubeIcon,
+    CUSTOM_ITEM_CREATED: WrenchScrewdriverIcon,
+    CUSTOM_ITEM_UPDATED: WrenchScrewdriverIcon,
+    CUSTOM_ITEM_DELETED: WrenchScrewdriverIcon,
+    OFFICE_EXPENSE_CREATED: BuildingOfficeIcon,
+    SALARY_PAID: CurrencyDollarIcon,
+};
+
+const ACTIVITY_TONE_MAP: Record<string, { dot: string; ring: string; iconColor: string; chip: string }> = {
+    CREATED: { dot: 'bg-emerald-500', ring: 'ring-emerald-100', iconColor: 'text-emerald-600', chip: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    UPDATED: { dot: 'bg-blue-500', ring: 'ring-blue-100', iconColor: 'text-blue-600', chip: 'bg-blue-50 text-blue-700 border-blue-200' },
+    DELETED: { dot: 'bg-rose-500', ring: 'ring-rose-100', iconColor: 'text-rose-600', chip: 'bg-rose-50 text-rose-700 border-rose-200' },
+    VOIDED: { dot: 'bg-amber-500', ring: 'ring-amber-100', iconColor: 'text-amber-600', chip: 'bg-amber-50 text-amber-700 border-amber-200' },
+    PAID: { dot: 'bg-emerald-500', ring: 'ring-emerald-100', iconColor: 'text-emerald-600', chip: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    DEFAULT: { dot: 'bg-slate-400', ring: 'ring-slate-100', iconColor: 'text-slate-600', chip: 'bg-slate-50 text-slate-700 border-slate-200' },
+};
+
+function getActivityTone(action: string) {
+    if (action.endsWith('_CREATED')) return ACTIVITY_TONE_MAP.CREATED;
+    if (action.endsWith('_UPDATED')) return ACTIVITY_TONE_MAP.UPDATED;
+    if (action.endsWith('_DELETED')) return ACTIVITY_TONE_MAP.DELETED;
+    if (action.endsWith('_VOIDED')) return ACTIVITY_TONE_MAP.VOIDED;
+    if (action === 'SALARY_PAID') return ACTIVITY_TONE_MAP.PAID;
+    return ACTIVITY_TONE_MAP.DEFAULT;
+}
+
+function humanizeAction(action: string) {
+    return action
+        .split('_')
+        .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
+        .join(' ');
+}
+
+function formatRelativeTime(value: string) {
+    const date = new Date(value);
+    const diffMs = Date.now() - date.getTime();
+    const seconds = Math.max(1, Math.floor(diffMs / 1000));
+    if (seconds < 60) return `${seconds}s ago`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d ago`;
+    const weeks = Math.floor(days / 7);
+    if (weeks < 5) return `${weeks}w ago`;
+    return date.toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 interface SalaryRecord {
@@ -435,31 +511,84 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
                 {/* Activity Log */}
                 < Card className="md:col-span-2 shadow-sm" >
                     <CardHeader>
-                        <CardTitle>Activity Log</CardTitle>
-                        <CardDescription>
-                            Recent actions performed by this admin
-                        </CardDescription>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle>Activity Log</CardTitle>
+                                <CardDescription>
+                                    Every action {member.name?.split(' ')[0] || 'this admin'} has taken in the system
+                                </CardDescription>
+                            </div>
+                            {activityLogs.length > 0 && (
+                                <Badge variant="secondary" className="h-6">
+                                    {activityLogs.length} entr{activityLogs.length === 1 ? 'y' : 'ies'}
+                                </Badge>
+                            )}
+                        </div>
                     </CardHeader>
                     <CardContent>
                         {activityLogs.length === 0 ? (
-                            <div className="text-center py-8 text-gray-500">No activity recorded yet</div>
+                            <div className="text-center py-12 text-gray-500">
+                                <ClockIcon className="w-10 h-10 mx-auto text-gray-300 mb-2" />
+                                <p className="text-sm">No activity recorded yet</p>
+                                <p className="text-xs text-gray-400 mt-1">Transactions and actions will appear here</p>
+                            </div>
                         ) : (
-                            <div className="space-y-6">
-                                {activityLogs.map((log) => (
-                                    <div key={log.id} className="flex gap-4">
-                                        <div className="flex flex-col items-center">
-                                            <div className="h-2 w-2 rounded-full bg-blue-400 mt-2"></div>
-                                            <div className="w-0.5 flex-1 bg-gray-100 my-1"></div>
-                                        </div>
-                                        <div className="pb-4">
-                                            <p className="text-sm font-medium text-gray-900">{log.action.replace('_', ' ')}</p>
-                                            <p className="text-sm text-gray-500">{log.details}</p>
-                                            <p className="text-xs text-gray-400 mt-1">
-                                                {new Date(log.createdAt).toLocaleString()}
-                                            </p>
-                                        </div>
-                                    </div>
-                                ))}
+                            <div className="relative max-h-[640px] overflow-y-auto pr-1">
+                                <div className="absolute left-[15px] top-2 bottom-2 w-px bg-gray-100" />
+                                <ul className="space-y-4">
+                                    {activityLogs.map((log) => {
+                                        const Icon = ACTIVITY_ICON_MAP[log.action] || ClockIcon;
+                                        const tone = getActivityTone(log.action);
+                                        const isClickable = !!log.link;
+                                        return (
+                                            <li key={log.id} className="relative pl-12">
+                                                <div className={`absolute left-0 top-1 flex h-8 w-8 items-center justify-center rounded-full bg-white ring-4 ${tone.ring}`}>
+                                                    <Icon className={`h-4 w-4 ${tone.iconColor}`} />
+                                                </div>
+                                                <div
+                                                    className={`group rounded-lg border border-gray-100 bg-white p-3 transition-colors hover:border-gray-200 hover:bg-gray-50 ${isClickable ? 'cursor-pointer' : ''}`}
+                                                    onClick={() => {
+                                                        if (isClickable && log.link) router.push(log.link);
+                                                    }}
+                                                    role={isClickable ? 'button' : undefined}
+                                                    tabIndex={isClickable ? 0 : undefined}
+                                                    onKeyDown={(event) => {
+                                                        if (!isClickable || !log.link) return;
+                                                        if (event.key === 'Enter' || event.key === ' ') {
+                                                            event.preventDefault();
+                                                            router.push(log.link);
+                                                        }
+                                                    }}
+                                                >
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${tone.chip}`}>
+                                                                    {humanizeAction(log.action)}
+                                                                </span>
+                                                                <span
+                                                                    className="text-[11px] text-gray-400"
+                                                                    title={new Date(log.createdAt).toLocaleString()}
+                                                                    suppressHydrationWarning
+                                                                >
+                                                                    {formatRelativeTime(log.createdAt)}
+                                                                </span>
+                                                            </div>
+                                                            {log.details && (
+                                                                <p className="mt-1.5 text-sm text-gray-700 break-words">
+                                                                    {log.details}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                        {isClickable && (
+                                                            <ArrowTopRightOnSquareIcon className="mt-1 h-4 w-4 flex-shrink-0 text-gray-300 transition-colors group-hover:text-blue-500" />
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
                             </div>
                         )}
                     </CardContent>

@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { generateUniqueCylinderCode } from '@/lib/cylinder-code-generator';
 import { normalizeTypeName } from '@/lib/cylinder-utils';
+import { logActivity, ActivityAction } from '@/lib/activityLogger';
+import { notifyUserActivity, checkAndNotifyLowCylinderStock } from '@/lib/superAdminNotifier';
 
 export async function GET(request: NextRequest) {
   try {
@@ -204,12 +208,49 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // Return the cylinder with original typeName for display purposes
-    // Store typeName in a way that can be retrieved later (we'll use the location field or add a note)
-    // For now, return the cylinder with the actual capacity which will be used for display
+    try {
+      const session = await getServerSession(authOptions);
+      if (session?.user?.id) {
+        const friendly = normalizedTypeName || cylinder.cylinderType.replace(/_/g, ' ');
+        const link = `/inventory/cylinders?type=${encodeURIComponent(cylinder.cylinderType)}`;
+        await logActivity({
+          userId: session.user.id,
+          action: ActivityAction.CYLINDER_CREATED,
+          entityType: 'CYLINDER',
+          entityId: cylinder.id,
+          details: `Added ${friendly} cylinder (${cylinder.code}) • Capacity: ${Number(cylinder.capacity)}kg • Status: ${cylinder.currentStatus}`,
+          link,
+          metadata: {
+            cylinderId: cylinder.id,
+            code: cylinder.code,
+            cylinderType: cylinder.cylinderType,
+            typeName: normalizedTypeName,
+            capacity: Number(cylinder.capacity),
+            currentStatus: cylinder.currentStatus,
+          },
+        });
+        await notifyUserActivity({
+          actorId: session.user.id,
+          actorName: session.user.name || session.user.email || 'A user',
+          title: 'Cylinder added to inventory',
+          message: `${session.user.name || session.user.email} added ${friendly} cylinder ${cylinder.code} (${Number(cylinder.capacity)}kg).`,
+          link,
+          priority: 'LOW',
+          metadata: {
+            domain: 'CYLINDER',
+            cylinderId: cylinder.id,
+            code: cylinder.code,
+            cylinderType: cylinder.cylinderType,
+          },
+        });
+      }
+      await checkAndNotifyLowCylinderStock(cylinder.cylinderType);
+    } catch (sideEffectError) {
+      console.error('Cylinder create side effects failed:', sideEffectError);
+    }
+
     const response = {
       ...cylinder,
-      // Include typeName if provided for reference (though it's not stored in DB)
       typeName: typeName || null,
     };
 

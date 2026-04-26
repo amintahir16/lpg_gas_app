@@ -248,37 +248,280 @@ export async function GET(request: NextRequest) {
     // 5. Recent Activities
     const [recentB2B, recentB2C] = await Promise.all([
       prisma.b2BTransaction.findMany({
-        take: 5,
+        take: 8,
         orderBy: { createdAt: 'desc' },
-        include: { customer: true }
+        include: { customer: true, items: true }
       }),
       prisma.b2CTransaction.findMany({
-        take: 5,
+        take: 8,
         orderBy: { createdAt: 'desc' },
-        include: { customer: true }
+        include: {
+          customer: true,
+          gasItems: true,
+          securityItems: true,
+          accessoryItems: true,
+        }
       })
     ]);
 
+    // ---- Helpers to build human-friendly titles & descriptions ----
+    /**
+     * Smart fallback formatter for raw cylinderType strings when no Cylinder row
+     * exists yet for that type. Extracts capacity (e.g. CYLINDER_11_8KG → 11.8kg)
+     * and a clean type-name prefix. Returns "" if nothing meaningful can be
+     * extracted, so callers can fallback further.
+     */
+    const cylinderTypeLabel = (raw: string | null | undefined) => {
+      if (!raw) return '';
+      const trimmed = raw.trim();
+      const capMatch = trimmed.match(/_?(\d+(?:_\d+)?)KG$/i);
+      let capacityLabel = '';
+      let prefix = trimmed;
+      if (capMatch && capMatch.index !== undefined) {
+        capacityLabel = `${capMatch[1].replace(/_/g, '.')}kg`;
+        prefix = trimmed.slice(0, capMatch.index).replace(/_+$/, '');
+      }
+      const typeNamePart = prefix
+        .replace(/^CYLINDER$/i, '') // drop the generic "CYLINDER" prefix
+        .replace(/_/g, ' ')
+        .toLowerCase()
+        .replace(/\b\w/g, (c) => c.toUpperCase())
+        .trim();
+      return [typeNamePart, capacityLabel].filter(Boolean).join(' ').trim();
+    };
+
+    // Build a map from raw cylinderType string → friendly "{TypeName} {capacity}kg"
+    // by sampling one Cylinder row per type. Falls back to formatted cylinderType.
+    const cylinderTypesUsed = new Set<string>();
+    recentB2B.forEach((t) =>
+      t.items.forEach((i) => {
+        if (i.cylinderType) cylinderTypesUsed.add(i.cylinderType);
+      })
+    );
+    recentB2C.forEach((t) => {
+      t.gasItems.forEach((g) => g.cylinderType && cylinderTypesUsed.add(g.cylinderType));
+      t.securityItems.forEach((s) => s.cylinderType && cylinderTypesUsed.add(s.cylinderType));
+    });
+
+    const cylinderTypeFriendlyMap = new Map<string, string>();
+    if (cylinderTypesUsed.size > 0) {
+      const samples = await prisma.cylinder.findMany({
+        where: { cylinderType: { in: Array.from(cylinderTypesUsed) } },
+        select: { cylinderType: true, typeName: true, capacity: true },
+        distinct: ['cylinderType'],
+      });
+      samples.forEach((s) => {
+        const cap = s.capacity != null ? `${Number(s.capacity)}kg` : '';
+        const friendly = [s.typeName?.trim(), cap].filter(Boolean).join(' ').trim();
+        cylinderTypeFriendlyMap.set(s.cylinderType, friendly || cylinderTypeLabel(s.cylinderType));
+      });
+    }
+
+    const friendlyCylinderName = (raw: string | null | undefined) => {
+      if (!raw) return '';
+      return cylinderTypeFriendlyMap.get(raw) || cylinderTypeLabel(raw);
+    };
+
+    // Group B2B items by friendly name and sum quantities.
+    // Priority for naming: dynamic Cylinder inventory lookup → smart-formatted
+    // raw cylinderType → stored productName → "cylinder".
+    // This guarantees we never surface raw strings like "CYLINDER_12KG Cylinder"
+    // when a real type exists in inventory.
+    const groupCylinderItems = (
+      items: Array<{ quantity: any; cylinderType?: string | null; productName?: string | null }>
+    ): string => {
+      if (!items.length) return '';
+      const grouped = new Map<string, number>();
+      for (const it of items) {
+        const fromInventory = it.cylinderType ? cylinderTypeFriendlyMap.get(it.cylinderType) : null;
+        const fromRawType = it.cylinderType ? cylinderTypeLabel(it.cylinderType) : '';
+        const name =
+          fromInventory ||
+          fromRawType ||
+          it.productName?.trim() ||
+          'cylinder';
+        grouped.set(name, (grouped.get(name) || 0) + Number(it.quantity || 0));
+      }
+      return Array.from(grouped.entries())
+        .map(([name, qty]) => `${qty} ${name}`)
+        .join(', ');
+    };
+
+    const buildB2BTitleAndDescription = (t: typeof recentB2B[number]) => {
+      const customer = t.customer?.name || 'Unknown';
+      const billTag = `Bill ${t.billSno}`;
+      const cylinderItems = t.items.filter((i) => i.cylinderType);
+      const accessoryItems = t.items.filter((i) => !i.cylinderType);
+      const accCount = accessoryItems.reduce((s, i) => s + Number(i.quantity || 0), 0);
+
+      const buildSaleSummary = () => {
+        const parts: string[] = [];
+        const cylSummary = groupCylinderItems(cylinderItems);
+        if (cylSummary) parts.push(cylSummary);
+        if (accCount > 0) {
+          const accNames = Array.from(
+            new Set(accessoryItems.map((a) => a.productName?.trim()).filter(Boolean))
+          );
+          const accLabel = accNames.length === 1 ? accNames[0] : `accessor${accCount > 1 ? 'ies' : 'y'}`;
+          parts.push(`${accCount} ${accLabel}`);
+        }
+        return parts.join(' + ');
+      };
+
+      switch (t.transactionType) {
+        case 'SALE': {
+          const summary = buildSaleSummary();
+          return {
+            title: 'B2B Sale',
+            description: summary
+              ? `${summary} sold to ${customer} • ${billTag}`
+              : `Sale to ${customer} • ${billTag}`,
+          };
+        }
+        case 'PAYMENT':
+          return {
+            title: 'B2B Payment',
+            description: `Payment received from ${customer} • ${billTag}`,
+          };
+        case 'BUYBACK': {
+          // Buyback is gas-by-the-kg, not by cylinder count.
+          // Total kg = sum(remainingKg * quantity) across cylinder items.
+          const totalKg = cylinderItems.reduce((sum, item) => {
+            const remaining = Number(item.remainingKg || 0);
+            const qty = Number(item.quantity || 0);
+            return sum + remaining * qty;
+          }, 0);
+          const types = Array.from(
+            new Set(cylinderItems.map((c) => friendlyCylinderName(c.cylinderType)).filter(Boolean))
+          );
+          const typeStr = types.length
+            ? ` (${types.slice(0, 2).join(', ')}${types.length > 2 ? ` +${types.length - 2}` : ''})`
+            : '';
+          const kgLabel = totalKg > 0 ? `${Number.isInteger(totalKg) ? totalKg : totalKg.toFixed(1)}kg` : '';
+          return {
+            title: 'B2B Buyback',
+            description: kgLabel
+              ? `Bought back ${kgLabel} gas${typeStr} from ${customer} • ${billTag}`
+              : `Buyback from ${customer} • ${billTag}`,
+          };
+        }
+        case 'RETURN_EMPTY': {
+          const summary = groupCylinderItems(cylinderItems);
+          return {
+            title: 'B2B Empty Return',
+            description: summary
+              ? `${summary} empty returned by ${customer} • ${billTag}`
+              : `Empty cylinders returned by ${customer} • ${billTag}`,
+          };
+        }
+        case 'ADJUSTMENT':
+          return {
+            title: 'B2B Adjustment',
+            description: `Ledger adjustment for ${customer} • ${billTag}`,
+          };
+        case 'CREDIT_NOTE':
+          return {
+            title: 'B2B Credit Note',
+            description: `Credit note issued to ${customer} • ${billTag}`,
+          };
+        default: {
+          const summary = buildSaleSummary();
+          return {
+            title: 'B2B Transaction',
+            description: summary ? `${summary} • ${customer} • ${billTag}` : `${customer} • ${billTag}`,
+          };
+        }
+      }
+    };
+
+    // Group items by friendly cylinder name and sum quantities
+    const groupB2CCylinders = (
+      items: Array<{ quantity: any; cylinderType: string }>
+    ): string => {
+      if (!items.length) return '';
+      const grouped = new Map<string, number>();
+      for (const it of items) {
+        const name = friendlyCylinderName(it.cylinderType) || 'cylinder';
+        grouped.set(name, (grouped.get(name) || 0) + Number(it.quantity || 0));
+      }
+      return Array.from(grouped.entries())
+        .map(([name, qty]) => `${qty} ${name}`)
+        .join(', ');
+    };
+
+    const buildB2CTitleAndDescription = (t: typeof recentB2C[number]) => {
+      const customer = t.customer?.name || 'Unknown';
+      const billTag = `Bill ${t.billSno}`;
+      const gasQty = t.gasItems?.reduce((s, i) => s + Number(i.quantity || 0), 0) || 0;
+      const securityHeld = t.securityItems?.filter((s) => !s.isReturn) || [];
+      const securityReturned = t.securityItems?.filter((s) => s.isReturn) || [];
+      const heldQty = securityHeld.reduce((s, i) => s + Number(i.quantity || 0), 0);
+      const returnedQty = securityReturned.reduce((s, i) => s + Number(i.quantity || 0), 0);
+      const accQty = t.accessoryItems?.reduce((s, i) => s + Number(i.quantity || 0), 0) || 0;
+
+      const parts: string[] = [];
+      if (gasQty > 0) {
+        const grouped = groupB2CCylinders(t.gasItems);
+        parts.push(grouped ? `${grouped} gas sold` : `${gasQty} cylinder${gasQty > 1 ? 's' : ''} gas sold`);
+      }
+      if (heldQty > 0) {
+        const grouped = groupB2CCylinders(securityHeld);
+        parts.push(grouped ? `${grouped} security held` : `${heldQty} security held`);
+      }
+      if (returnedQty > 0) {
+        const grouped = groupB2CCylinders(securityReturned);
+        parts.push(grouped ? `${grouped} empty returned` : `${returnedQty} empty returned`);
+      }
+      if (accQty > 0) {
+        const accNames = Array.from(
+          new Set((t.accessoryItems || []).map((a) => a.productName?.trim()).filter(Boolean))
+        );
+        const accLabel = accNames.length === 1 ? accNames[0] : `accessor${accQty > 1 ? 'ies' : 'y'}`;
+        parts.push(`${accQty} ${accLabel}`);
+      }
+
+      // Pick the dominant type for the badge title
+      let title = 'B2C Sale';
+      if (gasQty > 0) title = 'B2C Gas Sale';
+      else if (returnedQty > 0) title = 'B2C Empty Return';
+      else if (heldQty > 0) title = 'B2C Security Hold';
+      else if (accQty > 0) title = 'B2C Accessory Sale';
+
+      const description = parts.length
+        ? `${parts.join(' • ')} for ${customer} • ${billTag}`
+        : `Delivery to ${customer} • ${billTag}`;
+
+      return { title, description };
+    };
+
     const activities = [
-      ...recentB2B.map(t => ({
-        id: `b2b-${t.id}`,
-        type: 'b2b_sale',
-        title: 'B2B Sale',
-        description: `Sold to ${t.customer?.name || 'Unknown'} (Bill: ${t.billSno})`,
-        time: t.createdAt.toISOString(),
-        amount: Number(t.totalAmount),
-        status: t.voided ? 'error' : 'success'
-      })),
-      ...recentB2C.map(t => ({
-        id: `b2c-${t.id}`,
-        type: 'b2c_sale',
-        title: 'B2C Sale',
-        description: `Delivered to ${t.customer?.name || 'Unknown'} (Bill: ${t.billSno})`,
-        time: t.createdAt.toISOString(),
-        amount: Number(t.totalAmount),
-        status: t.voided ? 'error' : 'success'
-      }))
-    ].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 8);
+      ...recentB2B.map((t) => {
+        const { title, description } = buildB2BTitleAndDescription(t);
+        return {
+          id: `b2b-${t.id}`,
+          type: 'b2b_sale',
+          title,
+          description,
+          time: t.createdAt.toISOString(),
+          amount: Number(t.totalAmount),
+          status: t.voided ? 'error' : 'success',
+        };
+      }),
+      ...recentB2C.map((t) => {
+        const { title, description } = buildB2CTitleAndDescription(t);
+        return {
+          id: `b2c-${t.id}`,
+          type: 'b2c_sale',
+          title,
+          description,
+          time: t.createdAt.toISOString(),
+          amount: Number(t.totalAmount),
+          status: t.voided ? 'error' : 'success',
+        };
+      }),
+    ]
+      .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
+      .slice(0, 8);
 
     // 6. Accessories Inventory (individual items per category)
     const accessoryColors = ['#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#84cc16', '#14b8a6', '#a855f7', '#f43f5e'];

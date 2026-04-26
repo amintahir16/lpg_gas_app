@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { format, subMonths } from 'date-fns';
+import { logActivity, ActivityAction } from '@/lib/activityLogger';
+import { notifyUserActivity } from '@/lib/superAdminNotifier';
 export async function GET(request: NextRequest) {
     try {
         const session = await getServerSession(authOptions);
@@ -121,6 +123,41 @@ export async function POST(request: NextRequest) {
                     createdBy: session.user.id,
                 },
             });
+            try {
+                const monthLabel = format(new Date(rentYear, rentMonth - 1, 1), 'MMMM yyyy');
+                const link = `/financial/expenses`;
+                await logActivity({
+                    userId: session.user.id,
+                    action: ActivityAction.OFFICE_EXPENSE_CREATED,
+                    entityType: 'OFFICE_EXPENSE',
+                    entityId: expense.id,
+                    details: `Recorded RENT expense Rs ${parsedAmount.toLocaleString()} for ${monthLabel} • ${description}`,
+                    link,
+                    metadata: {
+                        expenseId: expense.id,
+                        type: 'RENT',
+                        amount: parsedAmount,
+                        month: rentMonth,
+                        year: rentYear,
+                    },
+                });
+                await notifyUserActivity({
+                    actorId: session.user.id,
+                    actorName: session.user.name || session.user.email || 'A user',
+                    title: 'Office rent recorded',
+                    message: `${session.user.name || session.user.email} recorded Rs ${parsedAmount.toLocaleString()} office rent for ${monthLabel}.`,
+                    link,
+                    priority: 'MEDIUM',
+                    metadata: {
+                        domain: 'OFFICE_EXPENSE',
+                        expenseId: expense.id,
+                        type: 'RENT',
+                        amount: parsedAmount,
+                    },
+                });
+            } catch (sideEffectError) {
+                console.error('Office expense (rent) side effects failed:', sideEffectError);
+            }
             return NextResponse.json(expense, { status: 201 });
         }
         // DAILY type
@@ -133,6 +170,39 @@ export async function POST(request: NextRequest) {
                 createdBy: session.user.id,
             },
         });
+        try {
+            const link = `/financial/expenses`;
+            await logActivity({
+                userId: session.user.id,
+                action: ActivityAction.OFFICE_EXPENSE_CREATED,
+                entityType: 'OFFICE_EXPENSE',
+                entityId: expense.id,
+                details: `Recorded DAILY expense Rs ${parsedAmount.toLocaleString()} • ${description}`,
+                link,
+                metadata: {
+                    expenseId: expense.id,
+                    type: 'DAILY',
+                    amount: parsedAmount,
+                    description,
+                },
+            });
+            await notifyUserActivity({
+                actorId: session.user.id,
+                actorName: session.user.name || session.user.email || 'A user',
+                title: 'Daily expense recorded',
+                message: `${session.user.name || session.user.email} recorded Rs ${parsedAmount.toLocaleString()} daily expense • ${description}.`,
+                link,
+                priority: 'LOW',
+                metadata: {
+                    domain: 'OFFICE_EXPENSE',
+                    expenseId: expense.id,
+                    type: 'DAILY',
+                    amount: parsedAmount,
+                },
+            });
+        } catch (sideEffectError) {
+            console.error('Office expense (daily) side effects failed:', sideEffectError);
+        }
         return NextResponse.json(expense, { status: 201 });
     } catch (error) {
         console.error('Office expense creation error:', error);

@@ -509,7 +509,7 @@ export default function DashboardPage() {
                   stats.recentActivities.map((activity) => (
                     <TableRow key={activity.id} className="hover:bg-gray-50/50">
                       <TableCell>
-                        <Badge variant="outline" className={`font-semibold ${activity.type === 'b2b_sale' ? 'text-blue-700 border-blue-200 bg-blue-50' : 'text-green-700 border-green-200 bg-green-50'}`}>
+                        <Badge variant="outline" className={`font-semibold whitespace-nowrap ${activity.type === 'b2b_sale' ? 'text-blue-700 border-blue-200 bg-blue-50' : 'text-green-700 border-green-200 bg-green-50'}`}>
                           {activity.title}
                         </Badge>
                       </TableCell>

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { BellIcon, XMarkIcon, CheckIcon, ExclamationTriangleIcon, InformationCircleIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,7 @@ export function NotificationBell({
   variant = 'default' 
 }: NotificationBellProps) {
   const { state, markAsRead, removeNotification } = useNotifications();
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const bellRef = useRef<HTMLButtonElement>(null);
@@ -83,7 +85,7 @@ export function NotificationBell({
   };
 
   const getBellIconClass = () => {
-    let baseClass = 'w-5 h-5 transition-all duration-200';
+    let baseClass = 'relative z-10 w-5 h-5 transition-all duration-200';
     
     if (isAnimating) {
       baseClass += ' animate-pulse text-red-500';
@@ -130,6 +132,22 @@ export function NotificationBell({
 
   const handleRemoveNotification = async (id: string) => {
     await removeNotification(id);
+  };
+
+  const handleNotificationClick = async (
+    notification: { id: string; isRead: boolean; link?: string | null }
+  ) => {
+    if (!notification.isRead) {
+      try {
+        await markAsRead(notification.id);
+      } catch {
+        // non-blocking: still navigate
+      }
+    }
+    if (notification.link) {
+      setIsOpen(false);
+      router.push(notification.link);
+    }
   };
 
   if (variant === 'minimal') {
@@ -190,9 +208,19 @@ export function NotificationBell({
                   {notifications.slice(0, 10).map((notification) => (
                     <div
                       key={notification.id}
+                      role={notification.link ? 'button' : undefined}
+                      tabIndex={notification.link ? 0 : undefined}
+                      onClick={() => handleNotificationClick(notification)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          handleNotificationClick(notification);
+                        }
+                      }}
                       className={cn(
-                        "p-4 hover:bg-gray-50 transition-colors",
-                        !notification.isRead ? 'bg-blue-50' : ''
+                        'p-4 hover:bg-gray-50 transition-colors',
+                        !notification.isRead ? 'bg-blue-50' : '',
+                        notification.link ? 'cursor-pointer' : ''
                       )}
                     >
                       <div className="flex items-start space-x-3">
@@ -229,7 +257,10 @@ export function NotificationBell({
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() => handleMarkAsRead(notification.id)}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleMarkAsRead(notification.id);
+                                  }}
                                   className="text-xs text-blue-600 hover:text-blue-800"
                                 >
                                   Mark read
@@ -238,7 +269,10 @@ export function NotificationBell({
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleRemoveNotification(notification.id)}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleRemoveNotification(notification.id);
+                                }}
                                 className="text-xs text-red-600 hover:text-red-800"
                               >
                                 Delete
@@ -279,27 +313,33 @@ export function NotificationBell({
         variant="ghost"
         size="icon"
         onClick={handleBellClick}
-        className={`relative group ${className}`}
+        className={`relative group overflow-visible ${className}`}
         aria-label={`Notifications (${unreadCount} unread)`}
       >
+        {/* Soft hover halo — sits BEHIND the icon */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-0 rounded-full bg-gray-100/0 transition-colors duration-200 group-hover:bg-gray-100"
+        />
+
+        {/* Pulse ring for urgent notifications — also behind the icon */}
+        {urgentCount > 0 && (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 z-0 rounded-full bg-red-200/60 animate-ping"
+          />
+        )}
+
         <BellIcon className={getBellIconClass()} />
-        
-        {/* Hover effect */}
-        <div className="absolute inset-0 rounded-lg bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
-        
+
         {/* Badge */}
         {showBadge && unreadCount > 0 && (
-          <Badge 
+          <Badge
             variant={getBadgeVariant()}
-            className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-xs flex items-center justify-center animate-in slide-in-from-top-1 duration-200"
+            className="absolute -top-1 -right-1 z-20 h-5 w-5 rounded-full p-0 text-xs flex items-center justify-center animate-in slide-in-from-top-1 duration-200"
           >
             {getBadgeContent()}
           </Badge>
-        )}
-        
-        {/* Pulse animation for urgent notifications */}
-        {urgentCount > 0 && (
-          <div className="absolute inset-0 rounded-lg bg-red-200 opacity-0 animate-ping" />
         )}
       </Button>
       
@@ -347,9 +387,19 @@ export function NotificationBell({
                 {notifications.slice(0, 10).map((notification) => (
                   <div
                     key={notification.id}
+                    role={notification.link ? 'button' : undefined}
+                    tabIndex={notification.link ? 0 : undefined}
+                    onClick={() => handleNotificationClick(notification)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        handleNotificationClick(notification);
+                      }
+                    }}
                     className={cn(
-                      "p-4 hover:bg-gray-50 transition-colors",
-                      !notification.isRead ? 'bg-blue-50' : ''
+                      'p-4 hover:bg-gray-50 transition-colors',
+                      !notification.isRead ? 'bg-blue-50' : '',
+                      notification.link ? 'cursor-pointer' : ''
                     )}
                   >
                     <div className="flex items-start space-x-3">
@@ -386,7 +436,10 @@ export function NotificationBell({
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleMarkAsRead(notification.id)}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleMarkAsRead(notification.id);
+                                }}
                                 className="text-xs text-blue-600 hover:text-blue-800"
                               >
                                 Mark read
@@ -395,7 +448,10 @@ export function NotificationBell({
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleRemoveNotification(notification.id)}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleRemoveNotification(notification.id);
+                              }}
                               className="text-xs text-red-600 hover:text-red-800"
                             >
                               Delete

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { logActivity, ActivityAction } from '@/lib/activityLogger';
+import { notifyUserActivity } from '@/lib/superAdminNotifier';
 
 export async function GET(request: NextRequest) {
   try {
@@ -233,6 +235,38 @@ export async function POST(request: NextRequest) {
         totalProfit: 0
       }
     });
+
+    try {
+      const link = `/customers/b2c/${customer.id}`;
+      await logActivity({
+        userId: session.user.id,
+        action: ActivityAction.B2C_CUSTOMER_CREATED,
+        entityType: 'B2C_CUSTOMER',
+        entityId: customer.id,
+        details: `Created B2C customer "${customer.name}" • Phone: ${customer.phone}`,
+        link,
+        metadata: {
+          customerId: customer.id,
+          customerName: customer.name,
+          phone: customer.phone,
+        },
+      });
+      await notifyUserActivity({
+        actorId: session.user.id,
+        actorName: session.user.name || session.user.email || 'A user',
+        title: 'New B2C customer added',
+        message: `${session.user.name || session.user.email} added B2C customer "${customer.name}".`,
+        link,
+        priority: 'MEDIUM',
+        metadata: {
+          domain: 'B2C_CUSTOMER',
+          customerId: customer.id,
+          customerName: customer.name,
+        },
+      });
+    } catch (sideEffectError) {
+      console.error('B2C customer create side effects failed:', sideEffectError);
+    }
 
     return NextResponse.json(customer, { status: 201 });
 

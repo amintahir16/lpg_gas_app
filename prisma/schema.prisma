@@ -465,11 +465,14 @@ model Notification {
   isRead    Boolean              @default(false)
   priority  NotificationPriority @default(MEDIUM)
   metadata  String?
+  link      String?
   userId    String?
   createdAt DateTime             @default(now())
   updatedAt DateTime             @updatedAt
   user      User?                @relation("UserNotifications", fields: [userId], references: [id])
 
+  @@index([userId, isRead])
+  @@index([type, createdAt])
   @@map("notifications")
 }
 
@@ -852,10 +855,13 @@ model ActivityLog {
   entityId   String?
   details    String?
   metadata   Json?
+  link       String?
   ipAddress  String?
   createdAt  DateTime @default(now())
   user       User     @relation(fields: [userId], references: [id])
 
+  @@index([userId, createdAt])
+  @@index([entityType, entityId])
   @@map("activity_logs")
 }
 model OfficeExpense {

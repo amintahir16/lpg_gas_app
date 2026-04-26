@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { logActivity, ActivityAction } from '@/lib/activityLogger';
+import { notifyUserActivity } from '@/lib/superAdminNotifier';
 
 export async function GET(request: NextRequest) {
   try {
@@ -465,6 +467,39 @@ export async function POST(request: NextRequest) {
         marginCategoryId: marginCategoryId || null,
       },
     });
+
+    try {
+      const link = `/customers/b2b/${customer.id}`;
+      await logActivity({
+        userId: session.user.id,
+        action: ActivityAction.B2B_CUSTOMER_CREATED,
+        entityType: 'B2B_CUSTOMER',
+        entityId: customer.id,
+        details: `Created B2B customer "${customer.name}" • Phone: ${customer.phone}`,
+        link,
+        metadata: {
+          customerId: customer.id,
+          customerName: customer.name,
+          phone: customer.phone,
+          customerType,
+        },
+      });
+      await notifyUserActivity({
+        actorId: session.user.id,
+        actorName: session.user.name || session.user.email || 'A user',
+        title: 'New B2B customer added',
+        message: `${session.user.name || session.user.email} added B2B customer "${customer.name}".`,
+        link,
+        priority: 'MEDIUM',
+        metadata: {
+          domain: 'B2B_CUSTOMER',
+          customerId: customer.id,
+          customerName: customer.name,
+        },
+      });
+    } catch (sideEffectError) {
+      console.error('B2B customer create side effects failed:', sideEffectError);
+    }
 
     return NextResponse.json(customer, { status: 201 });
   } catch (error) {

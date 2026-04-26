@@ -4,6 +4,11 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { CylinderStatus } from '@prisma/client';
 import { InventoryDeductionService } from '@/lib/inventory-deduction';
+import { logActivity, ActivityAction } from '@/lib/activityLogger';
+import {
+  notifyUserActivity,
+  checkAllCylinderTypesForLowStock,
+} from '@/lib/superAdminNotifier';
 
 export async function POST(
   request: NextRequest,
@@ -275,6 +280,56 @@ export async function POST(
 
       // Note: Gas items don't affect inventory (they're just refills), so nothing to reverse there
     });
+
+    // ---- Post-commit side effects ----
+    try {
+      const customerName = transaction.customer?.name || 'B2C Customer';
+      const total = parseFloat(transaction.totalAmount.toString());
+      const link = `/customers/b2c/${transaction.customerId}?tx=${transaction.id}`;
+
+      await logActivity({
+        userId: session.user.id,
+        action: ActivityAction.B2C_TRANSACTION_VOIDED,
+        entityType: 'B2C_TRANSACTION',
+        entityId: transaction.id,
+        details: `Voided B2C transaction • Customer: ${customerName} • Bill #: ${transaction.billSno} • Total: Rs ${total.toLocaleString()}${reason ? ` • Reason: ${reason}` : ''}`,
+        link,
+        metadata: {
+          customerId: transaction.customerId,
+          customerName,
+          billSno: transaction.billSno,
+          totalAmount: total,
+          reason: reason || null,
+        },
+      });
+
+      await notifyUserActivity({
+        actorId: session.user.id,
+        actorName: session.user.name || session.user.email || 'A user',
+        title: 'B2C transaction voided',
+        message: `${session.user.name || session.user.email} voided a B2C transaction of Rs ${total.toLocaleString()} for ${customerName} (Bill #${transaction.billSno}).`,
+        link,
+        priority: 'HIGH',
+        metadata: {
+          domain: 'B2C_TRANSACTION_VOIDED',
+          transactionId: transaction.id,
+          customerId: transaction.customerId,
+          customerName,
+          billSno: transaction.billSno,
+          totalAmount: total,
+        },
+      });
+
+      const cylinderTypesAffected = [
+        ...(transaction.gasItems || []).map((g: any) => g.cylinderType).filter(Boolean),
+        ...(transaction.securityItems || []).map((s: any) => s.cylinderType).filter(Boolean),
+      ];
+      if (cylinderTypesAffected.length > 0) {
+        await checkAllCylinderTypesForLowStock(cylinderTypesAffected);
+      }
+    } catch (sideEffectError) {
+      console.error('B2C undo post-commit side effects failed:', sideEffectError);
+    }
 
     return NextResponse.json({ 
       success: true, 
