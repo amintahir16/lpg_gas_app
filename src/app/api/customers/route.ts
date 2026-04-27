@@ -21,10 +21,10 @@ export async function GET(request: NextRequest) {
       isActive: true,
       ...regionScopedWhere(regionId),
       OR: search ? [
-        { name: { contains: search, mode: 'insensitive' as Prisma.QueryMode } },
-        { contactPerson: { contains: search, mode: 'insensitive' as Prisma.QueryMode } },
-        { phone: { contains: search, mode: 'insensitive' as Prisma.QueryMode } },
-        { email: { contains: search, mode: 'insensitive' as Prisma.QueryMode } }
+        { name: { contains: search } },
+        { contactPerson: { contains: search } },
+        { phone: { contains: search } },
+        { email: { contains: search } }
       ] : undefined
     };
 

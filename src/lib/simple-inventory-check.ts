@@ -80,7 +80,7 @@ export async function checkAccessoryInventory(
       case 'product':
         const product = await prisma.product.findFirst({
           where: {
-            name: { contains: itemName, mode: 'insensitive' },
+            name: { contains: itemName },
             ...regionScopedWhere(regionId ?? null),
           }
         });

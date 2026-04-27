@@ -28,24 +28,24 @@ export async function GET(request: NextRequest) {
     let b2bWhere: any = { ...regionScope };
     if (search) {
       b2bWhere.OR = [
-        { name: { contains: search, mode: 'insensitive' as const } },
-        { contactPerson: { contains: search, mode: 'insensitive' as const } },
-        { phone: { contains: search, mode: 'insensitive' as const } },
-        { email: { contains: search, mode: 'insensitive' as const } }
+        { name: { contains: search } },
+        { contactPerson: { contains: search } },
+        { phone: { contains: search } },
+        { email: { contains: search } }
       ];
     }
 
     let b2cWhere: any = { ...regionScope };
     if (search) {
       b2cWhere.OR = [
-        { name: { contains: search, mode: 'insensitive' as const } },
-        { phone: { contains: search, mode: 'insensitive' as const } },
-        { address: { contains: search, mode: 'insensitive' as const } },
-        { houseNumber: { contains: search, mode: 'insensitive' as const } },
-        { sector: { contains: search, mode: 'insensitive' as const } },
-        { street: { contains: search, mode: 'insensitive' as const } },
-        { phase: { contains: search, mode: 'insensitive' as const } },
-        { area: { contains: search, mode: 'insensitive' as const } }
+        { name: { contains: search } },
+        { phone: { contains: search } },
+        { address: { contains: search } },
+        { houseNumber: { contains: search } },
+        { sector: { contains: search } },
+        { street: { contains: search } },
+        { phase: { contains: search } },
+        { area: { contains: search } }
       ];
     }
 
@@ -206,7 +206,7 @@ export async function GET(request: NextRequest) {
 
       // And search by location containing ID
       const locMatches = b2bIds.map(id => ({ location: { contains: id } }));
-      const nameMatches = b2bCustomers.map(c => ({ location: { contains: c.name, mode: 'insensitive' as const } }));
+      const nameMatches = b2bCustomers.map(c => ({ location: { contains: c.name } }));
 
       const b2bCylsLocationCount = await prisma.cylinder.count({
         where: {

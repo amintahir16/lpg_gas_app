@@ -22,8 +22,8 @@ export async function GET(request: NextRequest) {
     const where: Prisma.CylinderWhereInput = {
       ...regionScopedWhere(regionId),
       OR: search ? [
-        { code: { contains: search, mode: 'insensitive' as Prisma.QueryMode } },
-        { location: { contains: search, mode: 'insensitive' as Prisma.QueryMode } }
+        { code: { contains: search } },
+        { location: { contains: search } }
       ] : undefined,
       currentStatus: status ? (status as CylinderStatus) : undefined,
       cylinderType: type ? type : undefined // Use string directly

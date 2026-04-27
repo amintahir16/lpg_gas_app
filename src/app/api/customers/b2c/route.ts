@@ -28,14 +28,14 @@ export async function GET(request: NextRequest) {
     // Build where clause for search
     const whereClause: any = search ? {
       OR: [
-        { name: { contains: search, mode: 'insensitive' as const } },
-        { phone: { contains: search, mode: 'insensitive' as const } },
-        { address: { contains: search, mode: 'insensitive' as const } },
-        { houseNumber: { contains: search, mode: 'insensitive' as const } },
-        { sector: { contains: search, mode: 'insensitive' as const } },
-        { street: { contains: search, mode: 'insensitive' as const } },
-        { phase: { contains: search, mode: 'insensitive' as const } },
-        { area: { contains: search, mode: 'insensitive' as const } }
+        { name: { contains: search } },
+        { phone: { contains: search } },
+        { address: { contains: search } },
+        { houseNumber: { contains: search } },
+        { sector: { contains: search } },
+        { street: { contains: search } },
+        { phase: { contains: search } },
+        { area: { contains: search } }
       ],
       ...regionScopedWhere(regionId),
     } : { ...regionScopedWhere(regionId) };

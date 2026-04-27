@@ -33,8 +33,7 @@ export async function GET(
         items: {
           some: {
             productName: {
-              contains: productName,
-              mode: 'insensitive'
+              contains: productName
             },
             cylinderType: cylinderType
           }
@@ -44,8 +43,7 @@ export async function GET(
         items: {
           where: {
             productName: {
-              contains: productName,
-              mode: 'insensitive'
+              contains: productName
             },
             cylinderType: cylinderType
           },
@@ -73,8 +71,7 @@ export async function GET(
     const lastKnownPrice = await prisma.b2BTransactionItem.findFirst({
       where: {
         productName: {
-          contains: productName,
-          mode: 'insensitive'
+          contains: productName
         },
         cylinderType: cylinderType,
         transaction: {

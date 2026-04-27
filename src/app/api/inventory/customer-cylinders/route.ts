@@ -18,15 +18,15 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       where.OR = [
-        { code: { contains: search, mode: 'insensitive' } },
-        { location: { contains: search, mode: 'insensitive' } },
+        { code: { contains: search } },
+        { location: { contains: search } },
         {
           cylinderRentals: {
             some: {
               customer: {
                 OR: [
-                  { name: { contains: search, mode: 'insensitive' } },
-                  { contactPerson: { contains: search, mode: 'insensitive' } }
+                  { name: { contains: search } },
+                  { contactPerson: { contains: search } }
                 ]
               }
             }
@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
           where: {
             ...regionScopedWhere(regionId),
             OR: Array.from(customerNames).map(name => ({
-              name: { contains: name, mode: 'insensitive' }
+              name: { contains: name }
             }))
           },
           select: {
@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
           where: {
             ...regionScopedWhere(regionId),
             OR: Array.from(customerNames).map(name => ({
-              name: { contains: name, mode: 'insensitive' }
+              name: { contains: name }
             }))
           },
           select: {
