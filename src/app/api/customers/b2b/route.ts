@@ -5,14 +5,17 @@ import { authOptions } from '@/lib/auth';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity } from '@/lib/superAdminNotifier';
 import { getActiveRegionId, regionScopedWhere, withRegionScope } from '@/lib/region';
+import { requireAdmin, clampLimit } from '@/lib/apiAuth';
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAdmin();
+    if (!auth.ok) return auth.response;
     const regionId = getActiveRegionId(request);
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const limit = clampLimit(searchParams.get('limit'), 10);
     const type = searchParams.get('type') || 'B2B';
 
     // New Filters

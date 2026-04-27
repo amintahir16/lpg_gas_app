@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { clampLimit } from '@/lib/apiAuth';
 
 // GET /api/admin/plant-prices - Get plant prices (with optional date filter)
 export async function GET(request: NextRequest) {
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const dateParam = searchParams.get('date');
     const latest = searchParams.get('latest') === 'true';
-    const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : 30;
+    const limit = clampLimit(searchParams.get('limit'), 30);
 
     if (latest) {
       const today = new Date();

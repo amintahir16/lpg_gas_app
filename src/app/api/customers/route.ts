@@ -3,22 +3,18 @@ import { prisma } from '@/lib/db';
 import { Prisma } from '@prisma/client';
 import { createCustomerAddedNotification } from '@/lib/notifications';
 import { getActiveRegionId, regionScopedWhere, withRegionScope } from '@/lib/region';
+import { requireAdmin, clampLimit } from '@/lib/apiAuth';
 
 export async function GET(request: NextRequest) {
   try {
-    // Get user info from headers (set by middleware)
-    const userId = request.headers.get('x-user-id');
-    const userRole = request.headers.get('x-user-role');
-
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAdmin();
+    if (!auth.ok) return auth.response;
 
     const regionId = getActiveRegionId(request);
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const limit = clampLimit(searchParams.get('limit'), 10);
     const skip = (page - 1) * limit;
 
     const where: Prisma.CustomerWhereInput = {
@@ -62,34 +58,10 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // Get user info from headers (set by middleware)
-    const userId = request.headers.get('x-user-id');
-    const userRole = request.headers.get('x-user-role'); // Keep for potential future role checks, though currently unused locally
+    const auth = await requireAdmin();
+    if (!auth.ok) return auth.response;
 
-    console.log('Received userId from headers:', userId);
-
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Verify user exists in database
-    let user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, email: true }
-    });
-
-    if (!user) {
-      console.log('User not found in database:', userId);
-      // Try to find any admin user as fallback (legacy logic preserved)
-      user = await prisma.user.findFirst({
-        where: { role: 'ADMIN' },
-        select: { id: true, email: true }
-      });
-
-      if (!user) {
-        return NextResponse.json({ error: 'No valid user found' }, { status: 401 });
-      }
-    }
+    const userId = auth.session.user.id;
 
     const body = await request.json();
     const {
@@ -103,7 +75,6 @@ export async function POST(request: NextRequest) {
       paymentTermsDays
     } = body;
 
-    // Validate required fields
     if (!name || !contactPerson || !phone) {
       return NextResponse.json(
         { error: 'Missing required fields: name, contactPerson, phone' },
@@ -122,17 +93,16 @@ export async function POST(request: NextRequest) {
         type,
         creditLimit: creditLimit ? parseFloat(creditLimit) : 0,
         paymentTermsDays: paymentTermsDays ? parseInt(paymentTermsDays) : 30,
-        createdBy: user.id
+        createdBy: userId
       }, regionId)
     });
 
-    // Create notification
     try {
-      const userEmail = request.headers.get('x-user-email') || 'Unknown User';
+      const userEmail = auth.session.user.email || 'Unknown User';
       await createCustomerAddedNotification(
         customer.name,
         userEmail,
-        customer.id // Using ID as code substitute since code field doesn't exist
+        customer.id
       );
     } catch (notificationError) {
       console.error('Failed to create notification:', notificationError);

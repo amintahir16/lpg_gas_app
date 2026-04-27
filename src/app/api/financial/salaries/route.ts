@@ -6,12 +6,12 @@ import { format } from 'date-fns';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity } from '@/lib/superAdminNotifier';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { requireAdmin } from '@/lib/apiAuth';
 export async function GET(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const auth = await requireAdmin();
+        if (!auth.ok) return auth.response;
+        const session = auth.session;
         const regionId = getActiveRegionId(request);
         const regionScope = regionScopedWhere(regionId);
         const { searchParams } = new URL(request.url);
@@ -111,10 +111,9 @@ export async function GET(request: NextRequest) {
 }
 export async function POST(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const auth = await requireAdmin();
+        if (!auth.ok) return auth.response;
+        const session = auth.session;
         const regionId = getActiveRegionId(request);
         const body = await request.json();
         const { userId, amount, month, year, paymentMethod, notes } = body;

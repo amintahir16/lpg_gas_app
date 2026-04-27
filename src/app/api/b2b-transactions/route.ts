@@ -3,21 +3,19 @@ import { prisma } from '@/lib/db';
 import { B2BTransactionType } from '@prisma/client';
 import { generateCylinderTypeFromCapacity, getCapacityFromTypeString } from '@/lib/cylinder-utils';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { requireAdmin, clampLimit } from '@/lib/apiAuth';
 
 export async function GET(request: NextRequest) {
   try {
-    const userId = request.headers.get('x-user-id');
-    
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAdmin();
+    if (!auth.ok) return auth.response;
 
     const regionId = getActiveRegionId(request);
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get('customerId');
     const transactionType = searchParams.get('transactionType');
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const limit = clampLimit(searchParams.get('limit'), 10);
     const skip = (page - 1) * limit;
 
     const whereClause: any = { ...regionScopedWhere(regionId) };
@@ -70,38 +68,19 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const userId = request.headers.get('x-user-id');
-    
-    console.log('Received userId from headers:', userId);
-    
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // Authenticate via verified session — never trust the spoofable
+    // `x-user-id` header alone, and never fall back to "any admin".
+    const auth = await requireAdmin();
+    if (!auth.ok) return auth.response;
+    const userId = auth.session.user.id;
 
-    // Verify user exists in database
-    let user = await prisma.user.findUnique({
+    const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true }
+      select: { id: true, email: true },
     });
 
     if (!user) {
-      console.log('User not found in database:', userId);
-      console.log('Looking for any admin user to use instead...');
-      
-      // If user not found, try to find any admin user
-      user = await prisma.user.findFirst({
-        where: { role: 'ADMIN' },
-        select: { id: true, email: true }
-      });
-      
-      if (!user) {
-        console.log('No admin users found in database');
-        return NextResponse.json({ error: 'No valid user found' }, { status: 401 });
-      }
-      
-      console.log('Using admin user instead:', user);
-    } else {
-      console.log('User found:', user);
+      return NextResponse.json({ error: 'No valid user found' }, { status: 401 });
     }
 
     const body = await request.json();
@@ -117,9 +96,6 @@ export async function POST(request: NextRequest) {
       items,
     } = body;
 
-    // Validate and format date/time
-    console.log('Received date/time data:', { date, time, dateType: typeof date, timeType: typeof time });
-    
     const transactionDate = new Date(date);
     
     // Handle time parsing - if time is just HH:MM, combine with date
@@ -141,13 +117,6 @@ export async function POST(request: NextRequest) {
     } else {
       transactionTime = new Date();
     }
-    
-    console.log('Parsed dates:', { 
-      transactionDate: transactionDate.toISOString(), 
-      transactionTime: transactionTime.toISOString(),
-      dateValid: !isNaN(transactionDate.getTime()),
-      timeValid: !isNaN(transactionTime.getTime())
-    });
     
     if (isNaN(transactionDate.getTime())) {
       return NextResponse.json(
@@ -212,11 +181,7 @@ export async function POST(request: NextRequest) {
       }
 
       let newLedgerBalance = parseFloat(customer.ledgerBalance.toString());
-      
-      console.log('Current ledger balance:', customer.ledgerBalance, 'Type:', typeof customer.ledgerBalance);
-      console.log('Parsed ledger balance:', newLedgerBalance);
-      console.log('Transaction amount:', totalAmount, 'Type:', typeof totalAmount);
-      
+
       switch (transactionType) {
         case 'SALE':
           newLedgerBalance += parseFloat(totalAmount);
@@ -232,8 +197,6 @@ export async function POST(request: NextRequest) {
           newLedgerBalance -= parseFloat(totalAmount);
           break;
       }
-      
-      console.log('New ledger balance after calculation:', newLedgerBalance);
 
       // Update customer ledger balance and cylinder due counts
       const updateData: any = {
@@ -276,14 +239,10 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      console.log('Updating customer with data:', updateData);
-      
       const updatedCustomer = await tx.customer.update({
         where: { id: customerId },
         data: updateData,
       });
-      
-      console.log('Customer updated successfully. New balance:', updatedCustomer.ledgerBalance);
 
       // Update inventory for sales and returns
       for (const item of items) {
@@ -369,19 +328,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
+    // Log full details server-side, but don't echo `error.message` (which can
+    // contain Prisma payloads / SQL fragments) to the client.
     console.error('Error creating transaction:', error);
-    console.error('Transaction data:', {
-      transactionType,
-      customerId,
-      items: items?.map(item => ({
-        productName: item.productName,
-        quantity: item.quantity,
-        cylinderType: item.cylinderType,
-        productId: item.productId
-      }))
-    });
     return NextResponse.json(
-      { error: 'Failed to create transaction', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to create transaction' },
       { status: 500 }
     );
   }

@@ -1,6 +1,30 @@
 import { prisma } from '@/lib/db';
 import { formatMessageWithRegion } from '@/lib/superAdminNotifier';
 
+/**
+ * Strip control characters and HTML tags from notification text before
+ * persisting it. Even though our toast renderer uses `textContent` (so HTML
+ * cannot execute), unsanitized input can still contain things like
+ * zero-width characters or stored payloads that hurt other consumers
+ * (email digests, mobile push, log dashboards). One filter at the storage
+ * boundary keeps every downstream consumer safe by default.
+ */
+const MAX_TITLE_LEN = 200;
+const MAX_MESSAGE_LEN = 2000;
+
+function sanitizeNotificationField(input: unknown, max: number): string {
+  if (input === null || input === undefined) return '';
+  let str = String(input);
+  // Remove HTML tags entirely — notifications must be plain text.
+  str = str.replace(/<[^>]*>/g, '');
+  // Drop ASCII control chars except common whitespace.
+  // eslint-disable-next-line no-control-regex
+  str = str.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+  str = str.trim();
+  if (str.length > max) str = str.slice(0, max);
+  return str;
+}
+
 export interface CreateNotificationData {
   type: 'CYLINDER_ADDED' | 'CYLINDER_UPDATED' | 'CYLINDER_DELETED' | 'CYLINDER_STATUS_CHANGED' |
         'VENDOR_ADDED' | 'VENDOR_UPDATED' | 'VENDOR_DELETED' |
@@ -19,8 +43,11 @@ export interface CreateNotificationData {
 
 export async function createNotification(data: CreateNotificationData) {
   try {
+    const safeTitle = sanitizeNotificationField(data.title, MAX_TITLE_LEN);
+    const safeMessage = sanitizeNotificationField(data.message, MAX_MESSAGE_LEN);
+
     const { message: finalMessage, regionName, regionCode } = await formatMessageWithRegion(
-      data.message,
+      safeMessage,
       data.regionId
     );
     const meta: Record<string, unknown> = data.metadata ? { ...data.metadata } : {};
@@ -32,7 +59,7 @@ export async function createNotification(data: CreateNotificationData) {
     const notification = await prisma.notification.create({
       data: {
         type: data.type,
-        title: data.title,
+        title: safeTitle,
         message: finalMessage,
         userId: data.userId || null,
         metadata: Object.keys(meta).length > 0 ? JSON.stringify(meta) : null,

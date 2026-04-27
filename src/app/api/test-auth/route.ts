@@ -1,31 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSuperAdmin } from '@/lib/apiAuth';
 
-export async function GET(request: NextRequest) {
-  const userId = request.headers.get('x-user-id');
-  const userRole = request.headers.get('x-user-role');
-  const userEmail = request.headers.get('x-user-email');
-  
-  console.log(`[TEST API] Headers - UserId: ${userId}, Role: ${userRole}, Email: ${userEmail}`);
-  
-  if (!userId) {
-    return NextResponse.json({ 
-      error: 'Unauthorized',
-      message: 'No user ID in headers',
-      headers: {
-        userId,
-        userRole,
-        userEmail
-      }
-    }, { status: 401 });
+/**
+ * Diagnostic endpoint — only reachable in development. In production this
+ * route returns 404 so we don't expose any auth scaffolding.
+ */
+export async function GET(_request: NextRequest) {
+  if (process.env.NODE_ENV !== 'development') {
+    return new NextResponse(null, { status: 404 });
   }
-  
-  return NextResponse.json({ 
+
+  const auth = await requireSuperAdmin();
+  if (!auth.ok) return auth.response;
+
+  return NextResponse.json({
     success: true,
     message: 'Authentication working',
     user: {
-      id: userId,
-      role: userRole,
-      email: userEmail
-    }
+      id: auth.session.user.id,
+      role: auth.session.user.role,
+      email: auth.session.user.email,
+    },
   });
-} 
+}

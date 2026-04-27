@@ -134,6 +134,19 @@ export function NotificationBell({
     await removeNotification(id);
   };
 
+  // Some legacy notifications were stored with the API path
+  // `/inventory/custom-items?…` as their `link`. That path doesn't exist as a
+  // page (it's only an API route) so clicking the notification 404'd. New
+  // notifications use `/inventory/accessories?…` instead — this helper
+  // rewrites the older ones on the fly so already-stored notifications keep
+  // working without a DB migration.
+  const normalizeNotificationLink = (link: string): string => {
+    if (link.startsWith('/inventory/custom-items')) {
+      return link.replace('/inventory/custom-items', '/inventory/accessories');
+    }
+    return link;
+  };
+
   const handleNotificationClick = async (
     notification: { id: string; isRead: boolean; link?: string | null }
   ) => {
@@ -146,7 +159,7 @@ export function NotificationBell({
     }
     if (notification.link) {
       setIsOpen(false);
-      router.push(notification.link);
+      router.push(normalizeNotificationLink(notification.link));
     }
   };
 

@@ -2,6 +2,20 @@ import { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
+import { checkRateLimit } from '@/lib/rateLimit';
+
+/**
+ * Per-email login throttle.
+ *
+ * NextAuth's `authorize` callback does not give us direct access to the
+ * underlying `NextRequest`, so IP-based rate limiting has to live in
+ * dedicated middleware (we use the in-memory limiter elsewhere). Here we
+ * additionally cap attempts per-email so that an attacker targeting one
+ * known admin account cannot simply rotate IPs to brute-force the
+ * password — they would still trip this counter.
+ */
+const LOGIN_LIMIT = 5;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -17,6 +31,17 @@ export const authOptions: NextAuthOptions = {
             return null;
           }
 
+          const emailKey = credentials.email.toLowerCase().trim();
+          const limit = checkRateLimit(emailKey, {
+            name: 'auth:login',
+            limit: LOGIN_LIMIT,
+            windowMs: LOGIN_WINDOW_MS,
+          });
+          if (!limit.ok) {
+            console.warn(`Login throttled for ${emailKey}; retry after ${limit.retryAfterSeconds}s`);
+            return null;
+          }
+
           const user = await prisma.user.findUnique({
             where: {
               email: credentials.email
@@ -27,6 +52,15 @@ export const authOptions: NextAuthOptions = {
           });
 
           if (!user || !user.password) {
+            return null;
+          }
+
+          // Block disabled users from authenticating. We check this *before*
+          // bcrypt to avoid leaking timing info about whether disabled
+          // accounts exist, but after the existence check so a generic
+          // attacker cannot enumerate via timing alone.
+          if (user.isActive === false) {
+            console.warn(`Login attempt for inactive user ${user.email}`);
             return null;
           }
 
@@ -165,14 +199,13 @@ export const authOptions: NextAuthOptions = {
     }
   },
   events: {
-    async signIn({ user, account, profile, isNewUser }) {
-      console.log('User signed in:', user.email);
+    async signIn({ user }) {
+      // Avoid logging the email/PII at info level. If you need login auditing
+      // it should go through the activity log instead.
+      console.info('NextAuth signIn for user id:', user.id);
     },
-    async signOut({ token, session }) {
-      console.log('User signed out');
+    async signOut() {
+      console.info('NextAuth signOut');
     },
-    async session({ session, token }) {
-      // Session is being checked
-    }
   }
 }; 

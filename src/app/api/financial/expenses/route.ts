@@ -6,17 +6,17 @@ import { format, subMonths } from 'date-fns';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity } from '@/lib/superAdminNotifier';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { requireAdmin, clampLimit } from '@/lib/apiAuth';
 export async function GET(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const auth = await requireAdmin();
+        if (!auth.ok) return auth.response;
+        const session = auth.session;
         const regionId = getActiveRegionId(request);
         const regionScope = regionScopedWhere(regionId);
         const { searchParams } = new URL(request.url);
-        const page = parseInt(searchParams.get('page') || '1');
-        const limit = parseInt(searchParams.get('limit') || '20');
+        const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+        const limit = clampLimit(searchParams.get('limit'), 20);
         const type = searchParams.get('type') || ''; // 'RENT' or 'DAILY' or '' for all
         const skip = (page - 1) * limit;
         const where: any = { ...regionScope };
@@ -86,10 +86,9 @@ export async function GET(request: NextRequest) {
 }
 export async function POST(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const auth = await requireAdmin();
+        if (!auth.ok) return auth.response;
+        const session = auth.session;
         const regionId = getActiveRegionId(request);
         const body = await request.json();
         const { type, amount, description, expenseDate, month, year } = body;

@@ -11,11 +11,15 @@ import {
   differenceInDays
 } from 'date-fns';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { requireAdmin } from '@/lib/apiAuth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAdmin();
+    if (!auth.ok) return auth.response;
+
     const regionId = getActiveRegionId(request);
     const regionScope = regionScopedWhere(regionId);
     const txRegionScope = regionId ? { regionId } : {};

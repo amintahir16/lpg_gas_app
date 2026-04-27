@@ -1,23 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { generateUniqueCylinderCode } from '@/lib/cylinder-code-generator';
 import { normalizeTypeName } from '@/lib/cylinder-utils';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity, checkAndNotifyLowCylinderStock } from '@/lib/superAdminNotifier';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { requireAdmin, clampLimit } from '@/lib/apiAuth';
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAdmin();
+    if (!auth.ok) return auth.response;
     const regionId = getActiveRegionId(request);
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
     const status = searchParams.get('status') || '';
     const type = searchParams.get('type') || '';
     const location = searchParams.get('location') || '';
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '100');
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const limit = clampLimit(searchParams.get('limit'), 100);
 
     // Build where clause
     // Exclude WITH_CUSTOMER cylinders from main inventory - they are tracked on separate page
@@ -167,6 +168,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAdmin();
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
     const regionId = getActiveRegionId(request);
     const body = await request.json();
     const { code, typeName, cylinderType, capacity, currentStatus, location, storeId, vehicleId, purchaseDate, purchasePrice } = body;
@@ -216,7 +220,6 @@ export async function POST(request: NextRequest) {
     });
 
     try {
-      const session = await getServerSession(authOptions);
       if (session?.user?.id) {
         const friendly = normalizedTypeName || cylinder.cylinderType.replace(/_/g, ' ');
         const link = `/inventory/cylinders?type=${encodeURIComponent(cylinder.cylinderType)}`;
@@ -269,9 +272,8 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error creating cylinder:', error);
-    
-    // Provide more specific error messages
-    if (error.message?.includes('Invalid enum value')) {
+
+    if (error?.message?.includes('Invalid enum value')) {
       return NextResponse.json(
         {
           success: false,
@@ -281,9 +283,11 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    
+
+    // Don't leak raw error.message to clients — it can expose Prisma error codes,
+    // SQL fragments, and stack-trace fragments to anyone hitting the endpoint.
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to create cylinder' },
+      { success: false, error: 'Failed to create cylinder' },
       { status: 500 }
     );
   }

@@ -187,7 +187,13 @@ export function useRealTimeNotifications() {
 
   // Show notification toast
   const showNotificationToast = useCallback((notification: Notification) => {
-    // Create a custom toast element
+    // Build the toast purely with DOM APIs and `textContent` to ensure
+    // user-controlled `notification.title` and `notification.message` are
+    // never interpreted as HTML. Previously we used `innerHTML` here, which
+    // turned every notification field into a stored-XSS sink (an attacker
+    // who could plant `<img onerror=...>` into a customer name, vendor name,
+    // expense description, etc. would execute script in every admin's
+    // browser when the toast fired).
     const toast = document.createElement('div');
     toast.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg max-w-sm transform transition-all duration-300 translate-x-full ${
       notification.priority === 'URGENT' ? 'bg-red-500 text-white' :
@@ -195,26 +201,42 @@ export function useRealTimeNotifications() {
       notification.priority === 'MEDIUM' ? 'bg-blue-500 text-white' :
       'bg-gray-500 text-white'
     }`;
-    
-    toast.innerHTML = `
-      <div class="flex items-start space-x-3">
-        <div class="flex-shrink-0">
-          <div class="w-5 h-5 rounded-full ${
-            notification.priority === 'URGENT' ? 'bg-red-300' :
-            notification.priority === 'HIGH' ? 'bg-orange-300' :
-            notification.priority === 'MEDIUM' ? 'bg-blue-300' :
-            'bg-gray-300'
-          }"></div>
-        </div>
-        <div class="flex-1">
-          <h4 class="font-semibold text-sm">${notification.title}</h4>
-          <p class="text-sm opacity-90">${notification.message}</p>
-        </div>
-        <button class="text-white opacity-70 hover:opacity-100" onclick="this.parentElement.parentElement.remove()">
-          ×
-        </button>
-      </div>
-    `;
+
+    const row = document.createElement('div');
+    row.className = 'flex items-start space-x-3';
+
+    const iconWrap = document.createElement('div');
+    iconWrap.className = 'flex-shrink-0';
+    const icon = document.createElement('div');
+    icon.className = `w-5 h-5 rounded-full ${
+      notification.priority === 'URGENT' ? 'bg-red-300' :
+      notification.priority === 'HIGH' ? 'bg-orange-300' :
+      notification.priority === 'MEDIUM' ? 'bg-blue-300' :
+      'bg-gray-300'
+    }`;
+    iconWrap.appendChild(icon);
+
+    const body = document.createElement('div');
+    body.className = 'flex-1';
+    const title = document.createElement('h4');
+    title.className = 'font-semibold text-sm';
+    title.textContent = notification.title || '';
+    const message = document.createElement('p');
+    message.className = 'text-sm opacity-90';
+    message.textContent = notification.message || '';
+    body.appendChild(title);
+    body.appendChild(message);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'text-white opacity-70 hover:opacity-100';
+    closeBtn.type = 'button';
+    closeBtn.textContent = '×';
+    closeBtn.addEventListener('click', () => toast.remove());
+
+    row.appendChild(iconWrap);
+    row.appendChild(body);
+    row.appendChild(closeBtn);
+    toast.appendChild(row);
 
     document.body.appendChild(toast);
 

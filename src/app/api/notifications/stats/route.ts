@@ -11,10 +11,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId') || session.user.id;
+    // Always derive scope from the authenticated session — never accept a
+    // `?userId=` from the query string. Previously this endpoint let any
+    // logged-in user read another user's notification statistics by passing
+    // an arbitrary userId in the URL (IDOR).
+    const userId = session.user.id;
 
-    // Base where clause for user's notifications
     const baseWhere = {
       OR: [
         { userId },

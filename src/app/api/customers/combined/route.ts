@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { clampLimit } from '@/lib/apiAuth';
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,8 +18,8 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const limit = clampLimit(searchParams.get('limit'), 10);
     const filterStatus = searchParams.get('status') || 'ALL'; // 'ACTIVE' | 'INACTIVE' | 'ALL'
     const filterType = searchParams.get('type') || 'ALL'; // 'B2B' | 'B2C' | 'ALL'
     const skip = (page - 1) * limit;

@@ -3,6 +3,24 @@ import type { NotificationPriority, NotificationType, Prisma } from '@prisma/cli
 
 type Priority = NotificationPriority;
 
+/**
+ * Strip HTML tags / control chars and cap length so untrusted input
+ * (customer/vendor names, free-text descriptions) cannot store XSS or
+ * binary payloads in the notification body. Pairs with the toast renderer
+ * which uses `textContent`, but we belt-and-suspenders this at write time
+ * for email/push consumers as well.
+ */
+function sanitizeNotificationField(input: unknown, max: number): string {
+  if (input === null || input === undefined) return '';
+  let str = String(input);
+  str = str.replace(/<[^>]*>/g, '');
+  // eslint-disable-next-line no-control-regex
+  str = str.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+  str = str.trim();
+  if (str.length > max) str = str.slice(0, max);
+  return str;
+}
+
 interface NotifySuperAdminsInput {
   type: NotificationType;
   title: string;
@@ -69,8 +87,14 @@ export async function notifySuperAdmins(input: NotifySuperAdminsInput) {
     const recipientIds = await getSuperAdminUserIds(input.excludeUserId ?? null);
     if (recipientIds.length === 0) return [];
 
+    // Always strip control characters / HTML before persisting. Title and
+    // message can come from arbitrary user activity (e.g. customer name in
+    // an "imported customer" log) so we treat them as untrusted.
+    const safeTitle = sanitizeNotificationField(input.title, 200);
+    const safeInputMessage = sanitizeNotificationField(input.message, 2000);
+
     const { message: finalMessage, regionName, regionCode } = await formatMessageWithRegion(
-      input.message,
+      safeInputMessage,
       input.regionId
     );
     const meta: Record<string, unknown> = { ...(input.metadata ?? {}) };
@@ -86,7 +110,7 @@ export async function notifySuperAdmins(input: NotifySuperAdminsInput) {
         prisma.notification.create({
           data: {
             type: input.type,
-            title: input.title,
+            title: safeTitle,
             message: finalMessage,
             priority: input.priority ?? 'MEDIUM',
             link: input.link ?? null,
@@ -314,7 +338,7 @@ export async function checkAndNotifyLowAccessoryStock(itemId: string) {
       title: 'Low Accessory Stock',
       message: `Only ${item.quantity} units left of ${item.name} – ${item.type}. Please restock soon.`,
       priority: 'URGENT',
-      link: `/inventory/custom-items?category=${encodeURIComponent(item.name)}&item=${encodeURIComponent(item.id)}`,
+      link: `/inventory/accessories?category=${encodeURIComponent(item.name)}&item=${encodeURIComponent(item.id)}`,
       regionId: item.regionId,
       metadata: {
         kind: 'accessory',

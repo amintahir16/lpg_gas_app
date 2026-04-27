@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   CheckCircleIcon, 
   ExclamationTriangleIcon, 
@@ -32,14 +32,30 @@ interface ToastProps {
 export function Toast({ notification, onDismiss, position = 'top-right' }: ToastProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { id, type, title, message, duration = 5000, action, dismissible = true } = notification;
 
+  // Keep the latest `onDismiss` in a ref so we can read it from the timer
+  // without re-arming the effect on every parent re-render. If we put
+  // `onDismiss` in the dep array we end up cancelling and re-creating the
+  // auto-dismiss timer on every render, which both wastes work and (in
+  // practice) prevents the toast from ever auto-dismissing while the parent
+  // is re-rendering frequently.
+  const onDismissRef = useRef(onDismiss);
   useEffect(() => {
-    // Animate in
+    onDismissRef.current = onDismiss;
+  }, [onDismiss]);
+
+  const handleDismiss = useCallback(() => {
+    setIsExiting(true);
+    setTimeout(() => {
+      onDismissRef.current(id);
+    }, 300);
+  }, [id]);
+
+  useEffect(() => {
     const showTimer = setTimeout(() => setIsVisible(true), 100);
-    
-    // Auto-dismiss
+
     if (duration > 0) {
       timeoutRef.current = setTimeout(() => {
         handleDismiss();
@@ -52,14 +68,7 @@ export function Toast({ notification, onDismiss, position = 'top-right' }: Toast
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [duration, id, onDismiss]);
-
-  const handleDismiss = () => {
-    setIsExiting(true);
-    setTimeout(() => {
-      onDismiss(id);
-    }, 300);
-  };
+  }, [duration, handleDismiss]);
 
   const handleAction = () => {
     if (action?.onClick) {
@@ -197,42 +206,56 @@ export function ToastContainer({
   );
 }
 
-// Toast manager hook
+// Toast manager hook.
+//
+// IMPORTANT: every function returned from this hook is wrapped in
+// `useCallback` so it has a STABLE identity across renders. Consumers (most
+// notably `NotificationToastManager`) use these in `useEffect` dependency
+// arrays — if they were re-created on every render the effect would re-run
+// after each `setToasts` call and immediately re-toast the same notification,
+// triggering React's "Maximum update depth exceeded" guard.
 export function useToast() {
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
 
-  const addToast = (notification: Omit<ToastNotification, 'id'>) => {
+  const addToast = useCallback((notification: Omit<ToastNotification, 'id'>) => {
     const id = `toast_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const newToast: ToastNotification = { ...notification, id };
-    
+
     setToasts(prev => [newToast, ...prev]);
     return id;
-  };
+  }, []);
 
-  const removeToast = (id: string) => {
+  const removeToast = useCallback((id: string) => {
     setToasts(prev => prev.filter(toast => toast.id !== id));
-  };
+  }, []);
 
-  const clearToasts = () => {
+  const clearToasts = useCallback(() => {
     setToasts([]);
-  };
+  }, []);
 
-  // Convenience methods
-  const success = (title: string, message?: string, options?: Partial<ToastNotification>) => {
-    return addToast({ type: 'success', title, message, ...options });
-  };
+  const success = useCallback(
+    (title: string, message?: string, options?: Partial<ToastNotification>) =>
+      addToast({ type: 'success', title, message, ...options }),
+    [addToast]
+  );
 
-  const error = (title: string, message?: string, options?: Partial<ToastNotification>) => {
-    return addToast({ type: 'error', title, message, ...options });
-  };
+  const error = useCallback(
+    (title: string, message?: string, options?: Partial<ToastNotification>) =>
+      addToast({ type: 'error', title, message, ...options }),
+    [addToast]
+  );
 
-  const warning = (title: string, message?: string, options?: Partial<ToastNotification>) => {
-    return addToast({ type: 'warning', title, message, ...options });
-  };
+  const warning = useCallback(
+    (title: string, message?: string, options?: Partial<ToastNotification>) =>
+      addToast({ type: 'warning', title, message, ...options }),
+    [addToast]
+  );
 
-  const info = (title: string, message?: string, options?: Partial<ToastNotification>) => {
-    return addToast({ type: 'info', title, message, ...options });
-  };
+  const info = useCallback(
+    (title: string, message?: string, options?: Partial<ToastNotification>) =>
+      addToast({ type: 'info', title, message, ...options }),
+    [addToast]
+  );
 
   return {
     toasts,
@@ -244,4 +267,4 @@ export function useToast() {
     warning,
     info,
   };
-} 
+}

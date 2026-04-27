@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
+import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +33,11 @@ interface EquipmentStats {
 
 export default function AccessoriesInventoryPage() {
   const { data: session } = useSession();
+  const searchParams = useSearchParams();
+  // Notifications link to e.g. `/inventory/accessories?category=Stoves&item=…`.
+  // We honour `category` to pre-select the tab once data has loaded.
+  const requestedCategory = searchParams?.get('category') || null;
+  const requestedItemId = searchParams?.get('item') || null;
   const [activeTab, setActiveTab] = useState<string>('');
   const [customItems, setCustomItems] = useState<CustomItem[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -120,9 +126,14 @@ export default function AccessoriesInventoryPage() {
         const uniqueCategories: string[] = [...new Set(items.map((item: CustomItem) => item.name))];
         setCategories(uniqueCategories);
 
-        // Set active tab to first category if none selected
+        // Prefer the category requested in the URL (e.g. via a notification
+        // link) when it actually exists in this region's categories. Fall
+        // back to the first category if none is selected yet.
         if (uniqueCategories.length > 0 && !activeTab) {
-          setActiveTab(uniqueCategories[0]);
+          const matched = requestedCategory && uniqueCategories.find(
+            c => c.toLowerCase() === requestedCategory.toLowerCase()
+          );
+          setActiveTab(matched || uniqueCategories[0]);
         }
       } else {
         console.error('Failed to fetch data:', response.status, response.statusText);

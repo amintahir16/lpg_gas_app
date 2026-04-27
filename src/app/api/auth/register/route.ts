@@ -1,13 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
+import { rateLimitResponse } from '@/lib/rateLimit';
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MIN_PASSWORD_LENGTH = 12;
+
+/**
+ * Account self-registration is intentionally disabled.
+ *
+ * Originally this endpoint accepted a `userType` from the request body and
+ * minted ADMIN / VENDOR accounts on demand, which was a privilege-escalation
+ * sink for any unauthenticated caller. The application only ever creates
+ * privileged users via the SUPER_ADMIN team management UI
+ * (`/api/admin/team`), so we lock this endpoint down to SUPER_ADMIN and
+ * always create regular USER accounts — never admin/vendor — regardless of
+ * what the client sends. The role field is ignored.
+ */
 export async function POST(req: NextRequest) {
   try {
+    // Even though this is gated to SUPER_ADMIN, rate-limit by IP to slow down
+    // anyone probing the endpoint (e.g. with stolen session cookies or trying
+    // to enumerate behavior via 401 timing).
+    const limited = rateLimitResponse(req, {
+      name: 'auth:register',
+      limit: 10,
+      windowMs: 60_000,
+    });
+    if (limited) return limited;
+
+    const session = await getServerSession(authOptions);
+    if (!session?.user || session.user.role !== 'SUPER_ADMIN') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const data = await req.json();
-    const { firstName, lastName, email, password, phone, companyName, userType } = data;
-    
-    // Validate required fields
+    const { firstName, lastName, email, password, phone, companyName } = data;
+
     if (!email || !password || !firstName || !lastName) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
@@ -16,72 +47,47 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Phone number is required' }, { status: 400 });
     }
 
-    // Check if user already exists
+    if (typeof email !== 'string' || !EMAIL_REGEX.test(email)) {
+      return NextResponse.json({ error: 'Invalid email address' }, { status: 400 });
+    }
+
+    if (typeof password !== 'string' || password.length < MIN_PASSWORD_LENGTH) {
+      return NextResponse.json(
+        { error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` },
+        { status: 400 }
+      );
+    }
+
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
       return NextResponse.json({ error: 'Email already registered' }, { status: 409 });
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-    
-    // Determine user role
-    let role = 'USER';
-    if (userType === 'admin') {
-      role = 'ADMIN';
-    } else if (userType === 'vendor') {
-      role = 'VENDOR';
-    }
+    const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Create user
+    // Always USER. Privileged roles are only assignable through the
+    // SUPER_ADMIN team management UI.
     const user = await prisma.user.create({
       data: {
         email,
         password: hashedPassword,
         name: `${firstName} ${lastName}`,
-        role: role as any,
+        role: 'USER',
       },
     });
 
-    // Create associated profiles based on user type
-    if (userType === 'customer') {
-      await prisma.customer.create({
-        data: {
-          firstName,
-          lastName,
-          email,
-          phone,
-          code: `CUST${Date.now()}`,
-          customerType: 'RESIDENTIAL',
-          userId: user.id,
-        },
-      });
-    } else if (userType === 'vendor') {
-      await prisma.vendor.create({
-        data: {
-          companyName: companyName || `${firstName} ${lastName}`,
-          contactPerson: `${firstName} ${lastName}`,
-          email,
-          phone,
-          vendorCode: `VEND${Date.now()}`,
-        },
-      });
-    }
-
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       message: 'Account created successfully',
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role
-      }
+        role: user.role,
+      },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Registration error:', error);
-    return NextResponse.json({ 
-      error: error.message || 'Registration failed' 
-    }, { status: 500 });
+    return NextResponse.json({ error: 'Registration failed' }, { status: 500 });
   }
 }

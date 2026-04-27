@@ -72,7 +72,7 @@ export async function PUT(
       const session = await getServerSession(authOptions);
       const qtyChanged = existingItem.quantity !== customItem.quantity;
       if (session?.user?.id) {
-        const link = `/inventory/custom-items?category=${encodeURIComponent(customItem.name)}&item=${encodeURIComponent(customItem.id)}`;
+        const link = `/inventory/accessories?category=${encodeURIComponent(customItem.name)}&item=${encodeURIComponent(customItem.id)}`;
         await logActivity({
           userId: session.user.id,
           action: ActivityAction.CUSTOM_ITEM_UPDATED,
@@ -149,7 +149,7 @@ export async function DELETE(
     try {
       const session = await getServerSession(authOptions);
       if (session?.user?.id) {
-        const link = `/inventory/custom-items?category=${encodeURIComponent(existingItem.name)}`;
+        const link = `/inventory/accessories?category=${encodeURIComponent(existingItem.name)}`;
         await logActivity({
           userId: session.user.id,
           action: ActivityAction.CUSTOM_ITEM_DELETED,

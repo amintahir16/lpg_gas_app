@@ -17,6 +17,10 @@ const routePermissions = {
         '/contact'
     ],
 
+    // Pages / routes accessible to ADMIN and SUPER_ADMIN.
+    // The `/api/` catch-all is intentional: only ADMIN/SUPER_ADMIN can sign in
+    // (enforced in `src/lib/auth.ts`), and individual API routes do their own
+    // role/permission checks on top of this gate.
     admin: [
         '/dashboard',
         '/customers',
@@ -24,29 +28,16 @@ const routePermissions = {
         '/vendors',
         '/reports',
         '/admin',
-        '/api/customers',
-        '/api/customers/b2b',
-        '/api/cylinders',
-        '/api/expenses',
-        '/api/vendors',
-        '/api/vendor-categories',
-        '/api/reports',
-        '/api/dashboard',
-        '/api/inventory',
-        '/api/b2b-transactions',
-        '/api/customers/b2b/transactions',
-        '/api/admin/margin-categories',
-        '/api/admin/plant-prices',
-        '/api/admin/regions',
-        '/api/regions',
-        '/api/pricing'
+        '/financial',
+        '/settings',
+        '/team',
+        '/api/'
     ],
 
+    // Routes any authenticated user (regardless of role) may hit.
     notifications: [
         '/api/notifications',
-        '/api/notifications/stats',
-        '/api/simple-notifications',
-        '/api/test-notification'
+        '/api/simple-notifications'
     ],
 
     user: [
@@ -84,6 +75,17 @@ function isRegionAgnostic(pathname: string): boolean {
     return REGION_AGNOSTIC_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'));
 }
 
+/**
+ * Next.js 16 renamed the `middleware` file convention to `proxy` (see
+ * https://nextjs.org/docs/messages/middleware-to-proxy). The file MUST be
+ * named `proxy.ts` AND export a function named `proxy` for it to run.
+ *
+ * This is the only place where the inbound JWT is verified end-to-end and
+ * where we strip and re-inject the `x-user-id`, `x-user-role`,
+ * `x-user-email`, and `x-region-id` headers from the verified token. Every
+ * downstream API route is allowed to trust those headers because *this*
+ * function is the gate that produced them.
+ */
 export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
     if (pathname === '/') {
@@ -134,10 +136,6 @@ export async function proxy(request: NextRequest) {
     let regionId = request.cookies.get(REGION_COOKIE_NAME)?.value || null;
 
     if (isAdminish) {
-        // ADMINs are locked to a finite set of accessible regions; SUPER_ADMINs
-        // can roam across all regions. The cookie is checked against this set
-        // and reset to the primary if it drifts (e.g. an old cookie from a
-        // region that was just revoked).
         const primaryRegionFromToken = (token as { regionId?: string | null }).regionId || null;
         const accessibleRegionIds = ((token as { regionIds?: string[] }).regionIds || []).filter(Boolean);
 
@@ -147,13 +145,9 @@ export async function proxy(request: NextRequest) {
                 : (primaryRegionFromToken ? [primaryRegionFromToken] : []);
 
             if (regionId && !allowed.includes(regionId)) {
-                // Stale cookie pointing at a region the admin no longer has
-                // access to — fall back to primary (or first allowed).
                 regionId = primaryRegionFromToken || allowed[0] || null;
             }
 
-            // Auto-pick the only accessible region so single-branch admins skip
-            // the picker entirely (preserving prior behaviour).
             if (!regionId && allowed.length === 1) {
                 regionId = allowed[0];
             }
@@ -177,7 +171,16 @@ export async function proxy(request: NextRequest) {
     }
 
     if (pathname.startsWith('/api/')) {
+        // Build a fresh header set from the inbound request, then OVERWRITE the
+        // user/region identity headers with values derived from the verified
+        // JWT. Crucially we strip any client-supplied `x-user-*` / `x-region-id`
+        // headers first so an attacker cannot smuggle them through.
         const requestHeaders = new Headers(request.headers);
+        requestHeaders.delete('x-user-id');
+        requestHeaders.delete('x-user-role');
+        requestHeaders.delete('x-user-email');
+        requestHeaders.delete(REGION_HEADER_NAME);
+
         requestHeaders.set('x-user-id', token.sub || '');
         requestHeaders.set('x-user-role', userRole);
         requestHeaders.set('x-user-email', token.email || '');
@@ -191,7 +194,6 @@ export async function proxy(request: NextRequest) {
             },
         });
 
-        // If we corrected an ADMIN's stale region cookie above, persist the fix.
         if (isAdminish && userRole === 'ADMIN' && regionId &&
             request.cookies.get(REGION_COOKIE_NAME)?.value !== regionId) {
             response.cookies.set(REGION_COOKIE_NAME, regionId, {

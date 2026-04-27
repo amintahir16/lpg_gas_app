@@ -16,26 +16,13 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify the user exists in the database
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id }
+      where: { id: session.user.id },
+      select: { id: true },
     });
 
     if (!user) {
-      console.error('❌ User not found in database:', session.user.id);
-      // Try to find user by email as fallback
-      const userByEmail = await prisma.user.findUnique({
-        where: { email: session.user.email || '' }
-      });
-      
-      if (userByEmail) {
-        console.log('✅ Found user by email, updating session user ID');
-        // Update the session user ID to match the database
-        session.user.id = userByEmail.id;
-      } else {
-        console.error('❌ User not found by email either:', session.user.email);
-        return NextResponse.json({ error: 'User not found in database' }, { status: 401 });
-      }
+      return NextResponse.json({ error: 'User not found in database' }, { status: 401 });
     }
 
     const regionId = getActiveRegionId(request);
@@ -81,26 +68,13 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify the user exists in the database
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id }
+      where: { id: session.user.id },
+      select: { id: true },
     });
 
     if (!user) {
-      console.error('❌ User not found in database:', session.user.id);
-      // Try to find user by email as fallback
-      const userByEmail = await prisma.user.findUnique({
-        where: { email: session.user.email || '' }
-      });
-      
-      if (userByEmail) {
-        console.log('✅ Found user by email, updating session user ID');
-        // Update the session user ID to match the database
-        session.user.id = userByEmail.id;
-      } else {
-        console.error('❌ User not found by email either:', session.user.email);
-        return NextResponse.json({ error: 'User not found in database' }, { status: 401 });
-      }
+      return NextResponse.json({ error: 'User not found in database' }, { status: 401 });
     }
 
     const regionId = getActiveRegionId(request);

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
+import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -55,11 +56,16 @@ interface CylinderTypeStats {
 
 export default function CylindersInventoryPage() {
   const { data: session } = useSession();
+  const searchParams = useSearchParams();
+  // Notifications link to e.g. `/inventory/cylinders?type=…`. Honour the
+  // `type` param as the initial type filter so the user lands on the right
+  // subset of cylinders. Falls back to 'ALL' when no param is present.
+  const initialTypeFilter = searchParams?.get('type') || 'ALL';
   const [cylinders, setCylinders] = useState<Cylinder[]>([]);
   const [cylinderTypeStats, setCylinderTypeStats] = useState<CylinderTypeStats[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [typeFilter, setTypeFilter] = useState('ALL');
+  const [typeFilter, setTypeFilter] = useState(initialTypeFilter);
   const [locationFilter, setLocationFilter] = useState('ALL');
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);

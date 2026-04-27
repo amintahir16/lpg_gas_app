@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     try {
       const session = await getServerSession(authOptions);
       if (session?.user?.id) {
-        const link = `/inventory/custom-items?category=${encodeURIComponent(customItem.name)}&item=${encodeURIComponent(customItem.id)}`;
+        const link = `/inventory/accessories?category=${encodeURIComponent(customItem.name)}&item=${encodeURIComponent(customItem.id)}`;
         await logActivity({
           userId: session.user.id,
           action: ActivityAction.CUSTOM_ITEM_CREATED,

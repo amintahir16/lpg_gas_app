@@ -238,7 +238,11 @@ export async function PUT(
             });
         }
 
-        return NextResponse.json(updatedUser);
+        // Strip the password hash before responding even though only a
+        // SUPER_ADMIN gets here — defense in depth keeps hashes out of the
+        // browser/devtools/log pipeline.
+        const { password: _pw, ...safeUser } = updatedUser;
+        return NextResponse.json(safeUser);
 
     } catch (error) {
         console.error('Error updating admin:', error);

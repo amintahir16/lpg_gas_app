@@ -5,13 +5,16 @@ import {
   markAllNotificationsAsRead,
   getNotificationStats 
 } from '@/lib/simpleNotifications';
+import { requireRoles, clampLimit } from '@/lib/apiAuth';
 
 // GET - Fetch notifications
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireRoles(['USER', 'ADMIN', 'SUPER_ADMIN', 'VENDOR']);
+    if (!auth.ok) return auth.response;
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const limit = clampLimit(searchParams.get('limit'), 10);
     const unreadOnly = searchParams.get('unreadOnly') === 'true';
 
     const notifications = await getSimpleNotifications(
@@ -41,6 +44,8 @@ export async function GET(request: NextRequest) {
 // PUT - Mark notifications as read
 export async function PUT(request: NextRequest) {
   try {
+    const auth = await requireRoles(['USER', 'ADMIN', 'SUPER_ADMIN', 'VENDOR']);
+    if (!auth.ok) return auth.response;
     const body = await request.json();
     const { notificationIds, markAllAsRead: markAll } = body;
 

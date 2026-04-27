@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { requireAdmin } from '@/lib/apiAuth';
+
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const auth = await requireAdmin();
+        if (!auth.ok) return auth.response;
         const regionId = getActiveRegionId(request);
         const { id } = await params;
         const body = await request.json();
@@ -33,12 +31,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         return NextResponse.json({ error: 'Failed to update expense' }, { status: 500 });
     }
 }
+
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const auth = await requireAdmin();
+        if (!auth.ok) return auth.response;
         const regionId = getActiveRegionId(request);
         const { id } = await params;
         const existing = await prisma.officeExpense.findFirst({

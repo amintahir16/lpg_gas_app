@@ -2,8 +2,10 @@
  * Region (multi-branch) helpers.
  *
  * The selected region flows through the app via:
- *   1. `flamora_region_id` HTTP-only cookie (set on /select-region or admin login)
- *   2. `x-region-id` request header (injected by middleware in `src/proxy.ts`)
+ *   1. `flamora_region_id` HTTP-only cookie (set on /select-region or admin login).
+ *      This is the *trusted* source — read it first.
+ *   2. `x-region-id` request header (injected by middleware in
+ *      `src/middleware.ts` after verifying the JWT). Used only as a fallback.
  *
  * API routes should read the active region with `getActiveRegionId(request)` and
  * use the `regionScopedWhere` / `withRegionScope` helpers to scope reads/writes.
@@ -16,31 +18,46 @@ import { prisma } from '@/lib/db';
 export const REGION_COOKIE_NAME = 'flamora_region_id';
 export const REGION_HEADER_NAME = 'x-region-id';
 
-/** Read the active region id from an incoming `NextRequest` (preferred for API routes). */
+/**
+ * Read the active region id from an incoming `NextRequest` (preferred for API routes).
+ *
+ * Trust order: cookie first, header second. The cookie is set server-side
+ * from the authenticated session (or by `/select-region`), so it is the
+ * canonical source of truth. The `x-region-id` header is a *convenience*
+ * mirror that the middleware injects after verifying the JWT — but if the
+ * middleware ever fails to run (matcher gap, edge case), an attacker could
+ * forge the header from a browser. Falling back to the header preserves
+ * existing behavior, but only after the trustworthy cookie is checked.
+ */
 export function getActiveRegionId(request: NextRequest): string | null {
+  const cookie = request.cookies.get(REGION_COOKIE_NAME);
+  if (cookie?.value && cookie.value.trim().length > 0) {
+    return cookie.value;
+  }
   const headerValue = request.headers.get(REGION_HEADER_NAME);
   if (headerValue && headerValue.trim().length > 0) {
     return headerValue;
   }
-  const cookie = request.cookies.get(REGION_COOKIE_NAME);
-  return cookie?.value || null;
+  return null;
 }
 
 /** Read the active region id inside a server component / server action. */
 export async function getActiveRegionIdServer(): Promise<string | null> {
   try {
+    const cookieStore = await cookies();
+    const value = cookieStore.get(REGION_COOKIE_NAME)?.value;
+    if (value && value.trim().length > 0) return value;
+  } catch {
+    // cookies() not available in this context; fall back to headers
+  }
+  try {
     const headerStore = await headers();
     const headerValue = headerStore.get(REGION_HEADER_NAME);
     if (headerValue) return headerValue;
   } catch {
-    // headers() not available in this context; fall back to cookies
-  }
-  try {
-    const cookieStore = await cookies();
-    return cookieStore.get(REGION_COOKIE_NAME)?.value || null;
-  } catch {
     return null;
   }
+  return null;
 }
 
 /**
@@ -80,7 +97,7 @@ export type ApiUserContext = {
   regionId: string | null;
 };
 
-/** Pull the user context (id, role, region) out of headers injected by proxy.ts. */
+/** Pull the user context (id, role, region) out of headers injected by middleware.ts. */
 export function getApiContext(request: NextRequest): ApiUserContext {
   return {
     userId: request.headers.get('x-user-id') || '',

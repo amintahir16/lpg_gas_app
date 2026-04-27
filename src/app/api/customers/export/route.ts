@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { requireAdmin } from '@/lib/apiAuth';
+import { toCsvRow } from '@/lib/csv';
 
 export async function GET(request: NextRequest) {
   try {
-    const userId = request.headers.get('x-user-id');
-    
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAdmin();
+    if (!auth.ok) return auth.response;
 
     const regionId = getActiveRegionId(request);
     const { searchParams } = new URL(request.url);
@@ -50,24 +49,27 @@ export async function GET(request: NextRequest) {
         headers.push('Total Transactions', 'Last Transaction Date', 'Total Sales Amount');
       }
 
-      const csvLines = [headers.join(',')];
+      // toCsvRow handles both standard RFC-4180 escaping AND CSV formula
+      // injection — fields starting with =,+,-,@ are prefixed with a single
+      // quote so Excel/Sheets render them as plain text instead of executing.
+      const csvLines: string[] = [toCsvRow(headers)];
 
       customers.forEach(customer => {
-        const row = [
+        const row: unknown[] = [
           customer.id,
-          `"${customer.name}"`,
-          `"${customer.contactPerson}"`,
+          customer.name,
+          customer.contactPerson,
           customer.phone,
           customer.email || '',
-          `"${customer.address || ''}"`,
+          customer.address || '',
           customer.creditLimit?.toString() || '0',
           customer.paymentTermsDays.toString(),
           customer.ledgerBalance.toString(),
           customer.domestic118kgDue.toString(),
           customer.standard15kgDue.toString(),
           customer.commercial454kgDue.toString(),
-          `"${customer.notes || ''}"`,
-          customer.createdAt.toISOString().split('T')[0]
+          customer.notes || '',
+          customer.createdAt.toISOString().split('T')[0],
         ];
 
         if (includeTransactions) {
@@ -85,10 +87,10 @@ export async function GET(request: NextRequest) {
           );
         }
 
-        csvLines.push(row.join(','));
+        csvLines.push(toCsvRow(row));
       });
 
-      const csvContent = csvLines.join('\n');
+      const csvContent = csvLines.join('\r\n');
 
       return new NextResponse(csvContent, {
         headers: {

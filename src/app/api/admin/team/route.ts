@@ -210,7 +210,10 @@ export async function POST(request: NextRequest) {
             }
         });
 
-        return NextResponse.json(newUser, { status: 201 });
+        // Never echo the password hash back, even when the caller is a
+        // SUPER_ADMIN. Strip it from the response payload explicitly.
+        const { password: _pw, ...safeUser } = newUser;
+        return NextResponse.json(safeUser, { status: 201 });
 
     } catch (error) {
         console.error('Error creating admin:', error);

@@ -1,24 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { ExpenseCategory, Prisma } from '@prisma/client';
 import { createExpenseAddedNotification } from '@/lib/notifications';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { requireAdmin, clampLimit } from '@/lib/apiAuth';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAdmin();
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
     const category = searchParams.get('category') || '';
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const limit = clampLimit(searchParams.get('limit'), 10);
     const skip = (page - 1) * limit;
 
     const regionId = getActiveRegionId(request);
@@ -39,11 +36,7 @@ export async function GET(request: NextRequest) {
         orderBy: { expenseDate: 'desc' },
         include: {
           user: {
-            select: {
-              id: true,
-              name: true,
-              email: true
-            }
+            select: { id: true, name: true, email: true }
           }
         }
       }),
@@ -52,12 +45,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       expenses,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit)
-      }
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) }
     });
   } catch (error) {
     console.error('Expenses fetch error:', error);
@@ -70,15 +58,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAdmin();
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
 
     const body = await request.json();
-    console.log('API received body:', body);
-    
+
     const {
       category,
       amount,
@@ -87,7 +72,6 @@ export async function POST(request: NextRequest) {
       receiptUrl
     } = body;
 
-    // Validate required fields
     if (!category || !description || !amount || !expenseDate) {
       return NextResponse.json(
         { error: 'Missing required fields: category, description, amount, expenseDate' },
@@ -95,7 +79,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate date before creating
     if (isNaN(Date.parse(expenseDate))) {
       return NextResponse.json(
         { error: 'Invalid expense date provided' },
@@ -103,7 +86,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate amount
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       return NextResponse.json(
@@ -111,15 +93,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    console.log('Creating expense with data:', {
-      category,
-      amount: parsedAmount,
-      description,
-      expenseDate: new Date(expenseDate),
-      receiptUrl,
-      userId: session.user.id
-    });
 
     const regionId = getActiveRegionId(request);
     const expense = await prisma.expense.create({
@@ -133,27 +106,19 @@ export async function POST(request: NextRequest) {
         ...(regionId ? { regionId } : {}),
       },
       include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
-        }
+        user: { select: { id: true, name: true, email: true } }
       }
     });
 
-    // Create notification for new expense
     try {
       await createExpenseAddedNotification(
-        parseFloat(amount), 
-        category, 
+        parseFloat(amount),
+        category,
         session.user.email || 'Unknown User',
         description
       );
     } catch (notificationError) {
       console.error('Failed to create notification:', notificationError);
-      // Don't fail the main operation if notification fails
     }
 
     return NextResponse.json(expense, { status: 201 });
@@ -168,11 +133,9 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAdmin();
+    if (!auth.ok) return auth.response;
+    const session = auth.session;
 
     const body = await request.json();
     const {
@@ -184,7 +147,6 @@ export async function PUT(request: NextRequest) {
       receiptUrl
     } = body;
 
-    // Verify the expense belongs to the user
     const existingExpense = await prisma.expense.findUnique({
       where: { id },
       select: { userId: true }
@@ -194,8 +156,8 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Expense not found' }, { status: 404 });
     }
 
-    if (existingExpense.userId !== session.user.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    if (existingExpense.userId !== session.user.id && session.user.role !== 'SUPER_ADMIN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const updatedExpense = await prisma.expense.update({
@@ -208,13 +170,7 @@ export async function PUT(request: NextRequest) {
         receiptUrl
       },
       include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
-        }
+        user: { select: { id: true, name: true, email: true } }
       }
     });
 
@@ -226,4 +182,4 @@ export async function PUT(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}
