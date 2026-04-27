@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -64,6 +65,8 @@ interface DashboardStats {
 }
 
 export default function DashboardPage() {
+  const { data: session } = useSession();
+  const isSuperAdmin = session?.user?.role === 'SUPER_ADMIN';
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -234,8 +237,10 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+      {/* Stats Cards — Period Revenue & Est. Profit: SUPER_ADMIN only */}
+      <div
+        className={`grid grid-cols-2 gap-3 ${isSuperAdmin ? 'md:grid-cols-3 lg:grid-cols-6' : 'md:grid-cols-2 lg:grid-cols-4'}`}
+      >
         <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-500 to-blue-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
           <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">
             <UsersIcon className="w-10 h-10 text-white" />
@@ -247,27 +252,31 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-500 to-emerald-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
-          <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">
-            <CurrencyDollarIcon className="w-10 h-10 text-white" />
-          </div>
-          <CardContent className="p-3 relative z-10">
-            <p className="text-xs font-medium text-emerald-100 mb-1 truncate">Period Revenue</p>
-            <h3 className="text-xl font-bold text-white truncate">{formatCurrency(stats.kpis.rangeRevenue)}</h3>
-            <p className="text-[10px] text-emerald-200 mt-1 truncate">Selected dates</p>
-          </CardContent>
-        </Card>
+        {isSuperAdmin && (
+          <>
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-500 to-emerald-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
+              <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">
+                <CurrencyDollarIcon className="w-10 h-10 text-white" />
+              </div>
+              <CardContent className="p-3 relative z-10">
+                <p className="text-xs font-medium text-emerald-100 mb-1 truncate">Period Revenue</p>
+                <h3 className="text-xl font-bold text-white truncate">{formatCurrency(stats.kpis.rangeRevenue)}</h3>
+                <p className="text-[10px] text-emerald-200 mt-1 truncate">Selected dates</p>
+              </CardContent>
+            </Card>
 
-        <Card className="border-0 shadow-sm bg-gradient-to-br from-violet-500 to-violet-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
-          <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">
-            <ChartBarIcon className="w-10 h-10 text-white" />
-          </div>
-          <CardContent className="p-3 relative z-10">
-            <p className="text-xs font-medium text-violet-100 mb-1 truncate">Est. Profit</p>
-            <h3 className="text-xl font-bold text-white truncate">{formatCurrency(stats.kpis.rangeProfit)}</h3>
-            <p className="text-[10px] text-violet-200 mt-1 truncate">Gross margins</p>
-          </CardContent>
-        </Card>
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-violet-500 to-violet-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
+              <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">
+                <ChartBarIcon className="w-10 h-10 text-white" />
+              </div>
+              <CardContent className="p-3 relative z-10">
+                <p className="text-xs font-medium text-violet-100 mb-1 truncate">Est. Profit</p>
+                <h3 className="text-xl font-bold text-white truncate">{formatCurrency(stats.kpis.rangeProfit)}</h3>
+                <p className="text-[10px] text-violet-200 mt-1 truncate">Gross margins</p>
+              </CardContent>
+            </Card>
+          </>
+        )}
 
         <Card className="border-0 shadow-sm bg-gradient-to-br from-rose-500 to-orange-500 relative overflow-hidden group hover:shadow-lg transition-shadow">
           <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">

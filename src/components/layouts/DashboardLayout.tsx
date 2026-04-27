@@ -53,10 +53,8 @@ const adminNavigation: NavigationItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, roles: ['ADMIN'] },
   { name: 'Customers', href: '/customers', icon: UsersIcon, roles: ['ADMIN'] },
   { name: 'Inventory', href: '/inventory', icon: CubeIcon, roles: ['ADMIN'] },
-  { name: 'Financial', href: '/financial', icon: CurrencyDollarIcon, roles: ['ADMIN'] },
   { name: 'Vendors', href: '/vendors', icon: BuildingOfficeIcon, roles: ['ADMIN'] },
   { name: 'Reports', href: '/reports', icon: ChartBarIcon, roles: ['ADMIN'] },
-  { name: 'Settings', href: '/settings', icon: CogIcon, roles: ['ADMIN'] },
 ];
 
 const customerNavigation: NavigationItem[] = [
