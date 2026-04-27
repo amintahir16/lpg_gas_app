@@ -173,6 +173,7 @@ export async function POST(request: NextRequest) {
                 entityId: salaryRecord.id,
                 details: `Paid Rs ${parsedAmount.toLocaleString()} salary to ${employeeName} for ${monthLabel}`,
                 link,
+                regionId,
                 metadata: {
                     salaryId: salaryRecord.id,
                     employeeId: userId,

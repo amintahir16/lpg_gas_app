@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { getActiveRegionId } from '@/lib/region';
 
 export async function GET(
     request: NextRequest,
@@ -15,11 +16,20 @@ export async function GET(
         }
 
         const { id } = await params;
+        const activeRegionId = getActiveRegionId(request);
 
         const activityLogs = await prisma.activityLog.findMany({
-            where: { userId: id },
+            where: {
+                userId: id,
+                ...(activeRegionId ? { regionId: activeRegionId } : {}),
+            },
             orderBy: { createdAt: 'desc' },
-            take: 50 // Limit to last 50 actions
+            take: 50,
+            include: {
+                region: {
+                    select: { id: true, name: true, code: true },
+                },
+            },
         });
 
         return NextResponse.json(activityLogs);

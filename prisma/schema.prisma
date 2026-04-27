@@ -916,11 +916,16 @@ model ActivityLog {
   metadata   Json?
   link       String?
   ipAddress  String?
+  /** Branch / region where the action occurred (from active region on the request). */
+  regionId   String?
+  region     Region?  @relation(fields: [regionId], references: [id], onDelete: SetNull)
   createdAt  DateTime @default(now())
   user       User     @relation(fields: [userId], references: [id])
 
   @@index([userId, createdAt])
+  @@index([userId, regionId, createdAt])
   @@index([entityType, entityId])
+  @@index([regionId])
   @@map("activity_logs")
 }
 
@@ -999,6 +1004,7 @@ model Region {
   b2bTransactions        B2BTransaction[]
   b2cTransactions        B2CTransaction[]
   notifications          Notification[]
+  activityLogs           ActivityLog[]
 
   @@map("regions")
 }

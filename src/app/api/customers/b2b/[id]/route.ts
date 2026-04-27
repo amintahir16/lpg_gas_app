@@ -148,6 +148,7 @@ export async function PUT(
         entityId: customer.id,
         details: `Updated B2B customer "${customer.name}"${changedFields.length ? ` • Fields: ${changedFields.join(', ')}` : ''}`,
         link,
+        regionId,
         metadata: {
           customerId: customer.id,
           customerName: customer.name,
@@ -285,6 +286,7 @@ export async function DELETE(
         entityId: customer.id,
         details: `Deleted B2B customer "${customer.name}"`,
         link: '/customers/b2b',
+        regionId,
         metadata: {
           customerId: customer.id,
           customerName: customer.name,

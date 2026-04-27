@@ -51,6 +51,8 @@ interface ActivityLog {
     entityId?: string | null;
     metadata?: Record<string, any> | null;
     createdAt: string;
+    regionId?: string | null;
+    region?: { id: string; name: string; code: string } | null;
 }
 
 const ACTIVITY_ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -652,7 +654,8 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
                             <div>
                                 <CardTitle>Activity Log</CardTitle>
                                 <CardDescription>
-                                    Every action {member.name?.split(' ')[0] || 'this admin'} has taken in the system
+                                    Actions {member.name?.split(' ')[0] || 'this admin'} took in the branch selected in
+                                    the header (switch branch to see activity in other regions)
                                 </CardDescription>
                             </div>
                             {activityLogs.length > 0 && (
@@ -666,8 +669,10 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
                         {activityLogs.length === 0 ? (
                             <div className="text-center py-12 text-gray-500">
                                 <ClockIcon className="w-10 h-10 mx-auto text-gray-300 mb-2" />
-                                <p className="text-sm">No activity recorded yet</p>
-                                <p className="text-xs text-gray-400 mt-1">Transactions and actions will appear here</p>
+                                <p className="text-sm">No activity in this branch yet</p>
+                                <p className="text-xs text-gray-400 mt-1">
+                                    Switch branch in the header to view other regions, or record activity in this branch
+                                </p>
                             </div>
                         ) : (
                             <div className="relative h-full overflow-y-auto pr-1">
@@ -703,6 +708,17 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
                                                                 <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${tone.chip}`}>
                                                                     {humanizeAction(log.action)}
                                                                 </span>
+                                                                {log.region && (
+                                                                    <span
+                                                                        className="inline-flex max-w-full items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600"
+                                                                        title={log.region.name}
+                                                                    >
+                                                                        {log.region.name}
+                                                                        {log.region.code ? (
+                                                                            <span className="ml-1 text-slate-400">• {log.region.code}</span>
+                                                                        ) : null}
+                                                                    </span>
+                                                                )}
                                                                 <span
                                                                     className="text-[11px] text-gray-400"
                                                                     title={new Date(log.createdAt).toLocaleString()}

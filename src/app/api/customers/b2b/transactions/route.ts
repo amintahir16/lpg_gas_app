@@ -560,6 +560,7 @@ export async function POST(request: NextRequest) {
         entityId: result.id,
         details: detailsParts.join(' • '),
         link: transactionLink,
+        regionId,
         metadata: {
           customerId,
           customerName,

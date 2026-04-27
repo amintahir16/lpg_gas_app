@@ -64,6 +64,7 @@ export async function PUT(
           entityId: cylinder.id,
           details: `Updated ${friendly} cylinder (${cylinder.code})${statusChanged ? ` • Status: ${previous?.currentStatus} → ${cylinder.currentStatus}` : ''}`,
           link,
+          regionId,
           metadata: {
             cylinderId: cylinder.id,
             code: cylinder.code,
@@ -155,6 +156,7 @@ export async function DELETE(
           entityId: cylinder.id,
           details: `Deleted ${friendly} cylinder (${cylinder.code})`,
           link,
+          regionId,
           metadata: {
             cylinderId: cylinder.id,
             code: cylinder.code,

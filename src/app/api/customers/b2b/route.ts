@@ -483,6 +483,7 @@ export async function POST(request: NextRequest) {
         entityId: customer.id,
         details: `Created B2B customer "${customer.name}" • Phone: ${customer.phone}`,
         link,
+        regionId,
         metadata: {
           customerId: customer.id,
           customerName: customer.name,

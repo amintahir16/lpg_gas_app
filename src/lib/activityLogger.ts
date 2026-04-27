@@ -63,6 +63,8 @@ export interface LogActivityInput {
   metadata?: Prisma.InputJsonValue | null;
   link?: string | null;
   ipAddress?: string | null;
+  /** Active branch for this request — pass `getActiveRegionId(request)` from API routes. */
+  regionId?: string | null;
 }
 
 /**
@@ -83,6 +85,7 @@ export async function logActivity(input: LogActivityInput) {
         metadata: (input.metadata ?? undefined) as Prisma.InputJsonValue | undefined,
         link: input.link ?? null,
         ipAddress: input.ipAddress ?? null,
+        regionId: input.regionId ?? null,
       },
     });
   } catch (error) {

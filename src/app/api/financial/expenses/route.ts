@@ -141,6 +141,7 @@ export async function POST(request: NextRequest) {
                     entityId: expense.id,
                     details: `Recorded RENT expense Rs ${parsedAmount.toLocaleString()} for ${monthLabel} • ${description}`,
                     link,
+                    regionId,
                     metadata: {
                         expenseId: expense.id,
                         type: 'RENT',
@@ -189,6 +190,7 @@ export async function POST(request: NextRequest) {
                 entityId: expense.id,
                 details: `Recorded DAILY expense Rs ${parsedAmount.toLocaleString()} • ${description}`,
                 link,
+                regionId,
                 metadata: {
                     expenseId: expense.id,
                     type: 'DAILY',

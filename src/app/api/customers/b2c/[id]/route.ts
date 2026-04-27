@@ -164,6 +164,7 @@ export async function PUT(
         entityId: customer.id,
         details: `Updated B2C customer "${customer.name}"`,
         link,
+        regionId,
         metadata: {
           customerId: customer.id,
           customerName: customer.name,
@@ -251,6 +252,7 @@ export async function DELETE(
         entityId: customerId,
         details: `Deleted B2C customer "${existing?.name ?? customerId}"`,
         link: '/customers/b2c',
+        regionId,
         metadata: {
           customerId,
           customerName: existing?.name ?? null,

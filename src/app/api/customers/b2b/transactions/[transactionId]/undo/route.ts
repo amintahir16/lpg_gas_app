@@ -428,6 +428,7 @@ export async function POST(
         entityId: transaction.id,
         details: `Voided B2B ${transaction.transactionType} • Customer: ${customerName} • Bill #: ${transaction.billSno} • Total: Rs ${total.toLocaleString()}${reason ? ` • Reason: ${reason}` : ''}`,
         link,
+        regionId,
         metadata: {
           customerId: transaction.customerId,
           customerName,

@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
           entityId: customItem.id,
           details: `Added accessory "${customItem.name} – ${customItem.type}" • Qty: ${customItem.quantity}`,
           link,
+          regionId,
           metadata: {
             itemId: customItem.id,
             category: customItem.name,

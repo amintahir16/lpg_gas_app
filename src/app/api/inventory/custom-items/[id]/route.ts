@@ -80,6 +80,7 @@ export async function PUT(
           entityId: customItem.id,
           details: `Updated accessory "${customItem.name} – ${customItem.type}"${qtyChanged ? ` • Qty: ${existingItem.quantity} → ${customItem.quantity}` : ''}`,
           link,
+          regionId,
           metadata: {
             itemId: customItem.id,
             category: customItem.name,
@@ -156,6 +157,7 @@ export async function DELETE(
           entityId: existingItem.id,
           details: `Deleted accessory "${existingItem.name} – ${existingItem.type}"`,
           link,
+          regionId,
           metadata: {
             itemId: existingItem.id,
             category: existingItem.name,

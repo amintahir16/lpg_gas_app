@@ -227,6 +227,7 @@ export async function POST(request: NextRequest) {
           entityId: cylinder.id,
           details: `Added ${friendly} cylinder (${cylinder.code}) • Capacity: ${Number(cylinder.capacity)}kg • Status: ${cylinder.currentStatus}`,
           link,
+          regionId,
           metadata: {
             cylinderId: cylinder.id,
             code: cylinder.code,
@@ -272,7 +273,11 @@ export async function POST(request: NextRequest) {
     // Provide more specific error messages
     if (error.message?.includes('Invalid enum value')) {
       return NextResponse.json(
-        { success: false, error: `Invalid cylinder type. Please contact support to add "${body.cylinderType}" to the system.` },
+        {
+          success: false,
+          error:
+            'Invalid cylinder type. Please contact support if you need a new type added to the system.',
+        },
         { status: 400 }
       );
     }
