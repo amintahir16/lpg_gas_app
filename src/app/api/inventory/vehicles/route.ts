@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getActiveRegionId, regionScopedWhere, withRegionScope } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
+    const regionId = getActiveRegionId(request);
     const vehicles = await prisma.vehicle.findMany({
+      where: { ...regionScopedWhere(regionId) },
       include: {
         cylinders: {
           select: {
@@ -24,11 +27,10 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Process vehicles to include cylinder count
     const processedVehicles = vehicles.map(vehicle => ({
       ...vehicle,
       cylinderCount: vehicle._count.cylinders,
-      cylinders: vehicle.cylinders.slice(0, 10) // Limit to first 10 for display
+      cylinders: vehicle.cylinders.slice(0, 10)
     }));
 
     return NextResponse.json({
@@ -46,16 +48,17 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const regionId = getActiveRegionId(request);
     const body = await request.json();
     const { vehicleNumber, vehicleType, driverName, capacity } = body;
 
     const vehicle = await prisma.vehicle.create({
-      data: {
+      data: withRegionScope({
         vehicleNumber,
         vehicleType,
         driverName: driverName || null,
         capacity: capacity ? parseInt(capacity) : null
-      }
+      }, regionId)
     });
 
     return NextResponse.json({

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(
   request: NextRequest,
@@ -8,13 +9,14 @@ export async function GET(
   try {
     const { id } = await params;
     const userId = request.headers.get('x-user-id');
+    const regionId = getActiveRegionId(request);
     
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const customer = await prisma.customer.findUnique({
-      where: { id },
+    const customer = await prisma.customer.findFirst({
+      where: { id, ...regionScopedWhere(regionId) },
       include: {
         transactions: {
           include: {
@@ -46,9 +48,19 @@ export async function PUT(
   try {
     const { id } = await params;
     const userId = request.headers.get('x-user-id');
+    const regionId = getActiveRegionId(request);
     
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Region-scope guard
+    const scopeCheck = await prisma.customer.findFirst({
+      where: { id, ...regionScopedWhere(regionId) },
+      select: { id: true }
+    });
+    if (!scopeCheck) {
+      return NextResponse.json({ error: 'Customer not found in current region' }, { status: 404 });
     }
 
     const body = await request.json();
@@ -96,9 +108,19 @@ export async function DELETE(
     const { id } = await params;
     const userId = request.headers.get('x-user-id');
     const userRole = request.headers.get('x-user-role');
+    const regionId = getActiveRegionId(request);
     
     if (!userId || userRole !== 'ADMIN') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Region-scope guard
+    const scopeCheck = await prisma.customer.findFirst({
+      where: { id, ...regionScopedWhere(regionId) },
+      select: { id: true }
+    });
+    if (!scopeCheck) {
+      return NextResponse.json({ error: 'Customer not found in current region' }, { status: 404 });
     }
 
     // Soft delete by setting isActive to false

@@ -3,12 +3,15 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { startOfMonth, subMonths, format } from 'date-fns';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 export async function GET(request: NextRequest) {
     try {
         const session = await getServerSession(authOptions);
         if (!session) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+        const regionId = getActiveRegionId(request);
+        const txRegionScope = regionId ? { regionId } : {};
         const { searchParams } = new URL(request.url);
         const month = parseInt(searchParams.get('month') || String(new Date().getMonth() + 1));
         const year = parseInt(searchParams.get('year') || String(new Date().getFullYear()));
@@ -21,6 +24,7 @@ export async function GET(request: NextRequest) {
                     transaction: {
                         date: { gte: startDate, lte: endDate },
                         voided: false,
+                        ...txRegionScope,
                     },
                 },
                 select: { cylinderType: true, quantity: true, totalPrice: true },
@@ -30,6 +34,7 @@ export async function GET(request: NextRequest) {
                     transaction: {
                         date: { gte: startDate, lte: endDate },
                         voided: false,
+                        ...txRegionScope,
                     },
                 },
                 select: { productName: true, quantity: true, totalPrice: true },
@@ -40,6 +45,7 @@ export async function GET(request: NextRequest) {
                         date: { gte: startDate, lte: endDate },
                         voided: false,
                         transactionType: 'SALE',
+                        ...txRegionScope,
                     },
                 },
                 select: {
@@ -54,6 +60,7 @@ export async function GET(request: NextRequest) {
         ]);
         // Get dynamic cylinder types for display labels
         const cylinderTypes = await prisma.cylinder.findMany({
+            where: regionScopedWhere(regionId),
             distinct: ['cylinderType'],
             select: { cylinderType: true, typeName: true, capacity: true },
         });
@@ -119,17 +126,17 @@ export async function GET(request: NextRequest) {
             const chartEnd = new Date(chartMonth.getFullYear(), chartMonth.getMonth() + 1, 0, 23, 59, 59, 999);
             const [b2cGas, b2cAcc, b2bCylinders, b2bAccessories] = await Promise.all([
                 prisma.b2CTransactionGasItem.aggregate({
-                    where: { transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false } },
+                    where: { transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false, ...txRegionScope } },
                     _sum: { totalPrice: true },
                 }),
                 prisma.b2CTransactionAccessoryItem.aggregate({
-                    where: { transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false } },
+                    where: { transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false, ...txRegionScope } },
                     _sum: { totalPrice: true },
                 }),
                 // B2B cylinder items (have cylinderType set)
                 prisma.b2BTransactionItem.aggregate({
                     where: {
-                        transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false, transactionType: 'SALE' },
+                        transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false, transactionType: 'SALE', ...txRegionScope },
                         cylinderType: { not: null },
                     },
                     _sum: { totalPrice: true },
@@ -137,7 +144,7 @@ export async function GET(request: NextRequest) {
                 // B2B accessory items (no cylinderType)
                 prisma.b2BTransactionItem.aggregate({
                     where: {
-                        transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false, transactionType: 'SALE' },
+                        transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false, transactionType: 'SALE', ...txRegionScope },
                         cylinderType: null,
                     },
                     _sum: { totalPrice: true },

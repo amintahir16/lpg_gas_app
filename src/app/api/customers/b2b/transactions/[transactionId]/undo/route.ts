@@ -9,6 +9,7 @@ import {
   notifyUserActivity,
   checkAllCylinderTypesForLowStock,
 } from '@/lib/superAdminNotifier';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function POST(
   request: NextRequest,
@@ -21,13 +22,14 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const { transactionId } = await params;
     const body = await request.json();
     const { reason } = body;
 
-    // Get the transaction with all details
-    const transaction = await prisma.b2BTransaction.findUnique({
-      where: { id: transactionId },
+    // Get the transaction with all details (region-scoped)
+    const transaction = await prisma.b2BTransaction.findFirst({
+      where: { id: transactionId, ...regionScopedWhere(regionId) },
       include: {
         customer: true,
         items: true
@@ -206,15 +208,15 @@ export async function POST(
           const quantity = Number(item.quantity);
           const cylinderType = item.cylinderType as string;
 
-          // Find cylinders that are WITH_CUSTOMER for this customer
-          // Order by most recent first (or by some consistent order) to match transaction order
+          // Find cylinders that are WITH_CUSTOMER for this customer (region-scoped)
           const cylindersWithCustomer = await tx.cylinder.findMany({
             where: {
-              cylinderType: cylinderType, // Filter by string type
+              cylinderType: cylinderType,
               currentStatus: CylinderStatus.WITH_CUSTOMER,
-              location: { contains: customer.name }
+              location: { contains: customer.name },
+              ...regionScopedWhere(regionId),
             },
-            orderBy: { updatedAt: 'desc' }, // Get most recently updated first
+            orderBy: { updatedAt: 'desc' },
             take: quantity
           });
 
@@ -247,12 +249,13 @@ export async function POST(
           const quantity = Number(item.quantity);
           const cylinderType = item.cylinderType as string;
 
-          // Find EMPTY cylinders in store (these were added back during the return)
+          // Find EMPTY cylinders in store (region-scoped)
           const emptyCylinders = await tx.cylinder.findMany({
             where: {
-              cylinderType: cylinderType, // Filter by string type
+              cylinderType: cylinderType,
               currentStatus: CylinderStatus.EMPTY,
-              location: 'Store - Ready for Refill'
+              location: 'Store - Ready for Refill',
+              ...regionScopedWhere(regionId),
             },
             orderBy: { updatedAt: 'desc' },
             take: quantity
@@ -285,19 +288,18 @@ export async function POST(
             const quantity = Number(item.quantity);
             const productName = item.productName || '';
 
-            // Parse category and itemType securely using saved database fields
             const category = item.category || productName.split(' - ')[0] || '';
-            // If itemType is explicitly in productName, use it; otherwise fallback to category
             const itemType = productName.includes(' - ') ? productName.split(' - ').slice(1).join(' - ') : category;
 
             console.log(`Reversing custom accessory: ${category} - ${itemType}, quantity: ${quantity}`);
 
-            // Try to find in CustomItem table (used by InventoryDeductionService)
+            // Try to find in CustomItem table (region-scoped)
             const customItem = await tx.customItem.findFirst({
               where: {
                 name: category,
                 type: itemType,
-                isActive: true
+                isActive: true,
+                ...regionScopedWhere(regionId),
               }
             });
 
@@ -318,8 +320,8 @@ export async function POST(
             } else {
               // Try Product table as fallback
               if (item.productId) {
-                const product = await tx.product.findUnique({
-                  where: { id: item.productId }
+                const product = await tx.product.findFirst({
+                  where: { id: item.productId, ...regionScopedWhere(regionId) }
                 });
 
                 if (product) {
@@ -336,10 +338,11 @@ export async function POST(
                   console.warn(`⚠️ Could not find inventory item for ${productName} - manual adjustment may be needed`);
                 }
               } else {
-                // Try to find by name in Product table
+                // Try to find by name in Product table (region-scoped)
                 const productByName = await tx.product.findFirst({
                   where: {
-                    name: { contains: productName, mode: 'insensitive' }
+                    name: { contains: productName, mode: 'insensitive' },
+                    ...regionScopedWhere(regionId),
                   }
                 });
 
@@ -369,14 +372,15 @@ export async function POST(
           const quantity = Number(item.quantity);
           const cylinderType = item.cylinderType as string;
 
-          // Find EMPTY cylinders in store (prioritize most recently updated - likely from this transaction)
+          // Find EMPTY cylinders in store (region-scoped, most recent first)
           const emptyCylinders = await tx.cylinder.findMany({
             where: {
-              cylinderType: cylinderType, // Filter by string type
+              cylinderType: cylinderType,
               currentStatus: CylinderStatus.EMPTY,
-              location: 'Store - Ready for Refill'
+              location: 'Store - Ready for Refill',
+              ...regionScopedWhere(regionId),
             },
-            orderBy: { updatedAt: 'desc' }, // Most recent first
+            orderBy: { updatedAt: 'desc' },
             take: quantity
           });
 
@@ -441,6 +445,7 @@ export async function POST(
         message: `${session.user.name || session.user.email} voided B2B ${transaction.transactionType} of Rs ${total.toLocaleString()} for ${customerName} (Bill #${transaction.billSno}).`,
         link,
         priority: 'HIGH',
+        regionId,
         metadata: {
           domain: 'B2B_TRANSACTION_VOIDED',
           transactionId: transaction.id,
@@ -455,7 +460,7 @@ export async function POST(
         .map((it: any) => it.cylinderType)
         .filter(Boolean) as string[];
       if (cylinderTypesAffected.length > 0) {
-        await checkAllCylinderTypesForLowStock(cylinderTypesAffected);
+        await checkAllCylinderTypesForLowStock(cylinderTypesAffected, regionId);
       }
     } catch (sideEffectError) {
       console.error('B2B undo post-commit side effects failed:', sideEffectError);

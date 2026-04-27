@@ -5,18 +5,21 @@ import { prisma } from '@/lib/db';
 import { format, subMonths } from 'date-fns';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity } from '@/lib/superAdminNotifier';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 export async function GET(request: NextRequest) {
     try {
         const session = await getServerSession(authOptions);
         if (!session) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+        const regionId = getActiveRegionId(request);
+        const regionScope = regionScopedWhere(regionId);
         const { searchParams } = new URL(request.url);
         const page = parseInt(searchParams.get('page') || '1');
         const limit = parseInt(searchParams.get('limit') || '20');
         const type = searchParams.get('type') || ''; // 'RENT' or 'DAILY' or '' for all
         const skip = (page - 1) * limit;
-        const where: any = {};
+        const where: any = { ...regionScope };
         if (type) where.type = type;
         const [expenses, total] = await Promise.all([
             prisma.officeExpense.findMany({
@@ -34,6 +37,7 @@ export async function GET(request: NextRequest) {
                 type: 'RENT',
                 month: now.getMonth() + 1,
                 year: now.getFullYear(),
+                ...regionScope,
             },
         });
         // Monthly chart data for daily expenses (last 6 months)
@@ -46,6 +50,7 @@ export async function GET(request: NextRequest) {
                 where: {
                     type: 'DAILY',
                     expenseDate: { gte: chartStart, lte: chartEnd },
+                    ...regionScope,
                 },
                 _sum: { amount: true },
             });
@@ -53,6 +58,7 @@ export async function GET(request: NextRequest) {
                 where: {
                     type: 'RENT',
                     expenseDate: { gte: chartStart, lte: chartEnd },
+                    ...regionScope,
                 },
                 _sum: { amount: true },
             });
@@ -84,6 +90,7 @@ export async function POST(request: NextRequest) {
         if (!session) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+        const regionId = getActiveRegionId(request);
         const body = await request.json();
         const { type, amount, description, expenseDate, month, year } = body;
         if (!type || !amount || !description || !expenseDate) {
@@ -104,11 +111,11 @@ export async function POST(request: NextRequest) {
             const rentMonth = month || new Date(expenseDate).getMonth() + 1;
             const rentYear = year || new Date(expenseDate).getFullYear();
             const existing = await prisma.officeExpense.findFirst({
-                where: { type: 'RENT', month: rentMonth, year: rentYear },
+                where: { type: 'RENT', month: rentMonth, year: rentYear, ...regionScopedWhere(regionId) },
             });
             if (existing) {
                 return NextResponse.json(
-                    { error: `Office rent already recorded for ${format(new Date(rentYear, rentMonth - 1, 1), 'MMMM yyyy')}` },
+                    { error: `Office rent already recorded for ${format(new Date(rentYear, rentMonth - 1, 1), 'MMMM yyyy')} for this branch` },
                     { status: 409 }
                 );
             }
@@ -121,6 +128,7 @@ export async function POST(request: NextRequest) {
                     month: rentMonth,
                     year: rentYear,
                     createdBy: session.user.id,
+                    ...(regionId ? { regionId } : {}),
                 },
             });
             try {
@@ -148,6 +156,7 @@ export async function POST(request: NextRequest) {
                     message: `${session.user.name || session.user.email} recorded Rs ${parsedAmount.toLocaleString()} office rent for ${monthLabel}.`,
                     link,
                     priority: 'MEDIUM',
+                    regionId,
                     metadata: {
                         domain: 'OFFICE_EXPENSE',
                         expenseId: expense.id,
@@ -168,6 +177,7 @@ export async function POST(request: NextRequest) {
                 description,
                 expenseDate: new Date(expenseDate),
                 createdBy: session.user.id,
+                ...(regionId ? { regionId } : {}),
             },
         });
         try {
@@ -193,6 +203,7 @@ export async function POST(request: NextRequest) {
                 message: `${session.user.name || session.user.email} recorded Rs ${parsedAmount.toLocaleString()} daily expense • ${description}.`,
                 link,
                 priority: 'LOW',
+                regionId,
                 metadata: {
                     domain: 'OFFICE_EXPENSE',
                     expenseId: expense.id,

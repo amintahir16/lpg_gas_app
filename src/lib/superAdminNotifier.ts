@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db';
-import type { NotificationPriority, NotificationType } from '@prisma/client';
+import type { NotificationPriority, NotificationType, Prisma } from '@prisma/client';
 
 type Priority = NotificationPriority;
 
@@ -11,11 +11,39 @@ interface NotifySuperAdminsInput {
   metadata?: Record<string, unknown> | null;
   priority?: Priority;
   /**
+   * Active branch when the event happened (from `x-region-id` / cookie).
+   * Appends "— in Branch Name (CODE)" to the message and stores `regionId` on the row.
+   */
+  regionId?: string | null;
+  /**
    * When provided, this user (the actor) is excluded from receiving the
    * notification – useful so a SUPER_ADMIN doesn't get notified about
    * activities they performed themselves.
    */
   excludeUserId?: string | null;
+}
+
+/** Resolve display label and append "— in …" to the message for in-app copy. */
+export async function formatMessageWithRegion(
+  message: string,
+  regionId?: string | null
+): Promise<{ message: string; regionName: string | null; regionCode: string | null }> {
+  if (!regionId) {
+    return { message, regionName: null, regionCode: null };
+  }
+  const r = await prisma.region.findUnique({
+    where: { id: regionId },
+    select: { name: true, code: true },
+  });
+  if (!r) {
+    return { message, regionName: null, regionCode: null };
+  }
+  const label = r.code ? `${r.name} (${r.code})` : r.name;
+  return {
+    message: `${message} — in ${label}`,
+    regionName: r.name,
+    regionCode: r.code ?? null,
+  };
 }
 
 const SUPER_ADMIN_ROLE = 'SUPER_ADMIN' as const;
@@ -41,18 +69,30 @@ export async function notifySuperAdmins(input: NotifySuperAdminsInput) {
     const recipientIds = await getSuperAdminUserIds(input.excludeUserId ?? null);
     if (recipientIds.length === 0) return [];
 
-    const metadata = input.metadata ? JSON.stringify(input.metadata) : null;
+    const { message: finalMessage, regionName, regionCode } = await formatMessageWithRegion(
+      input.message,
+      input.regionId
+    );
+    const meta: Record<string, unknown> = { ...(input.metadata ?? {}) };
+    if (input.regionId) {
+      meta.regionId = input.regionId;
+      if (regionName) meta.regionName = regionName;
+      if (regionCode) meta.regionCode = regionCode;
+    }
+    const metadata = Object.keys(meta).length > 0 ? JSON.stringify(meta) : null;
+
     const created = await prisma.$transaction(
       recipientIds.map((userId) =>
         prisma.notification.create({
           data: {
             type: input.type,
             title: input.title,
-            message: input.message,
+            message: finalMessage,
             priority: input.priority ?? 'MEDIUM',
             link: input.link ?? null,
             metadata,
             userId,
+            regionId: input.regionId ?? null,
           },
         }),
       ),
@@ -72,6 +112,8 @@ interface UserActivityNotificationInput {
   link?: string | null;
   metadata?: Record<string, unknown> | null;
   priority?: Priority;
+  /** Active region for this request (pass `getActiveRegionId(request)` from API routes). */
+  regionId?: string | null;
 }
 
 /**
@@ -87,6 +129,7 @@ export async function notifyUserActivity(input: UserActivityNotificationInput) {
     metadata: { actorId: input.actorId, actorName: input.actorName, ...(input.metadata ?? {}) },
     priority: input.priority ?? 'MEDIUM',
     excludeUserId: input.actorId,
+    regionId: input.regionId ?? null,
   });
 }
 
@@ -98,14 +141,23 @@ const LOW_CYLINDER_THRESHOLD = 5;
 const LOW_ACCESSORY_THRESHOLD = 5;
 
 /**
- * Stable key fragments stored inside the (string) metadata JSON. We use
- * substring search to detect existing unread notifications because the column
- * is `String?` rather than `Json`.
+ * Stable key fragments inside `metadata` (string column). We use
+ * `contains` so keys must be unique per (cylinderType × region) or
+ * (accessory id × region).
  */
-const cylinderMarker = (cylinderType: string) =>
-  `"kind":"cylinder","cylinderType":"${cylinderType}"`;
-const accessoryMarker = (itemId: string) =>
-  `"kind":"accessory","itemId":"${itemId}"`;
+function lowStockCylinderMarker(cylinderType: string, regionScope: string | null | undefined) {
+  const encT = encodeURIComponent(cylinderType);
+  if (regionScope === undefined) {
+    return `LOWSTOCK_CYL|ALL|${encT}`;
+  }
+  const r = regionScope === null ? 'null' : regionScope;
+  return `LOWSTOCK_CYL|${r}|${encT}`;
+}
+
+function lowStockAccessoryMarker(itemId: string, regionId: string | null) {
+  const r = regionId === null ? 'null' : regionId;
+  return `LOWSTOCK_ACC|${r}|${itemId}`;
+}
 
 async function hasOpenLowStockNotification(marker: string): Promise<boolean> {
   const existing = await prisma.notification.findFirst({
@@ -120,8 +172,6 @@ async function hasOpenLowStockNotification(marker: string): Promise<boolean> {
 }
 
 async function clearResolvedLowStockNotifications(marker: string) {
-  // When stock recovers above threshold, drop unread alerts so the next dip
-  // re-arms a fresh notification.
   await prisma.notification.deleteMany({
     where: {
       type: 'LOW_INVENTORY',
@@ -132,18 +182,32 @@ async function clearResolvedLowStockNotifications(marker: string) {
 }
 
 /**
- * Check FULL cylinder stock for a given type and notify SUPER_ADMINs when
- * the count drops below the threshold. Idempotent – fires at most one open
- * alert per type until the alert is read or stock recovers.
+ * Check FULL cylinder stock for a given type in one branch and notify
+ * SUPER_ADMINs when the count drops below the threshold.
+ * Idempotent – one open alert per (cylinderType × region) until read or
+ * stock recovers.
+ *
+ * @param regionScope - Branch: pass `getActiveRegionId(request)` (string). If
+ *   `undefined`, counts across all regions (legacy; avoid in new code).
+ *   If `null`, only cylinders with `regionId: null` are counted.
  */
-export async function checkAndNotifyLowCylinderStock(cylinderType: string) {
+export async function checkAndNotifyLowCylinderStock(
+  cylinderType: string,
+  regionScope?: string | null
+) {
   if (!cylinderType) return;
   try {
-    const count = await prisma.cylinder.count({
-      where: { cylinderType, currentStatus: 'FULL' },
-    });
+    const where: Prisma.CylinderWhereInput = {
+      cylinderType,
+      currentStatus: 'FULL',
+    };
+    if (regionScope !== undefined) {
+      where.regionId = regionScope;
+    }
 
-    const marker = cylinderMarker(cylinderType);
+    const count = await prisma.cylinder.count({ where });
+
+    const marker = lowStockCylinderMarker(cylinderType, regionScope);
 
     if (count >= LOW_CYLINDER_THRESHOLD) {
       await clearResolvedLowStockNotifications(marker);
@@ -152,15 +216,15 @@ export async function checkAndNotifyLowCylinderStock(cylinderType: string) {
 
     if (await hasOpenLowStockNotification(marker)) return;
 
-    // Pull a friendly type name when available
     const sample = await prisma.cylinder.findFirst({
-      where: { cylinderType },
+      where,
       select: { typeName: true, capacity: true },
     });
-    const friendly =
-      sample?.typeName ||
-      cylinderType.replace(/_/g, ' ');
+    const friendly = sample?.typeName || cylinderType.replace(/_/g, ' ');
     const capacityNote = sample?.capacity ? ` (${Number(sample.capacity)}kg)` : '';
+
+    const notifyRegionId: string | null | undefined =
+      regionScope === undefined ? undefined : (regionScope as string | null);
 
     await notifySuperAdmins({
       type: 'LOW_INVENTORY',
@@ -168,11 +232,15 @@ export async function checkAndNotifyLowCylinderStock(cylinderType: string) {
       message: `Only ${count} FULL ${friendly}${capacityNote} cylinders left in inventory. Please restock soon.`,
       priority: 'URGENT',
       link: `/inventory/cylinders?type=${encodeURIComponent(cylinderType)}&status=FULL`,
+      regionId: notifyRegionId,
       metadata: {
         kind: 'cylinder',
         cylinderType,
         count,
         threshold: LOW_CYLINDER_THRESHOLD,
+        ...(regionScope === undefined
+          ? { scope: 'all_regions' as const }
+          : { regionId: regionScope }),
       },
     });
   } catch (error) {
@@ -181,23 +249,31 @@ export async function checkAndNotifyLowCylinderStock(cylinderType: string) {
 }
 
 /**
- * Run a low-stock check for every distinct cylinder type that currently has
- * any FULL or recently-touched stock. Used after transactions where multiple
- * types may have been impacted.
+ * Re-check low stock for the given types within the active branch
+ * (transaction / inventory context).
  */
-export async function checkAllCylinderTypesForLowStock(types?: string[]) {
+export async function checkAllCylinderTypesForLowStock(
+  types?: string[],
+  activeRegionId?: string | null
+) {
   try {
-    const distinctTypes = types && types.length > 0
-      ? Array.from(new Set(types.filter(Boolean)))
-      : (
-          await prisma.cylinder.findMany({
-            distinct: ['cylinderType'],
-            select: { cylinderType: true },
-          })
-        ).map((c) => c.cylinderType);
+    if (types && types.length > 0) {
+      const distinctTypes = Array.from(new Set(types.filter(Boolean)));
+      for (const t of distinctTypes) {
+        await checkAndNotifyLowCylinderStock(t, activeRegionId);
+      }
+      return;
+    }
 
-    for (const t of distinctTypes) {
-      await checkAndNotifyLowCylinderStock(t);
+    const groups = await prisma.cylinder.groupBy({
+      by: ['cylinderType', 'regionId'],
+      _count: { _all: true },
+    });
+    for (const g of groups) {
+      await checkAndNotifyLowCylinderStock(
+        g.cylinderType,
+        g.regionId
+      );
     }
   } catch (error) {
     console.error('[superAdminNotifier] Cylinder bulk low-stock check failed:', error);
@@ -213,11 +289,18 @@ export async function checkAndNotifyLowAccessoryStock(itemId: string) {
   try {
     const item = await prisma.customItem.findUnique({
       where: { id: itemId },
-      select: { id: true, name: true, type: true, quantity: true, isActive: true },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        quantity: true,
+        isActive: true,
+        regionId: true,
+      },
     });
     if (!item || !item.isActive) return;
 
-    const marker = accessoryMarker(itemId);
+    const marker = lowStockAccessoryMarker(itemId, item.regionId ?? null);
 
     if (item.quantity > LOW_ACCESSORY_THRESHOLD) {
       await clearResolvedLowStockNotifications(marker);
@@ -232,6 +315,7 @@ export async function checkAndNotifyLowAccessoryStock(itemId: string) {
       message: `Only ${item.quantity} units left of ${item.name} – ${item.type}. Please restock soon.`,
       priority: 'URGENT',
       link: `/inventory/custom-items?category=${encodeURIComponent(item.name)}&item=${encodeURIComponent(item.id)}`,
+      regionId: item.regionId,
       metadata: {
         kind: 'accessory',
         itemId: item.id,
@@ -239,6 +323,7 @@ export async function checkAndNotifyLowAccessoryStock(itemId: string) {
         type: item.type,
         quantity: item.quantity,
         threshold: LOW_ACCESSORY_THRESHOLD,
+        regionId: item.regionId,
       },
     });
   } catch (error) {

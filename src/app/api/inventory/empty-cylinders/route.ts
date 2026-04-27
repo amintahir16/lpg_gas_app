@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
+    const regionId = getActiveRegionId(request);
     // Get empty cylinders grouped by type
     const emptyCylinders = await prisma.cylinder.findMany({
       where: {
-        currentStatus: 'EMPTY'
+        currentStatus: 'EMPTY',
+        ...regionScopedWhere(regionId),
       },
       select: {
         id: true,

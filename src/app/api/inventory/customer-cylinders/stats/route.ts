@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
-    // Get cylinders with customers by type
+    const regionId = getActiveRegionId(request);
     const cylindersWithCustomers = await prisma.cylinder.groupBy({
       by: ['cylinderType', 'typeName', 'capacity'],
       where: {
-        currentStatus: 'WITH_CUSTOMER'
+        currentStatus: 'WITH_CUSTOMER',
+        ...regionScopedWhere(regionId),
       },
       _count: {
         id: true

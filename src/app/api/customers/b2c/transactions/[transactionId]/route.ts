@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { getActiveRegionId } from '@/lib/region';
 
 export async function GET(
   request: NextRequest,
@@ -14,10 +15,11 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const { transactionId } = await params;
 
-    const transaction = await prisma.b2CTransaction.findUnique({
-      where: { id: transactionId },
+    const transaction = await prisma.b2CTransaction.findFirst({
+      where: { id: transactionId, ...(regionId ? { regionId } : {}) },
       include: {
         customer: {
           select: {

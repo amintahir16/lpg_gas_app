@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,11 +10,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const { transactionId } = await request.json();
 
-    // Get transaction with customer and items
-    const transaction = await prisma.b2BTransaction.findUnique({
-      where: { id: transactionId },
+    // Get transaction with customer and items (region-scoped)
+    const transaction = await prisma.b2BTransaction.findFirst({
+      where: { id: transactionId, ...regionScopedWhere(regionId) },
       include: {
         customer: true,
         items: true

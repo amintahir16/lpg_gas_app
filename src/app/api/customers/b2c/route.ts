@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity } from '@/lib/superAdminNotifier';
+import { getActiveRegionId, regionScopedWhere, withRegionScope } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,6 +14,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
     const page = parseInt(searchParams.get('page') || '1');
@@ -33,8 +35,9 @@ export async function GET(request: NextRequest) {
         { street: { contains: search, mode: 'insensitive' as const } },
         { phase: { contains: search, mode: 'insensitive' as const } },
         { area: { contains: search, mode: 'insensitive' as const } }
-      ]
-    } : {};
+      ],
+      ...regionScopedWhere(regionId),
+    } : { ...regionScopedWhere(regionId) };
 
     if (filterStatus === 'ACTIVE') {
       whereClause.isActive = true;
@@ -112,7 +115,8 @@ export async function GET(request: NextRequest) {
       where: {
         cylinderType: {
           in: cylinderTypes
-        }
+        },
+        ...regionScopedWhere(regionId),
       },
       distinct: ['cylinderType'],
       select: {
@@ -184,6 +188,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const body = await request.json();
     const {
       name,
@@ -207,20 +212,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if customer with same phone already exists
+    // Check if customer with same phone already exists in this region
     const existingCustomer = await prisma.b2CCustomer.findFirst({
-      where: { phone }
+      where: { phone, ...regionScopedWhere(regionId) }
     });
 
     if (existingCustomer) {
       return NextResponse.json(
-        { error: 'Customer with this phone number already exists' },
+        { error: 'Customer with this phone number already exists in this branch' },
         { status: 400 }
       );
     }
 
     const customer = await prisma.b2CCustomer.create({
-      data: {
+      data: withRegionScope({
         name,
         phone,
         email: email || null,
@@ -233,7 +238,7 @@ export async function POST(request: NextRequest) {
         city,
         marginCategoryId: marginCategoryId || null,
         totalProfit: 0
-      }
+      }, regionId)
     });
 
     try {
@@ -258,6 +263,7 @@ export async function POST(request: NextRequest) {
         message: `${session.user.name || session.user.email} added B2C customer "${customer.name}".`,
         link,
         priority: 'MEDIUM',
+        regionId,
         metadata: {
           domain: 'B2C_CUSTOMER',
           customerId: customer.id,

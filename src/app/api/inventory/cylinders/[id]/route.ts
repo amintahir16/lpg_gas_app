@@ -5,22 +5,31 @@ import { prisma } from '@/lib/prisma';
 import { normalizeTypeName } from '@/lib/cylinder-utils';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity, checkAndNotifyLowCylinderStock } from '@/lib/superAdminNotifier';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const regionId = getActiveRegionId(request);
     const { id } = await params;
     const body = await request.json();
     const { typeName, cylinderType, capacity, currentStatus, location, storeId, vehicleId, purchaseDate, purchasePrice, lastMaintenanceDate, nextMaintenanceDate } = body;
 
     // IMPORTANT: Normalize typeName to consistent case format before storing
-    // This ensures "special", "Special", "SPECIAL" all become "Special"
-    // This prevents duplicate cards in inventory dashboard
     const normalizedTypeName = normalizeTypeName(typeName) || null;
 
-    const previous = await prisma.cylinder.findUnique({ where: { id } });
+    const previous = await prisma.cylinder.findFirst({
+      where: { id, ...regionScopedWhere(regionId) },
+    });
+
+    if (!previous) {
+      return NextResponse.json(
+        { success: false, error: 'Cylinder not found in current region' },
+        { status: 404 }
+      );
+    }
 
     // Store the cylinder type directly as a string (no enum validation needed)
     const cylinder = await prisma.cylinder.update({
@@ -71,6 +80,7 @@ export async function PUT(
           message: `${session.user.name || session.user.email} updated cylinder ${cylinder.code}${statusChanged ? ` (status → ${cylinder.currentStatus})` : ''}.`,
           link,
           priority: 'LOW',
+          regionId,
           metadata: {
             domain: 'CYLINDER',
             cylinderId: cylinder.id,
@@ -78,9 +88,9 @@ export async function PUT(
           },
         });
       }
-      await checkAndNotifyLowCylinderStock(cylinder.cylinderType);
+      await checkAndNotifyLowCylinderStock(cylinder.cylinderType, regionId);
       if (previous && previous.cylinderType !== cylinder.cylinderType) {
-        await checkAndNotifyLowCylinderStock(previous.cylinderType);
+        await checkAndNotifyLowCylinderStock(previous.cylinderType, regionId);
       }
     } catch (sideEffectError) {
       console.error('Cylinder update side effects failed:', sideEffectError);
@@ -104,11 +114,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const regionId = getActiveRegionId(request);
     const { id } = await params;
     
-    // Check if cylinder exists and is empty
-    const cylinder = await prisma.cylinder.findUnique({
-      where: { id }
+    // Check if cylinder exists in this region and is empty
+    const cylinder = await prisma.cylinder.findFirst({
+      where: { id, ...regionScopedWhere(regionId) }
     });
 
     if (!cylinder) {
@@ -157,6 +168,7 @@ export async function DELETE(
           message: `${session.user.name || session.user.email} deleted cylinder ${cylinder.code} (${friendly}).`,
           link,
           priority: 'MEDIUM',
+          regionId,
           metadata: {
             domain: 'CYLINDER',
             cylinderId: cylinder.id,
@@ -164,7 +176,7 @@ export async function DELETE(
           },
         });
       }
-      await checkAndNotifyLowCylinderStock(cylinder.cylinderType);
+      await checkAndNotifyLowCylinderStock(cylinder.cylinderType, regionId);
     } catch (sideEffectError) {
       console.error('Cylinder delete side effects failed:', sideEffectError);
     }

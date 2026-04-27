@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 // GET /api/admin/plant-prices - Get plant prices (with optional date filter)
 export async function GET(request: NextRequest) {
@@ -15,23 +16,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const regionId = getActiveRegionId(request);
+    const regionScope = regionScopedWhere(regionId);
+
     const { searchParams } = new URL(request.url);
     const dateParam = searchParams.get('date');
     const latest = searchParams.get('latest') === 'true';
     const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : 30;
 
     if (latest) {
-      // Get today's price or the most recent one
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      let price = await prisma.dailyPlantPrice.findUnique({
-        where: { date: today }
+      let price = await prisma.dailyPlantPrice.findFirst({
+        where: { date: today, ...regionScope }
       });
 
       if (!price) {
-        // Get the most recent price
         price = await prisma.dailyPlantPrice.findFirst({
+          where: regionScope,
           orderBy: { date: 'desc' }
         });
       }
@@ -43,12 +46,11 @@ export async function GET(request: NextRequest) {
     }
 
     if (dateParam) {
-      // Get price for specific date
       const date = new Date(dateParam);
       date.setHours(0, 0, 0, 0);
 
-      const price = await prisma.dailyPlantPrice.findUnique({
-        where: { date }
+      const price = await prisma.dailyPlantPrice.findFirst({
+        where: { date, ...regionScope }
       });
 
       if (!price) {
@@ -61,8 +63,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(price);
     }
 
-    // Get recent prices (history)
     const prices = await prisma.dailyPlantPrice.findMany({
+      where: regionScope,
       orderBy: { date: 'desc' },
       take: limit,
       include: {
@@ -94,6 +96,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const regionId = getActiveRegionId(request);
+
     const body = await request.json();
     const { plantPrice118kg, notes, date } = body;
 
@@ -107,14 +111,12 @@ export async function POST(request: NextRequest) {
     const targetDate = date ? new Date(date) : new Date();
     targetDate.setHours(0, 0, 0, 0);
 
-    // Check if price already exists for this date
-    const existingPrice = await prisma.dailyPlantPrice.findUnique({
-      where: { date: targetDate }
+    const existingPrice = await prisma.dailyPlantPrice.findFirst({
+      where: { date: targetDate, ...regionScopedWhere(regionId) }
     });
 
     let price;
     if (existingPrice) {
-      // Update existing price
       price = await prisma.dailyPlantPrice.update({
         where: { id: existingPrice.id },
         data: {
@@ -128,13 +130,13 @@ export async function POST(request: NextRequest) {
         }
       });
     } else {
-      // Create new price
       price = await prisma.dailyPlantPrice.create({
         data: {
           date: targetDate,
           plantPrice118kg: parseFloat(plantPrice118kg),
           notes: notes || null,
-          createdBy: session.user.id
+          createdBy: session.user.id,
+          ...(regionId ? { regionId } : {}),
         },
         include: {
           createdByUser: {

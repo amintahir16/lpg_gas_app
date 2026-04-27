@@ -10,6 +10,7 @@ import {
   checkAllCylinderTypesForLowStock,
   checkAccessoriesForLowStock,
 } from '@/lib/superAdminNotifier';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 // Define types for transaction items
 interface TransactionGasItem {
@@ -61,6 +62,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const body = await request.json();
     const {
       customerId,
@@ -83,15 +85,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if customer exists and get margin category
-    const customer = await prisma.b2CCustomer.findUnique({
-      where: { id: customerId },
+    // Check if customer exists and get margin category (region-scoped)
+    const customer = await prisma.b2CCustomer.findFirst({
+      where: { id: customerId, ...regionScopedWhere(regionId) },
       include: { marginCategory: true }
     });
 
     if (!customer) {
       return NextResponse.json(
-        { error: 'Customer not found' },
+        { error: 'Customer not found in current region' },
         { status: 404 }
       );
     }
@@ -175,7 +177,8 @@ export async function POST(request: NextRequest) {
           actualProfit,
           paymentMethod,
           notes: notes || null,
-          createdBy: session.user.id
+          createdBy: session.user.id,
+          ...(regionId ? { regionId } : {}),
         }
       });
 
@@ -231,11 +234,12 @@ export async function POST(request: NextRequest) {
             // New security deposit - deduct from inventory and create cylinder holding record
             const cylinderType = item.cylinderType; // Use string directly
 
-            // Find available cylinders of this type (FULL status)
+            // Find available cylinders of this type (region-scoped, FULL status)
             const availableCylinders = await tx.cylinder.findMany({
               where: {
-                cylinderType: cylinderType, // Filter by string type
-                currentStatus: 'FULL'
+                cylinderType: cylinderType,
+                currentStatus: 'FULL',
+                ...regionScopedWhere(regionId),
               },
               take: item.quantity
             });
@@ -256,13 +260,14 @@ export async function POST(request: NextRequest) {
             });
 
             // Create cylinder holding record (shown in Current Cylinder Holdings card)
+            // Region scope is inherited via the customer relation
             await tx.b2CCylinderHolding.create({
               data: {
                 customerId,
                 cylinderType: item.cylinderType,
                 quantity: item.quantity,
                 securityAmount: item.pricePerItem,
-                issueDate: new Date(date)
+                issueDate: new Date(date),
               }
             });
 
@@ -346,12 +351,13 @@ export async function POST(request: NextRequest) {
           if (securityItem.isReturn && securityItem.quantity > 0) {
             const cylinderType = securityItem.cylinderType; // Use string directly
 
-            // Find cylinders that are with THIS specific B2C customer
+            // Find cylinders that are with THIS specific B2C customer (region-scoped)
             const cylindersWithCustomer = await tx.cylinder.findMany({
               where: {
-                cylinderType: cylinderType, // Filter by string type
+                cylinderType: cylinderType,
                 currentStatus: 'WITH_CUSTOMER',
-                location: { contains: `B2C Customer: ${customer.name}` }
+                location: { contains: `B2C Customer: ${customer.name}` },
+                ...regionScopedWhere(regionId),
               },
               take: securityItem.quantity
             });
@@ -383,17 +389,18 @@ export async function POST(request: NextRequest) {
                 });
               }
 
-              // Create new cylinders for the remaining quantity
+              // Create new cylinders for the remaining quantity (region-scoped)
               const initialCylinderCount = await tx.cylinder.count();
               for (let i = 0; i < cylindersToCreate; i++) {
                 const code = `CYL${String(initialCylinderCount + 1 + i).padStart(3, '0')}`;
                 await tx.cylinder.create({
                   data: {
                     code,
-                    cylinderType: cylinderType, // Use string type directly
+                    cylinderType: cylinderType,
                     capacity: getCapacityFromTypeString(cylinderType),
                     currentStatus: 'EMPTY',
                     location: 'Store - Ready for Refill',
+                    ...(regionId ? { regionId } : {}),
                   },
                 });
               }
@@ -520,6 +527,7 @@ export async function POST(request: NextRequest) {
         message: `${session.user.name || session.user.email} recorded a B2C sale of Rs ${Number(finalAmount).toLocaleString()} for ${customerName} (Bill #${billSno}).`,
         link,
         priority: 'MEDIUM',
+        regionId,
         metadata: {
           domain: 'B2C_TRANSACTION',
           transactionId: transaction.id,
@@ -536,7 +544,7 @@ export async function POST(request: NextRequest) {
         ...securityItems.map((s: TransactionSecurityItem) => s.cylinderType).filter(Boolean),
       ];
       if (cylinderTypesAffected.length > 0) {
-        await checkAllCylinderTypesForLowStock(cylinderTypesAffected);
+        await checkAllCylinderTypesForLowStock(cylinderTypesAffected, regionId);
       }
 
       if (accessoryItems.length > 0) {

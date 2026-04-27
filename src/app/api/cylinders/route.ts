@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { Prisma, CylinderStatus } from '@prisma/client';
 import { createCylinderAddedNotification } from '@/lib/notifications';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,7 +22,9 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '10');
     const skip = (page - 1) * limit;
 
+    const regionId = getActiveRegionId(request);
     const where: Prisma.CylinderWhereInput = {
+      ...regionScopedWhere(regionId),
       OR: search ? [
         { code: { contains: search, mode: 'insensitive' as Prisma.QueryMode } },
         { location: { contains: search, mode: 'insensitive' as Prisma.QueryMode } }
@@ -90,6 +93,8 @@ export async function POST(request: NextRequest) {
       nextMaintenanceDate
     } = body;
 
+    const regionId = getActiveRegionId(request);
+
     // Generate unique cylinder code
     const cylinderCount = await prisma.cylinder.count();
     const code = `CYL${String(cylinderCount + 1).padStart(3, '0')}`;
@@ -104,7 +109,8 @@ export async function POST(request: NextRequest) {
         purchasePrice: purchasePrice ? parseFloat(purchasePrice) : null,
         lastMaintenanceDate: lastMaintenanceDate ? new Date(lastMaintenanceDate) : null,
         nextMaintenanceDate: nextMaintenanceDate ? new Date(nextMaintenanceDate) : null,
-        currentStatus: 'AVAILABLE'
+        currentStatus: 'AVAILABLE',
+        ...(regionId ? { regionId } : {}),
       },
       include: {
         cylinderRentals: {
@@ -164,9 +170,11 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Cylinder ID is required' }, { status: 400 });
     }
 
-    // Check if cylinder exists
-    const existingCylinder = await prisma.cylinder.findUnique({
-      where: { id }
+    const regionId = getActiveRegionId(request);
+
+    // Check if cylinder exists in current region
+    const existingCylinder = await prisma.cylinder.findFirst({
+      where: { id, ...regionScopedWhere(regionId) }
     });
 
     if (!existingCylinder) {

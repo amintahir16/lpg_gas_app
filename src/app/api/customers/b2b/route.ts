@@ -4,9 +4,11 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity } from '@/lib/superAdminNotifier';
+import { getActiveRegionId, regionScopedWhere, withRegionScope } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
+    const regionId = getActiveRegionId(request);
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
     const page = parseInt(searchParams.get('page') || '1');
@@ -23,12 +25,10 @@ export async function GET(request: NextRequest) {
 
     const skip = (page - 1) * limit;
 
-    // 1. Base Filter (Search & Type)
+    // 1. Base Filter (Search & Type) — scope by active region.
     const whereClause: any = {
       type: type,
-
-      // isActive was previously filtered here, but that hides manually 'Inactive' customers.
-      // We now handle active/inactive logic via the complex filter below.
+      ...regionScopedWhere(regionId),
     };
 
     if (search) {
@@ -128,6 +128,7 @@ export async function GET(request: NextRequest) {
       const assignedCylinders = await prisma.cylinder.findMany({
         where: {
           currentStatus: 'WITH_CUSTOMER',
+          ...regionScopedWhere(regionId),
           OR: [
             { cylinderRentals: { some: { customerId: { in: customerIds }, status: 'ACTIVE' } } },
             ...idMatches,
@@ -184,7 +185,8 @@ export async function GET(request: NextRequest) {
     const profitTransactions = await prisma.b2BTransaction.findMany({
       where: {
         customerId: { in: allCustomerIds },
-        transactionType: 'SALE'
+        transactionType: 'SALE',
+        ...regionScopedWhere(regionId),
       },
       select: {
         customerId: true,
@@ -322,6 +324,7 @@ export async function GET(request: NextRequest) {
       prisma.cylinder.findMany({
         where: {
           currentStatus: 'WITH_CUSTOMER',
+          ...regionScopedWhere(regionId),
           OR: [
             { cylinderRentals: { some: { customerId: { in: allFilteredCustomerIds }, status: 'ACTIVE' } } },
             ...allFilteredCustomerIds.map(id => ({ location: { contains: id } })),
@@ -330,8 +333,9 @@ export async function GET(request: NextRequest) {
         },
         select: { cylinderType: true }
       }),
-      // Fetch definitions for all types
+      // Fetch definitions for all types (region-scoped)
       prisma.cylinder.findMany({
+        where: { ...regionScopedWhere(regionId) },
         distinct: ['cylinderType'],
         select: { cylinderType: true, typeName: true, capacity: true }
       })
@@ -432,6 +436,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
+
     const body = await request.json();
     const {
       name,
@@ -453,7 +459,7 @@ export async function POST(request: NextRequest) {
       notes;
 
     const customer = await prisma.customer.create({
-      data: {
+      data: withRegionScope({
         name,
         contactPerson,
         email,
@@ -465,7 +471,7 @@ export async function POST(request: NextRequest) {
         type,
         createdBy: session.user.id,
         marginCategoryId: marginCategoryId || null,
-      },
+      }, regionId),
     });
 
     try {
@@ -491,6 +497,7 @@ export async function POST(request: NextRequest) {
         message: `${session.user.name || session.user.email} added B2B customer "${customer.name}".`,
         link,
         priority: 'MEDIUM',
+        regionId,
         metadata: {
           domain: 'B2B_CUSTOMER',
           customerId: customer.id,

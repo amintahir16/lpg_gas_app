@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ProductCategory, StockType } from '@prisma/client';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,8 +18,10 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50');
     const skip = (page - 1) * limit;
 
+    const regionId = getActiveRegionId(request);
     const whereClause: any = {
       isActive: true,
+      ...regionScopedWhere(regionId),
     };
 
     if (category) {
@@ -77,6 +80,7 @@ export async function POST(request: NextRequest) {
       lowStockThreshold,
     } = body;
 
+    const regionId = getActiveRegionId(request);
     const product = await prisma.product.create({
       data: {
         name,
@@ -87,6 +91,7 @@ export async function POST(request: NextRequest) {
         remainingKg: remainingKg ? parseFloat(remainingKg) : null,
         priceSoldToCustomer: parseFloat(priceSoldToCustomer),
         lowStockThreshold: parseInt(lowStockThreshold) || 10,
+        ...(regionId ? { regionId } : {}),
       },
     });
 

@@ -2,14 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 // GET all vendors or filter by category
+// NOTE: Vendor entities are GLOBAL (shared across regions); however the
+// purchase_entries / payments aggregates returned here are region-scoped so
+// totals reflect activity in the currently-selected region only.
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const regionId = getActiveRegionId(request);
+    const regionScope = regionScopedWhere(regionId);
 
     const { searchParams } = new URL(request.url);
     const categoryId = searchParams.get('categoryId');
@@ -36,6 +43,7 @@ export async function GET(request: NextRequest) {
       include: {
         category: true,
         purchase_entries: {
+          where: regionScope,
           select: {
             totalPrice: true,
             status: true
@@ -43,7 +51,8 @@ export async function GET(request: NextRequest) {
         },
         payments: {
           where: {
-            status: 'COMPLETED'
+            status: 'COMPLETED',
+            ...regionScope,
           },
           select: {
             amount: true

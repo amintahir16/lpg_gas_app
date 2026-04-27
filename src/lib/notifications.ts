@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+import { formatMessageWithRegion } from '@/lib/superAdminNotifier';
 
 export interface CreateNotificationData {
   type: 'CYLINDER_ADDED' | 'CYLINDER_UPDATED' | 'CYLINDER_DELETED' | 'CYLINDER_STATUS_CHANGED' |
@@ -13,18 +14,30 @@ export interface CreateNotificationData {
   userId?: string; // null for global notifications
   metadata?: Record<string, any>; // Additional data for the notification
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  regionId?: string | null;
 }
 
 export async function createNotification(data: CreateNotificationData) {
   try {
+    const { message: finalMessage, regionName, regionCode } = await formatMessageWithRegion(
+      data.message,
+      data.regionId
+    );
+    const meta: Record<string, unknown> = data.metadata ? { ...data.metadata } : {};
+    if (data.regionId) {
+      meta.regionId = data.regionId;
+      if (regionName) meta.regionName = regionName;
+      if (regionCode) meta.regionCode = regionCode;
+    }
     const notification = await prisma.notification.create({
       data: {
         type: data.type,
         title: data.title,
-        message: data.message,
+        message: finalMessage,
         userId: data.userId || null,
-        metadata: data.metadata ? JSON.stringify(data.metadata) : null,
+        metadata: Object.keys(meta).length > 0 ? JSON.stringify(meta) : null,
         priority: data.priority || 'MEDIUM',
+        regionId: data.regionId ?? null,
       },
     });
     return notification;

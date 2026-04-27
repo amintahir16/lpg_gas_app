@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { Prisma } from '@prisma/client';
 import { createCustomerAddedNotification } from '@/lib/notifications';
+import { getActiveRegionId, regionScopedWhere, withRegionScope } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,6 +14,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
     const page = parseInt(searchParams.get('page') || '1');
@@ -21,6 +23,7 @@ export async function GET(request: NextRequest) {
 
     const where: Prisma.CustomerWhereInput = {
       isActive: true,
+      ...regionScopedWhere(regionId),
       OR: search ? [
         { name: { contains: search, mode: 'insensitive' as Prisma.QueryMode } },
         { contactPerson: { contains: search, mode: 'insensitive' as Prisma.QueryMode } },
@@ -108,18 +111,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const regionId = getActiveRegionId(request);
     const customer = await prisma.customer.create({
-      data: {
+      data: withRegionScope({
         name,
         contactPerson,
         email,
         phone,
         address,
-        type, // Schema uses 'type', not 'customerType'
+        type,
         creditLimit: creditLimit ? parseFloat(creditLimit) : 0,
         paymentTermsDays: paymentTermsDays ? parseInt(paymentTermsDays) : 30,
-        createdBy: user.id // Schema uses 'createdBy' String, not 'userId' relation
-      }
+        createdBy: user.id
+      }, regionId)
     });
 
     // Create notification

@@ -40,6 +40,9 @@ export async function GET(request: NextRequest) {
               name: true,
               email: true
             }
+          },
+          region: {
+            select: { id: true, name: true, code: true }
           }
         }
       }),
@@ -74,7 +77,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { type, title, message, userId } = body;
+    const { type, title, message, userId, regionId } = body;
 
     const notification = await prisma.notification.create({
       data: {
@@ -82,6 +85,7 @@ export async function POST(request: NextRequest) {
         title,
         message,
         userId: userId || null, // null for global notifications
+        regionId: regionId || null,
       },
       include: {
         user: {
@@ -90,6 +94,9 @@ export async function POST(request: NextRequest) {
             name: true,
             email: true
           }
+        },
+        region: {
+          select: { id: true, name: true, code: true }
         }
       }
     });

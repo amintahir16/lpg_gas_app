@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
     try {
@@ -9,6 +10,10 @@ export async function GET(request: NextRequest) {
         if (!session) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+
+        const regionId = getActiveRegionId(request);
+        const regionScope = regionScopedWhere(regionId);
+        const txRegionScope = regionId ? { regionId } : {};
 
         const { searchParams } = new URL(request.url);
         const month = parseInt(searchParams.get('month') || String(new Date().getMonth() + 1));
@@ -23,6 +28,7 @@ export async function GET(request: NextRequest) {
                 where: {
                     date: { gte: startDate, lte: endDate },
                     voided: false,
+                    ...txRegionScope,
                 },
                 _sum: { finalAmount: true },
             }),
@@ -32,6 +38,7 @@ export async function GET(request: NextRequest) {
                         date: { gte: startDate, lte: endDate },
                         voided: false,
                         transactionType: 'SALE',
+                        ...txRegionScope,
                     },
                 },
                 _sum: { totalPrice: true },
@@ -44,6 +51,7 @@ export async function GET(request: NextRequest) {
         const expensesSum = await prisma.officeExpense.aggregate({
             where: {
                 expenseDate: { gte: startDate, lte: endDate },
+                ...regionScope,
             },
             _sum: { amount: true },
         });
@@ -56,6 +64,7 @@ export async function GET(request: NextRequest) {
             where: {
                 date: { gte: startDate, lte: endDate },
                 voided: false,
+                ...txRegionScope,
             },
             _sum: { actualProfit: true },
         });
@@ -69,6 +78,7 @@ export async function GET(request: NextRequest) {
                     date: { gte: startDate, lte: endDate },
                     voided: false,
                     transactionType: 'SALE',
+                    ...txRegionScope,
                 },
             },
             select: {
@@ -109,6 +119,7 @@ export async function GET(request: NextRequest) {
             where: {
                 month,
                 year,
+                ...regionScope,
             },
             _sum: { amount: true },
         });

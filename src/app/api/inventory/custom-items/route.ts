@@ -4,14 +4,16 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity, checkAndNotifyLowAccessoryStock } from '@/lib/superAdminNotifier';
+import { getActiveRegionId, regionScopedWhere, withRegionScope } from '@/lib/region';
 
 const prisma = new PrismaClient();
 
 // GET - Fetch all custom items
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const regionId = getActiveRegionId(request);
     const customItems = await prisma.customItem.findMany({
-      where: { isActive: true },
+      where: { isActive: true, ...regionScopedWhere(regionId) },
       orderBy: { createdAt: 'desc' }
     });
 
@@ -28,6 +30,7 @@ export async function GET() {
 // POST - Create new custom item
 export async function POST(request: NextRequest) {
   try {
+    const regionId = getActiveRegionId(request);
     const body = await request.json();
     const { name, type, quantity, costPerPiece, totalCost } = body;
 
@@ -39,30 +42,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if custom item with same name AND type already exists
+    // Check if custom item with same name AND type already exists in this region
     const existingItem = await prisma.customItem.findFirst({
-      where: { 
+      where: {
         name,
         type,
-        isActive: true
+        isActive: true,
+        ...regionScopedWhere(regionId),
       }
     });
 
     if (existingItem) {
       return NextResponse.json(
-        { error: 'Item with this type already exists in this category' },
+        { error: 'Item with this type already exists in this category for this branch' },
         { status: 400 }
       );
     }
 
     const customItem = await prisma.customItem.create({
-      data: {
+      data: withRegionScope({
         name,
         type,
         quantity: parseInt(quantity),
         costPerPiece: parseFloat(costPerPiece),
         totalCost: parseFloat(totalCost)
-      }
+      }, regionId)
     });
 
     try {
@@ -92,6 +96,7 @@ export async function POST(request: NextRequest) {
           message: `${session.user.name || session.user.email} added accessory ${customItem.name} – ${customItem.type} (Qty ${customItem.quantity}).`,
           link,
           priority: 'LOW',
+          regionId,
           metadata: {
             domain: 'CUSTOM_ITEM',
             itemId: customItem.id,

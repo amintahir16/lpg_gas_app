@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getCylinderTypeDisplayName, normalizeTypeName } from '@/lib/cylinder-utils';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(
   request: NextRequest,
@@ -14,14 +15,15 @@ export async function GET(
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const regionId = getActiveRegionId(request);
     const { id: customerId } = await params;
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    // Get customer to find their name for location matching
-    const customer = await prisma.customer.findUnique({
-      where: { id: customerId },
+    // Get customer to find their name for location matching (region-scoped)
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, ...regionScopedWhere(regionId) },
       select: { name: true }
     });
 
@@ -32,22 +34,23 @@ export async function GET(
       );
     }
 
-    // Get cylinders with this customer grouped by cylinderType, typeName, and capacity
+    // Get cylinders with this customer grouped by cylinderType, typeName, and capacity (region-scoped)
     const cylinderDues = await prisma.cylinder.groupBy({
       by: ['cylinderType', 'typeName', 'capacity'],
       where: {
         currentStatus: 'WITH_CUSTOMER',
         location: {
           contains: customer.name
-        }
+        },
+        ...regionScopedWhere(regionId),
       },
       _count: {
         id: true
       }
     });
 
-    // Build transaction filter
-    const transactionWhere: any = { customerId };
+    // Build transaction filter (region-scoped)
+    const transactionWhere: any = { customerId, ...regionScopedWhere(regionId) };
     if (startDate || endDate) {
       transactionWhere.date = {};
       if (startDate) {

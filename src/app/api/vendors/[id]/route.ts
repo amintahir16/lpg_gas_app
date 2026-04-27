@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(
   request: NextRequest,
@@ -13,6 +14,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
+    const regionScope = regionScopedWhere(regionId);
     const { id } = await params;
 
     const vendor = await prisma.vendor.findUnique({
@@ -20,15 +23,17 @@ export async function GET(
       include: {
         category: true,
         inventories: {
-          where: { status: 'IN_STOCK' },
+          where: { status: 'IN_STOCK', ...regionScope },
           orderBy: { createdAt: 'desc' }
         },
         purchase_entries: {
+          where: regionScope,
           orderBy: { purchaseDate: 'desc' }
         },
         payments: {
           where: {
-            status: 'COMPLETED'
+            status: 'COMPLETED',
+            ...regionScope,
           }
         }
       }

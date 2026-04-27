@@ -4,17 +4,17 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import {
-    BuildingOfficeIcon,
     UserPlusIcon,
     MagnifyingGlassIcon,
     PhoneIcon,
     IdentificationIcon,
     EnvelopeIcon,
-    ClockIcon
+    ClockIcon,
+    BuildingOffice2Icon,
 } from '@heroicons/react/24/outline';
+import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
     Dialog,
@@ -26,6 +26,15 @@ import {
     DialogFooter
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import RegionMultiSelect from '@/components/RegionMultiSelect';
+
+interface BranchSummary {
+    id: string;
+    name: string;
+    code?: string | null;
+    isActive: boolean;
+    isPrimary: boolean;
+}
 
 interface TeamMember {
     id: string;
@@ -39,6 +48,16 @@ interface TeamMember {
     isActive: boolean;
     lastActiveAt?: string;
     createdAt: string;
+    regionId?: string | null;
+    region?: { id: string; name: string; code?: string | null; isActive?: boolean } | null;
+    regions?: BranchSummary[];
+}
+
+interface RegionOption {
+    id: string;
+    name: string;
+    code?: string | null;
+    isActive: boolean;
 }
 
 export default function TeamManagementPage() {
@@ -51,7 +70,9 @@ export default function TeamManagementPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
 
-    // Form State
+    const [regions, setRegions] = useState<RegionOption[]>([]);
+
+    // Form State. `regionIds` is ordered — index 0 is the primary branch.
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
@@ -59,7 +80,8 @@ export default function TeamManagementPage() {
         phone: '',
         cnic: '',
         password: '',
-        confirmPassword: ''
+        confirmPassword: '',
+        regionIds: [] as string[],
     });
 
     const fetchTeamMembers = async () => {
@@ -80,6 +102,20 @@ export default function TeamManagementPage() {
     useEffect(() => {
         fetchTeamMembers();
     }, [search]);
+
+    useEffect(() => {
+        (async () => {
+            try {
+                const res = await fetch('/api/admin/regions?includeInactive=false', { cache: 'no-store' });
+                if (res.ok) {
+                    const data = await res.json();
+                    setRegions(data);
+                }
+            } catch {
+                // ignore
+            }
+        })();
+    }, []);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
@@ -116,8 +152,14 @@ export default function TeamManagementPage() {
             return;
         }
 
+        if (formData.regionIds.length === 0) {
+            setError('Please assign this admin to at least one branch.');
+            setIsSubmitting(false);
+            return;
+        }
+
         try {
-            // Remove confirmPassword before sending to API
+            // Strip confirmPassword before sending; the API accepts `regionIds`.
             const { confirmPassword, ...submissionData } = formData;
 
             const response = await fetch('/api/admin/team', {
@@ -142,9 +184,10 @@ export default function TeamManagementPage() {
                 phone: '',
                 cnic: '',
                 password: '',
-                confirmPassword: ''
+                confirmPassword: '',
+                regionIds: [],
             });
-            fetchTeamMembers(); // Refresh list
+            fetchTeamMembers();
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -277,6 +320,26 @@ export default function TeamManagementPage() {
                                 </div>
                             </div>
 
+                            <div className="space-y-1.5">
+                                <Label htmlFor="regionIds" className="text-xs font-medium text-gray-700 flex items-center gap-2">
+                                    <BuildingOffice2Icon className="w-3.5 h-3.5 text-gray-400" />
+                                    Assign to Branch{formData.regionIds.length > 1 ? 'es' : ''}
+                                    <span className="text-red-500">*</span>
+                                </Label>
+                                <RegionMultiSelect
+                                    id="regionIds"
+                                    value={formData.regionIds}
+                                    onChange={(ids) => setFormData(prev => ({ ...prev, regionIds: ids }))}
+                                    options={regions}
+                                    placeholder="Select one or more branches…"
+                                />
+                                <p className="text-[11px] text-gray-500 leading-snug">
+                                    Pick one or more branches. The first one becomes the <span className="font-semibold">primary</span> (auto-selected on login). Click the
+                                    <StarIconSolid className="inline-block h-3 w-3 mx-0.5 text-amber-500 align-text-top" />
+                                    on any chip to make it primary.
+                                </p>
+                            </div>
+
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1.5">
                                     <Label htmlFor="password" className="text-xs font-medium text-gray-700">Password</Label>
@@ -338,6 +401,7 @@ export default function TeamManagementPage() {
                             <tr>
                                 <th className="px-4 py-3 font-medium">Name / Email</th>
                                 <th className="px-4 py-3 font-medium">Role</th>
+                                <th className="px-4 py-3 font-medium">Branch</th>
                                 <th className="px-4 py-3 font-medium">Contact</th>
                                 <th className="px-4 py-3 font-medium">CNIC</th>
                                 <th className="px-4 py-3 font-medium">Status</th>
@@ -347,7 +411,7 @@ export default function TeamManagementPage() {
                         <tbody className="divide-y divide-gray-100">
                             {isLoading ? (
                                 <tr>
-                                    <td colSpan={6} className="px-4 py-6 text-center text-gray-500">
+                                    <td colSpan={7} className="px-4 py-6 text-center text-gray-500">
                                         <div className="flex items-center justify-center space-x-2">
                                             <div className="h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                                             <span>Loading...</span>
@@ -356,7 +420,7 @@ export default function TeamManagementPage() {
                                 </tr>
                             ) : teamMembers.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-4 py-6 text-center text-gray-500">
+                                    <td colSpan={7} className="px-4 py-6 text-center text-gray-500">
                                         No team members found
                                     </td>
                                 </tr>
@@ -373,6 +437,48 @@ export default function TeamManagementPage() {
                                             <Badge variant={member.role === 'SUPER_ADMIN' ? 'default' : 'secondary'} className={`text-xs px-2 py-0.5 ${member.role === 'SUPER_ADMIN' ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}>
                                                 {member.role.replace('_', ' ')}
                                             </Badge>
+                                        </td>
+                                        <td className="px-4 py-3 text-xs">
+                                            {member.role === 'SUPER_ADMIN' ? (
+                                                <span className="text-purple-600 font-medium">All branches</span>
+                                            ) : member.regions && member.regions.length > 0 ? (
+                                                <div className="flex flex-wrap items-center gap-1">
+                                                    {member.regions.slice(0, 2).map((r) => (
+                                                        <span
+                                                            key={r.id}
+                                                            className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${
+                                                                r.isPrimary
+                                                                    ? 'border-blue-200 bg-blue-50 text-blue-700'
+                                                                    : 'border-gray-200 bg-gray-50 text-gray-700'
+                                                            }`}
+                                                        >
+                                                            {r.isPrimary && <StarIconSolid className="h-2.5 w-2.5 text-amber-500" />}
+                                                            <span className="truncate max-w-[80px]">{r.name}</span>
+                                                            {r.code && (
+                                                                <span className="font-mono opacity-60">· {r.code}</span>
+                                                            )}
+                                                        </span>
+                                                    ))}
+                                                    {member.regions.length > 2 && (
+                                                        <span
+                                                            className="inline-flex items-center rounded-full border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-600"
+                                                            title={member.regions.slice(2).map((r) => r.name).join(', ')}
+                                                        >
+                                                            +{member.regions.length - 2} more
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            ) : member.region ? (
+                                                <div className="flex items-center gap-1.5 text-gray-700">
+                                                    <BuildingOffice2Icon className="w-3 h-3 text-blue-500" />
+                                                    <span className="font-medium">{member.region.name}</span>
+                                                    {member.region.code && (
+                                                        <span className="text-gray-400 font-mono">· {member.region.code}</span>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <span className="text-amber-600 italic">Unassigned</span>
+                                            )}
                                         </td>
                                         <td className="px-4 py-3 text-gray-600">
                                             <div className="flex items-center space-x-2 text-xs">

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhere, withRegionScope } from '@/lib/region';
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,6 +9,8 @@ export async function POST(request: NextRequest) {
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const regionId = getActiveRegionId(request);
 
     const formData = await request.formData();
     const file = formData.get('file') as File;
@@ -62,19 +65,19 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        // Check for duplicate phone numbers
+        // Check for duplicate phone numbers within this region
         const existingCustomer = await prisma.customer.findFirst({
-          where: { phone: customerData.phone }
+          where: { phone: customerData.phone, ...regionScopedWhere(regionId) }
         });
 
         if (existingCustomer) {
           results.failed++;
-          results.errors.push(`Row ${i + 1}: Customer with phone ${customerData.phone} already exists`);
+          results.errors.push(`Row ${i + 1}: Customer with phone ${customerData.phone} already exists in this branch`);
           continue;
         }
 
         await prisma.customer.create({
-          data: customerData
+          data: withRegionScope(customerData, regionId)
         });
 
         results.successful++;

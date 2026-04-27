@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 // Helper function to format currency
 function formatCurrency(amount: number): string {
@@ -711,14 +712,15 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const { id: customerId } = await params;
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    // Fetch customer
-    const customer = await prisma.customer.findUnique({
-      where: { id: customerId },
+    // Fetch customer (region-scoped)
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, ...regionScopedWhere(regionId) },
       select: {
         name: true,
         contactPerson: true,
@@ -732,8 +734,8 @@ export async function GET(
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }
 
-    // Build date filter
-    const transactionWhere: any = { customerId, voided: false };
+    // Build date filter (region-scoped)
+    const transactionWhere: any = { customerId, voided: false, ...regionScopedWhere(regionId) };
     if (startDate || endDate) {
       transactionWhere.date = {};
       if (startDate) {
@@ -746,9 +748,9 @@ export async function GET(
       }
     }
 
-    // Get ALL transactions first to calculate running balance correctly
+    // Get ALL transactions first to calculate running balance correctly (region-scoped)
     const allTransactions = await prisma.b2BTransaction.findMany({
-      where: { customerId, voided: false },
+      where: { customerId, voided: false, ...regionScopedWhere(regionId) },
       include: {
         items: true,
       },
@@ -879,7 +881,8 @@ export async function GET(
     if (uniqueCylinderTypes.size > 0) {
       const cylinders = await prisma.cylinder.findMany({
         where: {
-          cylinderType: { in: Array.from(uniqueCylinderTypes) }
+          cylinderType: { in: Array.from(uniqueCylinderTypes) },
+          ...regionScopedWhere(regionId),
         },
         select: {
           cylinderType: true,

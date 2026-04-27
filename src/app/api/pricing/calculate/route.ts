@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 /**
  * Price Calculation Logic:
@@ -27,6 +28,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const regionId = getActiveRegionId(request);
+    const regionScope = regionScopedWhere(regionId);
+
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get('customerId');
     const customerType = searchParams.get('customerType') || 'B2C';
@@ -38,18 +42,18 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get customer with margin category
+    // Get customer with margin category (region-scoped)
     let customer: any;
     let category: any;
 
     if (customerType === 'B2C') {
-      customer = await prisma.b2CCustomer.findUnique({
-        where: { id: customerId },
+      customer = await prisma.b2CCustomer.findFirst({
+        where: { id: customerId, ...regionScope },
         include: { marginCategory: true }
       });
     } else {
-      customer = await prisma.customer.findUnique({
-        where: { id: customerId },
+      customer = await prisma.customer.findFirst({
+        where: { id: customerId, ...regionScope },
         include: { marginCategory: true }
       });
     }
@@ -70,17 +74,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get today's plant price
+    // Get today's plant price (region-scoped)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    let plantPrice = await prisma.dailyPlantPrice.findUnique({
-      where: { date: today }
+    let plantPrice = await prisma.dailyPlantPrice.findFirst({
+      where: { date: today, ...regionScope }
     });
 
     if (!plantPrice) {
-      // Get the most recent plant price
       plantPrice = await prisma.dailyPlantPrice.findFirst({
+        where: regionScope,
         orderBy: { date: 'desc' }
       });
     }

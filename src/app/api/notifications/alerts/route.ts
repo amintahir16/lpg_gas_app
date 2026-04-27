@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,13 +10,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const alerts = [];
+    const regionId = getActiveRegionId(request);
+    const regionScope = regionScopedWhere(regionId);
 
-    // High outstanding balance alert
+    const alerts: any[] = [];
+
+    // High outstanding balance alert (region-scoped)
     const highOutstandingCustomers = await prisma.customer.findMany({
       where: {
         isActive: true,
-        ledgerBalance: { gt: 100000 } // Configurable threshold
+        ledgerBalance: { gt: 100000 },
+        ...regionScope,
       },
       select: {
         id: true,
@@ -43,11 +48,12 @@ export async function GET(request: NextRequest) {
       });
     });
 
-    // Low stock alert
+    // Low stock alert (region-scoped)
     const lowStockProducts = await prisma.product.findMany({
       where: {
         isActive: true,
-        stockQuantity: { lt: prisma.product.fields.lowStockThreshold }
+        stockQuantity: { lt: prisma.product.fields.lowStockThreshold },
+        ...regionScope,
       },
       select: {
         id: true,
@@ -73,17 +79,19 @@ export async function GET(request: NextRequest) {
       });
     });
 
-    // Overdue customers (based on payment terms)
+    // Overdue customers (based on payment terms, region-scoped)
     const overdueCustomers = await prisma.customer.findMany({
       where: {
         isActive: true,
-        ledgerBalance: { gt: 0 }
+        ledgerBalance: { gt: 0 },
+        ...regionScope,
       },
       include: {
-        transactions: {
+        b2bTransactions: {
           where: {
             transactionType: 'SALE',
-            voided: false
+            voided: false,
+            ...regionScope,
           },
           orderBy: { date: 'desc' },
           take: 1
@@ -92,8 +100,8 @@ export async function GET(request: NextRequest) {
     });
 
     const today = new Date();
-    overdueCustomers.forEach(customer => {
-      const lastSale = customer.transactions[0];
+    overdueCustomers.forEach((customer: any) => {
+      const lastSale = customer.b2bTransactions[0];
       if (lastSale) {
         const daysSinceLastSale = Math.floor(
           (today.getTime() - new Date(lastSale.date).getTime()) / (1000 * 60 * 60 * 24)

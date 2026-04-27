@@ -1,18 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
     try {
+        const regionId = getActiveRegionId(request);
+        const regionScope = regionScopedWhere(regionId);
         // Group cylinders by typeName and capacity to get unique types
         const cylinderTypes = await prisma.cylinder.groupBy({
             by: ['cylinderType', 'typeName', 'capacity'],
             where: {
-                // Exclude cylinders that are marked as retired or maintenance if desired
-                // For now, we want all valid types existing in the system
                 currentStatus: {
                     notIn: ['RETIRED']
-                }
+                },
+                ...regionScope,
             },
             _count: {
                 id: true
@@ -26,7 +28,8 @@ export async function GET(request: NextRequest) {
         const fullCounts = await prisma.cylinder.groupBy({
             by: ['cylinderType'],
             where: {
-                currentStatus: 'FULL'
+                currentStatus: 'FULL',
+                ...regionScope,
             },
             _count: {
                 id: true

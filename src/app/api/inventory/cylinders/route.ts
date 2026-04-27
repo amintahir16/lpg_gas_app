@@ -6,9 +6,11 @@ import { generateUniqueCylinderCode } from '@/lib/cylinder-code-generator';
 import { normalizeTypeName } from '@/lib/cylinder-utils';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity, checkAndNotifyLowCylinderStock } from '@/lib/superAdminNotifier';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
+    const regionId = getActiveRegionId(request);
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
     const status = searchParams.get('status') || '';
@@ -19,7 +21,7 @@ export async function GET(request: NextRequest) {
 
     // Build where clause
     // Exclude WITH_CUSTOMER cylinders from main inventory - they are tracked on separate page
-    const where: any = {};
+    const where: any = { ...regionScopedWhere(regionId) };
 
     // Build status condition
     let statusCondition: any;
@@ -105,6 +107,9 @@ export async function GET(request: NextRequest) {
       where.currentStatus = statusCondition;
     }
 
+    // Region scoping is handled at the top-level `where` (regionScopedWhere) so
+    // it applies regardless of which AND/OR branches are used.
+
     // Get cylinders with pagination
     const cylinders = await prisma.cylinder.findMany({
       where,
@@ -162,6 +167,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const regionId = getActiveRegionId(request);
     const body = await request.json();
     const { code, typeName, cylinderType, capacity, currentStatus, location, storeId, vehicleId, purchaseDate, purchasePrice } = body;
 
@@ -204,7 +210,8 @@ export async function POST(request: NextRequest) {
         storeId: storeId || null,
         vehicleId: vehicleId || null,
         purchaseDate: purchaseDate ? new Date(purchaseDate) : null,
-        purchasePrice: purchasePrice ? parseFloat(purchasePrice) : null
+        purchasePrice: purchasePrice ? parseFloat(purchasePrice) : null,
+        ...(regionId ? { regionId } : {}),
       }
     });
 
@@ -236,6 +243,7 @@ export async function POST(request: NextRequest) {
           message: `${session.user.name || session.user.email} added ${friendly} cylinder ${cylinder.code} (${Number(cylinder.capacity)}kg).`,
           link,
           priority: 'LOW',
+          regionId,
           metadata: {
             domain: 'CYLINDER',
             cylinderId: cylinder.id,
@@ -244,7 +252,7 @@ export async function POST(request: NextRequest) {
           },
         });
       }
-      await checkAndNotifyLowCylinderStock(cylinder.cylinderType);
+      await checkAndNotifyLowCylinderStock(cylinder.cylinderType, regionId);
     } catch (sideEffectError) {
       console.error('Cylinder create side effects failed:', sideEffectError);
     }

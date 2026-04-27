@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 // GET - Get all custom item categories (unique names)
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const regionId = getActiveRegionId(request);
     const categories = await prisma.customItem.findMany({
-      where: { isActive: true },
+      where: { isActive: true, ...regionScopedWhere(regionId) },
       select: { name: true },
       distinct: ['name'],
       orderBy: { name: 'asc' }
@@ -27,6 +29,7 @@ export async function GET() {
 // POST - Create a new category (when adding first item to a new category)
 export async function POST(request: NextRequest) {
   try {
+    const regionId = getActiveRegionId(request);
     const body = await request.json();
     const { name } = body;
 
@@ -37,11 +40,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if category already exists
+    // Check if category already exists in this region
     const existingCategory = await prisma.customItem.findFirst({
       where: { 
         name: name,
-        isActive: true 
+        isActive: true,
+        ...regionScopedWhere(regionId),
       }
     });
 

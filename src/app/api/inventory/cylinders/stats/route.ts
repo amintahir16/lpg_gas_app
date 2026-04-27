@@ -1,18 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCylinderTypeDisplayName, normalizeTypeName } from '@/lib/cylinder-utils';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
-    // Get cylinder type stats
-    // Exclude WITH_CUSTOMER cylinders from inventory stats
-    // Group by typeName, capacity, and cylinderType to distinguish custom types
+    const regionId = getActiveRegionId(request);
     const cylinderTypeStats = await prisma.cylinder.groupBy({
       by: ['cylinderType', 'currentStatus', 'typeName', 'capacity'],
       where: {
         currentStatus: {
           not: 'WITH_CUSTOMER'
-        }
+        },
+        ...regionScopedWhere(regionId),
       },
       _count: {
         id: true

@@ -36,18 +36,46 @@ export async function GET(request: NextRequest) {
                 name: true,
                 email: true,
                 role: true,
-                isActive: true, // Assuming isActive exists on User model based on schema read
+                isActive: true,
                 firstName: true,
                 lastName: true,
                 phone: true,
                 cnic: true,
                 lastActiveAt: true,
-                createdAt: true
+                createdAt: true,
+                regionId: true,
+                region: {
+                    select: { id: true, name: true, code: true, isActive: true },
+                },
+                userRegions: {
+                    select: {
+                        regionId: true,
+                        region: { select: { id: true, name: true, code: true, isActive: true } },
+                    },
+                },
             },
             orderBy: { createdAt: 'desc' }
         });
 
-        return NextResponse.json(teamMembers);
+        // Merge `regionId` (primary) + `userRegions` (additional) into a
+        // canonical de-duplicated `regions` array per admin so the UI can
+        // render branch chips without re-implementing the union client-side.
+        const shaped = teamMembers.map((m) => {
+            const seen = new Set<string>();
+            const regions: Array<{ id: string; name: string; code?: string | null; isActive: boolean; isPrimary: boolean }> = [];
+            if (m.region) {
+                seen.add(m.region.id);
+                regions.push({ ...m.region, isPrimary: true });
+            }
+            for (const ur of m.userRegions) {
+                if (!ur.region || seen.has(ur.region.id)) continue;
+                seen.add(ur.region.id);
+                regions.push({ ...ur.region, isPrimary: false });
+            }
+            return { ...m, regions };
+        });
+
+        return NextResponse.json(shaped);
 
     } catch (error) {
         console.error('Error fetching team members:', error);
@@ -69,14 +97,50 @@ export async function POST(request: NextRequest) {
 
         const body = await request.json();
         const { firstName, lastName, email, phone, cnic, password } = body;
+        // Accept either `regionIds: string[]` (multi-branch, first = primary) or
+        // legacy `regionId: string` (single branch). Empty / missing => error.
+        const rawRegionIds: unknown = Array.isArray(body.regionIds)
+            ? body.regionIds
+            : (body.regionId ? [body.regionId] : []);
+        const regionIds = Array.from(
+            new Set(
+                (rawRegionIds as unknown[])
+                    .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+            )
+        );
 
-        // Validation
         if (!firstName || !lastName || !email || !phone || !cnic || !password) {
             return NextResponse.json(
                 { error: 'All fields are required' },
                 { status: 400 }
             );
         }
+
+        if (regionIds.length === 0) {
+            return NextResponse.json(
+                { error: 'At least one branch must be assigned to every admin.' },
+                { status: 400 }
+            );
+        }
+
+        const regions = await prisma.region.findMany({
+            where: { id: { in: regionIds } },
+            select: { id: true, isActive: true },
+        });
+        if (regions.length !== regionIds.length) {
+            return NextResponse.json(
+                { error: 'One or more selected branches were not found.' },
+                { status: 400 }
+            );
+        }
+        const inactive = regions.find((r) => !r.isActive);
+        if (inactive) {
+            return NextResponse.json(
+                { error: 'One or more selected branches are inactive.' },
+                { status: 400 }
+            );
+        }
+        const primaryRegionId = regionIds[0];
 
         // Validate CNIC format (MB-1234567-8 or 12345-1234567-8)
         // Assuming standard Pakistani CNIC format: 5 digits - 7 digits - 1 digit
@@ -108,28 +172,41 @@ export async function POST(request: NextRequest) {
         const hashedPassword = await bcrypt.hash(password, 10);
         const fullName = `${firstName} ${lastName}`;
 
-        const newUser = await prisma.user.create({
-            data: {
-                name: fullName,
-                firstName,
-                lastName,
-                email,
-                phone,
-                cnic,
-                password: hashedPassword,
-                role: 'ADMIN',
-                isActive: true
+        const newUser = await prisma.$transaction(async (tx) => {
+            const created = await tx.user.create({
+                data: {
+                    name: fullName,
+                    firstName,
+                    lastName,
+                    email,
+                    phone,
+                    cnic,
+                    password: hashedPassword,
+                    role: 'ADMIN',
+                    isActive: true,
+                    regionId: primaryRegionId,
+                },
+            });
+            // Mirror EVERY assigned region (including the primary) into the
+            // join table so the accessible-region union has a single source
+            // of truth and additional branches are persisted.
+            if (regionIds.length > 0) {
+                await tx.userRegion.createMany({
+                    data: regionIds.map((rid) => ({ userId: created.id, regionId: rid })),
+                    skipDuplicates: true,
+                });
             }
+            return created;
         });
 
-        // Log the activity
         await prisma.activityLog.create({
             data: {
                 userId: session.user.id,
                 action: 'CREATED_ADMIN',
                 entityType: 'User',
                 entityId: newUser.id,
-                details: `Created admin account for ${fullName} (${email})`
+                details: `Created admin account for ${fullName} (${email}) with ${regionIds.length} branch${regionIds.length === 1 ? '' : 'es'}`,
+                metadata: { regionIds, primaryRegionId },
             }
         });
 

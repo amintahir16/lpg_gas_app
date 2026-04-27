@@ -10,11 +10,15 @@ import {
   endOfDay,
   differenceInDays
 } from 'date-fns';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
+    const regionId = getActiveRegionId(request);
+    const regionScope = regionScopedWhere(regionId);
+    const txRegionScope = regionId ? { regionId } : {};
     const { searchParams } = new URL(request.url);
     const startDateParam = searchParams.get('startDate');
     const endDateParam = searchParams.get('endDate');
@@ -29,16 +33,16 @@ export async function GET(request: NextRequest) {
 
     // 1. Total Customers (point in time)
     const [totalB2b, totalB2c] = await Promise.all([
-      prisma.customer.count({ where: { isActive: true } }),
-      prisma.b2CCustomer.count({ where: { isActive: true } })
+      prisma.customer.count({ where: { isActive: true, ...regionScope } }),
+      prisma.b2CCustomer.count({ where: { isActive: true, ...regionScope } })
     ]);
     const totalCustomers = totalB2b + totalB2c;
 
     // 2. Active Cylinders (point in time)
     const [activeCylinders, emptyCylinders, fullCylinders] = await Promise.all([
-      prisma.cylinder.count({ where: { currentStatus: 'WITH_CUSTOMER' } }),
-      prisma.cylinder.count({ where: { currentStatus: 'EMPTY' } }),
-      prisma.cylinder.count({ where: { currentStatus: 'FULL' } })
+      prisma.cylinder.count({ where: { currentStatus: 'WITH_CUSTOMER', ...regionScope } }),
+      prisma.cylinder.count({ where: { currentStatus: 'EMPTY', ...regionScope } }),
+      prisma.cylinder.count({ where: { currentStatus: 'FULL', ...regionScope } })
     ]);
 
     const cylinderStatusData = [
@@ -52,7 +56,8 @@ export async function GET(request: NextRequest) {
       prisma.b2CTransaction.findMany({
         where: {
           date: { gte: startDate, lte: endDate },
-          voided: false
+          voided: false,
+          ...txRegionScope,
         },
         select: {
           totalAmount: true,
@@ -64,7 +69,8 @@ export async function GET(request: NextRequest) {
         where: {
           date: { gte: startDate, lte: endDate },
           voided: false,
-          transactionType: 'SALE'
+          transactionType: 'SALE',
+          ...txRegionScope,
         },
         select: {
           customerId: true,
@@ -92,9 +98,9 @@ export async function GET(request: NextRequest) {
       rangeProfit += Number(t.actualProfit || 0);
     });
 
-    // We need margins for B2B profit calculation
+    // We need margins for B2B profit calculation (region-scoped)
     const customersForMargin = await prisma.customer.findMany({
-      where: { id: { in: Array.from(new Set(b2bTransInRange.map(t => t.customerId))) } },
+      where: { id: { in: Array.from(new Set(b2bTransInRange.map(t => t.customerId))) }, ...regionScope },
       select: { id: true, marginCategoryId: true }
     });
 
@@ -145,21 +151,24 @@ export async function GET(request: NextRequest) {
     const [expensesSum, purchasesSum, paymentsSum] = await Promise.all([
       prisma.officeExpense.aggregate({
         where: {
-          expenseDate: { gte: startDate, lte: endDate }
+          expenseDate: { gte: startDate, lte: endDate },
+          ...regionScope,
         },
         _sum: { amount: true }
       }),
       prisma.purchaseEntry.aggregate({
         where: {
           purchaseDate: { gte: startDate, lte: endDate },
-          status: { not: 'CANCELLED' } // Purchases in period
+          status: { not: 'CANCELLED' },
+          ...regionScope,
         },
         _sum: { totalPrice: true }
       }),
       prisma.vendorPayment.aggregate({
         where: {
           paymentDate: { gte: startDate, lte: endDate },
-          status: 'COMPLETED' // Payments in period
+          status: 'COMPLETED',
+          ...regionScope,
         },
         _sum: { amount: true }
       })
@@ -175,7 +184,7 @@ export async function GET(request: NextRequest) {
 
     const [b2cTransChart, b2bTransChart, expensesChart] = await Promise.all([
       prisma.b2CTransaction.findMany({
-        where: { date: { gte: chartStartDate, lte: endDate }, voided: false },
+        where: { date: { gte: chartStartDate, lte: endDate }, voided: false, ...txRegionScope },
         select: {
           date: true,
           totalAmount: true,
@@ -183,11 +192,11 @@ export async function GET(request: NextRequest) {
         }
       }),
       prisma.b2BTransaction.findMany({
-        where: { date: { gte: chartStartDate, lte: endDate }, voided: false, transactionType: 'SALE' },
+        where: { date: { gte: chartStartDate, lte: endDate }, voided: false, transactionType: 'SALE', ...txRegionScope },
         select: { date: true, totalAmount: true }
       }),
       prisma.officeExpense.findMany({
-        where: { expenseDate: { gte: chartStartDate, lte: endDate } },
+        where: { expenseDate: { gte: chartStartDate, lte: endDate }, ...regionScope },
         select: { expenseDate: true, amount: true }
       })
     ]);
@@ -248,11 +257,13 @@ export async function GET(request: NextRequest) {
     // 5. Recent Activities
     const [recentB2B, recentB2C] = await Promise.all([
       prisma.b2BTransaction.findMany({
+        where: txRegionScope,
         take: 8,
         orderBy: { createdAt: 'desc' },
         include: { customer: true, items: true }
       }),
       prisma.b2CTransaction.findMany({
+        where: txRegionScope,
         take: 8,
         orderBy: { createdAt: 'desc' },
         include: {
@@ -306,7 +317,7 @@ export async function GET(request: NextRequest) {
     const cylinderTypeFriendlyMap = new Map<string, string>();
     if (cylinderTypesUsed.size > 0) {
       const samples = await prisma.cylinder.findMany({
-        where: { cylinderType: { in: Array.from(cylinderTypesUsed) } },
+        where: { cylinderType: { in: Array.from(cylinderTypesUsed) }, ...regionScope },
         select: { cylinderType: true, typeName: true, capacity: true },
         distinct: ['cylinderType'],
       });
@@ -526,7 +537,7 @@ export async function GET(request: NextRequest) {
     // 6. Accessories Inventory (individual items per category)
     const accessoryColors = ['#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#84cc16', '#14b8a6', '#a855f7', '#f43f5e'];
     const customItems = await prisma.customItem.findMany({
-      where: { isActive: true, quantity: { gt: 0 } },
+      where: { isActive: true, quantity: { gt: 0 }, ...regionScope },
       select: { name: true, type: true, quantity: true }
     });
 

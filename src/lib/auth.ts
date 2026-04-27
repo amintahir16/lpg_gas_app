@@ -20,7 +20,10 @@ export const authOptions: NextAuthOptions = {
           const user = await prisma.user.findUnique({
             where: {
               email: credentials.email
-            }
+            },
+            include: {
+              userRegions: { select: { regionId: true } },
+            },
           });
 
           if (!user || !user.password) {
@@ -43,11 +46,27 @@ export const authOptions: NextAuthOptions = {
             return null;
           }
 
+          // Compute the union of accessible region ids (primary first).
+          const accessibleIds: string[] = [];
+          const seen = new Set<string>();
+          if (user.regionId) {
+            seen.add(user.regionId);
+            accessibleIds.push(user.regionId);
+          }
+          for (const ur of user.userRegions) {
+            if (!seen.has(ur.regionId)) {
+              seen.add(ur.regionId);
+              accessibleIds.push(ur.regionId);
+            }
+          }
+
           return {
             id: user.id,
             email: user.email,
             name: user.name,
             role: user.role,
+            regionId: user.regionId ?? null,
+            regionIds: accessibleIds,
           };
         } catch (error) {
           console.error('NextAuth authorize error:', error);
@@ -64,10 +83,46 @@ export const authOptions: NextAuthOptions = {
     maxAge: 24 * 60 * 60, // 24 hours
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       try {
         if (user) {
-          token.role = user.role;
+          token.role = (user as { role?: string }).role;
+          token.regionId = (user as { regionId?: string | null }).regionId ?? null;
+          token.regionIds = (user as { regionIds?: string[] }).regionIds ?? [];
+        }
+        // Re-fetch the latest assigned regions from DB on session update so a
+        // SUPER_ADMIN reassignment of an ADMIN takes effect on next request.
+        if (trigger === 'update' && token.sub) {
+          try {
+            const dbUser = await prisma.user.findUnique({
+              where: { id: token.sub },
+              select: {
+                regionId: true,
+                role: true,
+                isActive: true,
+                userRegions: { select: { regionId: true } },
+              },
+            });
+            if (dbUser) {
+              token.role = dbUser.role;
+              token.regionId = dbUser.regionId ?? null;
+              const seen = new Set<string>();
+              const ids: string[] = [];
+              if (dbUser.regionId) {
+                seen.add(dbUser.regionId);
+                ids.push(dbUser.regionId);
+              }
+              for (const ur of dbUser.userRegions) {
+                if (!seen.has(ur.regionId)) {
+                  seen.add(ur.regionId);
+                  ids.push(ur.regionId);
+                }
+              }
+              token.regionIds = ids;
+            }
+          } catch {
+            // ignore – keep existing token claims
+          }
         }
         return token;
       } catch (error) {
@@ -80,6 +135,10 @@ export const authOptions: NextAuthOptions = {
         if (token) {
           session.user.id = token.sub!;
           session.user.role = token.role as string;
+          (session.user as { regionId?: string | null }).regionId =
+            (token as { regionId?: string | null }).regionId ?? null;
+          (session.user as { regionIds?: string[] }).regionIds =
+            (token as { regionIds?: string[] }).regionIds ?? [];
         }
         return session;
       } catch (error) {

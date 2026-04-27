@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { checkCylinderInventory, checkAccessoryInventory } from '@/lib/simple-inventory-check';
+import { getActiveRegionId } from '@/lib/region';
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,27 +15,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const regionId = getActiveRegionId(request);
+
     const body = await request.json();
     const { cylinders, accessories } = body;
 
     const results: any[] = [];
 
-    // Check cylinder inventory
     if (cylinders && cylinders.length > 0) {
       for (const cylinder of cylinders) {
-        const result = await checkCylinderInventory(cylinder.cylinderType, cylinder.requested);
+        const result = await checkCylinderInventory(cylinder.cylinderType, cylinder.requested, regionId);
         results.push(result);
       }
     }
 
-    // Check accessory inventory
     if (accessories && accessories.length > 0) {
       for (const accessory of accessories) {
         const result = await checkAccessoryInventory(
           accessory.itemName,
           accessory.itemType,
           accessory.quality || '',
-          accessory.requested
+          accessory.requested,
+          regionId,
         );
         results.push(result);
       }

@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity } from '@/lib/superAdminNotifier';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(
   request: NextRequest,
@@ -16,10 +17,11 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const { id: customerId } = await params;
 
-    const customer = await prisma.customer.findUnique({
-      where: { id: customerId },
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, ...regionScopedWhere(regionId) },
       include: { marginCategory: true }
     });
 
@@ -51,6 +53,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const { id: customerId } = await params;
     const body = await request.json();
     const {
@@ -80,7 +83,8 @@ export async function PUT(
       const existingCustomer = await prisma.customer.findFirst({
         where: {
           phone,
-          id: { not: customerId }
+          id: { not: customerId },
+          ...regionScopedWhere(regionId),
         }
       });
 
@@ -157,6 +161,7 @@ export async function PUT(
         message: `${session.user.name || session.user.email} updated B2B customer "${customer.name}".`,
         link,
         priority: 'LOW',
+        regionId,
         metadata: {
           domain: 'B2B_CUSTOMER',
           customerId: customer.id,
@@ -189,12 +194,18 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const { id: customerId } = await params;
 
-    // Delete related B2B Transactions and their items
-    // First, we need to find all transactions to delete their items (if the relation is not cascade in schema, which it isn't explicit in file view)
-    // Actually, prisma deleteMany on transactions will fail if transaction items exist pointing to them unless we delete items first.
-    // Let's check relation: B2BTransactionItem -> B2BTransaction
+    // Region-scope guard: ensure the customer belongs to the active region
+    const customerScopeCheck = await prisma.customer.findFirst({
+      where: { id: customerId, ...regionScopedWhere(regionId) },
+      select: { id: true }
+    });
+
+    if (!customerScopeCheck) {
+      return NextResponse.json({ error: 'Customer not found in current region' }, { status: 404 });
+    }
 
     // Step 1: Find all transaction IDs
     const transactions = await prisma.b2BTransaction.findMany({
@@ -286,6 +297,7 @@ export async function DELETE(
         message: `${session.user.name || session.user.email} deleted B2B customer "${customer.name}".`,
         link: '/customers/b2b',
         priority: 'HIGH',
+        regionId,
         metadata: {
           domain: 'B2B_CUSTOMER',
           customerId: customer.id,

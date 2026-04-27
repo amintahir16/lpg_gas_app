@@ -22,6 +22,13 @@ model User {
   lastActiveAt     DateTime?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
+  // Region assignment for ADMIN users (SUPER_ADMIN ignores this).
+  // `regionId` is the PRIMARY/default region (auto-selected when the admin has
+  // only one branch). Additional branches are tracked in `userRegions`.
+  // Full accessible set = [regionId] ∪ userRegions[].regionId
+  regionId         String?
+  region           Region?           @relation("UserAssignedRegion", fields: [regionId], references: [id])
+  userRegions      UserRegion[]
   activityLogs     ActivityLog[]
   b2b_transactions B2BTransaction[]
   cylinderRentals  CylinderRental[]  @relation("UserCylinderRentals")
@@ -32,6 +39,7 @@ model User {
   purchaseEntries  PurchaseEntry[]   @relation("UserPurchaseEntries")
   salaryRecords    SalaryRecord[]    @relation("SalaryRecords")
 
+  @@index([regionId])
   @@map("users")
 }
 
@@ -49,7 +57,7 @@ model Customer {
   domestic118kgDue   Int              @default(0)
   standard15kgDue    Int              @default(0)
   commercial454kgDue Int              @default(0)
-  billSequence       Int              @default(0)  // Per-customer bill sequence number
+  billSequence       Int              @default(0) // Per-customer bill sequence number
   notes              String?
   isActive           Boolean          @default(true)
   createdBy          String
@@ -57,12 +65,15 @@ model Customer {
   updatedBy          String?
   updatedAt          DateTime         @updatedAt
   marginCategoryId   String?
+  regionId           String?
+  region             Region?          @relation(fields: [regionId], references: [id])
   b2bTransactions    B2BTransaction[]
   ledger             CustomerLedger[]
   marginCategory     MarginCategory?  @relation(fields: [marginCategoryId], references: [id])
   cylinderRentals    CylinderRental[]
   supportRequests    SupportRequest[]
 
+  @@index([regionId])
   @@map("customers")
 }
 
@@ -83,25 +94,28 @@ model B2CCustomer {
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
   marginCategoryId String?
+  regionId         String?
+  region           Region?              @relation(fields: [regionId], references: [id])
   marginCategory   MarginCategory?      @relation(fields: [marginCategoryId], references: [id])
   cylinderHoldings B2CCylinderHolding[]
   transactions     B2CTransaction[]
   billSequence     Int                  @default(0)
 
+  @@index([regionId])
   @@map("b2c_customers")
 }
 
 model B2CCylinderHolding {
-  id              String       @id @default(cuid())
+  id              String      @id @default(cuid())
   customerId      String
-  cylinderType    String       // Changed from enum to String to support unlimited custom types
-  quantity        Int          @default(1)
-  securityAmount  Decimal      @db.Decimal(10, 2)
-  issueDate       DateTime     @default(now())
+  cylinderType    String // Changed from enum to String to support unlimited custom types
+  quantity        Int         @default(1)
+  securityAmount  Decimal     @db.Decimal(10, 2)
+  issueDate       DateTime    @default(now())
   returnDate      DateTime?
-  isReturned      Boolean      @default(false)
-  returnDeduction Decimal      @default(0) @db.Decimal(10, 2)
-  customer        B2CCustomer  @relation(fields: [customerId], references: [id])
+  isReturned      Boolean     @default(false)
+  returnDeduction Decimal     @default(0) @db.Decimal(10, 2)
+  customer        B2CCustomer @relation(fields: [customerId], references: [id])
 
   @@map("b2c_cylinder_holdings")
 }
@@ -126,20 +140,22 @@ model B2CTransaction {
   voidedBy        String?
   voidedAt        DateTime?
   voidReason      String?
+  regionId        String?
+  region          Region?                       @relation(fields: [regionId], references: [id])
   accessoryItems  B2CTransactionAccessoryItem[]
   gasItems        B2CTransactionGasItem[]
   securityItems   B2CTransactionSecurityItem[]
   customer        B2CCustomer                   @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@unique([customerId, billSno])
-
+  @@index([regionId])
   @@map("b2c_transactions")
 }
 
 model B2CTransactionGasItem {
   id            String         @id @default(cuid())
   transactionId String
-  cylinderType  String         // Changed from enum to String to support unlimited custom types
+  cylinderType  String // Changed from enum to String to support unlimited custom types
   quantity      Int
   pricePerItem  Decimal        @db.Decimal(10, 2)
   totalPrice    Decimal        @db.Decimal(10, 2)
@@ -154,7 +170,7 @@ model B2CTransactionGasItem {
 model B2CTransactionSecurityItem {
   id            String         @id @default(cuid())
   transactionId String
-  cylinderType  String         // Changed from enum to String to support unlimited custom types
+  cylinderType  String // Changed from enum to String to support unlimited custom types
   quantity      Int
   pricePerItem  Decimal        @db.Decimal(10, 2)
   totalPrice    Decimal        @db.Decimal(10, 2)
@@ -197,14 +213,18 @@ model MarginCategory {
 
 model DailyPlantPrice {
   id              String   @id @default(cuid())
-  date            DateTime @unique
+  date            DateTime
   plantPrice118kg Decimal  @db.Decimal(10, 2)
   notes           String?
   createdBy       String
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  regionId        String?
+  region          Region?  @relation(fields: [regionId], references: [id])
   createdByUser   User     @relation(fields: [createdBy], references: [id])
 
+  @@unique([regionId, date])
+  @@index([regionId])
   @@map("daily_plant_prices")
 }
 
@@ -226,11 +246,11 @@ model VendorCategoryConfig {
 model Cylinder {
   id                  String            @id @default(cuid())
   code                String            @unique
-  cylinderType        String            // Changed from enum to String to support unlimited custom types
-  typeName            String?           // Store original type name (e.g., "Special", "Domestic", "Custom")
+  cylinderType        String // Changed from enum to String to support unlimited custom types
+  typeName            String? // Store original type name (e.g., "Special", "Domestic", "Custom")
   capacity            Decimal           @db.Decimal(5, 2)
   purchaseDate        DateTime?
-  purchasePrice        Decimal?          @db.Decimal(10, 2)
+  purchasePrice       Decimal?          @db.Decimal(10, 2)
   currentStatus       CylinderStatus    @default(FULL)
   location            String?
   lastMaintenanceDate DateTime?
@@ -239,11 +259,14 @@ model Cylinder {
   vehicleId           String?
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
+  regionId            String?
+  region              Region?           @relation(fields: [regionId], references: [id])
   cylinderRentals     CylinderRental[]
   store               Store?            @relation(fields: [storeId], references: [id])
   vehicle             Vehicle?          @relation(fields: [vehicleId], references: [id])
   vendorInventories   VendorInventory[]
 
+  @@index([regionId])
   @@map("cylinders")
 }
 
@@ -294,8 +317,11 @@ model Expense {
   userId      String
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @default(now()) @updatedAt
+  regionId    String?
+  region      Region?         @relation(fields: [regionId], references: [id])
   user        User            @relation("UserExpenses", fields: [userId], references: [id])
 
+  @@index([regionId])
   @@map("expenses")
 }
 
@@ -355,9 +381,12 @@ model VendorInventory {
   lastUpdated DateTime        @default(now())
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
+  regionId    String?
+  region      Region?         @relation(fields: [regionId], references: [id])
   cylinder    Cylinder?       @relation(fields: [cylinderId], references: [id])
   vendor      Vendor          @relation(fields: [vendorId], references: [id])
 
+  @@index([regionId])
   @@map("vendor_inventories")
 }
 
@@ -372,8 +401,11 @@ model VendorPayment {
   description String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+  regionId    String?
+  region      Region?       @relation(fields: [regionId], references: [id])
   vendor      Vendor        @relation(fields: [vendorId], references: [id])
 
+  @@index([regionId])
   @@map("vendor_payments")
 }
 
@@ -424,8 +456,11 @@ model VendorOrder {
   notes       String?
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
+  regionId    String?
+  region      Region?           @relation(fields: [regionId], references: [id])
   vendor      Vendor            @relation(fields: [vendorId], references: [id])
 
+  @@index([regionId])
   @@map("vendor_orders")
 }
 
@@ -467,12 +502,16 @@ model Notification {
   metadata  String?
   link      String?
   userId    String?
+  /** Branch / region where the activity occurred (from active region cookie). */
+  regionId  String?
+  region    Region?              @relation(fields: [regionId], references: [id], onDelete: SetNull)
   createdAt DateTime             @default(now())
   updatedAt DateTime             @updatedAt
   user      User?                @relation("UserNotifications", fields: [userId], references: [id])
 
   @@index([userId, isRead])
   @@index([type, createdAt])
+  @@index([regionId])
   @@map("notifications")
 }
 
@@ -492,9 +531,12 @@ model PurchaseEntry {
   userId          String
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
+  regionId        String?
+  region          Region?             @relation(fields: [regionId], references: [id])
   user            User                @relation("UserPurchaseEntries", fields: [userId], references: [id])
   vendors         Vendor              @relation(fields: [vendorId], references: [id])
 
+  @@index([regionId])
   @@map("purchase_entries")
 }
 
@@ -509,9 +551,12 @@ model VendorFinancialReport {
   notes           String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  regionId        String?
+  region          Region?  @relation(fields: [regionId], references: [id])
   vendor          Vendor   @relation(fields: [vendorId], references: [id])
 
-  @@unique([vendorId, reportDate])
+  @@unique([vendorId, regionId, reportDate])
+  @@index([regionId])
   @@map("vendor_financial_reports")
 }
 
@@ -523,8 +568,11 @@ model Store {
   isActive  Boolean    @default(true)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+  regionId  String?
+  region    Region?    @relation(fields: [regionId], references: [id])
   cylinders Cylinder[]
 
+  @@index([regionId])
   @@map("stores")
 }
 
@@ -537,8 +585,11 @@ model Vehicle {
   isActive      Boolean    @default(true)
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
+  regionId      String?
+  region        Region?    @relation(fields: [regionId], references: [id])
   cylinders     Cylinder[]
 
+  @@index([regionId])
   @@map("vehicles")
 }
 
@@ -552,14 +603,17 @@ model CustomItem {
   quantity     Int      @default(0)
   totalCost    Decimal  @db.Decimal(10, 2)
   type         String
+  regionId     String?
+  region       Region?  @relation(fields: [regionId], references: [id])
 
+  @@index([regionId])
   @@map("custom_items")
 }
 
 model B2BTransaction {
   id               String               @id @default(cuid())
   transactionType  B2BTransactionType
-  billSno          String               // Per-customer bill sequence number
+  billSno          String // Per-customer bill sequence number
   customerId       String
   date             DateTime
   time             DateTime
@@ -576,11 +630,14 @@ model B2BTransaction {
   voidedBy         String?
   voidedAt         DateTime?
   voidReason       String?
+  regionId         String?
+  region           Region?              @relation(fields: [regionId], references: [id])
   items            B2BTransactionItem[]
   users            User                 @relation(fields: [createdBy], references: [id])
   customer         Customer             @relation(fields: [customerId], references: [id])
 
-  @@unique([customerId, billSno])  // Each customer has their own bill sequence
+  @@unique([customerId, billSno]) // Each customer has their own bill sequence
+  @@index([regionId])
   @@map("b2b_transactions")
 }
 
@@ -622,8 +679,11 @@ model Product {
   isActive              Boolean              @default(true)
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
+  regionId              String?
+  region                Region?              @relation(fields: [regionId], references: [id])
   b2b_transaction_items B2BTransactionItem[]
 
+  @@index([regionId])
   @@map("products")
 }
 
@@ -636,7 +696,6 @@ model BillSequence {
 
   @@map("bill_sequences")
 }
-
 
 enum VendorOrderStatus {
   PENDING
@@ -864,33 +923,102 @@ model ActivityLog {
   @@index([entityType, entityId])
   @@map("activity_logs")
 }
+
 model OfficeExpense {
   id          String   @id @default(cuid())
-  type        String   // "RENT" or "DAILY"
+  type        String // "RENT" or "DAILY"
   amount      Decimal  @db.Decimal(10, 2)
   description String
   expenseDate DateTime
-  month       Int?     // 1-12 (for RENT type, to enforce one rent per month)
-  year        Int?     // e.g. 2026 (for RENT type)
+  month       Int? // 1-12 (for RENT type, to enforce one rent per month)
+  year        Int? // e.g. 2026 (for RENT type)
   createdBy   String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  @@unique([type, month, year])
+  regionId    String?
+  region      Region?  @relation(fields: [regionId], references: [id])
+
+  @@unique([regionId, type, month, year])
+  @@index([regionId])
   @@map("office_expenses")
 }
+
 model SalaryRecord {
   id            String   @id @default(cuid())
   userId        String
   amount        Decimal  @db.Decimal(10, 2)
-  month         Int      // 1-12
-  year          Int      // e.g. 2026
+  month         Int // 1-12
+  year          Int // e.g. 2026
   paidDate      DateTime
   paymentMethod String   @default("CASH")
   notes         String?
   createdBy     String
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  regionId      String?
+  region        Region?  @relation(fields: [regionId], references: [id])
   user          User     @relation("SalaryRecords", fields: [userId], references: [id])
-  @@unique([userId, month, year])
+
+  @@unique([userId, regionId, month, year])
+  @@index([regionId])
   @@map("salary_records")
+}
+
+model Region {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  code        String?  @unique
+  address     String?
+  phone       String?
+  description String?
+  isActive    Boolean  @default(true)
+  isDefault   Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users                  User[]                  @relation("UserAssignedRegion")
+  userRegions            UserRegion[]
+  customers              Customer[]
+  b2cCustomers           B2CCustomer[]
+  cylinders              Cylinder[]
+  expenses               Expense[]
+  officeExpenses         OfficeExpense[]
+  salaryRecords          SalaryRecord[]
+  dailyPlantPrices       DailyPlantPrice[]
+  products               Product[]
+  customItems            CustomItem[]
+  stores                 Store[]
+  vehicles               Vehicle[]
+  purchaseEntries        PurchaseEntry[]
+  vendorPayments         VendorPayment[]
+  vendorOrders           VendorOrder[]
+  vendorInventories      VendorInventory[]
+  vendorFinancialReports VendorFinancialReport[]
+  b2bTransactions        B2BTransaction[]
+  b2cTransactions        B2CTransaction[]
+  notifications          Notification[]
+
+  @@map("regions")
+}
+
+// Join table allowing a single ADMIN to access multiple regions / branches.
+// `User.regionId` is still treated as the PRIMARY region (auto-selected for
+// single-region admins). When an admin has more than one branch, additional
+// branches are tracked here. The primary region MAY also be present in this
+// list; callers should de-duplicate the union when computing access.
+model UserRegion {
+  id        String   @id @default(cuid())
+  userId    String
+  regionId  String
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  region Region @relation(fields: [regionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, regionId])
+  @@index([userId])
+  @@index([regionId])
+  @@map("user_regions")
 }

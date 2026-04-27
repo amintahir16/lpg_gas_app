@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,9 +12,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get all B2C customers with their profit data
+    const regionId = getActiveRegionId(request);
+    const regionScope = regionScopedWhere(regionId);
+
+    // Get all B2C customers with their profit data (region-scoped)
     const [customers, profitSummary, totalCustomers] = await Promise.all([
       prisma.b2CCustomer.findMany({
+        where: regionScope,
         select: {
           id: true,
           name: true,
@@ -30,9 +35,10 @@ export async function GET(request: NextRequest) {
         orderBy: { totalProfit: 'desc' }
       }),
       prisma.b2CCustomer.aggregate({
+        where: regionScope,
         _sum: { totalProfit: true }
       }),
-      prisma.b2CCustomer.count()
+      prisma.b2CCustomer.count({ where: regionScope })
     ]);
 
     const response = {

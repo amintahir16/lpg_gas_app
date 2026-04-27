@@ -12,8 +12,8 @@ export default function LandingLayout({
   const pathname = usePathname();
   
   // Check if the current route is an admin/authenticated route
-  const isAdminRoute = pathname?.startsWith('/dashboard') || 
-                     pathname?.startsWith('/settings') || 
+  const isAdminRoute = pathname?.startsWith('/dashboard') ||
+                     pathname?.startsWith('/settings') ||
                      pathname?.startsWith('/admin') ||
                      pathname?.startsWith('/api') ||
                      pathname?.startsWith('/auth') ||
@@ -26,7 +26,8 @@ export default function LandingLayout({
                      pathname?.startsWith('/reports') ||
                      pathname?.startsWith('/test-notifications') ||
                      pathname?.startsWith('/login') ||
-                     pathname?.startsWith('/register');
+                     pathname?.startsWith('/register') ||
+                     pathname?.startsWith('/select-region');
 
   // Only show Navbar and Footer for landing pages (public routes)
   if (isAdminRoute) {

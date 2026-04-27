@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 // Helper function to format currency
 function formatCurrency(amount: number): string {
@@ -674,10 +675,11 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const { transactionId } = await params;
 
-    const transaction = await prisma.b2BTransaction.findUnique({
-      where: { id: transactionId },
+    const transaction = await prisma.b2BTransaction.findFirst({
+      where: { id: transactionId, ...regionScopedWhere(regionId) },
       include: {
         customer: {
           select: {
@@ -697,13 +699,14 @@ export async function GET(
       return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
     }
 
-    // Get all transactions for this customer up to this transaction to calculate holding
+    // Get all transactions for this customer up to this transaction to calculate holding (region-scoped)
     const allTransactions = await prisma.b2BTransaction.findMany({
       where: {
         customerId: transaction.customerId,
         createdAt: {
           lte: transaction.createdAt
-        }
+        },
+        ...regionScopedWhere(regionId),
       },
       include: {
         items: true
@@ -769,10 +772,11 @@ export async function GET(
     const cylinderTypeMap = new Map<string, { typeName: string | null, capacity: number | null }>();
 
     if (uniqueCylinderTypes.size > 0) {
-      // Query cylinders to get typeName and capacity for each cylinderType
+      // Query cylinders to get typeName and capacity for each cylinderType (region-scoped)
       const cylinders = await prisma.cylinder.findMany({
         where: {
-          cylinderType: { in: Array.from(uniqueCylinderTypes) }
+          cylinderType: { in: Array.from(uniqueCylinderTypes) },
+          ...regionScopedWhere(regionId),
         },
         select: {
           cylinderType: true,

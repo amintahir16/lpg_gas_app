@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,14 +10,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
+
     const { searchParams } = new URL(request.url);
     const asOfDate = searchParams.get('asOfDate') || new Date().toISOString().split('T')[0];
 
-    // Get all customers with outstanding balances
+    // Get all customers with outstanding balances (region-scoped)
     const customers = await prisma.customer.findMany({
       where: {
         isActive: true,
-        ledgerBalance: { gt: 0 }
+        ledgerBalance: { gt: 0 },
+        ...regionScopedWhere(regionId),
       },
       select: {
         id: true,

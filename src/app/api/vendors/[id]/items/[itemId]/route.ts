@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 // PUT - Update vendor item
 export async function PUT(
@@ -14,6 +15,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const { id, itemId } = await params;
     const body = await request.json();
     const { name, description, category } = body;
@@ -26,11 +28,12 @@ export async function PUT(
       );
     }
 
-    // Check if item exists and belongs to vendor
+    // Check if item exists and belongs to vendor (region-scoped)
     const existingItem = await prisma.vendorInventory.findFirst({
       where: {
         id: itemId,
-        vendorId: id
+        vendorId: id,
+        ...regionScopedWhere(regionId),
       }
     });
 
@@ -77,13 +80,15 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const { id, itemId } = await params;
 
-    // Check if item exists and belongs to vendor
+    // Check if item exists and belongs to vendor (region-scoped)
     const existingItem = await prisma.vendorInventory.findFirst({
       where: {
         id: itemId,
-        vendorId: id
+        vendorId: id,
+        ...regionScopedWhere(regionId),
       }
     });
 

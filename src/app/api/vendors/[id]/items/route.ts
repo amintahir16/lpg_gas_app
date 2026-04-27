@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 // GET all items for a vendor
 export async function GET(
@@ -14,12 +15,14 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const { id } = await params;
 
     const items = await prisma.vendorInventory.findMany({
       where: {
         vendorId: id,
-        status: 'IN_STOCK'
+        status: 'IN_STOCK',
+        ...regionScopedWhere(regionId),
       },
       orderBy: { createdAt: 'asc' }
     });
@@ -45,6 +48,7 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const { id } = await params;
     const body = await request.json();
     const { name, description, category, defaultUnit } = body;
@@ -63,9 +67,10 @@ export async function POST(
         name,
         description,
         category: category || 'General',
-        quantity: 0, // Default quantity for new items
-        unitPrice: 0, // Default unit price
-        status: 'IN_STOCK'
+        quantity: 0,
+        unitPrice: 0,
+        status: 'IN_STOCK',
+        ...(regionId ? { regionId } : {}),
       }
     });
 

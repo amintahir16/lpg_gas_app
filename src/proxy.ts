@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 
-// Define route permissions
+const REGION_COOKIE_NAME = 'flamora_region_id';
+const REGION_HEADER_NAME = 'x-region-id';
+
 const routePermissions = {
-    // Public routes (landing pages - no authentication required)
     public: [
         '/login',
         '/register',
@@ -16,7 +17,6 @@ const routePermissions = {
         '/contact'
     ],
 
-    // Admin only routes
     admin: [
         '/dashboard',
         '/customers',
@@ -40,10 +40,11 @@ const routePermissions = {
         '/api/customers/b2b/transactions',
         '/api/admin/margin-categories',
         '/api/admin/plant-prices',
+        '/api/admin/regions',
+        '/api/regions',
         '/api/pricing'
     ],
 
-    // Notification routes (accessible by all authenticated users)
     notifications: [
         '/api/notifications',
         '/api/notifications/stats',
@@ -51,21 +52,18 @@ const routePermissions = {
         '/api/test-notification'
     ],
 
-    // User routes (accessible by USER, ADMIN, SUPER_ADMIN)
     user: [
         '/customer',
         '/api/customer',
         '/api/rentals'
     ],
 
-    // Vendor routes
     vendor: [
         '/vendor',
         '/api/vendor'
     ]
 };
 
-// Role hierarchy
 const roleHierarchy = {
     'USER': ['USER'],
     'ADMIN': ['USER', 'ADMIN'],
@@ -73,24 +71,37 @@ const roleHierarchy = {
     'VENDOR': ['VENDOR']
 };
 
+// Routes that should be reachable by ADMIN/SUPER_ADMIN even when no region is
+// selected yet (avoids redirect loops on /select-region itself).
+const REGION_AGNOSTIC_PREFIXES = [
+    '/select-region',
+    '/api/select-region',
+    '/api/admin/regions', // SUPER_ADMIN region CRUD
+    '/api/regions',       // listing regions for switcher / select-region
+    '/api/auth',
+    '/api/notifications',
+    '/api/simple-notifications',
+];
+
+function isRegionAgnostic(pathname: string): boolean {
+    return REGION_AGNOSTIC_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'));
+}
+
 export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
     if (pathname === '/') {
         return NextResponse.next();
     }
 
-    // Allow public routes
     if (routePermissions.public.some(route => pathname.startsWith(route))) {
         return NextResponse.next();
     }
 
-    // Get token from NextAuth
     const token = await getToken({
         req: request,
         secret: process.env.NEXTAUTH_SECRET
     });
 
-    // Redirect to login if no token
     if (!token) {
         if (pathname.startsWith('/api/')) {
             return NextResponse.json(
@@ -104,10 +115,8 @@ export async function proxy(request: NextRequest) {
         return NextResponse.redirect(loginUrl);
     }
 
-    // Check role-based access
     const userRole = token.role as string;
 
-    // Check if user has access to the requested route
     const hasAccess = checkRouteAccess(pathname, userRole);
 
     if (!hasAccess) {
@@ -118,53 +127,122 @@ export async function proxy(request: NextRequest) {
             );
         }
 
-        // Redirect to appropriate dashboard based on role
         const redirectUrl = getRedirectUrl(userRole);
         return NextResponse.redirect(new URL(redirectUrl, request.url));
     }
 
-    // Add user info to headers for API routes
+    // Region gating: only applies to ADMIN / SUPER_ADMIN — those are the roles
+    // that operate on region-scoped data. USER / VENDOR pass through unchanged.
+    const isAdminish = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+    let regionId = request.cookies.get(REGION_COOKIE_NAME)?.value || null;
+
+    if (isAdminish) {
+        // ADMINs are locked to a finite set of accessible regions; SUPER_ADMINs
+        // can roam across all regions. The cookie is checked against this set
+        // and reset to the primary if it drifts (e.g. an old cookie from a
+        // region that was just revoked).
+        const primaryRegionFromToken = (token as { regionId?: string | null }).regionId || null;
+        const accessibleRegionIds = ((token as { regionIds?: string[] }).regionIds || []).filter(Boolean);
+
+        if (userRole === 'ADMIN') {
+            const allowed = accessibleRegionIds.length > 0
+                ? accessibleRegionIds
+                : (primaryRegionFromToken ? [primaryRegionFromToken] : []);
+
+            if (regionId && !allowed.includes(regionId)) {
+                // Stale cookie pointing at a region the admin no longer has
+                // access to — fall back to primary (or first allowed).
+                regionId = primaryRegionFromToken || allowed[0] || null;
+            }
+
+            // Auto-pick the only accessible region so single-branch admins skip
+            // the picker entirely (preserving prior behaviour).
+            if (!regionId && allowed.length === 1) {
+                regionId = allowed[0];
+            }
+        }
+
+        const needsRegion = !regionId && !isRegionAgnostic(pathname);
+        if (needsRegion) {
+            if (pathname.startsWith('/api/')) {
+                return NextResponse.json(
+                    {
+                        error: 'NoRegion',
+                        message: 'Please select a region before continuing.',
+                    },
+                    { status: 409 }
+                );
+            }
+            const selectUrl = new URL('/select-region', request.url);
+            selectUrl.searchParams.set('callbackUrl', pathname);
+            return NextResponse.redirect(selectUrl);
+        }
+    }
+
     if (pathname.startsWith('/api/')) {
         const requestHeaders = new Headers(request.headers);
         requestHeaders.set('x-user-id', token.sub || '');
         requestHeaders.set('x-user-role', userRole);
         requestHeaders.set('x-user-email', token.email || '');
+        if (regionId) {
+            requestHeaders.set(REGION_HEADER_NAME, regionId);
+        }
 
-        return NextResponse.next({
+        const response = NextResponse.next({
             request: {
                 headers: requestHeaders,
             },
         });
+
+        // If we corrected an ADMIN's stale region cookie above, persist the fix.
+        if (isAdminish && userRole === 'ADMIN' && regionId &&
+            request.cookies.get(REGION_COOKIE_NAME)?.value !== regionId) {
+            response.cookies.set(REGION_COOKIE_NAME, regionId, {
+                httpOnly: true,
+                sameSite: 'lax',
+                path: '/',
+                maxAge: 60 * 60 * 24 * 30, // 30 days
+            });
+        }
+        return response;
     }
 
-    return NextResponse.next();
+    const response = NextResponse.next();
+    if (isAdminish && userRole === 'ADMIN' && regionId &&
+        request.cookies.get(REGION_COOKIE_NAME)?.value !== regionId) {
+        response.cookies.set(REGION_COOKIE_NAME, regionId, {
+            httpOnly: true,
+            sameSite: 'lax',
+            path: '/',
+            maxAge: 60 * 60 * 24 * 30,
+        });
+    }
+    return response;
 }
 
 function checkRouteAccess(pathname: string, userRole: string): boolean {
-    // SUPER_ADMIN has access to everything
     if (userRole === 'SUPER_ADMIN') return true;
 
-    // Check notification routes (accessible by all authenticated users)
     if (routePermissions.notifications.some(route => pathname.startsWith(route))) {
-        return true; // All authenticated users can access notifications
+        return true;
     }
 
-    // Check admin routes
+    if (pathname.startsWith('/select-region') || pathname.startsWith('/api/select-region')) {
+        return userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+    }
+
     if (routePermissions.admin.some(route => pathname.startsWith(route))) {
         return roleHierarchy[userRole as keyof typeof roleHierarchy]?.includes('ADMIN') || false;
     }
 
-    // Check user routes
     if (routePermissions.user.some(route => pathname.startsWith(route))) {
         return roleHierarchy[userRole as keyof typeof roleHierarchy]?.includes('USER') || false;
     }
 
-    // Check vendor routes
     if (routePermissions.vendor.some(route => pathname.startsWith(route))) {
         return userRole === 'VENDOR';
     }
 
-    // Default deny
     return false;
 }
 

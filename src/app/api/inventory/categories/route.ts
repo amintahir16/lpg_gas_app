@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
-    // Fetch all inventory categories and their items from CustomItem table
+    const regionId = getActiveRegionId(request);
+    // Fetch all inventory categories and their items from CustomItem table (region-scoped)
     const customItems = await prisma.customItem.findMany({
       where: {
         isActive: true,
         quantity: {
-          gt: 0 // Only include items with stock
-        }
+          gt: 0
+        },
+        ...regionScopedWhere(regionId),
       },
       orderBy: [
         { name: 'asc' },

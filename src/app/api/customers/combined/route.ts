@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,6 +12,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
+    const regionScope = regionScopedWhere(regionId);
+
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
     const page = parseInt(searchParams.get('page') || '1');
@@ -19,8 +23,8 @@ export async function GET(request: NextRequest) {
     const filterType = searchParams.get('type') || 'ALL'; // 'B2B' | 'B2C' | 'ALL'
     const skip = (page - 1) * limit;
 
-    // Build search conditions for both B2B and B2C customers
-    let b2bWhere: any = {};
+    // Build search conditions for both B2B and B2C customers (region-scoped)
+    let b2bWhere: any = { ...regionScope };
     if (search) {
       b2bWhere.OR = [
         { name: { contains: search, mode: 'insensitive' as const } },
@@ -30,7 +34,7 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    let b2cWhere: any = {};
+    let b2cWhere: any = { ...regionScope };
     if (search) {
       b2cWhere.OR = [
         { name: { contains: search, mode: 'insensitive' as const } },

@@ -2,16 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const session = await getServerSession(authOptions);
         if (!session) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+        const regionId = getActiveRegionId(request);
         const { id } = await params;
         const body = await request.json();
         const { amount, description, expenseDate } = body;
-        const existing = await prisma.officeExpense.findUnique({ where: { id } });
+        const existing = await prisma.officeExpense.findFirst({
+            where: { id, ...regionScopedWhere(regionId) },
+        });
         if (!existing) {
             return NextResponse.json({ error: 'Expense not found' }, { status: 404 });
         }
@@ -35,8 +39,11 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
         if (!session) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+        const regionId = getActiveRegionId(request);
         const { id } = await params;
-        const existing = await prisma.officeExpense.findUnique({ where: { id } });
+        const existing = await prisma.officeExpense.findFirst({
+            where: { id, ...regionScopedWhere(regionId) },
+        });
         if (!existing) {
             return NextResponse.json({ error: 'Expense not found' }, { status: 404 });
         }

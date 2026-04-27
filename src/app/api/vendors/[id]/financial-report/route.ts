@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(
   request: NextRequest,
@@ -13,6 +14,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
+    const regionScope = regionScopedWhere(regionId);
     const { id } = await params;
     const { searchParams } = new URL(request.url);
     const period = searchParams.get('period') || 'all'; // all, daily, monthly, yearly
@@ -76,18 +79,19 @@ export async function GET(
         endDate = new Date();
     }
 
-    // Get purchases in date range
+    // Get purchases in date range (region-scoped)
     const purchases = await prisma.purchaseEntry.findMany({
       where: {
         vendorId: id,
         purchaseDate: {
           gte: startDate,
           lte: endDate
-        }
+        },
+        ...regionScope,
       }
     });
 
-    // Get direct vendor payments in date range
+    // Get direct vendor payments in date range (region-scoped)
     const directPayments = await prisma.vendorPayment.findMany({
       where: {
         vendorId: id,
@@ -95,7 +99,8 @@ export async function GET(
           gte: startDate,
           lte: endDate
         },
-        status: 'COMPLETED'
+        status: 'COMPLETED',
+        ...regionScope,
       }
     });
 
@@ -121,19 +126,20 @@ export async function GET(
     // Calculate period outstanding balance (period payments - period purchases)
     const periodOutstandingBalance = totalPayments - totalPurchases;
 
-    // Get overall balance (all time)
+    // Get overall balance (all time, region-scoped)
     const allPurchases = await prisma.purchaseEntry.findMany({
-      where: { vendorId: id },
+      where: { vendorId: id, ...regionScope },
       select: {
         totalPrice: true
       }
     });
 
-    // Get all direct payments (all time)
+    // Get all direct payments (all time, region-scoped)
     const allDirectPayments = await prisma.vendorPayment.findMany({
       where: { 
         vendorId: id,
-        status: 'COMPLETED'
+        status: 'COMPLETED',
+        ...regionScope,
       },
       select: { amount: true }
     });

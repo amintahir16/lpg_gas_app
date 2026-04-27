@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getActiveRegionId, regionScopedWhere, withRegionScope } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
+    const regionId = getActiveRegionId(request);
     const stores = await prisma.store.findMany({
+      where: { ...regionScopedWhere(regionId) },
       include: {
         cylinders: {
           select: {
@@ -24,11 +27,10 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Process stores to include cylinder count
     const processedStores = stores.map(store => ({
       ...store,
       cylinderCount: store._count.cylinders,
-      cylinders: store.cylinders.slice(0, 10) // Limit to first 10 for display
+      cylinders: store.cylinders.slice(0, 10)
     }));
 
     return NextResponse.json({
@@ -46,15 +48,16 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const regionId = getActiveRegionId(request);
     const body = await request.json();
     const { name, location, address } = body;
 
     const store = await prisma.store.create({
-      data: {
+      data: withRegionScope({
         name,
         location,
         address: address || null
-      }
+      }, regionId)
     });
 
     return NextResponse.json({

@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const regionId = getActiveRegionId(request);
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
@@ -15,9 +17,9 @@ export async function GET(
 
     const skip = (page - 1) * limit;
 
-    // Get customer details
-    const customer = await prisma.customer.findUnique({
-      where: { id: customerId },
+    // Get customer details (region-scoped)
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, ...regionScopedWhere(regionId) },
       include: { marginCategory: true }
     });
 

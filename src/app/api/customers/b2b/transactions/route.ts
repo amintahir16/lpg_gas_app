@@ -11,6 +11,7 @@ import {
   checkAllCylinderTypesForLowStock,
   checkAccessoriesForLowStock,
 } from '@/lib/superAdminNotifier';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,6 +21,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const body = await request.json();
     const {
       transactionType,
@@ -108,7 +110,7 @@ export async function POST(request: NextRequest) {
       // Generate per-customer bill sequence number (1, 2, 3... for each customer)
       // Find the max existing bill number for this customer and use max + 1
       const existingTransactions = await tx.b2BTransaction.findMany({
-        where: { customerId },
+        where: { customerId, ...regionScopedWhere(regionId) },
         select: { billSno: true },
         orderBy: { createdAt: 'desc' }
       });
@@ -148,6 +150,7 @@ export async function POST(request: NextRequest) {
           paymentReference: paymentReference || null,
           notes: notes || null,
           createdBy: session.user.id,
+          ...(regionId ? { regionId } : {}),
         },
       });
 
@@ -215,12 +218,12 @@ export async function POST(request: NextRequest) {
       }
 
       // Update customer ledger balance and cylinder due counts
-      const customer = await tx.customer.findUnique({
-        where: { id: customerId },
+      const customer = await tx.customer.findFirst({
+        where: { id: customerId, ...regionScopedWhere(regionId) },
       });
 
       if (!customer) {
-        throw new Error('Customer not found');
+        throw new Error('Customer not found in current region');
       }
 
       let newLedgerBalance = parseFloat(customer.ledgerBalance.toString()) || 0;
@@ -377,11 +380,12 @@ export async function POST(request: NextRequest) {
             // Find and update cylinders from inventory
             const cylinderType = gasItem.cylinderType; // Use string directly
 
-            // Find available cylinders of this type
+            // Find available cylinders of this type (region-scoped)
             const availableCylinders = await tx.cylinder.findMany({
               where: {
-                cylinderType: cylinderType, // Filter by string type
-                currentStatus: CylinderStatus.FULL
+                cylinderType: cylinderType,
+                currentStatus: CylinderStatus.FULL,
+                ...regionScopedWhere(regionId),
               },
               take: gasItem.delivered
             });
@@ -465,12 +469,13 @@ export async function POST(request: NextRequest) {
             if (quantity > 0 && cylinderType) {
               console.log(`Processing return: ${quantity} x ${cylinderType}`);
 
-              // Find cylinders that are currently with this customer
+              // Find cylinders that are currently with this customer (region-scoped)
               const cylindersWithCustomer = await tx.cylinder.findMany({
                 where: {
-                  cylinderType: cylinderType, // Filter by string type
+                  cylinderType: cylinderType,
                   currentStatus: CylinderStatus.WITH_CUSTOMER,
-                  location: { contains: customer.name }
+                  location: { contains: customer.name },
+                  ...regionScopedWhere(regionId),
                 },
                 take: quantity
               });
@@ -502,17 +507,18 @@ export async function POST(request: NextRequest) {
                   });
                 }
 
-                // Create new cylinders for the remaining quantity
+                // Create new cylinders for the remaining quantity (region-scoped)
                 const initialCylinderCount = await tx.cylinder.count();
                 for (let i = 0; i < cylindersToCreate; i++) {
                   const code = `CYL${String(initialCylinderCount + 1 + i).padStart(3, '0')}`;
                   await tx.cylinder.create({
                     data: {
                       code,
-                      cylinderType: cylinderType, // Use string type directly
+                      cylinderType: cylinderType,
                       capacity: getCapacityFromTypeString(cylinderType),
                       currentStatus: CylinderStatus.EMPTY,
                       location: 'Store - Ready for Refill',
+                      ...(regionId ? { regionId } : {}),
                     },
                   });
                 }
@@ -528,8 +534,8 @@ export async function POST(request: NextRequest) {
 
     // ---- Post-commit side effects: activity log + super-admin notifications ----
     try {
-      const customerForLog = await prisma.customer.findUnique({
-        where: { id: customerId },
+      const customerForLog = await prisma.customer.findFirst({
+        where: { id: customerId, ...regionScopedWhere(regionId) },
         select: { name: true },
       });
       const customerName = customerForLog?.name || 'Customer';
@@ -572,6 +578,7 @@ export async function POST(request: NextRequest) {
         message: `${session.user.name || session.user.email} recorded a B2B ${transactionType} of Rs ${total.toLocaleString()} for ${customerName} (Bill #${result.billSno}).`,
         link: transactionLink,
         priority: 'MEDIUM',
+        regionId,
         metadata: {
           domain: 'B2B_TRANSACTION',
           transactionId: result.id,
@@ -587,7 +594,7 @@ export async function POST(request: NextRequest) {
         .map((g) => g?.cylinderType)
         .filter(Boolean);
       if (cylinderTypesAffected.length > 0) {
-        await checkAllCylinderTypesForLowStock(cylinderTypesAffected);
+        await checkAllCylinderTypesForLowStock(cylinderTypesAffected, regionId);
       }
       if (Array.isArray(accessoryItems) && accessoryItems.length > 0) {
         const accessoriesForCheck = (accessoryItems as any[])

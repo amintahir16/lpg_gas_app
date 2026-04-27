@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 // PUT - Update category name (rename category)
 export async function PUT(
@@ -7,6 +8,7 @@ export async function PUT(
   { params }: { params: Promise<{ name: string }> }
 ) {
   try {
+    const regionId = getActiveRegionId(request);
     const { name: oldName } = await params;
     const body = await request.json();
     const { newName } = body;
@@ -18,11 +20,12 @@ export async function PUT(
       );
     }
 
-    // Check if old category exists
+    // Check if old category exists in this region
     const existingItems = await prisma.customItem.findMany({
       where: { 
         name: oldName,
-        isActive: true 
+        isActive: true,
+        ...regionScopedWhere(regionId),
       }
     });
 
@@ -33,11 +36,12 @@ export async function PUT(
       );
     }
 
-    // Check if new name already exists
+    // Check if new name already exists in this region
     const duplicateCategory = await prisma.customItem.findFirst({
       where: { 
         name: newName,
-        isActive: true 
+        isActive: true,
+        ...regionScopedWhere(regionId),
       }
     });
 
@@ -48,11 +52,12 @@ export async function PUT(
       );
     }
 
-    // Update all items in the category
+    // Update all items in the category for this region
     await prisma.customItem.updateMany({
       where: { 
         name: oldName,
-        isActive: true 
+        isActive: true,
+        ...regionScopedWhere(regionId),
       },
       data: { name: newName }
     });
@@ -76,13 +81,15 @@ export async function DELETE(
   { params }: { params: Promise<{ name: string }> }
 ) {
   try {
+    const regionId = getActiveRegionId(request);
     const { name } = await params;
 
-    // Check if category exists
+    // Check if category exists in this region
     const existingItems = await prisma.customItem.findMany({
       where: { 
         name: name,
-        isActive: true 
+        isActive: true,
+        ...regionScopedWhere(regionId),
       }
     });
 
@@ -93,11 +100,12 @@ export async function DELETE(
       );
     }
 
-    // Soft delete all items in the category
+    // Soft delete all items in the category for this region
     await prisma.customItem.updateMany({
       where: { 
         name: name,
-        isActive: true 
+        isActive: true,
+        ...regionScopedWhere(regionId),
       },
       data: { isActive: false }
     });

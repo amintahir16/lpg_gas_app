@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,6 +10,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
+    const regionScope = regionScopedWhere(regionId);
+
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get('customerId');
     const asOfDate = searchParams.get('asOfDate') || new Date().toISOString().split('T')[0];
@@ -17,9 +21,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Customer ID required' }, { status: 400 });
     }
 
-    // Get customer details
-    const customer = await prisma.customer.findUnique({
-      where: { id: customerId },
+    // Get customer details (region-scoped)
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, ...regionScope },
       select: {
         id: true,
         name: true,
@@ -31,12 +35,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }
 
-    // Get all transactions up to the specified date
+    // Get all transactions up to the specified date (region-scoped)
     const transactions = await prisma.b2BTransaction.findMany({
       where: {
         customerId,
         voided: false,
-        date: { lte: new Date(asOfDate + 'T23:59:59.999Z') }
+        date: { lte: new Date(asOfDate + 'T23:59:59.999Z') },
+        ...regionScope,
       },
       include: {
         items: true

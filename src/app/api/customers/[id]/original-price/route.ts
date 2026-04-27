@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const regionId = getActiveRegionId(request);
     const { id: customerId } = await params;
     const { searchParams } = new URL(request.url);
     const productName = searchParams.get('productName');
@@ -21,12 +23,13 @@ export async function GET(
       return NextResponse.json({ error: 'Product name and cylinder type required' }, { status: 400 });
     }
 
-    // Find the most recent sale of this cylinder type to this customer
+    // Find the most recent sale of this cylinder type to this customer (region-scoped)
     const recentSale = await prisma.b2BTransaction.findFirst({
       where: {
         customerId,
         transactionType: 'SALE',
         voided: false,
+        ...regionScopedWhere(regionId),
         items: {
           some: {
             productName: {
@@ -66,7 +69,7 @@ export async function GET(
       });
     }
 
-    // If no sale found to this customer, get the last known price for this product
+    // If no sale found to this customer, get the last known price for this product (region-scoped)
     const lastKnownPrice = await prisma.b2BTransactionItem.findFirst({
       where: {
         productName: {
@@ -76,7 +79,8 @@ export async function GET(
         cylinderType: cylinderType,
         transaction: {
           transactionType: 'SALE',
-          voided: false
+          voided: false,
+          ...regionScopedWhere(regionId),
         }
       },
       orderBy: {

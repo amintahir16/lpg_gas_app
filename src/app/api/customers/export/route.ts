@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,14 +10,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const { searchParams } = new URL(request.url);
     const format = searchParams.get('format') || 'csv';
     const includeTransactions = searchParams.get('includeTransactions') === 'true';
 
     const customers = await prisma.customer.findMany({
-      where: { isActive: true },
+      where: { isActive: true, ...regionScopedWhere(regionId) },
       include: includeTransactions ? {
-        transactions: {
+        b2bTransactions: {
           where: { voided: false },
           include: { items: true },
           orderBy: { date: 'desc' }
@@ -69,11 +71,12 @@ export async function GET(request: NextRequest) {
         ];
 
         if (includeTransactions) {
-          const totalTransactions = customer.transactions?.length || 0;
-          const lastTransactionDate = customer.transactions?.[0]?.date?.toISOString().split('T')[0] || '';
-          const totalSalesAmount = customer.transactions
-            ?.filter(t => t.transactionType === 'SALE')
-            .reduce((sum, t) => sum + t.totalAmount.toNumber(), 0) || 0;
+          const txs = (customer as any).b2bTransactions || [];
+          const totalTransactions = txs.length;
+          const lastTransactionDate = txs[0]?.date?.toISOString().split('T')[0] || '';
+          const totalSalesAmount = txs
+            .filter((t: any) => t.transactionType === 'SALE')
+            .reduce((sum: number, t: any) => sum + Number(t.totalAmount), 0);
 
           row.push(
             totalTransactions.toString(),
@@ -112,19 +115,19 @@ export async function GET(request: NextRequest) {
         commercial454kgDue: customer.commercial454kgDue,
         notes: customer.notes,
         createdAt: customer.createdAt,
-        transactions: includeTransactions ? customer.transactions?.map(t => ({
+        transactions: includeTransactions ? ((customer as any).b2bTransactions || []).map((t: any) => ({
           id: t.id,
           billSno: t.billSno,
           transactionType: t.transactionType,
           date: t.date,
-          totalAmount: t.totalAmount.toNumber(),
+          totalAmount: Number(t.totalAmount),
           paymentReference: t.paymentReference,
           notes: t.notes,
-          items: t.items?.map(item => ({
+          items: (t.items || []).map((item: any) => ({
             productName: item.productName,
-            quantity: item.quantity.toNumber(),
-            pricePerItem: item.pricePerItem.toNumber(),
-            totalPrice: item.totalPrice.toNumber(),
+            quantity: Number(item.quantity),
+            pricePerItem: Number(item.pricePerItem),
+            totalPrice: Number(item.totalPrice),
             cylinderType: item.cylinderType
           }))
         })) : undefined

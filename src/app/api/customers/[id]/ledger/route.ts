@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(
   request: NextRequest,
@@ -8,6 +9,7 @@ export async function GET(
   try {
     const { id } = await params;
     const userId = request.headers.get('x-user-id');
+    const regionId = getActiveRegionId(request);
     
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -23,6 +25,7 @@ export async function GET(
     const whereClause: any = {
       customerId: id,
       voided: false,
+      ...regionScopedWhere(regionId),
     };
 
     if (startDate && endDate) {
@@ -45,9 +48,9 @@ export async function GET(
       prisma.b2BTransaction.count({ where: whereClause }),
     ]);
 
-    // Get customer info
-    const customer = await prisma.customer.findUnique({
-      where: { id },
+    // Get customer info (region-scoped)
+    const customer = await prisma.customer.findFirst({
+      where: { id, ...regionScopedWhere(regionId) },
       select: {
         id: true,
         name: true,

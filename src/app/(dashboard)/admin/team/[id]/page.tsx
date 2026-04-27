@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, use } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import {
-    UserIcon,
     EnvelopeIcon,
     PhoneIcon,
     IdentificationIcon,
@@ -25,6 +24,7 @@ import {
     ArrowTopRightOnSquareIcon,
     PencilSquareIcon,
 } from '@heroicons/react/24/outline';
+import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -40,6 +40,7 @@ import {
     DialogFooter
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import RegionMultiSelect from '@/components/RegionMultiSelect';
 
 interface ActivityLog {
     id: string;
@@ -125,6 +126,14 @@ interface SalaryRecord {
     notes: string | null;
 }
 
+interface BranchSummary {
+    id: string;
+    name: string;
+    code?: string | null;
+    isActive: boolean;
+    isPrimary: boolean;
+}
+
 interface TeamMember {
     id: string;
     name: string;
@@ -137,7 +146,17 @@ interface TeamMember {
     isActive: boolean;
     lastActiveAt?: string;
     createdAt: string;
+    regionId?: string | null;
+    region?: { id: string; name: string; code?: string | null; isActive?: boolean } | null;
+    regions?: BranchSummary[];
     activityLogs?: ActivityLog[];
+}
+
+interface RegionOption {
+    id: string;
+    name: string;
+    code?: string | null;
+    isActive: boolean;
 }
 
 export default function AdminProfilePage({ params }: { params: Promise<{ id: string }> }) {
@@ -153,16 +172,18 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
 
-    // Edit Form State
+    // Edit Form State. `regionIds` is ordered — index 0 is primary.
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
         email: '',
         phone: '',
         cnic: '',
-        isActive: true
+        isActive: true,
+        regionIds: [] as string[],
     });
     const [deleteConfirmationName, setDeleteConfirmationName] = useState('');
+    const [regionOptions, setRegionOptions] = useState<RegionOption[]>([]);
 
     const profileCardRef = useRef<HTMLDivElement | null>(null);
     const [profileCardHeight, setProfileCardHeight] = useState<number | null>(null);
@@ -195,10 +216,15 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
                 const data = await memberRes.json();
                 setMember(data);
 
-                // Fallback for names if not explicitly set
                 const nameParts = data.name ? data.name.split(' ') : [];
                 const fallbackFirstName = nameParts[0] || '';
                 const fallbackLastName = nameParts.slice(1).join(' ') || '';
+
+                // Seed regionIds from the API's canonical accessible list
+                // (primary first), falling back to the legacy single regionId.
+                const seededRegionIds: string[] = Array.isArray(data.regions) && data.regions.length > 0
+                    ? data.regions.map((r: BranchSummary) => r.id)
+                    : data.regionId ? [data.regionId] : [];
 
                 setFormData({
                     firstName: data.firstName || fallbackFirstName,
@@ -206,7 +232,8 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
                     email: data.email || '',
                     phone: data.phone || '',
                     cnic: data.cnic || '',
-                    isActive: data.isActive
+                    isActive: data.isActive,
+                    regionIds: seededRegionIds,
                 });
             }
 
@@ -230,6 +257,19 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
         fetchMemberDetails();
     }, [id]);
 
+    useEffect(() => {
+        (async () => {
+            try {
+                const res = await fetch('/api/admin/regions?includeInactive=false', { cache: 'no-store' });
+                if (!res.ok) return;
+                const data = await res.json();
+                setRegionOptions(data);
+            } catch {
+                // ignore
+            }
+        })();
+    }, []);
+
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         if (name === 'cnic') {
@@ -249,18 +289,30 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
         setError('');
 
         try {
+            const payload: Record<string, unknown> = { ...formData };
+            // Only send branch assignments for ADMIN — SUPER_ADMINs aren't
+            // region-scoped, so the API ignores `regionIds` for them anyway.
+            if (member?.role !== 'ADMIN') {
+                delete payload.regionIds;
+            } else {
+                payload.regionIds = formData.regionIds;
+            }
+
             const response = await fetch(`/api/admin/team/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
+                body: JSON.stringify(payload)
             });
 
-            if (!response.ok) throw new Error('Failed to update admin');
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.error || 'Failed to update admin');
+            }
 
             setIsEditDialogOpen(false);
             fetchMemberDetails();
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Update failed');
         } finally {
             setIsSubmitting(false);
         }
@@ -350,6 +402,50 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
                                 <ClockIcon className="w-4 h-4 mr-3 text-gray-400" />
                                 Last active {member.lastActiveAt ? new Date(member.lastActiveAt).toLocaleString() : 'Never'}
                             </div>
+                            {member.role === 'ADMIN' && (
+                                <div className="flex items-start text-sm text-gray-600">
+                                    <BuildingOfficeIcon className="w-4 h-4 mr-3 mt-0.5 text-gray-400 flex-shrink-0" />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="text-xs uppercase tracking-wide text-gray-400 mb-1">
+                                            {(member.regions?.length || 0) > 1 ? 'Branches' : 'Branch'}
+                                        </div>
+                                        {member.regions && member.regions.length > 0 ? (
+                                            <div className="flex flex-wrap gap-1">
+                                                {member.regions.map((r) => (
+                                                    <span
+                                                        key={r.id}
+                                                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                                                            r.isPrimary
+                                                                ? 'border-blue-300 bg-blue-50 text-blue-800'
+                                                                : 'border-gray-200 bg-gray-50 text-gray-700'
+                                                        }`}
+                                                        title={r.isPrimary ? 'Primary (auto-selected on login)' : undefined}
+                                                    >
+                                                        {r.isPrimary && (
+                                                            <StarIconSolid className="h-3 w-3 text-amber-500" />
+                                                        )}
+                                                        <span className="truncate max-w-[140px]">{r.name}</span>
+                                                        {r.code && (
+                                                            <span className="font-mono text-[10px] opacity-70">· {r.code}</span>
+                                                        )}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        ) : member.region ? (
+                                            <span className="font-medium text-gray-900">
+                                                {member.region.name}
+                                                {member.region.code && (
+                                                    <span className="ml-1 text-xs font-mono text-gray-400">
+                                                        ({member.region.code})
+                                                    </span>
+                                                )}
+                                            </span>
+                                        ) : (
+                                            <span className="text-amber-700 italic">Unassigned</span>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <div className="pt-2 flex space-x-2">
@@ -420,6 +516,26 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
                                                 />
                                             </div>
                                         </div>
+
+                                        {member.role === 'ADMIN' && (
+                                            <div className="space-y-1.5">
+                                                <Label className="text-xs font-medium text-gray-700 flex items-center gap-2">
+                                                    <BuildingOfficeIcon className="w-3.5 h-3.5 text-gray-400" />
+                                                    Assigned Branch{formData.regionIds.length === 1 ? '' : 'es'}
+                                                </Label>
+                                                <RegionMultiSelect
+                                                    value={formData.regionIds}
+                                                    onChange={(ids) => setFormData(prev => ({ ...prev, regionIds: ids }))}
+                                                    options={regionOptions}
+                                                    placeholder="Select one or more branches…"
+                                                />
+                                                <p className="text-[11px] text-gray-500 leading-snug">
+                                                    Pick one or more branches. The first one is the <span className="font-semibold">primary</span> (auto-selected on login). Click the
+                                                    <StarIconSolid className="inline-block h-3 w-3 mx-0.5 text-amber-500 align-text-top" />
+                                                    on any chip to make it primary. Removing all branches forces a re-login until reassigned.
+                                                </p>
+                                            </div>
+                                        )}
 
                                         <div className="flex items-center space-x-2 pt-2">
                                             <div className="flex items-center h-5">

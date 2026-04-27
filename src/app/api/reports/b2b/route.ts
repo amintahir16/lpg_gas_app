@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,6 +9,9 @@ export async function GET(request: NextRequest) {
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const regionId = getActiveRegionId(request);
+    const regionScope = regionScopedWhere(regionId);
 
     const { searchParams } = new URL(request.url);
     const reportType = searchParams.get('type');
@@ -24,22 +28,22 @@ export async function GET(request: NextRequest) {
 
     switch (reportType) {
       case 'ar-summary':
-        return await getARSummary();
+        return await getARSummary(regionScope);
       
       case 'cylinder-due':
-        return await getCylinderDueReport();
+        return await getCylinderDueReport(regionScope);
       
       case 'buyback':
-        return await getBuybackReport(dateFilter);
+        return await getBuybackReport(dateFilter, regionScope);
       
       case 'inventory':
-        return await getInventoryReport();
+        return await getInventoryReport(regionScope);
       
       case 'sales':
-        return await getSalesReport(dateFilter);
+        return await getSalesReport(dateFilter, regionScope);
       
       case 'daily-cashbook':
-        return await getDailyCashbookReport(dateFilter);
+        return await getDailyCashbookReport(dateFilter, regionScope);
       
       default:
         return NextResponse.json({ error: 'Invalid report type' }, { status: 400 });
@@ -53,16 +57,16 @@ export async function GET(request: NextRequest) {
   }
 }
 
-async function getARSummary() {
-  // Get total outstanding
+async function getARSummary(regionScope: any) {
+  // Get total outstanding (region-scoped)
   const totalOutstanding = await prisma.customer.aggregate({
-    where: { ledgerBalance: { gt: 0 } },
+    where: { ledgerBalance: { gt: 0 }, ...regionScope },
     _sum: { ledgerBalance: true },
   });
 
-  // Get top 10 debtors
+  // Get top 10 debtors (region-scoped)
   const topDebtors = await prisma.customer.findMany({
-    where: { ledgerBalance: { gt: 0 } },
+    where: { ledgerBalance: { gt: 0 }, ...regionScope },
     orderBy: { ledgerBalance: 'desc' },
     take: 10,
     select: {
@@ -91,6 +95,7 @@ async function getARSummary() {
         transactionType: 'SALE',
         date: { gte: thirtyDaysAgo },
         voided: false,
+        ...regionScope,
       },
       _sum: { totalAmount: true },
       _count: true,
@@ -101,6 +106,7 @@ async function getARSummary() {
         transactionType: 'SALE',
         date: { gte: sixtyDaysAgo, lt: thirtyDaysAgo },
         voided: false,
+        ...regionScope,
       },
       _sum: { totalAmount: true },
       _count: true,
@@ -111,6 +117,7 @@ async function getARSummary() {
         transactionType: 'SALE',
         date: { gte: ninetyDaysAgo, lt: sixtyDaysAgo },
         voided: false,
+        ...regionScope,
       },
       _sum: { totalAmount: true },
       _count: true,
@@ -121,6 +128,7 @@ async function getARSummary() {
         transactionType: 'SALE',
         date: { lt: ninetyDaysAgo },
         voided: false,
+        ...regionScope,
       },
       _sum: { totalAmount: true },
       _count: true,
@@ -139,7 +147,7 @@ async function getARSummary() {
   });
 }
 
-async function getCylinderDueReport() {
+async function getCylinderDueReport(regionScope: any) {
   const customersWithDue = await prisma.customer.findMany({
     where: {
       OR: [
@@ -147,6 +155,7 @@ async function getCylinderDueReport() {
         { standard15kgDue: { gt: 0 } },
         { commercial454kgDue: { gt: 0 } },
       ],
+      ...regionScope,
     },
     select: {
       id: true,
@@ -163,12 +172,13 @@ async function getCylinderDueReport() {
   return NextResponse.json({ customers: customersWithDue });
 }
 
-async function getBuybackReport(dateFilter: any) {
+async function getBuybackReport(dateFilter: any, regionScope: any) {
   const buybacks = await prisma.b2BTransaction.findMany({
     where: {
       transactionType: 'BUYBACK',
       ...dateFilter,
       voided: false,
+      ...regionScope,
     },
     include: {
       customer: {
@@ -186,21 +196,22 @@ async function getBuybackReport(dateFilter: any) {
   return NextResponse.json({ buybacks });
 }
 
-async function getInventoryReport() {
+async function getInventoryReport(regionScope: any) {
   const inventory = await prisma.product.findMany({
-    where: { isActive: true },
+    where: { isActive: true, ...regionScope },
     orderBy: { name: 'asc' },
   });
 
   return NextResponse.json({ inventory });
 }
 
-async function getSalesReport(dateFilter: any) {
+async function getSalesReport(dateFilter: any, regionScope: any) {
   const sales = await prisma.b2BTransaction.findMany({
     where: {
       transactionType: 'SALE',
       ...dateFilter,
       voided: false,
+      ...regionScope,
     },
     include: {
       customer: {
@@ -218,12 +229,13 @@ async function getSalesReport(dateFilter: any) {
   return NextResponse.json({ sales });
 }
 
-async function getDailyCashbookReport(dateFilter: any) {
+async function getDailyCashbookReport(dateFilter: any, regionScope: any) {
   const payments = await prisma.b2BTransaction.findMany({
     where: {
       transactionType: 'PAYMENT',
       ...dateFilter,
       voided: false,
+      ...regionScope,
     },
     include: {
       customer: {
@@ -242,6 +254,7 @@ async function getDailyCashbookReport(dateFilter: any) {
       transactionType: 'PAYMENT',
       ...dateFilter,
       voided: false,
+      ...regionScope,
     },
     _sum: { totalAmount: true },
   });

@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
+    const regionId = getActiveRegionId(request);
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
     const type = searchParams.get('type') || '';
@@ -10,7 +12,8 @@ export async function GET(request: NextRequest) {
 
     // Build where clause
     const where: any = {
-      currentStatus: 'WITH_CUSTOMER'
+      currentStatus: 'WITH_CUSTOMER',
+      ...regionScopedWhere(regionId),
     };
 
     if (search) {
@@ -97,6 +100,7 @@ export async function GET(request: NextRequest) {
       const [b2bCustomers, b2cCustomers] = await Promise.all([
         prisma.customer.findMany({
           where: {
+            ...regionScopedWhere(regionId),
             OR: Array.from(customerNames).map(name => ({
               name: { contains: name, mode: 'insensitive' }
             }))
@@ -112,6 +116,7 @@ export async function GET(request: NextRequest) {
         }),
         prisma.b2CCustomer.findMany({
           where: {
+            ...regionScopedWhere(regionId),
             OR: Array.from(customerNames).map(name => ({
               name: { contains: name, mode: 'insensitive' }
             }))

@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity } from '@/lib/superAdminNotifier';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(
   request: NextRequest,
@@ -16,6 +17,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const { id: customerId } = await params;
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get('startDate');
@@ -36,8 +38,8 @@ export async function GET(
       }
     }
 
-    const customer = await prisma.b2CCustomer.findUnique({
-      where: { id: customerId },
+    const customer = await prisma.b2CCustomer.findFirst({
+      where: { id: customerId, ...regionScopedWhere(regionId) },
       include: {
         cylinderHoldings: {
           orderBy: { issueDate: 'desc' }
@@ -83,6 +85,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const { id: customerId } = await params;
     const body = await request.json();
     const {
@@ -108,11 +111,22 @@ export async function PUT(
       );
     }
 
-    // Check if another customer with same phone already exists
+    // Region-scope guard: ensure the customer belongs to the active region
+    const customerScopeCheck = await prisma.b2CCustomer.findFirst({
+      where: { id: customerId, ...regionScopedWhere(regionId) },
+      select: { id: true }
+    });
+
+    if (!customerScopeCheck) {
+      return NextResponse.json({ error: 'Customer not found in current region' }, { status: 404 });
+    }
+
+    // Check if another customer with same phone already exists in the same region
     const existingCustomer = await prisma.b2CCustomer.findFirst({
       where: {
         phone,
-        id: { not: customerId }
+        id: { not: customerId },
+        ...regionScopedWhere(regionId),
       }
     });
 
@@ -162,6 +176,7 @@ export async function PUT(
         message: `${session.user.name || session.user.email} updated B2C customer "${customer.name}".`,
         link,
         priority: 'LOW',
+        regionId,
         metadata: {
           domain: 'B2C_CUSTOMER',
           customerId: customer.id,
@@ -194,7 +209,18 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const { id: customerId } = await params;
+
+    // Region-scope guard: ensure the customer belongs to the active region
+    const customerScopeCheck = await prisma.b2CCustomer.findFirst({
+      where: { id: customerId, ...regionScopedWhere(regionId) },
+      select: { id: true }
+    });
+
+    if (!customerScopeCheck) {
+      return NextResponse.json({ error: 'Customer not found in current region' }, { status: 404 });
+    }
 
     // Check if customer has any active cylinder holdings
     const holdings = await prisma.b2CCylinderHolding.count({
@@ -237,6 +263,7 @@ export async function DELETE(
         message: `${session.user.name || session.user.email} deleted B2C customer "${existing?.name ?? customerId}".`,
         link: '/customers/b2c',
         priority: 'HIGH',
+        regionId,
         metadata: {
           domain: 'B2C_CUSTOMER',
           customerId,

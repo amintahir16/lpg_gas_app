@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { ExpenseCategory, Prisma } from '@prisma/client';
 import { createExpenseAddedNotification } from '@/lib/notifications';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,8 +21,10 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '10');
     const skip = (page - 1) * limit;
 
+    const regionId = getActiveRegionId(request);
     const where: Prisma.ExpenseWhereInput = {
       userId: session.user.id,
+      ...regionScopedWhere(regionId),
       OR: search ? [
         { description: { contains: search, mode: 'insensitive' as Prisma.QueryMode } }
       ] : undefined,
@@ -118,6 +121,7 @@ export async function POST(request: NextRequest) {
       userId: session.user.id
     });
 
+    const regionId = getActiveRegionId(request);
     const expense = await prisma.expense.create({
       data: {
         category: category as ExpenseCategory,
@@ -125,7 +129,8 @@ export async function POST(request: NextRequest) {
         description,
         expenseDate: new Date(expenseDate),
         receiptUrl: receiptUrl || null,
-        userId: session.user.id
+        userId: session.user.id,
+        ...(regionId ? { regionId } : {}),
       },
       include: {
         user: {

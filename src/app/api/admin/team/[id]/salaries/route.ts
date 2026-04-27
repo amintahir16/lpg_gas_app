@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { format } from 'date-fns';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(
     request: NextRequest,
@@ -15,10 +16,11 @@ export async function GET(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
+        const regionId = getActiveRegionId(request);
         const { id } = await params;
 
         const salaryRecords = await prisma.salaryRecord.findMany({
-            where: { userId: id },
+            where: { userId: id, ...regionScopedWhere(regionId) },
             orderBy: [{ year: 'desc' }, { month: 'desc' }],
             take: 50,
         });

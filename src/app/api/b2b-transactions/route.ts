@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { B2BTransactionType } from '@prisma/client';
 import { generateCylinderTypeFromCapacity, getCapacityFromTypeString } from '@/lib/cylinder-utils';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,6 +12,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get('customerId');
     const transactionType = searchParams.get('transactionType');
@@ -18,7 +20,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '10');
     const skip = (page - 1) * limit;
 
-    const whereClause: any = {};
+    const whereClause: any = { ...regionScopedWhere(regionId) };
     
     if (customerId) {
       whereClause.customerId = customerId;
@@ -161,6 +163,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const regionId = getActiveRegionId(request);
+
     // Start a transaction to ensure data consistency
     const result = await prisma.$transaction(async (tx) => {
       // Create the transaction
@@ -175,6 +179,7 @@ export async function POST(request: NextRequest) {
           paymentReference,
           notes,
           createdBy: user.id,
+          ...(regionId ? { regionId } : {}),
         },
       });
 
@@ -345,10 +350,11 @@ export async function POST(request: NextRequest) {
                 data: {
                   code,
                   cylinderType: typeString,
-                  typeName: typeName, // Store type name for proper grouping
+                  typeName: typeName,
                   capacity: capacity,
                   currentStatus: 'EMPTY',
                   location: 'Returned from Customer',
+                  ...(regionId ? { regionId } : {}),
                 },
               });
             }

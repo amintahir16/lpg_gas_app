@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity, checkAndNotifyLowAccessoryStock } from '@/lib/superAdminNotifier';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 const prisma = new PrismaClient();
 
@@ -13,6 +14,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const regionId = getActiveRegionId(request);
     const { id } = await params;
     const body = await request.json();
     const { name, type, quantity, costPerPiece, totalCost } = body;
@@ -25,9 +27,9 @@ export async function PUT(
       );
     }
 
-    // Check if custom item exists
-    const existingItem = await prisma.customItem.findUnique({
-      where: { id }
+    // Check if custom item exists in this region
+    const existingItem = await prisma.customItem.findFirst({
+      where: { id, ...regionScopedWhere(regionId) }
     });
 
     if (!existingItem) {
@@ -37,13 +39,14 @@ export async function PUT(
       );
     }
 
-    // Check if another custom item with same name AND type exists (excluding current item)
+    // Check if another custom item with same name AND type exists (excluding current item) in this region
     const duplicateItem = await prisma.customItem.findFirst({
       where: {
         name,
         type,
         isActive: true,
-        id: { not: id }
+        id: { not: id },
+        ...regionScopedWhere(regionId),
       }
     });
 
@@ -93,6 +96,7 @@ export async function PUT(
           message: `${session.user.name || session.user.email} updated accessory ${customItem.name} – ${customItem.type}${qtyChanged ? ` (Qty ${existingItem.quantity} → ${customItem.quantity})` : ''}.`,
           link,
           priority: 'LOW',
+          regionId,
           metadata: {
             domain: 'CUSTOM_ITEM',
             itemId: customItem.id,
@@ -120,11 +124,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const regionId = getActiveRegionId(request);
     const { id } = await params;
 
-    // Check if custom item exists
-    const existingItem = await prisma.customItem.findUnique({
-      where: { id }
+    // Check if custom item exists in this region
+    const existingItem = await prisma.customItem.findFirst({
+      where: { id, ...regionScopedWhere(regionId) }
     });
 
     if (!existingItem) {
@@ -164,6 +169,7 @@ export async function DELETE(
           message: `${session.user.name || session.user.email} deleted accessory ${existingItem.name} – ${existingItem.type}.`,
           link,
           priority: 'MEDIUM',
+          regionId,
           metadata: {
             domain: 'CUSTOM_ITEM',
             itemId: existingItem.id,

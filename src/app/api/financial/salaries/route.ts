@@ -5,18 +5,25 @@ import { prisma } from '@/lib/db';
 import { format } from 'date-fns';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity } from '@/lib/superAdminNotifier';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 export async function GET(request: NextRequest) {
     try {
         const session = await getServerSession(authOptions);
         if (!session) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+        const regionId = getActiveRegionId(request);
+        const regionScope = regionScopedWhere(regionId);
         const { searchParams } = new URL(request.url);
         const month = parseInt(searchParams.get('month') || String(new Date().getMonth() + 1));
         const year = parseInt(searchParams.get('year') || String(new Date().getFullYear()));
-        // Fetch all active users (employees)
+        // Fetch active users (employees) — SUPER_ADMINs are global; ADMINs are region-scoped.
+        // Show employees that belong to this region OR are unassigned (super-admins).
         const users = await prisma.user.findMany({
-            where: { isActive: true },
+            where: {
+                isActive: true,
+                ...(regionId ? { OR: [{ regionId }, { regionId: null }] } : {}),
+            },
             select: {
                 id: true,
                 name: true,
@@ -28,9 +35,9 @@ export async function GET(request: NextRequest) {
             },
             orderBy: { name: 'asc' },
         });
-        // Fetch salary records for the selected month
+        // Fetch salary records for the selected month — scope by region.
         const salaryRecords = await prisma.salaryRecord.findMany({
-            where: { month, year },
+            where: { month, year, ...regionScope },
             include: {
                 user: {
                     select: { id: true, name: true, firstName: true, lastName: true, role: true },
@@ -60,8 +67,9 @@ export async function GET(request: NextRequest) {
                     : null,
             };
         });
-        // Salary history (all records, last 50)
+        // Salary history (last 50 records for this region)
         const history = await prisma.salaryRecord.findMany({
+            where: regionScope,
             take: 50,
             orderBy: { paidDate: 'desc' },
             include: {
@@ -107,6 +115,7 @@ export async function POST(request: NextRequest) {
         if (!session) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+        const regionId = getActiveRegionId(request);
         const body = await request.json();
         const { userId, amount, month, year, paymentMethod, notes } = body;
         if (!userId || !amount || !month || !year) {
@@ -124,14 +133,14 @@ export async function POST(request: NextRequest) {
         if (!user) {
             return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
         }
-        // Check for duplicate
+        // Check for duplicate within this region
         const existing = await prisma.salaryRecord.findFirst({
-            where: { userId, month: parseInt(month), year: parseInt(year) },
+            where: { userId, month: parseInt(month), year: parseInt(year), ...regionScopedWhere(regionId) },
         });
         if (existing) {
             const monthName = format(new Date(parseInt(year), parseInt(month) - 1, 1), 'MMMM yyyy');
             return NextResponse.json(
-                { error: `Salary already paid to ${user.name || user.email} for ${monthName}` },
+                { error: `Salary already paid to ${user.name || user.email} for ${monthName} for this branch` },
                 { status: 409 }
             );
         }
@@ -145,6 +154,7 @@ export async function POST(request: NextRequest) {
                 paymentMethod: paymentMethod || 'CASH',
                 notes: notes || null,
                 createdBy: session.user.id,
+                ...(regionId ? { regionId } : {}),
             },
             include: {
                 user: {
@@ -180,6 +190,7 @@ export async function POST(request: NextRequest) {
                 message: `${session.user.name || session.user.email} paid Rs ${parsedAmount.toLocaleString()} salary to ${employeeName} for ${monthLabel}.`,
                 link,
                 priority: 'MEDIUM',
+                regionId,
                 metadata: {
                     domain: 'SALARY_RECORD',
                     salaryId: salaryRecord.id,

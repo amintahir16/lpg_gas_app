@@ -1,63 +1,66 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
-    // Get total cylinders count (excluding WITH_CUSTOMER - they are tracked separately)
+    const regionId = getActiveRegionId(request);
+    const regionScope = regionScopedWhere(regionId);
+
     const totalCylinders = await prisma.cylinder.count({
       where: {
-        currentStatus: { not: 'WITH_CUSTOMER' }
+        currentStatus: { not: 'WITH_CUSTOMER' },
+        ...regionScope,
       }
     });
 
-    // Get cylinders by type (excluding WITH_CUSTOMER)
     const cylindersByType = await prisma.cylinder.groupBy({
       by: ['cylinderType'],
       where: {
-        currentStatus: { not: 'WITH_CUSTOMER' }
+        currentStatus: { not: 'WITH_CUSTOMER' },
+        ...regionScope,
       },
       _count: {
         id: true
       }
     });
 
-    // Get cylinders with customers
     const cylindersWithCustomers = await prisma.cylinder.count({
       where: {
-        currentStatus: 'WITH_CUSTOMER'
+        currentStatus: 'WITH_CUSTOMER',
+        ...regionScope,
       }
     });
 
-    // Get store inventory count
     const storeInventory = await prisma.cylinder.count({
       where: {
         storeId: {
           not: null
-        }
+        },
+        ...regionScope,
       }
     });
 
-    // Get vehicle inventory count
     const vehicleInventory = await prisma.cylinder.count({
       where: {
         vehicleId: {
           not: null
-        }
+        },
+        ...regionScope,
       }
     });
 
-    // Get accessories total quantity from CustomItem model
     const accessoriesData = await prisma.customItem.findMany({
-      where: { isActive: true },
+      where: { isActive: true, ...regionScope },
       select: { quantity: true }
     });
 
     const accessoriesCount = accessoriesData.reduce((sum, item) => sum + Number(item.quantity), 0);
 
-    // Get cylinder type stats
     const cylinderTypeStats = await prisma.cylinder.groupBy({
       by: ['cylinderType', 'typeName', 'capacity', 'currentStatus'],
+      where: regionScope,
       _count: {
         id: true
       }

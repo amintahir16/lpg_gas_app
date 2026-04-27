@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { InventoryIntegrationService } from '@/lib/inventory-integration';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 // GET all purchases for a vendor
 export async function GET(
@@ -37,12 +38,14 @@ export async function GET(
       }
     }
 
+    const regionId = getActiveRegionId(request);
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
     const where: any = {
-      vendorId: params.id
+      vendorId: params.id,
+      ...regionScopedWhere(regionId),
     };
 
     if (startDate && endDate) {
@@ -100,6 +103,7 @@ export async function POST(
       }
     }
 
+    const regionId = getActiveRegionId(request);
     const { id } = await params;
     const body = await request.json();
     const { items, invoiceNumber, notes, purchaseDate, paidAmount, paymentMethod } = body;
@@ -200,14 +204,15 @@ export async function POST(
               userId: session.user.id,
               category: categoryEnum as any,
               itemName: item.itemName,
-              itemDescription: itemDescription, // Stores category for accessories, description for others
+              itemDescription: itemDescription,
               quantity: Number(item.quantity),
               unitPrice: Number(item.unitPrice),
               totalPrice: Number(item.totalPrice),
               status: entryStatus as any,
               purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),
               invoiceNumber,
-              notes
+              notes,
+              ...(regionId ? { regionId } : {}),
             }
           });
         })
@@ -223,7 +228,8 @@ export async function POST(
             paymentDate: new Date(),
             method: (paymentMethod || 'CASH') as any,
             status: 'COMPLETED',
-            description: `Payment for invoice ${invoiceNumber}`
+            description: `Payment for invoice ${invoiceNumber}`,
+            ...(regionId ? { regionId } : {}),
           }
         });
       }

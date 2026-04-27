@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 // GET - Get all direct payments for a vendor
 export async function GET(
@@ -14,6 +15,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const { id } = await params;
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get('startDate');
@@ -32,7 +34,8 @@ export async function GET(
     const payments = await prisma.vendorPayment.findMany({
       where: {
         vendorId: id,
-        ...dateFilter
+        ...dateFilter,
+        ...regionScopedWhere(regionId),
       },
       orderBy: [
         {
@@ -65,6 +68,7 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const { id } = await params;
     const body = await request.json();
     const { amount, paymentDate, method, reference, description, invoiceNumber } = body;
@@ -88,7 +92,7 @@ export async function POST(
         throw new Error('Vendor not found');
       }
 
-      // Create direct payment
+      // Create direct payment scoped to current region.
       const payment = await tx.vendorPayment.create({
         data: {
           vendorId: id,
@@ -97,17 +101,19 @@ export async function POST(
           method: method || 'CASH',
           status: 'COMPLETED',
           reference: reference || null,
-          description: description || (invoiceNumber ? `Payment for invoice ${invoiceNumber}` : 'Direct payment to vendor')
+          description: description || (invoiceNumber ? `Payment for invoice ${invoiceNumber}` : 'Direct payment to vendor'),
+          ...(regionId ? { regionId } : {}),
         }
       });
 
       // If invoiceNumber is provided, update purchase entry statuses
       if (invoiceNumber) {
-        // Find all purchase entries with this invoice number
+        // Find all purchase entries with this invoice number — region-scoped.
         const purchaseEntries = await tx.purchaseEntry.findMany({
           where: {
             vendorId: id,
-            invoiceNumber: invoiceNumber
+            invoiceNumber: invoiceNumber,
+            ...regionScopedWhere(regionId),
           }
         });
 
@@ -126,7 +132,8 @@ export async function POST(
               },
               id: {
                 not: payment.id
-              }
+              },
+              ...regionScopedWhere(regionId),
             }
           });
 
@@ -145,7 +152,8 @@ export async function POST(
           await tx.purchaseEntry.updateMany({
             where: {
               vendorId: id,
-              invoiceNumber: invoiceNumber
+              invoiceNumber: invoiceNumber,
+              ...regionScopedWhere(regionId),
             },
             data: {
               status: newStatus as any

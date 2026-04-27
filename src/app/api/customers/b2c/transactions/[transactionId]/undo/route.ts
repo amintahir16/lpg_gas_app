@@ -9,6 +9,7 @@ import {
   notifyUserActivity,
   checkAllCylinderTypesForLowStock,
 } from '@/lib/superAdminNotifier';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function POST(
   request: NextRequest,
@@ -21,13 +22,14 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
     const { transactionId } = await params;
     const body = await request.json();
     const { reason } = body;
 
-    // Get the transaction with all details
-    const transaction = await prisma.b2CTransaction.findUnique({
-      where: { id: transactionId },
+    // Get the transaction with all details (region-scoped)
+    const transaction = await prisma.b2CTransaction.findFirst({
+      where: { id: transactionId, ...regionScopedWhere(regionId) },
       include: {
         customer: true,
         gasItems: true,
@@ -91,11 +93,12 @@ export async function POST(
             // Location format is "B2C Customer: {customer.name}"
             const cylindersWithCustomer = await tx.cylinder.findMany({
               where: {
-                cylinderType: cylinderType, // Filter by string type
+                cylinderType: cylinderType,
                 currentStatus: CylinderStatus.WITH_CUSTOMER,
-                location: { contains: `B2C Customer: ${customer.name}` }
+                location: { contains: `B2C Customer: ${customer.name}` },
+                ...regionScopedWhere(regionId),
               },
-              orderBy: { updatedAt: 'desc' }, // Most recently updated first
+              orderBy: { updatedAt: 'desc' },
               take: quantity
             });
 
@@ -172,11 +175,12 @@ export async function POST(
             // prioritize most recently updated cylinders (likely from this transaction)
             const emptyCylinders = await tx.cylinder.findMany({
               where: {
-                cylinderType: cylinderType, // Filter by string type
+                cylinderType: cylinderType,
                 currentStatus: CylinderStatus.EMPTY,
-                location: 'Store - Ready for Refill'
+                location: 'Store - Ready for Refill',
+                ...regionScopedWhere(regionId),
               },
-              orderBy: { updatedAt: 'desc' }, // Most recent first
+              orderBy: { updatedAt: 'desc' },
               take: quantity
             });
 
@@ -226,12 +230,13 @@ export async function POST(
           
           console.log(`Reversing accessory: ${category} - ${itemType}, quantity: ${quantity}`);
           
-          // Try to find in CustomItem table (used by InventoryDeductionService)
+          // Try to find in CustomItem table (region-scoped)
           const customItem = await tx.customItem.findFirst({
             where: {
               name: category,
               type: itemType,
-              isActive: true
+              isActive: true,
+              ...regionScopedWhere(regionId),
             }
           });
           
@@ -250,13 +255,14 @@ export async function POST(
             });
             console.log(`✅ Returned ${quantity} ${productName} to CustomItem inventory. New stock: ${newQuantity}`);
           } else {
-            // Try Product table as fallback (for items not using CustomItem)
+            // Try Product table as fallback (region-scoped)
             const products = await tx.product.findMany({
               where: {
                 OR: [
                   { name: { contains: category, mode: 'insensitive' } },
                   { name: { contains: productName, mode: 'insensitive' } }
-                ]
+                ],
+                ...regionScopedWhere(regionId),
               }
             });
 
@@ -310,6 +316,7 @@ export async function POST(
         message: `${session.user.name || session.user.email} voided a B2C transaction of Rs ${total.toLocaleString()} for ${customerName} (Bill #${transaction.billSno}).`,
         link,
         priority: 'HIGH',
+        regionId,
         metadata: {
           domain: 'B2C_TRANSACTION_VOIDED',
           transactionId: transaction.id,
@@ -325,7 +332,7 @@ export async function POST(
         ...(transaction.securityItems || []).map((s: any) => s.cylinderType).filter(Boolean),
       ];
       if (cylinderTypesAffected.length > 0) {
-        await checkAllCylinderTypesForLowStock(cylinderTypesAffected);
+        await checkAllCylinderTypesForLowStock(cylinderTypesAffected, regionId);
       }
     } catch (sideEffectError) {
       console.error('B2C undo post-commit side effects failed:', sideEffectError);

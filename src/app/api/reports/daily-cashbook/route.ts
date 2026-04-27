@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,10 +10,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
+    const regionScope = regionScopedWhere(regionId);
+
     const { searchParams } = new URL(request.url);
     const date = searchParams.get('date') || new Date().toISOString().split('T')[0];
 
-    // Get all payment transactions for the specified date
+    // Get all payment transactions for the specified date (region-scoped)
     const paymentTransactions = await prisma.b2BTransaction.findMany({
       where: {
         transactionType: 'PAYMENT',
@@ -20,7 +24,8 @@ export async function GET(request: NextRequest) {
         date: {
           gte: new Date(date + 'T00:00:00.000Z'),
           lte: new Date(date + 'T23:59:59.999Z')
-        }
+        },
+        ...regionScope,
       },
       include: {
         customer: {
@@ -39,7 +44,7 @@ export async function GET(request: NextRequest) {
       sum + transaction.totalAmount.toNumber(), 0
     );
 
-    // Get buyback transactions (cash payments) for the same date
+    // Get buyback transactions (cash payments) for the same date (region-scoped)
     const buybackTransactions = await prisma.b2BTransaction.findMany({
       where: {
         transactionType: 'BUYBACK',
@@ -50,7 +55,8 @@ export async function GET(request: NextRequest) {
         },
         notes: {
           contains: 'Cash Payment Now'
-        }
+        },
+        ...regionScope,
       },
       include: {
         customer: {

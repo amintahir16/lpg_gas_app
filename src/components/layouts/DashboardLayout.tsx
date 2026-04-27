@@ -10,6 +10,7 @@ import {
   CubeIcon,
   CurrencyDollarIcon,
   BuildingOfficeIcon,
+  BuildingOffice2Icon,
   ChartBarIcon,
   CogIcon,
   Bars3Icon,
@@ -24,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Footer } from '@/components/ui/footer';
 import { NotificationBell } from '@/components/ui/notification-bell';
 import FlamoraAnimatedLogo from '@/components/ui/FlamoraAnimatedLogo';
+import { RegionSwitcher } from '@/components/RegionSwitcher';
 
 import { cn } from '@/lib/utils';
 
@@ -37,6 +39,7 @@ interface NavigationItem {
 
 const superAdminNavigation: NavigationItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, roles: ['SUPER_ADMIN'] },
+  { name: 'Regions', href: '/admin/regions', icon: BuildingOffice2Icon, roles: ['SUPER_ADMIN'] },
   { name: 'Team Management', href: '/admin/team', icon: UserGroupIcon, roles: ['SUPER_ADMIN'] },
   { name: 'Customers', href: '/customers', icon: UsersIcon, roles: ['SUPER_ADMIN'] },
   { name: 'Inventory', href: '/inventory', icon: CubeIcon, roles: ['SUPER_ADMIN'] },
@@ -122,7 +125,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+    <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 overflow-x-hidden">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
@@ -134,10 +137,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Sidebar */}
       <div className={cn(
         "fixed inset-y-0 left-0 z-50 w-64 bg-white/95 backdrop-blur-sm shadow-xl transform transition-transform duration-300 ease-in-out lg:translate-x-0 border-r border-gray-200",
+        "flex flex-col h-screen h-[100dvh]",
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
       )}>
         {/* Sidebar Header */}
-        <div className="flex h-16 items-center justify-between px-6 border-b border-gray-200 bg-white/80">
+        <div className="flex h-16 items-center justify-between px-6 border-b border-gray-200 bg-white/80 flex-shrink-0">
           <div className="flex items-center pt-2">
             <FlamoraAnimatedLogo className="w-32" hideBadge />
           </div>
@@ -152,8 +156,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </div>
 
         {/* Navigation */}
-        <nav className="mt-8 px-4">
-          <div className="space-y-1">
+        <nav className="flex-1 mt-6 px-4 overflow-y-auto">
+          <div className="space-y-1 pb-4">
             {currentNavigation.map((item) => {
               const isActive = pathname === item.href;
               return (
@@ -185,9 +189,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </nav>
 
         {/* User Profile Section */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-white/80 backdrop-blur-sm">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-full flex items-center justify-center shadow-sm">
+        <div
+          className="flex-shrink-0 p-4 border-t border-gray-200 bg-white/80 backdrop-blur-sm"
+          style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-full flex items-center justify-center shadow-sm flex-shrink-0">
               <span className="text-white text-sm font-semibold">
                 {session?.user?.name?.charAt(0) || 'U'}
               </span>
@@ -200,15 +207,18 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 {userRole.toLowerCase()}
               </p>
             </div>
-            <div className="flex items-center space-x-2">
-              <Link href="/" className="text-xs text-blue-600 hover:text-blue-800 font-medium">
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <Link
+                href="/"
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium px-1.5"
+              >
                 Landing
               </Link>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={handleLogout}
-                className="text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 h-8 w-8"
                 title="Logout"
               >
                 <ArrowRightOnRectangleIcon className="w-4 h-4" />
@@ -219,27 +229,33 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       </div>
 
       {/* Main Content */}
-      <div className="lg:pl-64 flex flex-col min-h-screen">
+      <div className="lg:pl-64 flex flex-col min-h-screen min-h-[100dvh]">
         {/* Top Navigation Bar */}
-        <div className="sticky top-0 z-30 flex h-16 items-center justify-between px-4 bg-white/95 backdrop-blur-sm shadow-sm border-b border-gray-200">
-          <div className="flex items-center">
+        <div className="sticky top-0 z-30 flex h-16 items-center justify-between gap-2 px-3 sm:px-4 bg-white/95 backdrop-blur-sm shadow-sm border-b border-gray-200">
+          <div className="flex items-center min-w-0 flex-1">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden text-gray-500 hover:text-gray-700"
+              className="lg:hidden text-gray-500 hover:text-gray-700 flex-shrink-0"
             >
               <Bars3Icon className="w-5 h-5" />
             </Button>
-            <h2 className="ml-4 text-lg font-semibold text-gray-900 lg:hidden">
+            <h2 className="ml-2 sm:ml-4 text-base sm:text-lg font-semibold text-gray-900 lg:hidden truncate">
               {currentNavigation.find(item => item.href === pathname)?.name || 'Dashboard'}
             </h2>
-            <Link href="/" className="ml-4 text-sm text-blue-600 hover:text-blue-800 lg:hidden">
+            <Link
+              href="/"
+              className="hidden sm:inline-block ml-4 text-sm text-blue-600 hover:text-blue-800 lg:hidden flex-shrink-0"
+            >
               ← Landing
             </Link>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center gap-2 sm:gap-3 lg:gap-4 flex-shrink-0">
+            {/* Active branch indicator / switcher */}
+            <RegionSwitcher />
+
             {/* Notifications */}
             <NotificationBell />
 
@@ -339,7 +355,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </div>
 
         {/* Page Content */}
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-3 sm:p-4 lg:p-6 min-w-0">
           {children}
         </main>
 

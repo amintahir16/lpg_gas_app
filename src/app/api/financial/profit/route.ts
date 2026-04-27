@@ -3,19 +3,23 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { subMonths, format } from 'date-fns';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 export async function GET(request: NextRequest) {
     try {
         const session = await getServerSession(authOptions);
         if (!session) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+        const regionId = getActiveRegionId(request);
+        const regionScope = regionScopedWhere(regionId);
+        const txRegionScope = regionId ? { regionId } : {};
         const { searchParams } = new URL(request.url);
         const month = parseInt(searchParams.get('month') || String(new Date().getMonth() + 1));
         const year = parseInt(searchParams.get('year') || String(new Date().getFullYear()));
         const startDate = new Date(year, month - 1, 1);
         const endDate = new Date(year, month, 0, 23, 59, 59, 999);
-        // Get dynamic cylinder types for display labels
         const cylinderTypes = await prisma.cylinder.findMany({
+            where: regionScope,
             distinct: ['cylinderType'],
             select: { cylinderType: true, typeName: true, capacity: true },
         });
@@ -25,15 +29,15 @@ export async function GET(request: NextRequest) {
         // Fetch transaction items
         const [b2cGasItems, b2cAccessoryItems, b2bItems] = await Promise.all([
             prisma.b2CTransactionGasItem.findMany({
-                where: { transaction: { date: { gte: startDate, lte: endDate }, voided: false } },
+                where: { transaction: { date: { gte: startDate, lte: endDate }, voided: false, ...txRegionScope } },
                 select: { cylinderType: true, quantity: true, totalPrice: true, totalCost: true, profitMargin: true },
             }),
             prisma.b2CTransactionAccessoryItem.findMany({
-                where: { transaction: { date: { gte: startDate, lte: endDate }, voided: false } },
+                where: { transaction: { date: { gte: startDate, lte: endDate }, voided: false, ...txRegionScope } },
                 select: { productName: true, quantity: true, totalPrice: true, totalCost: true, profitMargin: true },
             }),
             prisma.b2BTransactionItem.findMany({
-                where: { transaction: { date: { gte: startDate, lte: endDate }, voided: false, transactionType: 'SALE' } },
+                where: { transaction: { date: { gte: startDate, lte: endDate }, voided: false, transactionType: 'SALE', ...txRegionScope } },
                 select: {
                     productName: true,
                     cylinderType: true,
@@ -49,7 +53,7 @@ export async function GET(request: NextRequest) {
         // Get B2B margins
         const b2bCustomerIds = [...new Set(b2bItems.map((i) => i.transaction.customerId))];
         const customersWithMargin = await prisma.customer.findMany({
-            where: { id: { in: b2bCustomerIds } },
+            where: { id: { in: b2bCustomerIds }, ...regionScope },
             select: { id: true, marginCategoryId: true },
         });
         const marginCategoryIds = [...new Set(customersWithMargin.map((c) => c.marginCategoryId).filter(Boolean))] as string[];
@@ -143,17 +147,17 @@ export async function GET(request: NextRequest) {
             const chartEnd = new Date(chartMonth.getFullYear(), chartMonth.getMonth() + 1, 0, 23, 59, 59, 999);
             // B2C profit from gas items
             const b2cGasProfit = await prisma.b2CTransactionGasItem.aggregate({
-                where: { transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false } },
+                where: { transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false, ...txRegionScope } },
                 _sum: { profitMargin: true },
             });
             // B2C profit from accessory items
             const b2cAccProfit = await prisma.b2CTransactionAccessoryItem.aggregate({
-                where: { transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false } },
+                where: { transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false, ...txRegionScope } },
                 _sum: { profitMargin: true },
             });
             // B2B items — compute actual profit per item
             const b2bChartItems = await prisma.b2BTransactionItem.findMany({
-                where: { transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false, transactionType: 'SALE' } },
+                where: { transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false, transactionType: 'SALE', ...txRegionScope } },
                 select: {
                     cylinderType: true,
                     quantity: true,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,14 +35,17 @@ export async function POST(request: NextRequest) {
     // Map categorySlug to VendorCategory enum string
     const categoryEnumStr = (categorySlug as string).toUpperCase();
 
-    // Get all invoice numbers for this vendor and category that start with the prefix
+    const regionId = getActiveRegionId(request);
+
+    // Get all invoice numbers for this vendor and category that start with the prefix (region-scoped)
     const purchases = await prisma.purchaseEntry.findMany({
       where: {
         vendorId: vendorId,
         category: categoryEnumStr as any,
         invoiceNumber: {
           startsWith: `${prefix}-`
-        }
+        },
+        ...regionScopedWhere(regionId),
       },
       select: {
         invoiceNumber: true
