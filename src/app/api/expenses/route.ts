@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
       userId: session.user.id,
       ...regionScopedWhere(regionId),
       OR: search ? [
-        { description: { contains: search } }
+        { description: { contains: search, mode: 'insensitive' as Prisma.QueryMode } }
       ] : undefined,
       category: category ? (category as ExpenseCategory) : undefined
     };

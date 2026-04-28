@@ -259,8 +259,8 @@ export async function POST(
             const products = await tx.product.findMany({
               where: {
                 OR: [
-                  { name: { contains: category } },
-                  { name: { contains: productName } }
+                  { name: { contains: category, mode: 'insensitive' } },
+                  { name: { contains: productName, mode: 'insensitive' } }
                 ],
                 ...regionScopedWhere(regionId),
               }

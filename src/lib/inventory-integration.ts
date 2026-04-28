@@ -389,7 +389,8 @@ export class InventoryIntegrationService {
     const existingItem = await prisma.customItem.findFirst({
       where: {
         name: {
-          equals: normalizedCategory
+          equals: normalizedCategory,
+          mode: 'insensitive'
         },
         type: itemName,
         isActive: true
@@ -564,7 +565,8 @@ export class InventoryIntegrationService {
     const existingProduct = await prisma.product.findFirst({
       where: {
         name: {
-          contains: itemName
+          contains: itemName,
+          mode: 'insensitive'
         }
       }
     });

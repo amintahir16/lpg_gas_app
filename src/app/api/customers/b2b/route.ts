@@ -36,10 +36,10 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       whereClause.OR = [
-        { name: { contains: search } },
-        { contactPerson: { contains: search } },
-        { phone: { contains: search } },
-        { email: { contains: search } },
+        { name: { contains: search, mode: 'insensitive' } },
+        { contactPerson: { contains: search, mode: 'insensitive' } },
+        { phone: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
       ];
     }
 
@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
       // Optimization: constructing OR clause for names might be heavy if list is huge, 
       // but for PAGINATED (limit=10), it's fine.
       const locationMatches = targetCustomers.map(c => ({
-        location: { contains: c.name }
+        location: { contains: c.name, mode: 'insensitive' as const }
       }));
       const idMatches = customerIds.map(id => ({
         location: { contains: id }
@@ -331,7 +331,7 @@ export async function GET(request: NextRequest) {
           OR: [
             { cylinderRentals: { some: { customerId: { in: allFilteredCustomerIds }, status: 'ACTIVE' } } },
             ...allFilteredCustomerIds.map(id => ({ location: { contains: id } })),
-            ...filteredCustomers.map(c => ({ location: { contains: c.name } }))
+            ...filteredCustomers.map(c => ({ location: { contains: c.name, mode: 'insensitive' as const } }))
           ]
         },
         select: { cylinderType: true }

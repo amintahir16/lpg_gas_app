@@ -341,7 +341,7 @@ export async function POST(
                 // Try to find by name in Product table (region-scoped)
                 const productByName = await tx.product.findFirst({
                   where: {
-                    name: { contains: productName },
+                    name: { contains: productName, mode: 'insensitive' },
                     ...regionScopedWhere(regionId),
                   }
                 });

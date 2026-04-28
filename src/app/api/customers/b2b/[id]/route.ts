@@ -256,7 +256,7 @@ export async function DELETE(
         OR: [
           { cylinderRentals: { some: { customerId: customerId, status: 'ACTIVE' } } },
           { location: { contains: customerId } },
-          { location: { contains: customerRecord.name } }
+          { location: { contains: customerRecord.name, mode: 'insensitive' } }
         ]
       }
     });

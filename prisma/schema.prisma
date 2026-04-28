@@ -3,13 +3,9 @@ generator client {
 }
 
 datasource db {
-  // MySQL / MariaDB on cPanel. The `mysql` provider works with both; the
-  // server-side driver is bundled with Prisma so we don't need a Node-side
-  // package like `mysql2`. Make sure the database is created with charset
-  // `utf8mb4` and collation `utf8mb4_unicode_ci` so case-insensitive
-  // searches behave the same way they did on PostgreSQL.
-  provider = "mysql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("POSTGRES_PRISMA_URL")
+  directUrl = env("POSTGRES_URL_NON_POOLING")
 }
 
 model User {
@@ -506,9 +502,7 @@ model Notification {
   metadata  String?
   link      String?
   userId    String?
-  /**
-   * Branch / region where the activity occurred (from active region cookie).
-   */
+  /** Branch / region where the activity occurred (from active region cookie). */
   regionId  String?
   region    Region?              @relation(fields: [regionId], references: [id], onDelete: SetNull)
   createdAt DateTime             @default(now())
@@ -922,9 +916,7 @@ model ActivityLog {
   metadata   Json?
   link       String?
   ipAddress  String?
-  /**
-   * Branch / region where the action occurred (from active region on the request).
-   */
+  /** Branch / region where the action occurred (from active region on the request). */
   regionId   String?
   region     Region?  @relation(fields: [regionId], references: [id], onDelete: SetNull)
   createdAt  DateTime @default(now())

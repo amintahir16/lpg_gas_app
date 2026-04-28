@@ -84,8 +84,8 @@ export async function GET(request: NextRequest) {
     if (search) {
       allConditions.push({
         OR: [
-          { code: { contains: search } },
-          { location: { contains: search } }
+          { code: { contains: search, mode: 'insensitive' } },
+          { location: { contains: search, mode: 'insensitive' } }
         ]
       });
     }

@@ -22,10 +22,10 @@ export async function GET(request: NextRequest) {
 
         if (search) {
             whereClause.OR = [
-                { name: { contains: search } },
-                { email: { contains: search } },
-                { phone: { contains: search } },
-                { cnic: { contains: search } }
+                { name: { contains: search, mode: 'insensitive' } },
+                { email: { contains: search, mode: 'insensitive' } },
+                { phone: { contains: search, mode: 'insensitive' } },
+                { cnic: { contains: search, mode: 'insensitive' } }
             ];
         }
 
