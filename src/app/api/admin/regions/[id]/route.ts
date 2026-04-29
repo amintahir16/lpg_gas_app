@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { getAssignedAppUserCountsByRegion } from '@/lib/region';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -23,7 +24,6 @@ export async function GET(_request: NextRequest, ctx: Ctx) {
       include: {
         _count: {
           select: {
-            users: true,
             customers: true,
             b2cCustomers: true,
             cylinders: true,
@@ -39,6 +39,16 @@ export async function GET(_request: NextRequest, ctx: Ctx) {
       return NextResponse.json({ error: 'Not Found' }, { status: 404 });
     }
 
+    const userCountMap = await getAssignedAppUserCountsByRegion([region.id]);
+
+    const regionWithCounts = {
+      ...region,
+      _count: {
+        ...region._count,
+        users: userCountMap.get(region.id) ?? 0,
+      },
+    };
+
     if (role === 'ADMIN') {
       const assigned = (session.user as { regionId?: string | null }).regionId;
       if (assigned !== region.id) {
@@ -46,7 +56,7 @@ export async function GET(_request: NextRequest, ctx: Ctx) {
       }
     }
 
-    return NextResponse.json(region);
+    return NextResponse.json(regionWithCounts);
   } catch (error) {
     console.error('GET /api/admin/regions/[id] failed:', error);
     return NextResponse.json(

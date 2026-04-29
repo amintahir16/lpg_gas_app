@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { getAssignedAppUserCountsByRegion } from '@/lib/region';
 
 // GET /api/admin/regions
 // Lists regions. ADMIN gets only their assigned region; SUPER_ADMIN gets all.
@@ -37,7 +38,6 @@ export async function GET(request: NextRequest) {
       include: {
         _count: {
           select: {
-            users: true,
             customers: true,
             b2cCustomers: true,
             cylinders: true,
@@ -46,7 +46,18 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(regions);
+    const regionIds = regions.map((r) => r.id);
+    const userCounts = await getAssignedAppUserCountsByRegion(regionIds);
+
+    const payload = regions.map((r) => ({
+      ...r,
+      _count: {
+        ...r._count,
+        users: userCounts.get(r.id) ?? 0,
+      },
+    }));
+
+    return NextResponse.json(payload);
   } catch (error) {
     console.error('GET /api/admin/regions failed:', error);
     return NextResponse.json(

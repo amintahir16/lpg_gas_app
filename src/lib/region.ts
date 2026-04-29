@@ -170,3 +170,41 @@ export async function getAccessibleRegionsForUser(userId: string): Promise<{
   }
   return { primary, ids };
 }
+
+/**
+ * For each region id: count distinct `users` rows assigned via primary `region_id`
+ * or via `user_regions` (multi-branch admins). Same union as auth/access logic.
+ */
+export async function getAssignedAppUserCountsByRegion(regionIds: string[]): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (regionIds.length === 0) return counts;
+
+  const [primaryRows, junctionRows] = await Promise.all([
+    prisma.user.findMany({
+      where: { regionId: { in: regionIds } },
+      select: { id: true, regionId: true },
+    }),
+    prisma.userRegion.findMany({
+      where: { regionId: { in: regionIds } },
+      select: { userId: true, regionId: true },
+    }),
+  ]);
+
+  const byRegion = new Map<string, Set<string>>();
+  for (const id of regionIds) {
+    byRegion.set(id, new Set<string>());
+  }
+  for (const u of primaryRows) {
+    if (!u.regionId) continue;
+    const set = byRegion.get(u.regionId);
+    if (set) set.add(u.id);
+  }
+  for (const ur of junctionRows) {
+    const set = byRegion.get(ur.regionId);
+    if (set) set.add(ur.userId);
+  }
+  for (const [rid, set] of byRegion) {
+    counts.set(rid, set.size);
+  }
+  return counts;
+}
