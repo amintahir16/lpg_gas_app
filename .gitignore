@@ -51,3 +51,6 @@ debug_*.js
 debug_*.ts
 scratch/
 
+# local / one-off scripts (often contain secrets; do not commit)
+/scripts/
+
