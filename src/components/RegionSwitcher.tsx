@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { Listbox, Transition } from '@headlessui/react';
 import {
@@ -69,11 +70,27 @@ export function RegionSwitcher() {
 
   if (!session?.user) return null;
   if (!isSuperAdmin && !isAdmin) return null;
-  if (loading || regions.length === 0) {
+  if (loading) {
     return (
       <div className="inline-flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-gray-500 px-2 sm:px-3 py-1.5 rounded-md border border-gray-200 bg-white/70 max-w-[55vw] sm:max-w-none">
         <BuildingOffice2Icon className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
         <span className="truncate">Loading branch…</span>
+      </div>
+    );
+  }
+  if (regions.length === 0) {
+    return (
+      <div className="inline-flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-amber-800 px-2 sm:px-3 py-1.5 rounded-md border border-amber-200 bg-amber-50/90 max-w-[55vw] sm:max-w-none">
+        <BuildingOffice2Icon className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+        {isSuperAdmin ? (
+          <Link href="/admin/regions" prefetch className="truncate font-medium text-blue-700 hover:underline">
+            No branches yet — add a region
+          </Link>
+        ) : (
+          <span className="truncate text-gray-600" title="Contact a Super Administrator.">
+            No branch assigned yet
+          </span>
+        )}
       </div>
     );
   }

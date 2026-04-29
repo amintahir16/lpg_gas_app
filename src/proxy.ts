@@ -64,6 +64,9 @@ const roleHierarchy = {
 const REGION_AGNOSTIC_PREFIXES = [
     '/select-region',
     '/api/select-region',
+    // Page shell for creating regions — must load without flamora_region_id (SPA
+    // navigation hits proxy the same way as full requests).
+    '/admin/regions',
     '/api/admin/regions', // SUPER_ADMIN region CRUD
     '/api/regions',       // listing regions for switcher / select-region
     '/api/auth',

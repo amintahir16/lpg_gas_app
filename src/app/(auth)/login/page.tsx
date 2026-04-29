@@ -30,7 +30,8 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const { data: session, status } = useSession();
 
-  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
+  /** Default landing for admin accounts: branch picker first; dashboards still use ?callbackUrl= */
+  const callbackUrl = searchParams.get('callbackUrl') || '/select-region';
 
   // Handle redirect when session is available
   useEffect(() => {

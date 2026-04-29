@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, Suspense } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import {
@@ -167,22 +168,21 @@ function SelectRegionInner() {
                   : 'Your account is not assigned to any branch yet. Please contact a Super Administrator.'}
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-col sm:flex-row gap-3">
+            <CardContent className="flex flex-col gap-4">
               {isSuperAdmin && (
-                <Button
-                  onClick={() => router.push('/admin/regions')}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  Manage Regions
-                </Button>
+                <>
+                  <p className="text-sm text-gray-600">
+                    Open Regions to add your first branch. You&apos;ll come back here to activate it once it exists.
+                  </p>
+                  <Link
+                    href="/admin/regions"
+                    prefetch
+                    className="inline-flex items-center justify-center rounded-lg text-sm font-medium shadow-sm transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 h-11 px-6 py-3 bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    Manage Regions
+                  </Link>
+                </>
               )}
-              <Button
-                variant="outline"
-                onClick={() => signOut({ callbackUrl: '/login' })}
-              >
-                <ArrowRightOnRectangleIcon className="w-4 h-4 mr-2" />
-                Sign out
-              </Button>
             </CardContent>
           </Card>
         ) : (
