@@ -44,7 +44,8 @@ export const authOptions: NextAuthOptions = {
 
           const user = await prisma.user.findUnique({
             where: {
-              email: credentials.email
+              // Emails are treated case-insensitively at login time.
+              email: emailKey,
             },
             include: {
               userRegions: { select: { regionId: true } },
