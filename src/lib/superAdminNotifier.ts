@@ -465,7 +465,10 @@ export async function checkAndNotifyLowAccessoryStock(itemId: string) {
  * Looks them up by (category, itemType) which matches `CustomItem.name` and
  * `CustomItem.type` respectively.
  */
-export async function checkAccessoriesForLowStock(items: Array<{ category: string; itemType: string }>) {
+export async function checkAccessoriesForLowStock(
+  items: Array<{ category: string; itemType: string }>,
+  regionId?: string | null,
+) {
   try {
     if (!items || items.length === 0) return;
 
@@ -473,6 +476,7 @@ export async function checkAccessoriesForLowStock(items: Array<{ category: strin
       where: {
         isActive: true,
         OR: items.map((i) => ({ name: i.category, type: i.itemType })),
+        ...(regionId !== undefined ? { regionId } : {}),
       },
       select: { id: true },
     });

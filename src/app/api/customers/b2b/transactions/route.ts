@@ -576,9 +576,9 @@ export async function POST(request: NextRequest) {
               itemType: (rest.join(' - ') || a?.itemType || category || '').trim(),
             };
           })
-          .filter((it) => it.category && it.itemType);
+          .filter((it: { category: string; itemType: string }) => it.category && it.itemType);
         if (accessoriesForCheck.length > 0) {
-          await checkAccessoriesForLowStock(accessoriesForCheck);
+          await checkAccessoriesForLowStock(accessoriesForCheck, regionId);
         }
       }
     } catch (sideEffectError) {
