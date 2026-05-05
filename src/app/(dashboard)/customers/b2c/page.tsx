@@ -560,8 +560,6 @@ export default function B2CCustomersPage() {
                 <TableHeader className="bg-gray-50">
                   <TableRow>
                     <TableHead className="font-semibold text-gray-700 w-[200px]">Customer</TableHead>
-                    <TableHead className="font-semibold text-gray-700 w-[250px]">Address</TableHead>
-                    <TableHead className="font-semibold text-gray-700 w-[150px]">Phone</TableHead>
 
                     {/* Dynamic Cylinder Columns */}
                     {cylinderTypes.map(type => (
@@ -592,15 +590,6 @@ export default function B2CCustomersPage() {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center max-w-xs">
-                          <MapPinIcon className="w-4 h-4 mr-1 text-gray-400 flex-shrink-0" />
-                          <span className="text-gray-700 text-sm truncate" title={formatAddress(customer)}>
-                            {formatAddress(customer)}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-gray-700">{customer.phone}</TableCell>
 
                       {/* Dynamic Cylinder Counts */}
                       {cylinderTypes.map(type => {

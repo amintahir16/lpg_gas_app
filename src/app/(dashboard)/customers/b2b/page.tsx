@@ -601,8 +601,6 @@ export default function B2BCustomersPage() {
                 <TableHeader className="bg-gray-50">
                   <TableRow>
                     <TableHead className="font-semibold text-gray-700 w-[250px]">Customer</TableHead>
-                    <TableHead className="font-semibold text-gray-700 w-[200px]">Contact</TableHead>
-                    <TableHead className="font-semibold text-gray-700 w-[120px]">Type</TableHead>
 
                     {/* Dynamic Headers */}
                     {cylinderTypes.length > 0 && cylinderTypes.map(type => (
@@ -611,7 +609,7 @@ export default function B2BCustomersPage() {
                       </TableHead>
                     ))}
 
-                    <TableHead className="font-semibold text-gray-700 text-right w-[120px]">Total Due</TableHead>
+                    <TableHead className="font-semibold text-gray-700 text-right w-[120px]">Cylinder Due</TableHead>
                     <TableHead className="font-semibold text-gray-700 text-right w-[150px]">Receivables</TableHead>
                     <TableHead className="font-semibold text-gray-700 text-center w-[100px]">Status</TableHead>
                     <TableHead className="font-semibold text-gray-700 text-center w-[100px]">Actions</TableHead>
@@ -629,23 +627,6 @@ export default function B2BCustomersPage() {
                           <p className="font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">{customer.name}</p>
                           <p className="text-xs text-gray-500 mt-0.5">ID: {customer.id.slice(-6)}</p>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-0.5">
-                          <p className="text-sm font-medium text-gray-700">{customer.contactPerson}</p>
-                          <p className="text-xs text-gray-500">{customer.phone}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={`font-medium text-xs ${getCustomerTypeFromNotes(customer.notes) === 'RESTAURANT' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                            getCustomerTypeFromNotes(customer.notes) === 'INDUSTRIAL' ? 'bg-purple-50 text-purple-700 border-purple-200' :
-                              'bg-gray-50 text-gray-700'
-                            }`}
-                        >
-                          {getCustomerTypeFromNotes(customer.notes) || 'B2B'}
-                        </Badge>
                       </TableCell>
 
                       {/* Dynamic Cylinder Cells */}
