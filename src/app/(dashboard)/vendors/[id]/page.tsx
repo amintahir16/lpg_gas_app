@@ -22,6 +22,7 @@ import VendorPaymentModal from '@/components/VendorPaymentModal';
 import VendorExportModal from '@/components/VendorExportModal';
 import { generateCylinderTypeFromCapacity } from '@/lib/cylinder-utils';
 import { CustomSelect } from '@/components/ui/select-custom';
+import { buildCylinderVariantKey, parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 
 interface Vendor {
   id: string;
@@ -170,7 +171,7 @@ export default function VendorDetailPage() {
 
   // Gas purchase state
   // Dynamic cylinder types - handles any cylinder type from the database
-  const [emptyCylinders, setEmptyCylinders] = useState<Record<string, Array<{ id: string, code: string, cylinderType: string }>>>({});
+  const [emptyCylinders, setEmptyCylinders] = useState<Record<string, Array<{ id: string, code: string, cylinderType: string, typeName?: string | null, capacity?: any, variantKey: string }>>>({});
   const [selectedCylinders, setSelectedCylinders] = useState<{
     domestic: string[];
     standard: string[];
@@ -957,58 +958,21 @@ export default function VendorDetailPage() {
         return null;
       }
 
-      // Use the same utility function as backend for consistency
-      // This generates enum like: CYLINDER_45_4KG, CYLINDER_11_8KG, etc.
+      // Prefer legacy enums for common capacities so we match existing inventory.
+      if (Math.abs(capacity - 11.8) < 0.11 || name.includes('domestic')) {
+        return 'DOMESTIC_11_8KG';
+      }
+      if (Math.abs(capacity - 15) < 0.11 || name.includes('standard')) {
+        return 'STANDARD_15KG';
+      }
+      if (Math.abs(capacity - 45.4) < 0.11 || name.includes('commercial')) {
+        return 'COMMERCIAL_45_4KG';
+      }
+
+      // Otherwise generate dynamic type from capacity (custom sizes).
       const generatedType = generateCylinderTypeFromCapacity(capacity);
-
-      console.log(`🔍 Extracted capacity: ${capacity}kg from "${itemName}" -> Generated type: "${generatedType}"`);
-
-      // Check if this generated type exists in emptyCylinders
-      if (emptyCylinders[generatedType]) {
-        return generatedType;
-      }
-
-      // Also check for legacy enum formats (DOMESTIC_11_8KG, STANDARD_15KG, COMMERCIAL_45_4KG)
-      // Map common weights to legacy types for backward compatibility
-      if (Math.abs(capacity - 11.8) < 0.1 || name.includes('domestic')) {
-        const legacyType = 'DOMESTIC_11_8KG';
-        if (emptyCylinders[legacyType]) {
-          return legacyType;
-        }
-        return generatedType; // Return generated type even if not in emptyCylinders yet
-      } else if (Math.abs(capacity - 15) < 0.1 || name.includes('standard')) {
-        const legacyType = 'STANDARD_15KG';
-        if (emptyCylinders[legacyType]) {
-          return legacyType;
-        }
-        return generatedType;
-      } else if (Math.abs(capacity - 45.4) < 0.1 || name.includes('commercial')) {
-        const legacyType = 'COMMERCIAL_45_4KG';
-        if (emptyCylinders[legacyType]) {
-          return legacyType;
-        }
-        return generatedType;
-      } else {
-        // For new cylinder types, try to find matching type in available cylinders
-        const availableTypes = Object.keys(emptyCylinders);
-        for (const type of availableTypes) {
-          // Extract weight from cylinder type enum
-          const typeWeightMatch = type.match(/(\d+)(?:_(\d+))?/);
-          if (typeWeightMatch) {
-            const wholePart = parseFloat(typeWeightMatch[1]);
-            const decimalPart = typeWeightMatch[2] ? parseFloat(typeWeightMatch[2]) / 10 : 0;
-            const typeWeight = wholePart + decimalPart;
-
-            if (Math.abs(typeWeight - capacity) < 0.1) {
-              console.log(`✅ Found matching type in inventory: "${type}" (weight: ${typeWeight})`);
-              return type;
-            }
-          }
-        }
-
-        // Return generated type even if not found (will be used by backend)
-        return generatedType;
-      }
+      console.log(`🔍 Extracted capacity: ${capacity}kg from "${itemName}" -> Type: "${generatedType}"`);
+      return generatedType;
     }
 
     // Fallback to keyword matching if no weight found
@@ -1028,6 +992,43 @@ export default function VendorDetailPage() {
     return null;
   };
 
+  const getCylinderVariantKeyFromItemName = (itemName: string): string | null => {
+    if (!itemName || !itemName.trim()) return null;
+    // Extract typeName (e.g. "Plastic") from the label.
+    // Supports:
+    // - "Plastic 15kg"
+    // - "Plastic (15kg)"
+    // - "Standard (15kg) Cylinder"
+    // - "Commercial (45.4kg) Gas"
+    const m = itemName.match(/^\s*([^\d(]+?)\s*(?:\(|\b)\s*(\d+(?:\.\d+)?)\s*kg/i);
+    const rawTypeName = m?.[1]?.trim() || '';
+    const capacity = getCapacityFromItemName(itemName) || null;
+    const typeName =
+      rawTypeName && !/cylinder|gas/i.test(rawTypeName) ? rawTypeName : null;
+
+    // IMPORTANT:
+    // `/api/inventory/empty-cylinders` keys include the *actual* cylinderType from DB.
+    // Custom 15kg variants may use CYLINDER_15KG (not STANDARD_15KG), so we first
+    // resolve the key by matching (capacity + typeName) against the fetched keys.
+    const desiredTypeNameLower = typeName ? typeName.trim().toLowerCase() : null;
+    if (capacity && Object.keys(emptyCylinders).length > 0) {
+      const matchKey = Object.keys(emptyCylinders).find((k) => {
+        const parsed = parseCylinderVariantKey(k);
+        if (!parsed) return false;
+        if (parsed.capacity === null || parsed.capacity === undefined) return false;
+        if (Math.abs(parsed.capacity - capacity) > 0.11) return false;
+        const tn = parsed.normalizedTypeNameLower ?? null;
+        return (tn ?? null) === (desiredTypeNameLower ?? null);
+      });
+      if (matchKey) return matchKey;
+    }
+
+    // Fallback: build a key using a generated cylinderType.
+    const cylinderType = getCylinderTypeFromItemName(itemName) || generateCylinderTypeFromCapacity(capacity || 0);
+    if (!cylinderType) return null;
+    return buildCylinderVariantKey({ cylinderType, typeName, capacity });
+  };
+
   const getMaxQuantity = (itemName: string) => {
     if (!isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
       return null;
@@ -1037,54 +1038,33 @@ export default function VendorDetailPage() {
       return null;
     }
 
-    const cylinderType = getCylinderTypeFromItemName(itemName);
-
-    if (!cylinderType) {
-      console.log(`⚠️ Could not determine cylinder type for: ${itemName}`);
+    const variantKey = getCylinderVariantKeyFromItemName(itemName);
+    if (!variantKey) {
+      console.log(`⚠️ Could not determine cylinder variant for: ${itemName}`);
       return null;
     }
 
     // Debug logging
-    console.log(`🔍 getMaxQuantity - Item: "${itemName}", Extracted Type: "${cylinderType}"`);
+    console.log(`🔍 getMaxQuantity - Item: "${itemName}", Variant Key: "${variantKey}"`);
     console.log(`🔍 Available types in emptyCylinders:`, Object.keys(emptyCylinders));
     console.log(`🔍 emptyCylinders object:`, emptyCylinders);
 
-    // Dynamically get count for any cylinder type
-    // Try exact match first
-    let cylinders = emptyCylinders[cylinderType];
+    // Dynamically get count for any cylinder variant
+    let cylinders = emptyCylinders[variantKey];
 
     // If not found, try case-insensitive match
     if (!cylinders && Object.keys(emptyCylinders).length > 0) {
       const matchingKey = Object.keys(emptyCylinders).find(
-        key => key.toUpperCase() === cylinderType.toUpperCase()
+        key => key.toUpperCase() === variantKey.toUpperCase()
       );
       if (matchingKey) {
         cylinders = emptyCylinders[matchingKey];
-        console.log(`✅ Found case-insensitive match: "${matchingKey}" for "${cylinderType}"`);
-      }
-    }
-
-    // If still not found, try to match by extracting weight from both
-    if (!cylinders && Object.keys(emptyCylinders).length > 0) {
-      const itemWeightMatch = itemName.match(/(\d+\.?\d*)\s*kg/i);
-      if (itemWeightMatch) {
-        const itemWeight = parseFloat(itemWeightMatch[1]);
-        for (const key of Object.keys(emptyCylinders)) {
-          const keyWeightMatch = key.match(/(\d+\.?\d*)/);
-          if (keyWeightMatch) {
-            const keyWeight = parseFloat(keyWeightMatch[1]);
-            if (Math.abs(keyWeight - itemWeight) < 0.1) {
-              cylinders = emptyCylinders[key];
-              console.log(`✅ Found weight-based match: "${key}" (weight: ${keyWeight}) for item "${itemName}" (weight: ${itemWeight})`);
-              break;
-            }
-          }
-        }
+        console.log(`✅ Found case-insensitive match: "${matchingKey}" for "${variantKey}"`);
       }
     }
 
     const count = cylinders ? cylinders.length : 0;
-    console.log(`🔍 Max quantity for "${itemName}" (type: "${cylinderType}"): ${count}`);
+    console.log(`🔍 Max quantity for "${itemName}" (variant: "${variantKey}"): ${count}`);
 
     return count;
   };
@@ -1125,8 +1105,8 @@ export default function VendorDetailPage() {
           }
 
           // Check if cylinder type exists in inventory
-          const cylinderType = getCylinderTypeFromItemName(item.itemName);
-          if (cylinderType && (!emptyCylinders[cylinderType] || emptyCylinders[cylinderType].length === 0)) {
+          const variantKey = getCylinderVariantKeyFromItemName(item.itemName);
+          if (variantKey && (!emptyCylinders[variantKey] || emptyCylinders[variantKey].length === 0)) {
             alert(`No empty cylinders available for "${item.itemName}". Please ensure cylinders of this type exist in inventory.`);
             return;
           }

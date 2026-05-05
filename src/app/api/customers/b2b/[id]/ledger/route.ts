@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { requireAdmin, clampLimit } from '@/lib/apiAuth';
+import { parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 
 export async function GET(
   request: NextRequest,
@@ -219,17 +220,27 @@ export async function GET(
                   const marginPerKg = parseFloat(customer.marginCategory.marginPerKg.toString());
                   // Helper function logic inlined/adapted since we can't easily import generic utils in API route without potential path issues
                   // But we can try to use the cylinder-utils if available, or regex parse
-                  let capacity = 15; // Default fallback
+                let capacity = 15; // Default fallback
 
-                  // Extract capacity from cylinderType string (e.g. DOMESTIC_11_8KG -> 11.8)
+                const parsedVk = item.cylinderVariantKey
+                  ? parseCylinderVariantKey(item.cylinderVariantKey)
+                  : null;
+                if (
+                  parsedVk?.capacity !== null &&
+                  parsedVk?.capacity !== undefined &&
+                  Number.isFinite(parsedVk.capacity)
+                ) {
+                  capacity = parsedVk.capacity;
+                } else if (item.cylinderType) {
                   const match = item.cylinderType.match(/(\d+)(?:_(\d+))?/);
                   if (match) {
                     const whole = match[1];
                     const decimal = match[2];
                     capacity = decimal ? parseFloat(`${whole}.${decimal}`) : parseFloat(whole);
                   }
+                }
 
-                  const quantity = parseFloat(item.quantity.toString());
+                const quantity = parseFloat(item.quantity.toString());
                   const itemProfit = marginPerKg * capacity * quantity;
                   totalProfit += itemProfit;
                 }

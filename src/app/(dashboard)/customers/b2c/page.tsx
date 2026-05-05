@@ -22,7 +22,8 @@ import {
   ArrowDownIcon,
   MapPinIcon
 } from '@heroicons/react/24/outline';
-import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
+import { getCylinderTypeDisplayName, getCapacityFromTypeString } from '@/lib/cylinder-utils';
+import { buildCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { CustomSelect } from '@/components/ui/select-custom';
 
 // Palette for dynamic cylinder badges
@@ -53,6 +54,15 @@ const getCylinderColor = (type: string) => {
   return CYLINDER_COLORS[index];
 };
 
+function b2cClientHoldingKey(h: { cylinderType: string; cylinderVariantKey?: string | null }) {
+  if (h.cylinderVariantKey?.trim()) return h.cylinderVariantKey.trim();
+  return buildCylinderVariantKey({
+    cylinderType: h.cylinderType,
+    typeName: null,
+    capacity: getCapacityFromTypeString(h.cylinderType),
+  });
+}
+
 interface B2CCustomer {
   id: string;
   name: string;
@@ -71,6 +81,7 @@ interface B2CCustomer {
   marginCategoryId: string | null;
   cylinderHoldings: {
     cylinderType: string;
+    cylinderVariantKey?: string | null;
     quantity: number;
     isReturned: boolean;
   }[];
@@ -322,14 +333,18 @@ export default function B2CCustomersPage() {
     return customer.address;
   };
 
-  const getCylinderHoldingsByType = (customer: B2CCustomer, type: string) => {
-    const holding = customer.cylinderHoldings.find(h => h.cylinderType === type && !h.isReturned);
-    return holding ? holding.quantity : 0;
+  const getCylinderHoldingsByVariantKey = (customer: B2CCustomer, variantKey: string) => {
+    return customer.cylinderHoldings
+      .filter((h) => !h.isReturned && b2cClientHoldingKey(h) === variantKey)
+      .reduce((sum, h) => sum + h.quantity, 0);
   };
 
   const getDynamicDisplayName = (type: string) => {
     if (typeDefinitions[type]) {
       const { name, capacity } = typeDefinitions[type];
+      // Avoid double capacity like "Domestic (11.8kg) (11.8kg)"
+      // `typeDefinitions` sometimes already includes capacity in its name.
+      if (/\(\s*\d+(\.\d+)?\s*kg\s*\)/i.test(name)) return name;
       return `${name} (${capacity}kg)`;
     }
     return getCylinderTypeDisplayName(type);
@@ -589,7 +604,7 @@ export default function B2CCustomersPage() {
 
                       {/* Dynamic Cylinder Counts */}
                       {cylinderTypes.map(type => {
-                        const count = getCylinderHoldingsByType(customer, type);
+                        const count = getCylinderHoldingsByVariantKey(customer, type);
                         return (
                           <TableCell key={type} className="text-center">
                             {count > 0 ? (

@@ -12,6 +12,8 @@ import {
 } from 'date-fns';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { requireAdmin } from '@/lib/apiAuth';
+import { parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
+import { getCapacityFromTypeString, getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -337,20 +339,38 @@ export async function GET(request: NextRequest) {
       return cylinderTypeFriendlyMap.get(raw) || cylinderTypeLabel(raw);
     };
 
+    const variantAwareCylinderName = (input: { cylinderType?: string | null; cylinderVariantKey?: string | null }) => {
+      const vk = input.cylinderVariantKey?.trim();
+      if (vk && vk.includes('|||')) {
+        const p = parseCylinderVariantKey(vk);
+        if (p?.cylinderType) {
+          const cap = p.capacity ?? getCapacityFromTypeString(p.cylinderType);
+          if (p.normalizedTypeNameLower && p.normalizedTypeNameLower !== 'null') {
+            const tn = p.normalizedTypeNameLower.replace(/\b\w/g, (c) => c.toUpperCase());
+            return `${tn} ${cap}kg`;
+          }
+          return `${getCylinderTypeDisplayName(p.cylinderType)} ${cap}kg`;
+        }
+      }
+      return friendlyCylinderName(input.cylinderType);
+    };
+
     // Group B2B items by friendly name and sum quantities.
     // Priority for naming: dynamic Cylinder inventory lookup → smart-formatted
     // raw cylinderType → stored productName → "cylinder".
     // This guarantees we never surface raw strings like "CYLINDER_12KG Cylinder"
     // when a real type exists in inventory.
     const groupCylinderItems = (
-      items: Array<{ quantity: any; cylinderType?: string | null; productName?: string | null }>
+      items: Array<{ quantity: any; cylinderType?: string | null; cylinderVariantKey?: string | null; productName?: string | null }>
     ): string => {
       if (!items.length) return '';
       const grouped = new Map<string, number>();
       for (const it of items) {
+        const fromVariant = it.cylinderType || it.cylinderVariantKey ? variantAwareCylinderName(it) : '';
         const fromInventory = it.cylinderType ? cylinderTypeFriendlyMap.get(it.cylinderType) : null;
         const fromRawType = it.cylinderType ? cylinderTypeLabel(it.cylinderType) : '';
         const name =
+          fromVariant ||
           fromInventory ||
           fromRawType ||
           it.productName?.trim() ||
@@ -451,12 +471,12 @@ export async function GET(request: NextRequest) {
 
     // Group items by friendly cylinder name and sum quantities
     const groupB2CCylinders = (
-      items: Array<{ quantity: any; cylinderType: string }>
+      items: Array<{ quantity: any; cylinderType: string; cylinderVariantKey?: string | null }>
     ): string => {
       if (!items.length) return '';
       const grouped = new Map<string, number>();
       for (const it of items) {
-        const name = friendlyCylinderName(it.cylinderType) || 'cylinder';
+        const name = variantAwareCylinderName(it) || 'cylinder';
         grouped.set(name, (grouped.get(name) || 0) + Number(it.quantity || 0));
       }
       return Array.from(grouped.entries())

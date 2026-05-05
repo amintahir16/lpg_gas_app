@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getCylinderTypeDisplayName, normalizeTypeName } from '@/lib/cylinder-utils';
+import { buildCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(
@@ -162,8 +163,15 @@ export async function GET(
         displayType = getCylinderTypeDisplayName(type);
       }
 
+      const variantKey = buildCylinderVariantKey({
+        cylinderType: type,
+        typeName: normalizedTypeNameLowercase,
+        capacity,
+      });
+
       return {
         cylinderType: type,
+        variantKey,
         displayName: displayType,
         count: totalCount,
         buybackWeight: stats.buybackWeight,
@@ -171,10 +179,10 @@ export async function GET(
       };
     });
 
-    // Deduplicate by display name and merge counts/stats
-    const uniqueDuesMap = new Map<string, any>();
+    // Deduplicate by variantKey (same typeName+capacity+cylinderType), never by label alone
+    const uniqueDuesMap = new Map<string, typeof processedDues[0] & { variantKey?: string }>();
     processedDues.forEach(due => {
-      const key = due.displayName;
+      const key = due.variantKey;
       if (!uniqueDuesMap.has(key)) {
         uniqueDuesMap.set(key, due);
       } else {

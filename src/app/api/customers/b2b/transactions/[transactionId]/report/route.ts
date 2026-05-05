@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
+import {
+  b2bItemVariantKey,
+  formatB2bItemCylinderLabel,
+  formatB2bVariantKeyForReport,
+} from '@/lib/b2b-transaction-item-variant';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 // Helper function to format currency
@@ -24,25 +28,6 @@ function formatDate(dateString: string | Date): string {
     month: 'short',
     day: 'numeric'
   });
-}
-
-// Helper function to get cylinder type display name - uses database mapping with fallback
-function getCylinderTypeDisplay(type: string | null, cylinderTypeMap?: Map<string, { typeName: string | null, capacity: number | null }>): string {
-  if (!type) return 'N/A';
-
-  // If we have a type map with proper typeName, use it
-  if (cylinderTypeMap && cylinderTypeMap.has(type)) {
-    const cylinderInfo = cylinderTypeMap.get(type)!;
-    if (cylinderInfo.typeName && cylinderInfo.typeName.trim() !== '' && cylinderInfo.typeName.trim() !== 'Cylinder') {
-      const capacity = cylinderInfo.capacity !== null ? cylinderInfo.capacity : 'N/A';
-      return `${cylinderInfo.typeName} (${capacity}kg)`;
-    } else if (cylinderInfo.capacity !== null) {
-      return `Cylinder (${cylinderInfo.capacity}kg)`;
-    }
-  }
-
-  // Fallback to dynamic utility function
-  return getCylinderTypeDisplayName(type);
 }
 
 // Categorize items into Sale, Buyback, and Return
@@ -312,7 +297,7 @@ async function generatePDF(
     if (isBuyback) {
       headers = ['Item', 'Qty', 'Remaining Gas', 'Buyback Rate', 'Credit/Item', 'Total Credit'];
       tableData = items.map(item => {
-        const itemName = item.cylinderType ? getCylinderTypeDisplay(item.cylinderType, cylinderTypeMap) : (item.productName || 'N/A');
+        const itemName = item.cylinderType ? formatB2bItemCylinderLabel(item, cylinderTypeMap) : (item.productName || 'N/A');
         const remainingKg = item.remainingKg ? `${Number(item.remainingKg).toFixed(1)} kg` : '-';
         const buybackRate = item.buybackRate ? `${(Number(item.buybackRate) * 100).toFixed(0)}%` : '-';
         const creditPerItem = item.buybackPricePerItem ? formatCurrencyRs(Number(item.buybackPricePerItem)) : '-';
@@ -331,7 +316,7 @@ async function generatePDF(
     } else if (isReturn) {
       headers = ['Item', 'Quantity', 'Status'];
       tableData = items.map(item => {
-        const itemName = item.cylinderType ? getCylinderTypeDisplay(item.cylinderType, cylinderTypeMap) : (item.productName || 'N/A');
+        const itemName = item.cylinderType ? formatB2bItemCylinderLabel(item, cylinderTypeMap) : (item.productName || 'N/A');
         return [itemName, item.quantity, 'Empty Returned'];
       });
       columnStyles = {
@@ -342,7 +327,7 @@ async function generatePDF(
     } else {
       headers = ['Item', 'Quantity', 'Price/Item', 'Total Price'];
       tableData = items.map(item => {
-        let itemName = item.cylinderType ? getCylinderTypeDisplay(item.cylinderType, cylinderTypeMap) : (item.productName || 'N/A');
+        let itemName = item.cylinderType ? formatB2bItemCylinderLabel(item, cylinderTypeMap) : (item.productName || 'N/A');
 
         // Check if this is a vaporizer to apply special pricing logic
         const isVaporizer = item.category && item.category.toLowerCase().includes('vaporizer');
@@ -454,7 +439,7 @@ async function generatePDF(
 
     cylinderStats.forEach((stats, type) => {
       if (stats.delivered > 0 || stats.returned > 0 || stats.buyback > 0 || stats.held !== 0) {
-        const typeName = getCylinderTypeDisplay(type, cylinderTypeMap);
+        const typeName = formatB2bVariantKeyForReport(type, cylinderTypeMap);
         const row = [
           typeName,
           stats.delivered.toString(),
@@ -722,40 +707,40 @@ export async function GET(
       const { saleItems, buybackItems, returnItems } = categorizeItems(items, t.transactionType);
 
       saleItems.forEach((item: any) => {
-        if (item.cylinderType) {
-          const current = cylinderStats.get(item.cylinderType) || { delivered: 0, returned: 0, buyback: 0, held: 0, buybackWeight: 0, buybackCredit: 0 };
-          const qty = item.quantity ? Number(item.quantity) : 0;
-          current.delivered += qty;
-          current.held += qty;
-          cylinderStats.set(item.cylinderType, current);
-        }
+        const vk = b2bItemVariantKey(item);
+        if (!vk) return;
+        const current = cylinderStats.get(vk) || { delivered: 0, returned: 0, buyback: 0, held: 0, buybackWeight: 0, buybackCredit: 0 };
+        const qty = item.quantity ? Number(item.quantity) : 0;
+        current.delivered += qty;
+        current.held += qty;
+        cylinderStats.set(vk, current);
       });
 
       buybackItems.forEach((item: any) => {
-        if (item.cylinderType) {
-          const current = cylinderStats.get(item.cylinderType) || { delivered: 0, returned: 0, buyback: 0, held: 0, buybackWeight: 0, buybackCredit: 0 };
-          const qty = item.quantity ? Number(item.quantity) : 0;
-          current.returned += qty;
-          current.buyback += qty;
-          current.held -= qty;
-          if (item.remainingKg) {
-            current.buybackWeight += Number(item.remainingKg) * qty;
-          }
-          if (item.totalPrice) {
-            current.buybackCredit += Number(item.totalPrice);
-          }
-          cylinderStats.set(item.cylinderType, current);
+        const vk = b2bItemVariantKey(item);
+        if (!vk) return;
+        const current = cylinderStats.get(vk) || { delivered: 0, returned: 0, buyback: 0, held: 0, buybackWeight: 0, buybackCredit: 0 };
+        const qty = item.quantity ? Number(item.quantity) : 0;
+        current.returned += qty;
+        current.buyback += qty;
+        current.held -= qty;
+        if (item.remainingKg) {
+          current.buybackWeight += Number(item.remainingKg) * qty;
         }
+        if (item.totalPrice) {
+          current.buybackCredit += Number(item.totalPrice);
+        }
+        cylinderStats.set(vk, current);
       });
 
       returnItems.forEach((item: any) => {
-        if (item.cylinderType) {
-          const current = cylinderStats.get(item.cylinderType) || { delivered: 0, returned: 0, buyback: 0, held: 0, buybackWeight: 0, buybackCredit: 0 };
-          const qty = item.quantity ? Number(item.quantity) : 0;
-          current.returned += qty;
-          current.held -= qty;
-          cylinderStats.set(item.cylinderType, current);
-        }
+        const vk = b2bItemVariantKey(item);
+        if (!vk) return;
+        const current = cylinderStats.get(vk) || { delivered: 0, returned: 0, buyback: 0, held: 0, buybackWeight: 0, buybackCredit: 0 };
+        const qty = item.quantity ? Number(item.quantity) : 0;
+        current.returned += qty;
+        current.held -= qty;
+        cylinderStats.set(vk, current);
       });
     });
 

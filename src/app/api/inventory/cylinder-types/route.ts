@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { buildCylinderVariantKey } from '@/lib/cylinder-variant-key';
 
 export async function GET(request: NextRequest) {
     try {
@@ -67,8 +68,15 @@ export async function GET(request: NextRequest) {
             // Build lookup key matching the fullCountMap key format
             const fullCountKey = `${type.cylinderType}|||${(type.typeName || 'null').toLowerCase()}|||${type.capacity?.toString() || 'null'}`;
 
+            const variantKey = buildCylinderVariantKey({
+                cylinderType: type.cylinderType,
+                typeName: type.typeName,
+                capacity: type.capacity,
+            });
+
             return {
                 cylinderType: type.cylinderType,
+                variantKey,
                 typeName: type.typeName,
                 capacity: parseFloat(type.capacity.toString()),
                 label: displayType,

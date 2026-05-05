@@ -8,7 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { B2CTransactionModal } from '@/components/B2CTransactionModal';
-import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
+import { getCylinderTypeDisplayName, getCapacityFromTypeString } from '@/lib/cylinder-utils';
+import { buildCylinderVariantKey, parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import {
   ArrowLeftIcon,
   HomeIcon,
@@ -24,6 +25,15 @@ import {
   CurrencyDollarIcon,
   ArrowPathIcon
 } from '@heroicons/react/24/outline';
+
+function b2cDetailHoldingKey(h: { cylinderType: string; cylinderVariantKey?: string | null }) {
+  if (h.cylinderVariantKey?.trim()) return h.cylinderVariantKey.trim();
+  return buildCylinderVariantKey({
+    cylinderType: h.cylinderType,
+    typeName: null,
+    capacity: getCapacityFromTypeString(h.cylinderType),
+  });
+}
 
 // Interfaces based on API response
 interface B2CCustomer {
@@ -49,6 +59,7 @@ interface B2CCustomer {
   cylinderHoldings: {
     id: string;
     cylinderType: string;
+    cylinderVariantKey?: string | null;
     quantity: number;
     securityAmount: number;
     issueDate: string;
@@ -71,12 +82,14 @@ interface B2CTransaction {
   paymentReference?: string;
   gasItems: {
     cylinderType: string;
+    cylinderVariantKey?: string | null;
     quantity: number;
     pricePerItem: number;
     totalPrice: number;
   }[];
   securityItems: {
     cylinderType: string;
+    cylinderVariantKey?: string | null;
     quantity: number;
     pricePerItem: number;
     totalPrice: number;
@@ -283,13 +296,33 @@ export default function B2CCustomerDetailPage() {
   const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-PK');
   const formatTime = (timeString: string) => new Date(timeString).toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
 
-  const getCylinderTypeDisplay = (type: string | null) => {
+  const getCylinderTypeDisplay = (type: string | null, variantKey?: string | null) => {
     if (!type) return 'N/A';
+    const vk = variantKey?.trim();
+    if (vk) {
+      const byKey = inventoryCylinderTypes.find((t: any) => t.variantKey === vk);
+      if (byKey?.label) return byKey.label;
+      const parsed = parseCylinderVariantKey(vk);
+      if (parsed?.normalizedTypeNameLower && parsed.normalizedTypeNameLower !== 'null') {
+        const cap = parsed.capacity != null ? ` (${parsed.capacity}kg)` : '';
+        return `${parsed.normalizedTypeNameLower.replace(/\b\w/g, (c) => c.toUpperCase())}${cap}`;
+      }
+    }
     if (inventoryCylinderTypes.length > 0) {
       const dynamicType = inventoryCylinderTypes.find(t => t.cylinderType === type);
       if (dynamicType) return dynamicType.label;
     }
     return getCylinderTypeDisplayName(type);
+  };
+
+  const formatHoldingVariantLabel = (variantKey: string) => {
+    const byKey = inventoryCylinderTypes.find((t: any) => t.variantKey === variantKey);
+    if (byKey?.label) return byKey.label;
+    const parsed = parseCylinderVariantKey(variantKey);
+    if (parsed?.cylinderType) {
+      return getCylinderTypeDisplay(parsed.cylinderType, variantKey);
+    }
+    return getCylinderTypeDisplayName(variantKey);
   };
 
   const formatAddress = (c: B2CCustomer) => {
@@ -463,18 +496,18 @@ export default function B2CCustomerDetailPage() {
                     customer.cylinderHoldings
                       .filter(h => !h.isReturned)
                       .reduce((acc, h) => {
-                        const type = h.cylinderType;
-                        if (!acc[type]) {
-                          acc[type] = { quantity: 0, amount: 0 };
+                        const key = b2cDetailHoldingKey(h);
+                        if (!acc[key]) {
+                          acc[key] = { quantity: 0, amount: 0 };
                         }
-                        acc[type].quantity += h.quantity;
-                        acc[type].amount += (Number(h.securityAmount) * h.quantity);
+                        acc[key].quantity += h.quantity;
+                        acc[key].amount += (Number(h.securityAmount) * h.quantity);
                         return acc;
                       }, {} as Record<string, { quantity: number; amount: number }>)
-                  ).map(([type, data], index) => (
-                    <div key={index} className="flex justify-between items-center">
+                  ).map(([variantKey, data]) => (
+                    <div key={variantKey} className="flex justify-between items-center">
                       <span className="text-xs text-blue-700 font-medium">
-                        {getCylinderTypeDisplay(type)} <span className="text-[10px] text-blue-500">x{data.quantity}</span>
+                        {formatHoldingVariantLabel(variantKey)} <span className="text-[10px] text-blue-500">x{data.quantity}</span>
                       </span>
                       <span className="text-xs font-bold text-blue-800">
                         {formatCurrency(data.amount)}
@@ -648,7 +681,7 @@ export default function B2CCustomerDetailPage() {
                               <span className="text-xs font-semibold text-green-700 bg-green-50 px-1 rounded mr-1">Sold:</span>
                               <span className="text-xs text-gray-700">
                                 {[
-                                  ...tx.gasItems.map(item => `${getCylinderTypeDisplay(item.cylinderType)} x${item.quantity}`),
+                                  ...tx.gasItems.map(item => `${getCylinderTypeDisplay(item.cylinderType, item.cylinderVariantKey)} x${item.quantity}`),
                                   ...tx.accessoryItems.map(item => `${item.productName} x${item.quantity}`)
                                 ].join(', ')}
                               </span>
@@ -662,7 +695,7 @@ export default function B2CCustomerDetailPage() {
                               <span className="text-xs text-gray-700">
                                 {tx.securityItems
                                   .filter(s => s.isReturn)
-                                  .map(item => `${getCylinderTypeDisplay(item.cylinderType)} x${item.quantity}`)
+                                  .map(item => `${getCylinderTypeDisplay(item.cylinderType, item.cylinderVariantKey)} x${item.quantity}`)
                                   .join(', ')}
                               </span>
                             </div>
@@ -675,7 +708,7 @@ export default function B2CCustomerDetailPage() {
                               <span className="text-xs text-gray-700">
                                 {tx.securityItems
                                   .filter(s => !s.isReturn)
-                                  .map(item => `${getCylinderTypeDisplay(item.cylinderType)} x${item.quantity}`)
+                                  .map(item => `${getCylinderTypeDisplay(item.cylinderType, item.cylinderVariantKey)} x${item.quantity}`)
                                   .join(', ')}
                               </span>
                             </div>
@@ -908,7 +941,7 @@ export default function B2CCustomerDetailPage() {
                               ].map((item: any, index) => (
                                 <tr key={`sold-${index}`} className="border-t border-green-100">
                                   <td className="px-4 py-2 text-sm text-gray-900">
-                                    {item.type === 'GAS' ? getCylinderTypeDisplay(item.cylinderType) : item.productName}
+                                    {item.type === 'GAS' ? getCylinderTypeDisplay(item.cylinderType, item.cylinderVariantKey) : item.productName}
                                   </td>
                                   <td className="px-4 py-2 text-sm text-gray-700">{Number(item.quantity)}</td>
                                   <td className="px-4 py-2 text-sm text-gray-700">
@@ -946,7 +979,7 @@ export default function B2CCustomerDetailPage() {
                             <tbody>
                               {selectedTransaction.securityItems.filter(item => item.isReturn).map((item, index) => (
                                 <tr key={`return-${index}`} className="border-t border-orange-100">
-                                  <td className="px-4 py-2 text-sm text-gray-900">{getCylinderTypeDisplay(item.cylinderType)}</td>
+                                  <td className="px-4 py-2 text-sm text-gray-900">{getCylinderTypeDisplay(item.cylinderType, item.cylinderVariantKey)}</td>
                                   <td className="px-4 py-2 text-sm text-gray-700">{Number(item.quantity)}</td>
                                   <td className="px-4 py-2 text-sm text-gray-700">
                                     {formatCurrency(item.quantity > 0 ? Number(item.totalPrice) / Number(item.quantity) : 0)}
@@ -983,7 +1016,7 @@ export default function B2CCustomerDetailPage() {
                             <tbody>
                               {selectedTransaction.securityItems.filter(item => !item.isReturn).map((item, index) => (
                                 <tr key={`deposit-${index}`} className="border-t border-blue-100">
-                                  <td className="px-4 py-2 text-sm text-gray-900">{getCylinderTypeDisplay(item.cylinderType)}</td>
+                                  <td className="px-4 py-2 text-sm text-gray-900">{getCylinderTypeDisplay(item.cylinderType, item.cylinderVariantKey)}</td>
                                   <td className="px-4 py-2 text-sm text-gray-700">{Number(item.quantity)}</td>
                                   <td className="px-4 py-2 text-sm text-gray-700">
                                     {formatCurrency(item.quantity > 0 ? Number(item.totalPrice) / Number(item.quantity) : 0)}

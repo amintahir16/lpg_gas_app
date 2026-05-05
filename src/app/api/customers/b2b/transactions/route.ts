@@ -5,6 +5,7 @@ import { InventoryDeductionService } from '@/lib/inventory-deduction';
 import { prisma } from '@/lib/db';
 import { CylinderStatus } from '@prisma/client';
 import { getCapacityFromTypeString } from '@/lib/cylinder-utils';
+import { buildPrismaCylinderVariantWhere, parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import {
   notifyUserActivity,
@@ -12,6 +13,8 @@ import {
   checkAccessoriesForLowStock,
 } from '@/lib/superAdminNotifier';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { getB2bCustomerCylinderDueAggregatesFromPhysicalStock } from '@/lib/b2b-customer-cylinder-dues-from-stock';
+import { buildCylinderVariantSummary } from '@/lib/cylinder-variant-summary';
 
 export async function POST(request: NextRequest) {
   try {
@@ -200,6 +203,7 @@ export async function POST(request: NextRequest) {
               pricePerItem: parseFloat(item.pricePerItem || 0),
               totalPrice: isBuybackItem && buybackTotal > 0 ? buybackTotal : parseFloat(String((item.delivered || item.quantity || 0) * (item.pricePerItem || 0))),
               cylinderType: item.cylinderType,
+              cylinderVariantKey: item.cylinderVariantKey?.trim() || null,
               returnedCondition: item.returnedCondition || (item.emptyReturned > 0 ? 'EMPTY' : null),
               // Only store remainingKg for actual buyback items (not empty returns)
               remainingKg: isBuybackItem && item.remainingKg > 0 ? parseFloat(item.remainingKg) : null,
@@ -227,9 +231,6 @@ export async function POST(request: NextRequest) {
       }
 
       let newLedgerBalance = parseFloat(customer.ledgerBalance.toString()) || 0;
-      let newDomestic118kgDue = customer.domestic118kgDue || 0;
-      let newStandard15kgDue = customer.standard15kgDue || 0;
-      let newCommercial454kgDue = customer.commercial454kgDue || 0;
 
       console.log(`Processing transaction type: ${transactionType}, amount: ${totalAmount}`);
       console.log(`Current ledger balance: ${newLedgerBalance}, Type: ${typeof newLedgerBalance}`);
@@ -275,40 +276,6 @@ export async function POST(request: NextRequest) {
 
           console.log(`New ledger balance after calculation: ${newLedgerBalance}`);
 
-          // Update cylinder due counts for sales - ONLY if delivered > 0
-          gasItems.forEach((item: any) => {
-            if (item.delivered > 0) {
-              console.log(`Processing cylinder sale: ${item.cylinderType} - ${item.delivered} delivered`);
-              switch (item.cylinderType) {
-                case 'DOMESTIC_11_8KG':
-                  newDomestic118kgDue += item.delivered;
-                  break;
-                case 'STANDARD_15KG':
-                  newStandard15kgDue += item.delivered;
-                  break;
-                case 'COMMERCIAL_45_4KG':
-                  newCommercial454kgDue += item.delivered;
-                  break;
-              }
-            } else {
-              console.log(`Skipping cylinder: ${item.cylinderType} - delivered: ${item.delivered} (not delivered)`);
-            }
-            // Handle returns within the same transaction (unified transaction)
-            if (item.emptyReturned > 0) {
-              console.log(`Processing cylinder return: ${item.cylinderType} - ${item.emptyReturned} returned`);
-              switch (item.cylinderType) {
-                case 'DOMESTIC_11_8KG':
-                  newDomestic118kgDue = Math.max(0, newDomestic118kgDue - item.emptyReturned);
-                  break;
-                case 'STANDARD_15KG':
-                  newStandard15kgDue = Math.max(0, newStandard15kgDue - item.emptyReturned);
-                  break;
-                case 'COMMERCIAL_45_4KG':
-                  newCommercial454kgDue = Math.max(0, newCommercial454kgDue - item.emptyReturned);
-                  break;
-              }
-            }
-          });
           break;
         case 'PAYMENT':
           // PAYMENT transactions decrease what customer owes
@@ -316,60 +283,14 @@ export async function POST(request: NextRequest) {
           break;
         case 'BUYBACK':
           newLedgerBalance -= parseFloat(totalAmount);
-          // Update cylinder due counts for buybacks
-          gasItems.forEach((item: any) => {
-            if (item.emptyReturned > 0) {
-              switch (item.cylinderType) {
-                case 'DOMESTIC_11_8KG':
-                  newDomestic118kgDue = Math.max(0, newDomestic118kgDue - item.emptyReturned);
-                  break;
-                case 'STANDARD_15KG':
-                  newStandard15kgDue = Math.max(0, newStandard15kgDue - item.emptyReturned);
-                  break;
-                case 'COMMERCIAL_45_4KG':
-                  newCommercial454kgDue = Math.max(0, newCommercial454kgDue - item.emptyReturned);
-                  break;
-              }
-            }
-          });
           break;
         case 'RETURN_EMPTY':
-          // Update cylinder due counts for empty returns
-          gasItems.forEach((item: any) => {
-            if (item.emptyReturned > 0) {
-              switch (item.cylinderType) {
-                case 'DOMESTIC_11_8KG':
-                  newDomestic118kgDue = Math.max(0, newDomestic118kgDue - item.emptyReturned);
-                  break;
-                case 'STANDARD_15KG':
-                  newStandard15kgDue = Math.max(0, newStandard15kgDue - item.emptyReturned);
-                  break;
-                case 'COMMERCIAL_45_4KG':
-                  newCommercial454kgDue = Math.max(0, newCommercial454kgDue - item.emptyReturned);
-                  break;
-              }
-            }
-          });
           break;
         case 'ADJUSTMENT':
         case 'CREDIT_NOTE':
           newLedgerBalance -= parseFloat(totalAmount);
           break;
       }
-
-      // Update customer
-      console.log(`Updating customer ${customerId} ledger balance from ${customer.ledgerBalance} to ${newLedgerBalance}`);
-      await tx.customer.update({
-        where: { id: customerId },
-        data: {
-          ledgerBalance: newLedgerBalance,
-          domestic118kgDue: newDomestic118kgDue,
-          standard15kgDue: newStandard15kgDue,
-          commercial454kgDue: newCommercial454kgDue,
-          updatedBy: session.user.id,
-        },
-      });
-      console.log(`Customer ${customerId} ledger balance updated successfully`);
 
       // Update cylinder inventory for sales (deduction) and returns (addition)
       if (transactionType === 'SALE' && gasItems.length > 0) {
@@ -378,12 +299,15 @@ export async function POST(request: NextRequest) {
           console.log(`Gas item: ${gasItem.cylinderType}, delivered: ${gasItem.delivered}, emptyReturned: ${gasItem.emptyReturned}`);
           if (gasItem.delivered > 0) {
             // Find and update cylinders from inventory
-            const cylinderType = gasItem.cylinderType; // Use string directly
+            const cylinderType = gasItem.cylinderType;
+            const variantWhere = buildPrismaCylinderVariantWhere(
+              cylinderType,
+              gasItem.cylinderVariantKey,
+            );
 
-            // Find available cylinders of this type (region-scoped)
             const availableCylinders = await tx.cylinder.findMany({
               where: {
-                cylinderType: cylinderType,
+                ...variantWhere,
                 currentStatus: CylinderStatus.FULL,
                 ...regionScopedWhere(regionId),
               },
@@ -465,20 +389,22 @@ export async function POST(request: NextRequest) {
           if (gasItem.emptyReturned > 0) {
             const quantity = parseInt(gasItem.emptyReturned);
             const cylinderType = gasItem.cylinderType;
+            if (quantity <= 0 || !cylinderType) continue;
 
-            if (quantity > 0 && cylinderType) {
-              console.log(`Processing return: ${quantity} x ${cylinderType}`);
+            const variantWhere = buildPrismaCylinderVariantWhere(
+              cylinderType,
+              gasItem.cylinderVariantKey,
+            );
 
-              // Find cylinders that are currently with this customer (region-scoped)
-              const cylindersWithCustomer = await tx.cylinder.findMany({
-                where: {
-                  cylinderType: cylinderType,
-                  currentStatus: CylinderStatus.WITH_CUSTOMER,
-                  location: { contains: customer.name },
-                  ...regionScopedWhere(regionId),
-                },
-                take: quantity
-              });
+            const cylindersWithCustomer = await tx.cylinder.findMany({
+              where: {
+                ...variantWhere,
+                currentStatus: CylinderStatus.WITH_CUSTOMER,
+                location: { contains: customer.name },
+                ...regionScopedWhere(regionId),
+              },
+              take: quantity
+            });
 
               if (cylindersWithCustomer.length >= quantity) {
                 // Update existing cylinders to EMPTY status
@@ -509,13 +435,26 @@ export async function POST(request: NextRequest) {
 
                 // Create new cylinders for the remaining quantity (region-scoped)
                 const initialCylinderCount = await tx.cylinder.count();
+                const parsed = gasItem.cylinderVariantKey
+                  ? parseCylinderVariantKey(gasItem.cylinderVariantKey)
+                  : null;
+                const capDecimal =
+                  parsed?.capacity ??
+                  getCapacityFromTypeString(cylinderType);
+                const typeNameCreated =
+                  parsed?.normalizedTypeNameLower &&
+                  parsed.normalizedTypeNameLower !== 'null'
+                    ? parsed.normalizedTypeNameLower.replace(/\b\w/g, (c) => c.toUpperCase())
+                    : null;
+
                 for (let i = 0; i < cylindersToCreate; i++) {
                   const code = `CYL${String(initialCylinderCount + 1 + i).padStart(3, '0')}`;
                   await tx.cylinder.create({
                     data: {
                       code,
-                      cylinderType: cylinderType,
-                      capacity: getCapacityFromTypeString(cylinderType),
+                      cylinderType,
+                      ...(typeNameCreated ? { typeName: typeNameCreated } : {}),
+                      capacity: capDecimal,
                       currentStatus: CylinderStatus.EMPTY,
                       location: 'Store - Ready for Refill',
                       ...(regionId ? { regionId } : {}),
@@ -524,10 +463,30 @@ export async function POST(request: NextRequest) {
                 }
                 console.log(`✅ Added ${quantity} empty ${cylinderType} cylinders to inventory (${cylindersWithCustomer.length} updated, ${cylindersToCreate} created)`);
               }
-            }
           }
         }
       }
+
+      const inventoryRegionId = transaction.regionId ?? regionId ?? null;
+      const cylinderDues = await getB2bCustomerCylinderDueAggregatesFromPhysicalStock(tx, {
+        customerName: customer.name || '',
+        regionId: inventoryRegionId,
+      });
+
+      console.log(
+        `Updating customer ${customerId} ledger balance to ${newLedgerBalance}; cylinder dues from stock:`,
+        cylinderDues,
+      );
+      await tx.customer.update({
+        where: { id: customerId },
+        data: {
+          ledgerBalance: newLedgerBalance,
+          domestic118kgDue: cylinderDues.domestic118kgDue,
+          standard15kgDue: cylinderDues.standard15kgDue,
+          commercial454kgDue: cylinderDues.commercial454kgDue,
+          updatedBy: session.user.id,
+        },
+      });
 
       return transaction;
     });
@@ -552,6 +511,14 @@ export async function POST(request: NextRequest) {
       if (paymentMethod) detailsParts.push(`Method: ${paymentMethod}`);
       if (gasItems.length) detailsParts.push(`Gas items: ${gasItems.length}`);
       if (accessoryItems.length) detailsParts.push(`Accessories: ${accessoryItems.length}`);
+      const cylinderSummary = buildCylinderVariantSummary(
+        (gasItems as any[]).map((g) => ({
+          cylinderType: g?.cylinderType ?? null,
+          cylinderVariantKey: g?.cylinderVariantKey ?? null,
+          quantity: Number(g?.delivered ?? g?.quantity ?? g?.emptyReturned ?? 0),
+        })),
+      );
+      if (cylinderSummary) detailsParts.push(`Cylinders: ${cylinderSummary}`);
 
       await logActivity({
         userId: session.user.id,
@@ -576,7 +543,7 @@ export async function POST(request: NextRequest) {
         actorId: session.user.id,
         actorName: session.user.name || session.user.email || 'A user',
         title: `New B2B ${transactionType} transaction`,
-        message: `${session.user.name || session.user.email} recorded a B2B ${transactionType} of Rs ${total.toLocaleString()} for ${customerName} (Bill #${result.billSno}).`,
+        message: `${session.user.name || session.user.email} recorded a B2B ${transactionType} of Rs ${total.toLocaleString()} for ${customerName} (Bill #${result.billSno}).${cylinderSummary ? ` Items: ${cylinderSummary}.` : ''}`,
         link: transactionLink,
         priority: 'MEDIUM',
         regionId,
@@ -587,12 +554,13 @@ export async function POST(request: NextRequest) {
           customerName,
           billSno: result.billSno,
           totalAmount: total,
+          cylinderSummary: cylinderSummary || null,
         },
       });
 
       // Low-stock checks (cylinders + accessories) after the transaction
       const cylinderTypesAffected = (gasItems as any[])
-        .map((g) => g?.cylinderType)
+        .map((g) => g?.cylinderVariantKey?.trim() || g?.cylinderType)
         .filter(Boolean);
       if (cylinderTypesAffected.length > 0) {
         await checkAllCylinderTypesForLowStock(cylinderTypesAffected, regionId);

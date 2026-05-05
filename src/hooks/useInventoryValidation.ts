@@ -27,6 +27,7 @@ export function useInventoryValidation() {
         body: JSON.stringify({
           cylinders: cylinders.map(c => ({
             cylinderType: c.cylinderType,
+            cylinderVariantKey: c.cylinderVariantKey ?? null,
             requested: c.requested || 0
           })),
           accessories: accessories.map(a => ({

@@ -4,6 +4,11 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { InventoryDeductionService } from '@/lib/inventory-deduction';
 import { getCapacityFromTypeString } from '@/lib/cylinder-utils';
+import {
+  buildPrismaCylinderVariantWhere,
+  parseCylinderVariantKey,
+} from '@/lib/cylinder-variant-key';
+import { CylinderStatus } from '@prisma/client';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import {
   notifyUserActivity,
@@ -11,10 +16,12 @@ import {
   checkAccessoriesForLowStock,
 } from '@/lib/superAdminNotifier';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { buildCylinderVariantSummary } from '@/lib/cylinder-variant-summary';
 
 // Define types for transaction items
 interface TransactionGasItem {
   cylinderType?: string;
+  cylinderVariantKey?: string | null;
   quantity: number;
   pricePerItem: number;
   costPrice?: number;
@@ -22,6 +29,7 @@ interface TransactionGasItem {
 
 interface TransactionSecurityItem {
   cylinderType: string;
+  cylinderVariantKey?: string | null;
   quantity: number;
   pricePerItem: number;
   isReturn?: boolean;
@@ -52,6 +60,35 @@ interface AccessorySaleItem {
   usagePrice?: number; // Cost Price - for charging usage (not deducted from inventory)
   sellingPrice?: number; // Selling Price - for selling vaporizer (deducted from inventory)
   costPerPiece?: number;
+}
+
+function gasItemCapacityKg(item: TransactionGasItem): number {
+  if (!item.cylinderType) return 0;
+  const parsed = item.cylinderVariantKey
+    ? parseCylinderVariantKey(item.cylinderVariantKey)
+    : null;
+  if (parsed?.capacity != null && Number.isFinite(parsed.capacity)) {
+    return parsed.capacity;
+  }
+  return getCapacityFromTypeString(item.cylinderType);
+}
+
+function b2cActiveHoldingFilter(
+  customerId: string,
+  cylinderType: string,
+  variantKey?: string | null,
+) {
+  const key = variantKey?.trim() || null;
+  return {
+    customerId,
+    cylinderType,
+    isReturned: false,
+    ...(key
+      ? {
+          OR: [{ cylinderVariantKey: key }, { cylinderVariantKey: null }],
+        }
+      : { cylinderVariantKey: null }),
+  };
 }
 
 export async function POST(request: NextRequest) {
@@ -143,8 +180,7 @@ export async function POST(request: NextRequest) {
       return gasItems.reduce((total: number, item: TransactionGasItem) => {
         if (!item.cylinderType) return total;
 
-        // Get cylinder weight dynamically from type - fully flexible
-        const cylinderWeight = getCapacityFromTypeString(item.cylinderType);
+        const cylinderWeight = gasItemCapacityKg(item);
 
         // Calculate profit based on margin per kg: marginPerKg × cylinderWeight × quantity
         const marginPerKg = Number(marginCategory.marginPerKg);
@@ -193,8 +229,7 @@ export async function POST(request: NextRequest) {
             // Calculate profit margin based on margin per kg if margin category is available
             let profitMargin = totalPrice - totalCost; // Default fallback
             if (customer.marginCategory && item.cylinderType) {
-              // Get cylinder weight dynamically from type - fully flexible
-              const cylinderWeight = getCapacityFromTypeString(item.cylinderType);
+              const cylinderWeight = gasItemCapacityKg(item);
 
               // Calculate profit based on margin per kg: marginPerKg × cylinderWeight × quantity
               const marginPerKg = Number(customer.marginCategory.marginPerKg);
@@ -204,6 +239,7 @@ export async function POST(request: NextRequest) {
             return {
               transactionId: newTransaction.id,
               cylinderType: item.cylinderType,
+              cylinderVariantKey: item.cylinderVariantKey?.trim() || null,
               quantity: item.quantity,
               pricePerItem: item.pricePerItem,
               totalPrice,
@@ -221,6 +257,7 @@ export async function POST(request: NextRequest) {
           data: securityItems.map((item: TransactionSecurityItem) => ({
             transactionId: newTransaction.id,
             cylinderType: item.cylinderType,
+            cylinderVariantKey: item.cylinderVariantKey?.trim() || null,
             quantity: item.quantity,
             pricePerItem: item.pricePerItem,
             totalPrice: item.pricePerItem * item.quantity,
@@ -233,12 +270,18 @@ export async function POST(request: NextRequest) {
           if (!item.isReturn) {
             // New security deposit - deduct from inventory and create cylinder holding record
             const cylinderType = item.cylinderType; // Use string directly
+            const variantKeyStored = item.cylinderVariantKey?.trim() || null;
+
+            const variantWhere = buildPrismaCylinderVariantWhere(
+              cylinderType,
+              variantKeyStored,
+            );
 
             // Find available cylinders of this type (region-scoped, FULL status)
             const availableCylinders = await tx.cylinder.findMany({
               where: {
-                cylinderType: cylinderType,
-                currentStatus: 'FULL',
+                ...variantWhere,
+                currentStatus: CylinderStatus.FULL,
                 ...regionScopedWhere(regionId),
               },
               take: item.quantity
@@ -254,7 +297,7 @@ export async function POST(request: NextRequest) {
                 id: { in: availableCylinders.map(c => c.id) }
               },
               data: {
-                currentStatus: 'WITH_CUSTOMER',
+                currentStatus: CylinderStatus.WITH_CUSTOMER,
                 location: `B2C Customer: ${customer.name || 'B2C Customer'}`
               }
             });
@@ -265,6 +308,7 @@ export async function POST(request: NextRequest) {
               data: {
                 customerId,
                 cylinderType: item.cylinderType,
+                cylinderVariantKey: variantKeyStored,
                 quantity: item.quantity,
                 securityAmount: item.pricePerItem,
                 issueDate: new Date(date),
@@ -275,11 +319,11 @@ export async function POST(request: NextRequest) {
           } else {
             // Return - mark cylinder holdings as returned
             const holdings = await tx.b2CCylinderHolding.findMany({
-              where: {
+              where: b2cActiveHoldingFilter(
                 customerId,
-                cylinderType: item.cylinderType,
-                isReturned: false
-              },
+                item.cylinderType,
+                item.cylinderVariantKey,
+              ),
               orderBy: { issueDate: 'asc' }
             });
 
@@ -349,13 +393,17 @@ export async function POST(request: NextRequest) {
       if (securityItems.length > 0) {
         for (const securityItem of securityItems) {
           if (securityItem.isReturn && securityItem.quantity > 0) {
-            const cylinderType = securityItem.cylinderType; // Use string directly
+            const cylinderType = securityItem.cylinderType;
+            const variantWhere = buildPrismaCylinderVariantWhere(
+              cylinderType,
+              securityItem.cylinderVariantKey,
+            );
 
             // Find cylinders that are with THIS specific B2C customer (region-scoped)
             const cylindersWithCustomer = await tx.cylinder.findMany({
               where: {
-                cylinderType: cylinderType,
-                currentStatus: 'WITH_CUSTOMER',
+                ...variantWhere,
+                currentStatus: CylinderStatus.WITH_CUSTOMER,
                 location: { contains: `B2C Customer: ${customer.name}` },
                 ...regionScopedWhere(regionId),
               },
@@ -369,7 +417,7 @@ export async function POST(request: NextRequest) {
                   id: { in: cylindersWithCustomer.slice(0, securityItem.quantity).map(c => c.id) }
                 },
                 data: {
-                  currentStatus: 'EMPTY',
+                  currentStatus: CylinderStatus.EMPTY,
                   location: 'Store - Ready for Refill'
                 }
               });
@@ -383,11 +431,22 @@ export async function POST(request: NextRequest) {
                     id: { in: cylindersWithCustomer.map(c => c.id) }
                   },
                   data: {
-                    currentStatus: 'EMPTY',
+                    currentStatus: CylinderStatus.EMPTY,
                     location: 'Store - Ready for Refill'
                   }
                 });
               }
+
+              const parsed = securityItem.cylinderVariantKey
+                ? parseCylinderVariantKey(securityItem.cylinderVariantKey)
+                : null;
+              const capDecimal =
+                parsed?.capacity ?? getCapacityFromTypeString(cylinderType);
+              const typeNameCreated =
+                parsed?.normalizedTypeNameLower &&
+                parsed.normalizedTypeNameLower !== 'null'
+                  ? parsed.normalizedTypeNameLower.replace(/\b\w/g, (c) => c.toUpperCase())
+                  : null;
 
               // Create new cylinders for the remaining quantity (region-scoped)
               const initialCylinderCount = await tx.cylinder.count();
@@ -397,8 +456,9 @@ export async function POST(request: NextRequest) {
                   data: {
                     code,
                     cylinderType: cylinderType,
-                    capacity: getCapacityFromTypeString(cylinderType),
-                    currentStatus: 'EMPTY',
+                    ...(typeNameCreated ? { typeName: typeNameCreated } : {}),
+                    capacity: capDecimal,
+                    currentStatus: CylinderStatus.EMPTY,
                     location: 'Store - Ready for Refill',
                     ...(regionId ? { regionId } : {}),
                   },
@@ -502,6 +562,19 @@ export async function POST(request: NextRequest) {
       if (gasItems.length) detailsParts.push(`Gas items: ${gasItems.length}`);
       if (securityItems.length) detailsParts.push(`Security items: ${securityItems.length}`);
       if (accessoryItems.length) detailsParts.push(`Accessories: ${accessoryItems.length}`);
+      const cylinderSummary = buildCylinderVariantSummary([
+        ...(gasItems as TransactionGasItem[]).map((g) => ({
+          cylinderType: g.cylinderType ?? null,
+          cylinderVariantKey: g.cylinderVariantKey ?? null,
+          quantity: Number(g.quantity || 0),
+        })),
+        ...(securityItems as TransactionSecurityItem[]).map((s) => ({
+          cylinderType: s.cylinderType ?? null,
+          cylinderVariantKey: s.cylinderVariantKey ?? null,
+          quantity: Number(s.quantity || 0),
+        })),
+      ]);
+      if (cylinderSummary) detailsParts.push(`Cylinders: ${cylinderSummary}`);
 
       await logActivity({
         userId: session.user.id,
@@ -525,7 +598,7 @@ export async function POST(request: NextRequest) {
         actorId: session.user.id,
         actorName: session.user.name || session.user.email || 'A user',
         title: 'New B2C transaction',
-        message: `${session.user.name || session.user.email} recorded a B2C sale of Rs ${Number(finalAmount).toLocaleString()} for ${customerName} (Bill #${billSno}).`,
+        message: `${session.user.name || session.user.email} recorded a B2C sale of Rs ${Number(finalAmount).toLocaleString()} for ${customerName} (Bill #${billSno}).${cylinderSummary ? ` Items: ${cylinderSummary}.` : ''}`,
         link,
         priority: 'MEDIUM',
         regionId,
@@ -536,13 +609,18 @@ export async function POST(request: NextRequest) {
           customerName,
           billSno,
           finalAmount: Number(finalAmount),
+          cylinderSummary: cylinderSummary || null,
         },
       });
 
       // Low-stock checks
       const cylinderTypesAffected = [
-        ...gasItems.map((g: TransactionGasItem) => g.cylinderType).filter(Boolean) as string[],
-        ...securityItems.map((s: TransactionSecurityItem) => s.cylinderType).filter(Boolean),
+        ...gasItems
+          .map((g: TransactionGasItem) => ({ cylinderType: g.cylinderType, cylinderVariantKey: g.cylinderVariantKey ?? null }))
+          .filter((x: any) => x.cylinderType),
+        ...securityItems
+          .map((s: TransactionSecurityItem) => ({ cylinderType: s.cylinderType, cylinderVariantKey: s.cylinderVariantKey ?? null }))
+          .filter((x: any) => x.cylinderType),
       ];
       if (cylinderTypesAffected.length > 0) {
         await checkAllCylinderTypesForLowStock(cylinderTypesAffected, regionId);

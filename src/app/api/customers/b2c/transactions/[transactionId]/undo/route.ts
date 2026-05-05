@@ -3,13 +3,14 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { CylinderStatus } from '@prisma/client';
-import { InventoryDeductionService } from '@/lib/inventory-deduction';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import {
   notifyUserActivity,
   checkAllCylinderTypesForLowStock,
 } from '@/lib/superAdminNotifier';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { buildPrismaCylinderVariantWhere } from '@/lib/cylinder-variant-key';
+import { buildCylinderVariantSummary } from '@/lib/cylinder-variant-summary';
 
 export async function POST(
   request: NextRequest,
@@ -45,6 +46,9 @@ export async function POST(
     if (transaction.voided) {
       return NextResponse.json({ error: 'Transaction is already voided' }, { status: 400 });
     }
+
+    /** Prefer the transaction's branch so inventory reversals never leak across regions when session has no region. */
+    const inventoryRegionId = transaction.regionId ?? regionId ?? null;
 
     // Undo the transaction - reverse all changes
     await prisma.$transaction(async (tx) => {
@@ -86,17 +90,20 @@ export async function POST(
             // - Return cylinders from WITH_CUSTOMER back to FULL
             // - Delete cylinder holding records
             
-            const cylinderType = item.cylinderType; // Use string directly
+            const cylinderType = item.cylinderType;
             const quantity = Number(item.quantity);
+            const variantWhere = buildPrismaCylinderVariantWhere(
+              cylinderType,
+              item.cylinderVariantKey,
+            );
 
             // Find cylinders that are WITH_CUSTOMER for this customer
-            // Location format is "B2C Customer: {customer.name}"
             const cylindersWithCustomer = await tx.cylinder.findMany({
               where: {
-                cylinderType: cylinderType,
+                ...variantWhere,
                 currentStatus: CylinderStatus.WITH_CUSTOMER,
                 location: { contains: `B2C Customer: ${customer.name}` },
-                ...regionScopedWhere(regionId),
+                ...regionScopedWhere(inventoryRegionId),
               },
               orderBy: { updatedAt: 'desc' },
               take: quantity
@@ -125,7 +132,10 @@ export async function POST(
                 customerId: transaction.customerId,
                 cylinderType: item.cylinderType,
                 issueDate: transaction.date,
-                isReturned: false
+                isReturned: false,
+                ...(item.cylinderVariantKey?.trim()
+                  ? { cylinderVariantKey: item.cylinderVariantKey.trim() }
+                  : { cylinderVariantKey: null }),
               }
             });
             console.log(`✅ Deleted ${deletedHoldings.count} cylinder holding record(s) for ${cylinderType}`);
@@ -153,7 +163,10 @@ export async function POST(
                 returnDate: {
                   gte: transactionDateStart,
                   lte: transactionDateEnd
-                }
+                },
+                ...(item.cylinderVariantKey?.trim()
+                  ? { cylinderVariantKey: item.cylinderVariantKey.trim() }
+                  : { cylinderVariantKey: null }),
               },
               orderBy: { issueDate: 'asc' },
               take: quantity
@@ -173,12 +186,16 @@ export async function POST(
             // Find EMPTY cylinders that were returned and put them back WITH_CUSTOMER
             // Note: Some cylinders may have been newly created during the return, so we need to
             // prioritize most recently updated cylinders (likely from this transaction)
+            const emptyVariantWhere = buildPrismaCylinderVariantWhere(
+              cylinderType,
+              item.cylinderVariantKey,
+            );
             const emptyCylinders = await tx.cylinder.findMany({
               where: {
-                cylinderType: cylinderType,
+                ...emptyVariantWhere,
                 currentStatus: CylinderStatus.EMPTY,
                 location: 'Store - Ready for Refill',
-                ...regionScopedWhere(regionId),
+                ...regionScopedWhere(inventoryRegionId),
               },
               orderBy: { updatedAt: 'desc' },
               take: quantity
@@ -236,7 +253,7 @@ export async function POST(
               name: category,
               type: itemType,
               isActive: true,
-              ...regionScopedWhere(regionId),
+              ...regionScopedWhere(inventoryRegionId),
             }
           });
           
@@ -262,7 +279,7 @@ export async function POST(
                   { name: { contains: category, mode: 'insensitive' } },
                   { name: { contains: productName, mode: 'insensitive' } }
                 ],
-                ...regionScopedWhere(regionId),
+                ...regionScopedWhere(inventoryRegionId),
               }
             });
 
@@ -287,26 +304,41 @@ export async function POST(
       // Note: Gas items don't affect inventory (they're just refills), so nothing to reverse there
     });
 
+    const activityRegionId = inventoryRegionId ?? regionId;
+
     // ---- Post-commit side effects ----
     try {
       const customerName = transaction.customer?.name || 'B2C Customer';
       const total = parseFloat(transaction.totalAmount.toString());
       const link = `/customers/b2c/${transaction.customerId}?tx=${transaction.id}`;
+      const cylinderSummary = buildCylinderVariantSummary([
+        ...(transaction.gasItems || []).map((g: any) => ({
+          cylinderType: g.cylinderType ?? null,
+          cylinderVariantKey: g.cylinderVariantKey ?? null,
+          quantity: Number(g.quantity || 0),
+        })),
+        ...(transaction.securityItems || []).map((s: any) => ({
+          cylinderType: s.cylinderType ?? null,
+          cylinderVariantKey: s.cylinderVariantKey ?? null,
+          quantity: Number(s.quantity || 0),
+        })),
+      ]);
 
       await logActivity({
         userId: session.user.id,
         action: ActivityAction.B2C_TRANSACTION_VOIDED,
         entityType: 'B2C_TRANSACTION',
         entityId: transaction.id,
-        details: `Voided B2C transaction • Customer: ${customerName} • Bill #: ${transaction.billSno} • Total: Rs ${total.toLocaleString()}${reason ? ` • Reason: ${reason}` : ''}`,
+        details: `Voided B2C transaction • Customer: ${customerName} • Bill #: ${transaction.billSno} • Total: Rs ${total.toLocaleString()}${cylinderSummary ? ` • Items: ${cylinderSummary}` : ''}${reason ? ` • Reason: ${reason}` : ''}`,
         link,
-        regionId,
+        regionId: activityRegionId,
         metadata: {
           customerId: transaction.customerId,
           customerName,
           billSno: transaction.billSno,
           totalAmount: total,
           reason: reason || null,
+          cylinderSummary: cylinderSummary || null,
         },
       });
 
@@ -314,10 +346,10 @@ export async function POST(
         actorId: session.user.id,
         actorName: session.user.name || session.user.email || 'A user',
         title: 'B2C transaction voided',
-        message: `${session.user.name || session.user.email} voided a B2C transaction of Rs ${total.toLocaleString()} for ${customerName} (Bill #${transaction.billSno}).`,
+        message: `${session.user.name || session.user.email} voided a B2C transaction of Rs ${total.toLocaleString()} for ${customerName} (Bill #${transaction.billSno}).${cylinderSummary ? ` Items: ${cylinderSummary}.` : ''}`,
         link,
         priority: 'HIGH',
-        regionId,
+        regionId: activityRegionId,
         metadata: {
           domain: 'B2C_TRANSACTION_VOIDED',
           transactionId: transaction.id,
@@ -325,15 +357,20 @@ export async function POST(
           customerName,
           billSno: transaction.billSno,
           totalAmount: total,
+          cylinderSummary: cylinderSummary || null,
         },
       });
 
       const cylinderTypesAffected = [
-        ...(transaction.gasItems || []).map((g: any) => g.cylinderType).filter(Boolean),
-        ...(transaction.securityItems || []).map((s: any) => s.cylinderType).filter(Boolean),
+        ...(transaction.gasItems || [])
+          .map((g: any) => ({ cylinderType: g.cylinderType, cylinderVariantKey: g.cylinderVariantKey ?? null }))
+          .filter((x: any) => x.cylinderType),
+        ...(transaction.securityItems || [])
+          .map((s: any) => ({ cylinderType: s.cylinderType, cylinderVariantKey: s.cylinderVariantKey ?? null }))
+          .filter((x: any) => x.cylinderType),
       ];
       if (cylinderTypesAffected.length > 0) {
-        await checkAllCylinderTypesForLowStock(cylinderTypesAffected, regionId);
+        await checkAllCylinderTypesForLowStock(cylinderTypesAffected, activityRegionId);
       }
     } catch (sideEffectError) {
       console.error('B2C undo post-commit side effects failed:', sideEffectError);

@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/db';
 import type { NotificationPriority, NotificationType, Prisma } from '@prisma/client';
+import { buildPrismaCylinderVariantWhere, parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
+import { getCapacityFromTypeString, getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
 
 type Priority = NotificationPriority;
 
@@ -178,6 +180,26 @@ function lowStockCylinderMarker(cylinderType: string, regionScope: string | null
   return `LOWSTOCK_CYL|${r}|${encT}`;
 }
 
+function lowStockCylinderVariantMarker(variantKey: string, regionScope: string | null | undefined) {
+  const encK = encodeURIComponent(variantKey);
+  if (regionScope === undefined) {
+    return `LOWSTOCK_CYLVK|ALL|${encK}`;
+  }
+  const r = regionScope === null ? 'null' : regionScope;
+  return `LOWSTOCK_CYLVK|${r}|${encK}`;
+}
+
+function formatCylinderVariantLabel(variantKey: string): string {
+  const parsed = parseCylinderVariantKey(variantKey);
+  if (!parsed) return variantKey;
+  const cap = parsed.capacity ?? getCapacityFromTypeString(parsed.cylinderType);
+  if (parsed.normalizedTypeNameLower && parsed.normalizedTypeNameLower !== 'null') {
+    const tn = parsed.normalizedTypeNameLower.replace(/\b\w/g, (c) => c.toUpperCase());
+    return `${tn} (${cap}kg)`;
+  }
+  return `${getCylinderTypeDisplayName(parsed.cylinderType)} (${cap}kg)`;
+}
+
 function lowStockAccessoryMarker(itemId: string, regionId: string | null) {
   const r = regionId === null ? 'null' : regionId;
   return `LOWSTOCK_ACC|${r}|${itemId}`;
@@ -221,6 +243,56 @@ export async function checkAndNotifyLowCylinderStock(
 ) {
   if (!cylinderType) return;
   try {
+    // Variant-aware: when passed a compound variantKey (type|||capacity|||typename),
+    // alert on that specific variant so Plastic 15kg and Standard 15kg don't collapse.
+    if (cylinderType.includes('|||')) {
+      const variantKey = cylinderType;
+      const parsed = parseCylinderVariantKey(variantKey);
+      if (!parsed?.cylinderType) return;
+
+      const where: Prisma.CylinderWhereInput = {
+        ...buildPrismaCylinderVariantWhere(parsed.cylinderType, variantKey),
+        currentStatus: 'FULL',
+      };
+      if (regionScope !== undefined) {
+        where.regionId = regionScope;
+      }
+
+      const count = await prisma.cylinder.count({ where });
+      const marker = lowStockCylinderVariantMarker(variantKey, regionScope);
+
+      if (count >= LOW_CYLINDER_THRESHOLD) {
+        await clearResolvedLowStockNotifications(marker);
+        return;
+      }
+      if (await hasOpenLowStockNotification(marker)) return;
+
+      const notifyRegionId: string | null | undefined =
+        regionScope === undefined ? undefined : (regionScope as string | null);
+      const friendly = formatCylinderVariantLabel(variantKey);
+
+      await notifySuperAdmins({
+        type: 'LOW_INVENTORY',
+        title: 'Low Cylinder Stock',
+        message: `Only ${count} FULL ${friendly} cylinders left in inventory. Please restock soon.`,
+        priority: 'URGENT',
+        link: `/inventory/cylinders?variantKey=${encodeURIComponent(variantKey)}&status=FULL`,
+        regionId: notifyRegionId,
+        metadata: {
+          kind: 'cylinder',
+          cylinderType: parsed.cylinderType,
+          cylinderVariantKey: variantKey,
+          count,
+          threshold: LOW_CYLINDER_THRESHOLD,
+          marker,
+          ...(regionScope === undefined
+            ? { scope: 'all_regions' as const }
+            : { regionId: regionScope }),
+        },
+      });
+      return;
+    }
+
     const where: Prisma.CylinderWhereInput = {
       cylinderType,
       currentStatus: 'FULL',
@@ -244,8 +316,14 @@ export async function checkAndNotifyLowCylinderStock(
       where,
       select: { typeName: true, capacity: true },
     });
-    const friendly = sample?.typeName || cylinderType.replace(/_/g, ' ');
-    const capacityNote = sample?.capacity ? ` (${Number(sample.capacity)}kg)` : '';
+    const cap = Number(sample?.capacity ?? getCapacityFromTypeString(cylinderType));
+    const capacityNote = Number.isFinite(cap) && cap > 0 ? ` (${cap}kg)` : '';
+    // For legacy enum-only notifications, prefer human display names instead of raw enums
+    // like "CYLINDER_18KG" → "Cylinder (18kg)".
+    const baseLabel = sample?.typeName?.trim()
+      ? sample.typeName.trim()
+      : getCylinderTypeDisplayName(cylinderType);
+    const friendly = `${baseLabel}${capacityNote}`;
 
     const notifyRegionId: string | null | undefined =
       regionScope === undefined ? undefined : (regionScope as string | null);
@@ -253,7 +331,7 @@ export async function checkAndNotifyLowCylinderStock(
     await notifySuperAdmins({
       type: 'LOW_INVENTORY',
       title: 'Low Cylinder Stock',
-      message: `Only ${count} FULL ${friendly}${capacityNote} cylinders left in inventory. Please restock soon.`,
+      message: `Only ${count} FULL ${friendly} cylinders left in inventory. Please restock soon.`,
       priority: 'URGENT',
       link: `/inventory/cylinders?type=${encodeURIComponent(cylinderType)}&status=FULL`,
       regionId: notifyRegionId,
@@ -262,6 +340,7 @@ export async function checkAndNotifyLowCylinderStock(
         cylinderType,
         count,
         threshold: LOW_CYLINDER_THRESHOLD,
+        marker,
         ...(regionScope === undefined
           ? { scope: 'all_regions' as const }
           : { regionId: regionScope }),
@@ -277,12 +356,37 @@ export async function checkAndNotifyLowCylinderStock(
  * (transaction / inventory context).
  */
 export async function checkAllCylinderTypesForLowStock(
-  types?: string[],
+  types?: Array<
+    | string
+    | { cylinderType: string; cylinderVariantKey?: string | null }
+    | { variantKey: string }
+  >,
   activeRegionId?: string | null
 ) {
   try {
     if (types && types.length > 0) {
-      const distinctTypes = Array.from(new Set(types.filter(Boolean)));
+      const normalized: string[] = [];
+      for (const t of types) {
+        if (!t) continue;
+        if (typeof t === 'string') {
+          normalized.push(t);
+          continue;
+        }
+        const anyT: any = t;
+        if (typeof anyT.variantKey === 'string' && anyT.variantKey.trim()) {
+          normalized.push(anyT.variantKey.trim());
+          continue;
+        }
+        if (typeof anyT.cylinderVariantKey === 'string' && anyT.cylinderVariantKey.trim()) {
+          normalized.push(anyT.cylinderVariantKey.trim());
+          continue;
+        }
+        if (typeof anyT.cylinderType === 'string' && anyT.cylinderType.trim()) {
+          normalized.push(anyT.cylinderType.trim());
+        }
+      }
+
+      const distinctTypes = Array.from(new Set(normalized.filter(Boolean)));
       for (const t of distinctTypes) {
         await checkAndNotifyLowCylinderStock(t, activeRegionId);
       }
@@ -290,14 +394,15 @@ export async function checkAllCylinderTypesForLowStock(
     }
 
     const groups = await prisma.cylinder.groupBy({
-      by: ['cylinderType', 'regionId'],
+      by: ['cylinderType', 'typeName', 'capacity', 'regionId'],
+      where: { currentStatus: 'FULL' },
       _count: { _all: true },
     });
     for (const g of groups) {
-      await checkAndNotifyLowCylinderStock(
-        g.cylinderType,
-        g.regionId
-      );
+      const variantKey = `${g.cylinderType}|||${g.capacity?.toString() ?? 'null'}|||${
+        g.typeName ? String(g.typeName).toLowerCase().trim() : 'null'
+      }`;
+      await checkAndNotifyLowCylinderStock(variantKey, g.regionId);
     }
   } catch (error) {
     console.error('[superAdminNotifier] Cylinder bulk low-stock check failed:', error);

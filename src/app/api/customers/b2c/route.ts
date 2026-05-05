@@ -6,6 +6,20 @@ import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity } from '@/lib/superAdminNotifier';
 import { getActiveRegionId, regionScopedWhere, withRegionScope } from '@/lib/region';
 import { clampLimit } from '@/lib/apiAuth';
+import { buildCylinderVariantKey, parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
+import { getCylinderTypeDisplayName, getCapacityFromTypeString } from '@/lib/cylinder-utils';
+
+function b2cHoldingVariantKey(h: {
+  cylinderType: string;
+  cylinderVariantKey: string | null;
+}): string {
+  if (h.cylinderVariantKey?.trim()) return h.cylinderVariantKey.trim();
+  return buildCylinderVariantKey({
+    cylinderType: h.cylinderType,
+    typeName: null,
+    capacity: getCapacityFromTypeString(h.cylinderType),
+  });
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -63,6 +77,7 @@ export async function GET(request: NextRequest) {
           cylinderHoldings: {
             select: {
               cylinderType: true,
+              cylinderVariantKey: true,
               quantity: true,
               isReturned: true
             }
@@ -91,64 +106,49 @@ export async function GET(request: NextRequest) {
       })
     ]);
 
-    // Get cylinder distribution by type
-    // Get cylinder distribution by type dynamically
-    const cylinderHoldings = await prisma.b2CCylinderHolding.groupBy({
-      by: ['cylinderType'],
+    const activeHoldingsRows = await prisma.b2CCylinderHolding.findMany({
       where: {
         isReturned: false,
-        customer: whereClause // Only include holdings for filtered customers
+        customer: whereClause
       },
-      _sum: { quantity: true }
+      select: {
+        cylinderType: true,
+        cylinderVariantKey: true,
+        quantity: true
+      }
     });
 
     const cylinderBreakdown: Record<string, number> = {};
-    cylinderHoldings.forEach(holding => {
-      cylinderBreakdown[holding.cylinderType] = holding._sum.quantity || 0;
-    });
+    for (const h of activeHoldingsRows) {
+      const k = b2cHoldingVariantKey(h);
+      cylinderBreakdown[k] = (cylinderBreakdown[k] || 0) + (h.quantity || 0);
+    }
 
-    // Get all unique types sorted alphabetically
     const cylinderTypes = Object.keys(cylinderBreakdown).sort();
 
-    // Fetch details for these types from the Cylinder table to get proper display names
-    // This is how B2B dashboard handles it - dynamic type names
-    const cylinderDefinitions = await prisma.cylinder.findMany({
-      where: {
-        cylinderType: {
-          in: cylinderTypes
-        },
-        ...regionScopedWhere(regionId),
-      },
-      distinct: ['cylinderType'],
-      select: {
-        cylinderType: true,
-        typeName: true,
-        capacity: true
-      }
-    });
-
-    // Create a map for frontend to use: code -> { name, capacity }
-    const typeDefinitions: Record<string, { name: string, capacity: number }> = {};
-
-    cylinderDefinitions.forEach(def => {
-      let displayName = 'Cylinder';
-
-      // Use typeName from database if available (this supports "Industrial", "Special" etc)
-      if (def.typeName && def.typeName.trim().toLowerCase() !== 'cylinder') {
-        displayName = def.typeName.trim();
+    const typeDefinitions: Record<string, { name: string; capacity: number }> = {};
+    for (const key of cylinderTypes) {
+      const parsed = parseCylinderVariantKey(key);
+      if (parsed && parsed.normalizedTypeNameLower && parsed.normalizedTypeNameLower !== 'null') {
+        const tn = parsed.normalizedTypeNameLower.replace(/\b\w/g, (c) => c.toUpperCase());
+        typeDefinitions[key] = {
+          name: tn,
+          capacity:
+            parsed.capacity ?? getCapacityFromTypeString(parsed.cylinderType),
+        };
+      } else if (parsed?.cylinderType) {
+        typeDefinitions[key] = {
+          name: getCylinderTypeDisplayName(parsed.cylinderType),
+          capacity:
+            parsed.capacity ?? getCapacityFromTypeString(parsed.cylinderType),
+        };
       } else {
-        // Fallback or Standard Names
-        const upperType = def.cylinderType.toUpperCase();
-        if (upperType.includes('DOMESTIC')) displayName = 'Domestic';
-        else if (upperType.includes('STANDARD')) displayName = 'Standard';
-        else if (upperType.includes('COMMERCIAL')) displayName = 'Commercial';
+        typeDefinitions[key] = {
+          name: getCylinderTypeDisplayName(key),
+          capacity: getCapacityFromTypeString(key),
+        };
       }
-
-      typeDefinitions[def.cylinderType] = {
-        name: displayName,
-        capacity: Number(def.capacity)
-      };
-    });
+    }
 
     const summary = {
       totalCustomers,

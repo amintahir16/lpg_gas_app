@@ -13,6 +13,8 @@ import { useCylinderStock } from '@/hooks/useCylinderStock';
 import { ProfessionalAccessorySelector } from '@/components/ui/ProfessionalAccessorySelector';
 import { CustomSelect } from '@/components/ui/select-custom';
 import { getCylinderTypeDisplayName, getCapacityFromTypeString } from '@/lib/cylinder-utils';
+import { parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
+import { formatB2bItemCylinderLabel } from '@/lib/b2b-transaction-item-variant';
 import {
   ArrowLeftIcon,
   DocumentTextIcon,
@@ -84,6 +86,7 @@ interface B2BTransactionItem {
   pricePerItem: number;
   totalPrice: number;
   cylinderType: string | null;
+  cylinderVariantKey?: string | null;
   returnedCondition: string | null;
   remainingKg: number | null;
   originalSoldPrice: number | null;
@@ -165,7 +168,7 @@ export default function B2BCustomerDetailPage() {
 
   // Return items for unified form (separate from delivery gasItems concept)
   const [returnItems, setReturnItems] = useState([
-    { cylinderType: '', emptyReturned: 0, buybackQuantity: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackCredit: 0 }
+    { cylinderVariantKey: '', cylinderType: '', emptyReturned: 0, buybackQuantity: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackCredit: 0 }
   ]);
 
   // Transaction detail modal states
@@ -186,13 +189,14 @@ export default function B2BCustomerDetailPage() {
 
   // Gas transaction form data - now supports dynamic rows
   const [gasItems, setGasItems] = useState([
-    { cylinderType: '', delivered: 0, pricePerItem: 0, emptyReturned: 0, remainingDue: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackPricePerItem: 0, buybackTotal: 0 }
+    { cylinderVariantKey: '', cylinderType: '', delivered: 0, pricePerItem: 0, emptyReturned: 0, remainingDue: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackPricePerItem: 0, buybackTotal: 0 }
   ]);
 
   // Available cylinder types from inventory
   const [availableCylinderTypes, setAvailableCylinderTypes] = useState<Array<{
     type: string;
     typeEnum: string;
+    variantKey: string;
     full: number;
     empty: number;
     total: number;
@@ -205,6 +209,7 @@ export default function B2BCustomerDetailPage() {
   // Cylinder dues (dynamic)
   const [cylinderDues, setCylinderDues] = useState<Array<{
     cylinderType: string;
+    variantKey?: string;
     displayName: string;
     count: number;
     buybackWeight?: number;
@@ -354,7 +359,9 @@ export default function B2BCustomerDetailPage() {
       setGasItems(prevItems =>
         prevItems.map(item => ({
           ...item,
-          remainingDue: getCurrentCylinderDue(item.cylinderType)
+          remainingDue: getCurrentCylinderDue(
+            item.cylinderVariantKey || item.cylinderType,
+          ),
         }))
       );
     }
@@ -368,7 +375,9 @@ export default function B2BCustomerDetailPage() {
     if (customer) {
       setGasItems(prevItems =>
         prevItems.map(item => {
-          const currentDue = getCurrentCylinderDue(item.cylinderType);
+          const currentDue = getCurrentCylinderDue(
+            item.cylinderVariantKey || item.cylinderType,
+          );
           let newRemainingDue = currentDue;
 
           if (transactionType === 'SALE') {
@@ -573,39 +582,49 @@ export default function B2BCustomerDetailPage() {
 
   // Get full stock count for a cylinder type (FULL status only)
   // Aggregates full count for the selected cylinder type from inventory
-  const getFullStockCount = (cylinderType: string): number => {
-    if (!cylinderType) return 0;
-    // Find the selected cylinder stat - match by typeEnum
-    const cylinderStat = availableCylinderTypes.find(stat => stat.typeEnum === cylinderType);
-    // Return the full count (cylinders with FULL status) for the selected type
-    return cylinderStat ? cylinderStat.full : 0;
+  const getFullStockCount = (cylinderKey: string): number => {
+    if (!cylinderKey) return 0;
+    const byVariant = availableCylinderTypes.find(stat => stat.variantKey === cylinderKey);
+    if (byVariant) return byVariant.full;
+    const byEnum = availableCylinderTypes.find(stat => stat.typeEnum === cylinderKey);
+    return byEnum ? byEnum.full : 0;
   };
 
   // Get display name for cylinder type from available types
-  const getCylinderDisplayName = (cylinderType: string): string => {
-    if (!cylinderType) return 'Select cylinder type';
-    const cylinderStat = availableCylinderTypes.find(stat => stat.typeEnum === cylinderType);
-    return cylinderStat ? cylinderStat.type : getCylinderTypeDisplayName(cylinderType);
+  const getCylinderDisplayName = (cylinderKey: string): string => {
+    if (!cylinderKey) return 'Select cylinder type';
+    const byVariant = availableCylinderTypes.find(stat => stat.variantKey === cylinderKey);
+    if (byVariant) return byVariant.type;
+    const byEnum = availableCylinderTypes.find(stat => stat.typeEnum === cylinderKey);
+    if (byEnum) return byEnum.type;
+    const parsed = parseCylinderVariantKey(cylinderKey);
+    return parsed
+      ? getCylinderTypeDisplayName(parsed.cylinderType)
+      : getCylinderTypeDisplayName(cylinderKey);
   };
 
   // Get display name for transaction item (for ledger display)
   const getTransactionItemDisplayName = (item: B2BTransactionItem): string => {
     if (item.cylinderType) {
-      // Try to get from availableCylinderTypes first (has proper typeName)
+      const vk = item.cylinderVariantKey?.trim();
+      if (vk) {
+        const byVk = availableCylinderTypes.find(stat => stat.variantKey === vk);
+        if (byVk) return byVk.type;
+        return formatB2bItemCylinderLabel(item);
+      }
       const cylinderStat = availableCylinderTypes.find(stat => stat.typeEnum === item.cylinderType);
       if (cylinderStat) {
         return cylinderStat.type;
       }
-      // Fallback to utility function
       return getCylinderTypeDisplayName(item.cylinderType);
     }
-    // For non-cylinder items, use productName
     return item.productName;
   };
 
   // Add a new gas item row
   const addGasItemRow = () => {
     setGasItems([...gasItems, {
+      cylinderVariantKey: '',
       cylinderType: '',
       delivered: 0,
       pricePerItem: 0,
@@ -635,28 +654,49 @@ export default function B2BCustomerDetailPage() {
   const updateGasItem = (index: number, field: string, value: any) => {
     const newItems = [...gasItems];
     const oldItem = newItems[index];
+
+    const stockLookupKey =
+      newItems[index].cylinderVariantKey || newItems[index].cylinderType;
+
     // Clamp delivered quantity to available stock
     if (field === 'delivered') {
-      const maxStock = getFullStockCount(newItems[index].cylinderType);
+      const maxStock = getFullStockCount(stockLookupKey);
       // Ensure positive and typically not exceeding stock (though 0 stock with >0 delivered is possible if they force it, but better to clamp)
       const clampedValue = Math.max(0, Math.min(value, maxStock));
       newItems[index] = { ...newItems[index], [field]: clampedValue };
+    } else if (field === 'cylinderVariantKey') {
+      const parsed = parseCylinderVariantKey(value);
+      newItems[index] = {
+        ...newItems[index],
+        cylinderVariantKey: value as string,
+        cylinderType: parsed?.cylinderType ?? '',
+      };
     } else {
       newItems[index] = { ...newItems[index], [field]: value };
     }
 
-    // Reset delivered quantity when cylinder type changes
-    if (field === 'cylinderType' && value !== oldItem.cylinderType && oldItem.cylinderType !== '') {
+    const cylTypeForPricing = newItems[index].cylinderType;
+
+    // Reset delivered quantity when cylinder variant/type changes
+    if (
+      (field === 'cylinderVariantKey' || field === 'cylinderType') &&
+      value !== (field === 'cylinderVariantKey' ? oldItem.cylinderVariantKey : oldItem.cylinderType) &&
+      (field === 'cylinderVariantKey' ? oldItem.cylinderVariantKey : oldItem.cylinderType) !== ''
+    ) {
       newItems[index].delivered = 0;
     }
 
-    // Auto-calculate price when cylinder type is selected (based on customer's margin category)
-    if (field === 'cylinderType' && value && pricingInfo) {
+    // Auto-calculate price when cylinder type / variant is selected (based on customer's margin category)
+    if (
+      (field === 'cylinderVariantKey' || field === 'cylinderType') &&
+      cylTypeForPricing &&
+      pricingInfo
+    ) {
       let calculatedPrice = 0;
 
       // Try to get precise price from finalPrices first
       if (pricingInfo.finalPrices) {
-        switch (value) {
+        switch (cylTypeForPricing) {
           case 'DOMESTIC_11_8KG':
             calculatedPrice = pricingInfo.finalPrices.domestic118kg;
             break;
@@ -671,7 +711,7 @@ export default function B2BCustomerDetailPage() {
 
       // Fallback to calculation if finalPrices not available or didn't match
       if (!calculatedPrice && pricingInfo.calculation?.endPricePerKg) {
-        const cylinderCapacity = getCapacityFromTypeString(value);
+        const cylinderCapacity = getCapacityFromTypeString(cylTypeForPricing);
         if (cylinderCapacity > 0) {
           calculatedPrice = Math.round(pricingInfo.calculation.endPricePerKg * cylinderCapacity);
         }
@@ -722,7 +762,9 @@ export default function B2BCustomerDetailPage() {
 
     // Calculate remaining cylinders due based on transaction type
     if (customer) {
-      const currentDue = getCurrentCylinderDue(newItems[index].cylinderType);
+      const lookupKey =
+        newItems[index].cylinderVariantKey || newItems[index].cylinderType;
+      const currentDue = getCurrentCylinderDue(lookupKey);
       let newRemainingDue = currentDue;
 
       if (transactionType === 'SALE') {
@@ -738,12 +780,16 @@ export default function B2BCustomerDetailPage() {
 
     setGasItems(newItems);
 
-    // Validate inventory when quantity changes
-    if (field === 'delivered' && transactionType === 'SALE') {
+    // Validate inventory when quantity or variant changes
+    if (
+      (field === 'delivered' || field === 'cylinderVariantKey') &&
+      transactionType === 'SALE'
+    ) {
       const cylinders = newItems
         .filter(item => item.delivered > 0)
         .map(item => ({
           cylinderType: item.cylinderType,
+          cylinderVariantKey: item.cylinderVariantKey || undefined,
           requested: item.delivered
         }));
 
@@ -761,14 +807,15 @@ export default function B2BCustomerDetailPage() {
       validateInventory(cylinders, accessories);
     }
 
-    // Check if we need to clear validation errors for reduced quantities
-    if (field === 'delivered') {
+    // Check if we need to clear validation errors for reduced quantities / variant changes
+    if (field === 'delivered' || field === 'cylinderVariantKey') {
       // Trigger validation to check if the new quantity is valid
       setTimeout(() => {
         const cylinders = newItems
           .filter(item => item.delivered > 0)
           .map(item => ({
             cylinderType: item.cylinderType,
+            cylinderVariantKey: item.cylinderVariantKey || undefined,
             requested: item.delivered
           }));
 
@@ -804,8 +851,11 @@ export default function B2BCustomerDetailPage() {
     let firstInvalidIndex: number | null = null;
     const hasErrors = gasItems.some((item, index) => {
       if (item.delivered > 0) {
-        const stockInfo = getCylinderStock(item.cylinderType);
-        const isExceedingStock = stockInfo && item.delivered > stockInfo.available;
+        const stockAvailable = getFullStockCount(
+          item.cylinderVariantKey || item.cylinderType,
+        );
+        const isExceedingStock =
+          stockAvailable > 0 && item.delivered > stockAvailable;
         if (isExceedingStock) {
           if (firstInvalidIndex === null) {
             firstInvalidIndex = index;
@@ -913,12 +963,13 @@ export default function B2BCustomerDetailPage() {
     setGasItems(updatedItems);
   };
 
-  const getCurrentCylinderDue = (cylinderType: string) => {
-    if (!cylinderType) return 0;
+  const getCurrentCylinderDue = (cylinderKey: string) => {
+    if (!cylinderKey) return 0;
 
-    // Use dynamic cylinder dues from API
-    const due = cylinderDues.find(d => d.cylinderType === cylinderType);
-    return due ? due.count : 0;
+    const byVariant = cylinderDues.find(d => d.variantKey === cylinderKey);
+    if (byVariant !== undefined) return byVariant.count;
+
+    return cylinderDues.find(d => d.cylinderType === cylinderKey)?.count ?? 0;
   };
 
   // ========== UNIFIED TRANSACTION HELPERS ==========
@@ -926,6 +977,7 @@ export default function B2BCustomerDetailPage() {
   // Add a new return item row
   const addReturnItemRow = () => {
     setReturnItems([...returnItems, {
+      cylinderVariantKey: '',
       cylinderType: '',
       emptyReturned: 0,
       buybackQuantity: 0,
@@ -948,19 +1000,24 @@ export default function B2BCustomerDetailPage() {
   const updateReturnItem = (index: number, field: string, value: any) => {
     const newItems = [...returnItems];
 
-    // Clamp values to ensure total return (empty + buyback) <= due
-    if (field === 'emptyReturned' || field === 'buybackQuantity') {
+    if (field === 'cylinderVariantKey') {
+      const parsed = parseCylinderVariantKey(value);
+      newItems[index] = {
+        ...newItems[index],
+        cylinderVariantKey: value as string,
+        cylinderType: parsed?.cylinderType ?? '',
+      };
+    } else if (field === 'emptyReturned' || field === 'buybackQuantity') {
       const item = newItems[index];
-      const maxDue = getCurrentCylinderDue(item.cylinderType);
+      const dueKey = item.cylinderVariantKey || item.cylinderType;
+      const maxDue = getCurrentCylinderDue(dueKey);
 
       if (field === 'emptyReturned') {
-        // Max allowed for empty is (Due - Buyback)
         const currentBuyback = item.buybackQuantity || 0;
         const maxAllowed = Math.max(0, maxDue - currentBuyback);
         const clampedValue = Math.max(0, Math.min(value, maxAllowed));
         newItems[index] = { ...newItems[index], [field]: clampedValue };
       } else {
-        // Max allowed for buyback is (Due - Empty)
         const currentEmpty = item.emptyReturned || 0;
         const maxAllowed = Math.max(0, maxDue - currentEmpty);
         const clampedValue = Math.max(0, Math.min(value, maxAllowed));
@@ -970,11 +1027,19 @@ export default function B2BCustomerDetailPage() {
       newItems[index] = { ...newItems[index], [field]: value };
     }
 
-    // Auto-set original price when cylinder type is selected
-    if (field === 'cylinderType' && value && pricingInfo && pricingInfo.calculation?.endPricePerKg) {
-      const cylinderCapacity = getCapacityFromTypeString(value);
+    const cylTypeForPricing = newItems[index].cylinderType;
+
+    if (
+      (field === 'cylinderVariantKey' || field === 'cylinderType') &&
+      cylTypeForPricing &&
+      pricingInfo &&
+      pricingInfo.calculation?.endPricePerKg
+    ) {
+      const cylinderCapacity = getCapacityFromTypeString(cylTypeForPricing);
       if (cylinderCapacity > 0) {
-        const calculatedPrice = Math.round(pricingInfo.calculation.endPricePerKg * cylinderCapacity);
+        const calculatedPrice = Math.round(
+          pricingInfo.calculation.endPricePerKg * cylinderCapacity,
+        );
         newItems[index].originalSoldPrice = calculatedPrice;
       }
     }
@@ -1051,8 +1116,8 @@ export default function B2BCustomerDetailPage() {
 
   // Reset unified form
   const resetUnifiedForm = () => {
-    setGasItems([{ cylinderType: '', delivered: 0, pricePerItem: 0, emptyReturned: 0, remainingDue: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackPricePerItem: 0, buybackTotal: 0 }]);
-    setReturnItems([{ cylinderType: '', emptyReturned: 0, buybackQuantity: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackCredit: 0 }]);
+    setGasItems([{ cylinderVariantKey: '', cylinderType: '', delivered: 0, pricePerItem: 0, emptyReturned: 0, remainingDue: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackPricePerItem: 0, buybackTotal: 0 }]);
+    setReturnItems([{ cylinderVariantKey: '', cylinderType: '', emptyReturned: 0, buybackQuantity: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackCredit: 0 }]);
     setAccessoryItems([]);
     setSalePaymentAmount(0);
     setIsAutoPayment(false);
@@ -1097,6 +1162,7 @@ export default function B2BCustomerDetailPage() {
       // Prepare gas items for delivery (sales)
       const deliveryGasItems = gasItems.filter(item => item.delivered > 0).map(item => ({
         cylinderType: item.cylinderType,
+        cylinderVariantKey: item.cylinderVariantKey || undefined,
         delivered: item.delivered,
         pricePerItem: item.pricePerItem,
         emptyReturned: 0, // Delivery only
@@ -1110,8 +1176,11 @@ export default function B2BCustomerDetailPage() {
       for (let index = 0; index < returnItems.length; index++) {
         const item = returnItems[index];
 
+        const cylinderSelected =
+          !!(item.cylinderVariantKey?.trim()) || !!(item.cylinderType?.trim());
+
         // Check for empty return without cylinder type
-        if (item.emptyReturned > 0 && (!item.cylinderType || item.cylinderType.trim() === '')) {
+        if (item.emptyReturned > 0 && !cylinderSelected) {
           setError(`Please select a cylinder type for return item ${index + 1} in the Cylinders Returned section.`);
           // Expand the returns section so user can see the issue
           setReturnsExpanded(true);
@@ -1126,7 +1195,7 @@ export default function B2BCustomerDetailPage() {
         }
 
         // Check for buyback without cylinder type
-        if (item.buybackQuantity > 0 && (!item.cylinderType || item.cylinderType.trim() === '')) {
+        if (item.buybackQuantity > 0 && !cylinderSelected) {
           setError(`Please select a cylinder type for buyback item ${index + 1} in the Cylinders buyback section.`);
           // Expand the returns section so user can see the issue
           setReturnsExpanded(true);
@@ -1140,8 +1209,7 @@ export default function B2BCustomerDetailPage() {
           return;
         }
 
-        // Skip items without cylinder type or quantity
-        if (!item.cylinderType || item.cylinderType.trim() === '') {
+        if (!cylinderSelected) {
           continue;
         }
 
@@ -1149,6 +1217,7 @@ export default function B2BCustomerDetailPage() {
         if (item.emptyReturned > 0) {
           returnGasItems.push({
             cylinderType: item.cylinderType,
+            cylinderVariantKey: item.cylinderVariantKey || undefined,
             delivered: 0,
             emptyReturned: item.emptyReturned,
             pricePerItem: 0,
@@ -1165,6 +1234,7 @@ export default function B2BCustomerDetailPage() {
         if (item.buybackQuantity > 0) {
           returnGasItems.push({
             cylinderType: item.cylinderType,
+            cylinderVariantKey: item.cylinderVariantKey || undefined,
             delivered: 0,
             emptyReturned: item.buybackQuantity, // Backend uses emptyReturned for cylinder dues
             pricePerItem: 0,
@@ -1575,7 +1645,7 @@ export default function B2BCustomerDetailPage() {
                 return (
                   <div className="space-y-1.5">
                     {visibleDues.map((due) => (
-                      <div key={due.cylinderType} className="flex justify-between">
+                      <div key={due.variantKey || due.displayName} className="flex justify-between">
                         <span className="text-xs text-gray-700">{due.displayName}</span>
                         <Badge variant="destructive" className="h-5 text-[10px] px-1.5">
                           {due.count}
@@ -1721,7 +1791,8 @@ export default function B2BCustomerDetailPage() {
                       </thead>
                       <tbody>
                         {gasItems.map((item, index) => {
-                          const fullStockCount = getFullStockCount(item.cylinderType);
+                          const lookupKey = item.cylinderVariantKey || item.cylinderType;
+                          const fullStockCount = getFullStockCount(lookupKey);
                           const isExceedingStock = item.delivered > 0 && fullStockCount > 0 && item.delivered > fullStockCount;
 
                           return (
@@ -1729,11 +1800,11 @@ export default function B2BCustomerDetailPage() {
                               <td className="py-2 px-2 align-top">
                                 <div className="relative">
                                   <CustomSelect
-                                    value={item.cylinderType || ''}
-                                    onChange={(val) => updateGasItem(index, 'cylinderType', val)}
+                                    value={item.cylinderVariantKey || ''}
+                                    onChange={(val) => updateGasItem(index, 'cylinderVariantKey', val)}
                                     placeholder="Select type..."
                                     options={availableCylinderTypes.map((stat) => ({
-                                      value: stat.typeEnum,
+                                      value: stat.variantKey,
                                       label: stat.type
                                     }))}
                                     className="h-9 text-sm"
@@ -1854,20 +1925,26 @@ export default function B2BCustomerDetailPage() {
                             <td className="py-2 px-2 align-top">
                               <div className="relative">
                                 <CustomSelect
-                                  value={item.cylinderType || ''}
-                                  onChange={(val) => updateReturnItem(index, 'cylinderType', val)}
+                                  value={item.cylinderVariantKey || ''}
+                                  onChange={(val) => updateReturnItem(index, 'cylinderVariantKey', val)}
                                   placeholder="Select type..."
                                   options={availableCylinderTypes
-                                    .filter(stat => cylinderDues.some(due => due.cylinderType === stat.typeEnum && due.count > 0))
+                                    .filter(stat =>
+                                      cylinderDues.some(due => {
+                                        if (due.count <= 0) return false;
+                                        if (due.variantKey) return due.variantKey === stat.variantKey;
+                                        return due.cylinderType === stat.typeEnum;
+                                      })
+                                    )
                                     .map((stat) => ({
-                                      value: stat.typeEnum,
+                                      value: stat.variantKey,
                                       label: stat.type
                                     }))}
                                   className="h-9 text-sm"
                                 />
                               </div>
                               {item.cylinderType && (
-                                <div className="text-xs text-gray-500 mt-1">Remaining Due: {getCurrentCylinderDue(item.cylinderType)} units</div>
+                                <div className="text-xs text-gray-500 mt-1">Remaining Due: {getCurrentCylinderDue(item.cylinderVariantKey || item.cylinderType)} units</div>
                               )}
                             </td>
                             <td className="py-2 px-2 align-top">

@@ -17,7 +17,8 @@ import { Badge } from '@/components/ui/badge';
 import { PlusIcon, CalculatorIcon, XMarkIcon, TrashIcon, CubeIcon, ArrowPathIcon, CreditCardIcon } from '@heroicons/react/24/outline';
 import { useInventoryValidation } from '@/hooks/useInventoryValidation';
 import { ProfessionalAccessorySelector, AccessoryItem } from '@/components/ui/ProfessionalAccessorySelector';
-import { getCylinderWeight } from '@/lib/cylinder-utils';
+import { getCylinderWeight, getCapacityFromTypeString, getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
+import { buildCylinderVariantKey, parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { CustomSelect } from '@/components/ui/select-custom';
 
 interface B2CTransactionModalProps {
@@ -30,6 +31,7 @@ interface B2CTransactionModalProps {
 
 interface GasItem {
     cylinderType: string;
+    cylinderVariantKey: string;
     quantity: number | '';
     pricePerItem: number | '';
     costPrice: number;
@@ -37,9 +39,19 @@ interface GasItem {
 
 interface SecurityItem {
     cylinderType: string;
+    cylinderVariantKey: string;
     quantity: number | '';
     pricePerItem: number | '';
     isReturn: boolean;
+}
+
+function b2cModalHoldingKey(h: { cylinderType: string; cylinderVariantKey?: string | null }) {
+    if (h.cylinderVariantKey?.trim()) return h.cylinderVariantKey.trim();
+    return buildCylinderVariantKey({
+        cylinderType: h.cylinderType,
+        typeName: null,
+        capacity: getCapacityFromTypeString(h.cylinderType),
+    });
 }
 
 export function B2CTransactionModal({ customerId, customerName, customer, onClose, onSuccess }: B2CTransactionModalProps) {
@@ -163,7 +175,7 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
     };
 
     const addGasItem = () => {
-        setGasItems([...gasItems, { cylinderType: '', quantity: '', pricePerItem: '', costPrice: 0 }]);
+        setGasItems([...gasItems, { cylinderType: '', cylinderVariantKey: '', quantity: '', pricePerItem: '', costPrice: 0 }]);
     };
 
     const removeGasItem = (index: number) => {
@@ -175,29 +187,24 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
         const updated = [...gasItems];
         updated[index] = { ...updated[index], [field]: value };
 
-        // Auto-apply calculated price when cylinder type is selected
-        if (field === 'cylinderType' && pricingInfo) {
-            const cylinderType = value;
+        // Auto-apply calculated price when a variant row is selected
+        if (field === 'cylinderVariantKey' && pricingInfo) {
+            const inventoryType = inventoryCylinderTypes.find(t => t.variantKey === value);
+            const cylinderType = inventoryType?.cylinderType ?? '';
+            updated[index].cylinderType = cylinderType;
             let calculatedPrice = 0;
-            // derive cost/kg from plant price (11.8kg basis)
             const plantPrice118 = Number(pricingInfo?.plantPrice?.price118kg) || 0;
             const costPerKg = plantPrice118 > 0 ? (plantPrice118 / 11.8) : 0;
 
-            // Get cylinder weight dynamically
-            let cylinderWeightForCost = getCylinderWeight(cylinderType) || 0;
-
-            // Try to find in dynamic inventory types first to get exact capacity
-            const inventoryType = inventoryCylinderTypes.find(t => t.cylinderType === cylinderType);
+            let cylinderWeightForCost =
+                cylinderType ? getCylinderWeight(cylinderType) || 0 : 0;
             if (inventoryType) {
                 cylinderWeightForCost = inventoryType.capacity;
             }
 
-            // Get calculated price based on cylinder type
-            // Check if we can calculate based on weight (Universal calculation)
             if (pricingInfo.calculation && pricingInfo.calculation.endPricePerKg && cylinderWeightForCost > 0) {
                 calculatedPrice = pricingInfo.calculation.endPricePerKg * cylinderWeightForCost;
-            } else {
-                // Fallback to legacy switch case if calculation info missing
+            } else if (cylinderType) {
                 switch (cylinderType) {
                     case 'DOMESTIC_11_8KG':
                         calculatedPrice = pricingInfo.finalPrices.domestic118kg;
@@ -210,8 +217,6 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                         break;
                     case 'CYLINDER_6KG':
                     case 'CYLINDER_30KG':
-                        // For new types, calculate price based on weight ratio
-                        // Fallback: use cost-based calculation if pricing not available
                         if (pricingInfo.finalPrices.standard15kg && cylinderWeightForCost > 0) {
                             calculatedPrice = (pricingInfo.finalPrices.standard15kg / 15.0) * cylinderWeightForCost;
                         }
@@ -223,43 +228,31 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                 updated[index].pricePerItem = Math.round(calculatedPrice);
             }
 
-            // Option 1: Auto-calculate Cost Price from Plant Price
             if (costPerKg > 0 && cylinderWeightForCost > 0) {
                 const autoCost = costPerKg * cylinderWeightForCost;
-                // Round to nearest rupee to match UI expectations
                 updated[index].costPrice = Math.round(autoCost);
             }
         }
 
         setGasItems(updated);
 
-        // Validate inventory when gas quantity changes
-        if (field === 'quantity') {
-            const cylinders = updated
-                .filter(item => Number(item.quantity) > 0)
+        const runCylinderValidation = (rows: GasItem[]) => {
+            const cylinders = rows
+                .filter(item => item.cylinderType && Number(item.quantity) > 0)
                 .map(item => ({
                     cylinderType: item.cylinderType,
+                    cylinderVariantKey: item.cylinderVariantKey || undefined,
                     requested: Number(item.quantity)
                 }));
-
-            // Only validate cylinders - accessories are validated by ProfessionalAccessorySelector
             validateInventory(cylinders, []);
-        }
+        };
 
-        // Check if we need to clear validation errors for reduced quantities
         if (field === 'quantity') {
-            // Trigger validation to check if the new quantity is valid
-            setTimeout(() => {
-                const cylinders = updated
-                    .filter(item => Number(item.quantity) > 0)
-                    .map(item => ({
-                        cylinderType: item.cylinderType,
-                        requested: Number(item.quantity)
-                    }));
-
-                // Only validate cylinders - accessories are validated by ProfessionalAccessorySelector
-                validateInventory(cylinders, []);
-            }, 100);
+            runCylinderValidation(updated);
+            setTimeout(() => runCylinderValidation(updated), 100);
+        }
+        if (field === 'cylinderVariantKey') {
+            runCylinderValidation(updated);
         }
     };
 
@@ -271,10 +264,11 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
 
         const updatedItems = gasItems.map(item => {
             let calculatedPrice = 0;
-            let cylinderWeightForCost = getCylinderWeight(item.cylinderType) || 0;
-
-            // Try to find in dynamic inventory types first to get exact capacity
-            const inventoryType = inventoryCylinderTypes.find(t => t.cylinderType === item.cylinderType);
+            const inventoryType = item.cylinderVariantKey
+                ? inventoryCylinderTypes.find(t => t.variantKey === item.cylinderVariantKey)
+                : inventoryCylinderTypes.find(t => t.cylinderType === item.cylinderType);
+            let cylinderWeightForCost =
+                item.cylinderType ? getCylinderWeight(item.cylinderType) || 0 : 0;
             if (inventoryType) {
                 cylinderWeightForCost = inventoryType.capacity;
             }
@@ -319,45 +313,72 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
     };
 
     const addSecurityItem = () => {
-        setSecurityItems([...securityItems, { cylinderType: '', quantity: '', pricePerItem: '', isReturn: false }]);
+        setSecurityItems([...securityItems, { cylinderType: '', cylinderVariantKey: '', quantity: '', pricePerItem: '', isReturn: false }]);
     };
 
     const removeSecurityItem = (index: number) => {
         setSecurityItems(securityItems.filter((_, i) => i !== index));
     };
 
-    // Get actual security amount from customer's holdings
-    const getActualSecurityAmount = (cylinderType: string): number => {
-        // 1. First check customer's active holdings (most accurate)
+    // Get actual security amount from customer's holdings (variant-aligned)
+    const getActualSecurityAmount = (variantKey: string): number => {
         if (customer?.cylinderHoldings) {
-            // Find the most recent active holding for this cylinder type
             const activeHoldings = customer.cylinderHoldings
-                .filter((holding: any) => holding.cylinderType === cylinderType && !holding.isReturned)
+                .filter((holding: any) => b2cModalHoldingKey(holding) === variantKey && !holding.isReturned)
                 .sort((a: any, b: any) => new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime());
 
             if (activeHoldings.length > 0) {
-                // Return the actual security amount from the most recent holding
                 return Number(activeHoldings[0].securityAmount);
             }
         }
 
-        // 2. Fallback to dynamic inventory types (prices from API)
-        const inventoryType = inventoryCylinderTypes.find(t => t.cylinderType === cylinderType);
+        const inventoryType = inventoryCylinderTypes.find(t => t.variantKey === variantKey);
         if (inventoryType && inventoryType.securityPrice) {
             return inventoryType.securityPrice;
         }
 
-        // 3. Last resort fallback (should rarely be reached if API is working)
         return 0;
     };
 
-    // Get available holdings count for a cylinder type
-    const getAvailableHoldings = (cylinderType: string): number => {
+    const getAvailableHoldings = (variantKey: string): number => {
         if (!customer?.cylinderHoldings) return 0;
 
         return customer.cylinderHoldings
-            .filter((holding: any) => holding.cylinderType === cylinderType && !holding.isReturned)
+            .filter((holding: any) => b2cModalHoldingKey(holding) === variantKey && !holding.isReturned)
             .reduce((sum: number, holding: any) => sum + holding.quantity, 0);
+    };
+
+    const formatVariantLabel = (variantKey: string): string => {
+        const inv = inventoryCylinderTypes.find(t => t.variantKey === variantKey);
+        if (inv?.label) return inv.label;
+        const parsed = parseCylinderVariantKey(variantKey);
+        if (parsed?.normalizedTypeNameLower && parsed.normalizedTypeNameLower !== 'null') {
+            const tn = parsed.normalizedTypeNameLower.replace(/\b\w/g, (c) => c.toUpperCase());
+            const cap = parsed.capacity ?? getCapacityFromTypeString(parsed.cylinderType);
+            return `${tn} (${cap}kg)`;
+        }
+        if (parsed?.cylinderType) {
+            const cap = parsed.capacity ?? getCapacityFromTypeString(parsed.cylinderType);
+            return `${getCylinderTypeDisplayName(parsed.cylinderType)} (${cap}kg)`;
+        }
+        return variantKey;
+    };
+
+    const getReturnableHoldingOptions = (): { value: string; label: string }[] => {
+        if (!customer?.cylinderHoldings) return [];
+        const map = new Map<string, number>();
+        for (const h of customer.cylinderHoldings) {
+            if (h?.isReturned) continue;
+            const k = b2cModalHoldingKey(h);
+            map.set(k, (map.get(k) || 0) + (Number(h?.quantity) || 0));
+        }
+        return Array.from(map.entries())
+            .filter(([, qty]) => qty > 0)
+            .map(([vk, qty]) => ({
+                value: vk,
+                label: `${formatVariantLabel(vk)}`,
+            }))
+            .sort((a, b) => a.label.localeCompare(b.label));
     };
 
     // Check if security return quantities exceed available holdings
@@ -370,8 +391,8 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
 
         let firstInvalidIndex: number | null = null;
         const hasErrors = securityItems.some((item, index) => {
-            if (item.isReturn && item.cylinderType) {
-                const available = getAvailableHoldings(item.cylinderType);
+            if (item.isReturn && item.cylinderVariantKey) {
+                const available = getAvailableHoldings(item.cylinderVariantKey);
                 if (Number(item.quantity) > available) {
                     if (firstInvalidIndex === null) {
                         firstInvalidIndex = index;
@@ -391,20 +412,33 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
         const updated = [...securityItems];
         updated[index] = { ...updated[index], [field]: value };
 
-        // Auto-fill security price when cylinder type is selected
-        if (field === 'cylinderType') {
+        if (field === 'cylinderVariantKey') {
+            const inv = inventoryCylinderTypes.find(t => t.variantKey === value);
+            updated[index].cylinderType = inv?.cylinderType ?? '';
             const actualSecurityAmount = getActualSecurityAmount(value);
             updated[index].pricePerItem = updated[index].isReturn
-                ? actualSecurityAmount * 0.75 // 25% deduction for returns
+                ? actualSecurityAmount * 0.75
                 : actualSecurityAmount;
         }
 
-        // Recalculate price when return status changes
         if (field === 'isReturn') {
-            const actualSecurityAmount = getActualSecurityAmount(updated[index].cylinderType);
+            const vk = updated[index].cylinderVariantKey;
+            const actualSecurityAmount = vk ? getActualSecurityAmount(vk) : 0;
             updated[index].pricePerItem = value
-                ? actualSecurityAmount * 0.75 // 25% deduction for returns
+                ? actualSecurityAmount * 0.75
                 : actualSecurityAmount;
+
+            // If switching to Return, restrict types to customer's active holdings.
+            // If the currently selected type isn't held, clear it.
+            if (value === true) {
+                const stillHeld = vk ? getAvailableHoldings(vk) > 0 : false;
+                if (!stillHeld) {
+                    updated[index].cylinderVariantKey = '';
+                    updated[index].cylinderType = '';
+                    updated[index].quantity = '';
+                    updated[index].pricePerItem = '';
+                }
+            }
         }
 
         setSecurityItems(updated);
@@ -434,20 +468,19 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
         if (!customer?.cylinderHoldings) return true; // Skip validation if no holdings data
 
         for (const securityItem of securityItems) {
-            if (securityItem.isReturn && securityItem.cylinderType) {
+            if (securityItem.isReturn && securityItem.cylinderVariantKey) {
                 const activeHoldings = customer.cylinderHoldings.filter(
-                    (holding: any) => holding.cylinderType === securityItem.cylinderType && !holding.isReturned
+                    (holding: any) => b2cModalHoldingKey(holding) === securityItem.cylinderVariantKey && !holding.isReturned
                 );
 
                 if (activeHoldings.length === 0) {
-                    setError(`Cannot return ${securityItem.cylinderType} - customer has no active security holdings for this cylinder type`);
+                    setError(`Cannot return — customer has no active security holdings for this cylinder`);
                     return false;
                 }
 
-                // Check if trying to return more than available
                 const totalAvailable = activeHoldings.reduce((sum: number, holding: any) => sum + holding.quantity, 0);
                 if (securityItem.quantity > totalAvailable) {
-                    setError(`Cannot return ${securityItem.quantity} ${securityItem.cylinderType} - customer only has ${totalAvailable} active holdings`);
+                    setError(`Cannot return ${securityItem.quantity} — customer only has ${totalAvailable} active holdings for this cylinder`);
                     return false;
                 }
             }
@@ -526,8 +559,8 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        const validGasItems = gasItems.filter(item => item.cylinderType && Number(item.quantity) > 0);
-        const validSecurityItems = securityItems.filter(item => item.cylinderType && Number(item.quantity) > 0);
+        const validGasItems = gasItems.filter(item => item.cylinderType && item.cylinderVariantKey && Number(item.quantity) > 0);
+        const validSecurityItems = securityItems.filter(item => item.cylinderType && item.cylinderVariantKey && Number(item.quantity) > 0);
         const validAccessoryItems = accessoryItems.filter(item => item.quantity > 0);
 
         if (validGasItems.length === 0 && validSecurityItems.length === 0 && validAccessoryItems.length === 0) {
@@ -570,8 +603,20 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                 deliveryCost: Number(deliveryCost),
                 paymentMethod,
                 notes: notes || null,
-                gasItems: gasItems.filter(item => item.cylinderType && Number(item.quantity) > 0),
-                securityItems: securityItems.filter(item => item.cylinderType && Number(item.quantity) > 0),
+                gasItems: gasItems.filter(item => item.cylinderType && item.cylinderVariantKey && Number(item.quantity) > 0).map(({ cylinderType, cylinderVariantKey, quantity, pricePerItem, costPrice }) => ({
+                    cylinderType,
+                    cylinderVariantKey,
+                    quantity: Number(quantity),
+                    pricePerItem: Number(pricePerItem),
+                    costPrice,
+                })),
+                securityItems: securityItems.filter(item => item.cylinderType && item.cylinderVariantKey && Number(item.quantity) > 0).map(({ cylinderType, cylinderVariantKey, quantity, pricePerItem, isReturn }) => ({
+                    cylinderType,
+                    cylinderVariantKey,
+                    quantity: Number(quantity),
+                    pricePerItem: Number(pricePerItem),
+                    isReturn,
+                })),
                 accessoryItems: accessoryItems.filter(item => item.quantity > 0).map(item => ({
                     itemName: `${item.category} - ${item.itemType}`,
                     itemType: item.itemType,
@@ -748,19 +793,17 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                                         <TableCell className="py-2 align-top">
                                                             <div className="relative">
                                                                 <CustomSelect
-                                                                    value={item.cylinderType}
-                                                                    onChange={(val) => updateGasItem(index, 'cylinderType', val)}
+                                                                    value={item.cylinderVariantKey}
+                                                                    onChange={(val) => updateGasItem(index, 'cylinderVariantKey', val)}
                                                                     placeholder="Select Type"
                                                                     options={inventoryCylinderTypes.map((type) => {
                                                                         const label = type.label;
-                                                                        // If label already has capacity info (e.g. "Special (10kg)"), don't duplicate it
-                                                                        // Or if label is just the name, append capacity
                                                                         const displayLabel = label.includes(type.capacity.toString()) || label.includes('kg')
                                                                             ? label
                                                                             : `${label} (${type.capacity}kg)`;
 
                                                                         return {
-                                                                            value: type.cylinderType,
+                                                                            value: type.variantKey,
                                                                             label: displayLabel
                                                                         };
                                                                     })}
@@ -871,8 +914,8 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                         </TableHeader>
                                         <TableBody>
                                             {securityItems.map((item, index) => {
-                                                const availableHoldings = item.isReturn ? getAvailableHoldings(item.cylinderType) : 0;
-                                                const isReturnInvalid = item.isReturn && item.cylinderType && Number(item.quantity) > availableHoldings;
+                                                const availableHoldings = item.isReturn && item.cylinderVariantKey ? getAvailableHoldings(item.cylinderVariantKey) : 0;
+                                                const isReturnInvalid = item.isReturn && item.cylinderVariantKey && Number(item.quantity) > availableHoldings;
                                                 return (
                                                     <TableRow key={index} id={`security-item-${index}`} className="hover:bg-transparent">
                                                         <TableCell className="py-2 align-top">
@@ -888,24 +931,24 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                                         </TableCell>
                                                         <TableCell className="py-2 align-top">
                                                             <CustomSelect
-                                                                value={item.cylinderType}
-                                                                onChange={(val) => updateSecurityItem(index, 'cylinderType', val)}
+                                                                value={item.cylinderVariantKey}
+                                                                onChange={(val) => updateSecurityItem(index, 'cylinderVariantKey', val)}
                                                                 placeholder="Select Type"
-                                                                options={inventoryCylinderTypes.map((type) => ({
-                                                                    value: type.cylinderType,
+                                                                options={(item.isReturn ? getReturnableHoldingOptions() : inventoryCylinderTypes.map((type) => ({
+                                                                    value: type.variantKey,
                                                                     label: type.label
-                                                                }))}
+                                                                })))}
                                                                 className="h-9 text-sm"
                                                             />
-                                                            {item.isReturn && item.cylinderType && (
+                                                            {item.isReturn && item.cylinderVariantKey && (
                                                                 <div className={`text-[10px] mt-0.5 ${availableHoldings === 0 ? "text-red-500 font-bold" : "text-gray-400"}`}>
                                                                     Holdings: {availableHoldings}
                                                                 </div>
                                                             )}
-                                                            {!item.isReturn && item.cylinderType && (
+                                                            {!item.isReturn && item.cylinderVariantKey && (
                                                                 <div className="text-[10px] mt-0.5 text-gray-400">
                                                                     {(() => {
-                                                                        const typeInfo = inventoryCylinderTypes.find(t => t.cylinderType === item.cylinderType);
+                                                                        const typeInfo = inventoryCylinderTypes.find(t => t.variantKey === item.cylinderVariantKey);
                                                                         const typeStock = typeInfo?.fullCount ?? 0;
                                                                         const isLow = typeStock < 5;
                                                                         return (
@@ -921,8 +964,21 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                                             <Input
                                                                 type="number"
                                                                 min="0"
+                                                                max={item.isReturn && item.cylinderVariantKey ? availableHoldings : undefined}
                                                                 value={item.quantity || ''}
-                                                                onChange={(e) => updateSecurityItem(index, 'quantity', e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value)))}
+                                                                onChange={(e) => {
+                                                                    const raw = e.target.value;
+                                                                    if (raw === '') {
+                                                                        updateSecurityItem(index, 'quantity', '');
+                                                                        return;
+                                                                    }
+                                                                    const n = Math.max(0, parseInt(raw, 10) || 0);
+                                                                    const clamped =
+                                                                        item.isReturn && item.cylinderVariantKey
+                                                                            ? Math.min(n, availableHoldings)
+                                                                            : n;
+                                                                    updateSecurityItem(index, 'quantity', clamped);
+                                                                }}
                                                                 className={`h-9 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 ${isReturnInvalid ? 'border-red-500' : ''}`}
                                                                 placeholder="0"
                                                             />

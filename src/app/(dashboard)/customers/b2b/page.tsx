@@ -26,6 +26,7 @@ import {
   ArrowDownIcon
 } from '@heroicons/react/24/outline';
 import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
+import { parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { CustomSelect } from '@/components/ui/select-custom';
 
 // Palette for dynamic cylinder badges
@@ -250,10 +251,15 @@ export default function B2BCustomersPage() {
   };
 
   const formatCylinderHeader = (type: string) => {
-    // Dynamic logic from typeDefinitions (matches B2C)
+    // Dynamic logic from typeDefinitions (variant keys from API)
     if (typeDefinitions[type]) {
       const { name, capacity } = typeDefinitions[type];
-      return `${name} ${capacity}kg`; // Format as "Name Capacitykg" (e.g. Domestic 11.8kg)
+      return `${name} ${capacity}kg`;
+    }
+
+    const parsed = parseCylinderVariantKey(type);
+    if (parsed) {
+      return getCylinderTypeDisplayName(parsed.cylinderType);
     }
 
     // Fallback logic

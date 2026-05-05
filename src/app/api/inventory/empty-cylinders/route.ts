@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { buildCylinderVariantKey } from '@/lib/cylinder-variant-key';
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,22 +15,28 @@ export async function GET(request: NextRequest) {
       select: {
         id: true,
         code: true,
-        cylinderType: true
+        cylinderType: true,
+        typeName: true,
+        capacity: true,
       },
       orderBy: {
         code: 'asc'
       }
     });
 
-    // Group by cylinder type dynamically (handles any cylinder type)
-    const groupedCylinders: Record<string, typeof emptyCylinders> = {};
+    // Group by cylinder variant key (type + capacity + typeName), not just enum.
+    const groupedCylinders: Record<string, Array<(typeof emptyCylinders)[number] & { variantKey: string }>> = {};
     
     emptyCylinders.forEach(cylinder => {
-      const type = cylinder.cylinderType;
-      if (!groupedCylinders[type]) {
-        groupedCylinders[type] = [];
+      const variantKey = buildCylinderVariantKey({
+        cylinderType: cylinder.cylinderType,
+        typeName: cylinder.typeName,
+        capacity: cylinder.capacity,
+      });
+      if (!groupedCylinders[variantKey]) {
+        groupedCylinders[variantKey] = [];
       }
-      groupedCylinders[type].push(cylinder);
+      groupedCylinders[variantKey].push({ ...cylinder, variantKey });
     });
 
     return NextResponse.json({

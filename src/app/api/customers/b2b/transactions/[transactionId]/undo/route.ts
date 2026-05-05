@@ -2,14 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { CylinderType, CylinderStatus } from '@prisma/client';
-import { InventoryDeductionService } from '@/lib/inventory-deduction';
+import { CylinderStatus } from '@prisma/client';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import {
   notifyUserActivity,
   checkAllCylinderTypesForLowStock,
 } from '@/lib/superAdminNotifier';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { buildPrismaCylinderVariantWhere } from '@/lib/cylinder-variant-key';
+import { getB2bCustomerCylinderDueAggregatesFromPhysicalStock } from '@/lib/b2b-customer-cylinder-dues-from-stock';
+import { buildCylinderVariantSummary } from '@/lib/cylinder-variant-summary';
 
 export async function POST(
   request: NextRequest,
@@ -44,6 +46,9 @@ export async function POST(
       return NextResponse.json({ error: 'Transaction is already voided' }, { status: 400 });
     }
 
+    /** Prefer the transaction's branch so inventory reversals never leak across regions when session has no region. */
+    const inventoryRegionId = transaction.regionId ?? regionId ?? null;
+
     // Undo the transaction - reverse all changes
     await prisma.$transaction(async (tx) => {
       // 1. Mark transaction as voided
@@ -67,9 +72,6 @@ export async function POST(
       }
 
       let newLedgerBalance = parseFloat(customer.ledgerBalance.toString());
-      let newDomestic118kgDue = customer.domestic118kgDue || 0;
-      let newStandard15kgDue = customer.standard15kgDue || 0;
-      let newCommercial454kgDue = customer.commercial454kgDue || 0;
 
       // Reverse balance based on transaction type
       switch (transaction.transactionType) {
@@ -95,43 +97,6 @@ export async function POST(
 
           newLedgerBalance -= impactToReverse;
 
-          // Reverse cylinder due counts
-          // In SALE transactions, items can be:
-          // 1. Delivered cylinders (increases due) - has cylinderType, NO returnedCondition
-          // 2. Returned cylinders (decreases due) - has cylinderType AND returnedCondition = 'EMPTY'
-          transaction.items.forEach((item: any) => {
-            if (item.cylinderType && item.quantity > 0) {
-              const quantity = Number(item.quantity);
-
-              if (item.returnedCondition === 'EMPTY') {
-                // This was a returned cylinder - it DECREASED due, so we ADD it back
-                switch (item.cylinderType) {
-                  case 'DOMESTIC_11_8KG':
-                    newDomestic118kgDue += quantity;
-                    break;
-                  case 'STANDARD_15KG':
-                    newStandard15kgDue += quantity;
-                    break;
-                  case 'COMMERCIAL_45_4KG':
-                    newCommercial454kgDue += quantity;
-                    break;
-                }
-              } else {
-                // This was a delivered cylinder - it INCREASED due, so we SUBTRACT it
-                switch (item.cylinderType) {
-                  case 'DOMESTIC_11_8KG':
-                    newDomestic118kgDue = Math.max(0, newDomestic118kgDue - quantity);
-                    break;
-                  case 'STANDARD_15KG':
-                    newStandard15kgDue = Math.max(0, newStandard15kgDue - quantity);
-                    break;
-                  case 'COMMERCIAL_45_4KG':
-                    newCommercial454kgDue = Math.max(0, newCommercial454kgDue - quantity);
-                    break;
-                }
-              }
-            }
-          });
           break;
         case 'PAYMENT':
         case 'ADJUSTMENT':
@@ -142,58 +107,10 @@ export async function POST(
         case 'BUYBACK':
           // Reverse: add back the amount (this decreased balance)
           newLedgerBalance += parseFloat(transaction.totalAmount.toString());
-          // Reverse cylinder due counts - buyback DECREASED them, so we need to INCREASE them back
-          transaction.items.forEach((item: any) => {
-            if (item.cylinderType && item.quantity > 0) {
-              // For BUYBACK, quantity is the emptyReturned amount
-              const returnedQuantity = Number(item.quantity);
-              switch (item.cylinderType) {
-                case 'DOMESTIC_11_8KG':
-                  newDomestic118kgDue += returnedQuantity;
-                  break;
-                case 'STANDARD_15KG':
-                  newStandard15kgDue += returnedQuantity;
-                  break;
-                case 'COMMERCIAL_45_4KG':
-                  newCommercial454kgDue += returnedQuantity;
-                  break;
-              }
-            }
-          });
           break;
         case 'RETURN_EMPTY':
-          // Reverse: add back cylinder due counts
-          transaction.items.forEach((item: any) => {
-            if (item.cylinderType && item.quantity > 0) {
-              // For RETURN_EMPTY, quantity is the emptyReturned amount
-              const returnedQuantity = Number(item.quantity);
-              switch (item.cylinderType) {
-                case 'DOMESTIC_11_8KG':
-                  newDomestic118kgDue += returnedQuantity;
-                  break;
-                case 'STANDARD_15KG':
-                  newStandard15kgDue += returnedQuantity;
-                  break;
-                case 'COMMERCIAL_45_4KG':
-                  newCommercial454kgDue += returnedQuantity;
-                  break;
-              }
-            }
-          });
           break;
       }
-
-      // Update customer balance
-      await tx.customer.update({
-        where: { id: transaction.customerId },
-        data: {
-          ledgerBalance: newLedgerBalance,
-          domestic118kgDue: newDomestic118kgDue,
-          standard15kgDue: newStandard15kgDue,
-          commercial454kgDue: newCommercial454kgDue,
-          updatedBy: session.user.id
-        }
-      });
 
       // 3. Reverse inventory changes
       if (transaction.transactionType === 'SALE') {
@@ -207,14 +124,18 @@ export async function POST(
         for (const item of gasItems) {
           const quantity = Number(item.quantity);
           const cylinderType = item.cylinderType as string;
+          const variantWhere = buildPrismaCylinderVariantWhere(
+            cylinderType,
+            item.cylinderVariantKey,
+          );
 
           // Find cylinders that are WITH_CUSTOMER for this customer (region-scoped)
           const cylindersWithCustomer = await tx.cylinder.findMany({
             where: {
-              cylinderType: cylinderType,
+              ...variantWhere,
               currentStatus: CylinderStatus.WITH_CUSTOMER,
               location: { contains: customer.name },
-              ...regionScopedWhere(regionId),
+              ...regionScopedWhere(inventoryRegionId),
             },
             orderBy: { updatedAt: 'desc' },
             take: quantity
@@ -248,14 +169,18 @@ export async function POST(
         for (const item of returnedCylinders) {
           const quantity = Number(item.quantity);
           const cylinderType = item.cylinderType as string;
+          const variantWhere = buildPrismaCylinderVariantWhere(
+            cylinderType,
+            item.cylinderVariantKey,
+          );
 
           // Find EMPTY cylinders in store (region-scoped)
           const emptyCylinders = await tx.cylinder.findMany({
             where: {
-              cylinderType: cylinderType,
+              ...variantWhere,
               currentStatus: CylinderStatus.EMPTY,
               location: 'Store - Ready for Refill',
-              ...regionScopedWhere(regionId),
+              ...regionScopedWhere(inventoryRegionId),
             },
             orderBy: { updatedAt: 'desc' },
             take: quantity
@@ -299,7 +224,7 @@ export async function POST(
                 name: category,
                 type: itemType,
                 isActive: true,
-                ...regionScopedWhere(regionId),
+                ...regionScopedWhere(inventoryRegionId),
               }
             });
 
@@ -321,7 +246,7 @@ export async function POST(
               // Try Product table as fallback
               if (item.productId) {
                 const product = await tx.product.findFirst({
-                  where: { id: item.productId, ...regionScopedWhere(regionId) }
+                  where: { id: item.productId, ...regionScopedWhere(inventoryRegionId) }
                 });
 
                 if (product) {
@@ -342,7 +267,7 @@ export async function POST(
                 const productByName = await tx.product.findFirst({
                   where: {
                     name: { contains: productName, mode: 'insensitive' },
-                    ...regionScopedWhere(regionId),
+                    ...regionScopedWhere(inventoryRegionId),
                   }
                 });
 
@@ -371,14 +296,18 @@ export async function POST(
         for (const item of gasItems) {
           const quantity = Number(item.quantity);
           const cylinderType = item.cylinderType as string;
+          const variantWhere = buildPrismaCylinderVariantWhere(
+            cylinderType,
+            item.cylinderVariantKey,
+          );
 
           // Find EMPTY cylinders in store (region-scoped, most recent first)
           const emptyCylinders = await tx.cylinder.findMany({
             where: {
-              cylinderType: cylinderType,
+              ...variantWhere,
               currentStatus: CylinderStatus.EMPTY,
               location: 'Store - Ready for Refill',
-              ...regionScopedWhere(regionId),
+              ...regionScopedWhere(inventoryRegionId),
             },
             orderBy: { updatedAt: 'desc' },
             take: quantity
@@ -413,22 +342,48 @@ export async function POST(
           }
         }
       }
+
+      const cylinderDues = await getB2bCustomerCylinderDueAggregatesFromPhysicalStock(tx, {
+        customerName: customer.name || '',
+        regionId: inventoryRegionId,
+      });
+
+      await tx.customer.update({
+        where: { id: transaction.customerId },
+        data: {
+          ledgerBalance: newLedgerBalance,
+          domestic118kgDue: cylinderDues.domestic118kgDue,
+          standard15kgDue: cylinderDues.standard15kgDue,
+          commercial454kgDue: cylinderDues.commercial454kgDue,
+          updatedBy: session.user.id,
+        },
+      });
     });
+    const activityRegionId = inventoryRegionId ?? regionId;
 
     // ---- Post-commit side effects ----
     try {
       const customerName = transaction.customer?.name || 'Customer';
       const total = parseFloat(transaction.totalAmount.toString());
       const link = `/customers/b2b/${transaction.customerId}?tx=${transaction.id}`;
+      const cylinderSummary = buildCylinderVariantSummary(
+        (transaction.items || [])
+          .filter((it: any) => it?.cylinderType)
+          .map((it: any) => ({
+            cylinderType: it.cylinderType ?? null,
+            cylinderVariantKey: it.cylinderVariantKey ?? null,
+            quantity: Number(it.quantity || 0),
+          })),
+      );
 
       await logActivity({
         userId: session.user.id,
         action: ActivityAction.B2B_TRANSACTION_VOIDED,
         entityType: 'B2B_TRANSACTION',
         entityId: transaction.id,
-        details: `Voided B2B ${transaction.transactionType} • Customer: ${customerName} • Bill #: ${transaction.billSno} • Total: Rs ${total.toLocaleString()}${reason ? ` • Reason: ${reason}` : ''}`,
+        details: `Voided B2B ${transaction.transactionType} • Customer: ${customerName} • Bill #: ${transaction.billSno} • Total: Rs ${total.toLocaleString()}${cylinderSummary ? ` • Items: ${cylinderSummary}` : ''}${reason ? ` • Reason: ${reason}` : ''}`,
         link,
-        regionId,
+        regionId: activityRegionId,
         metadata: {
           customerId: transaction.customerId,
           customerName,
@@ -436,6 +391,7 @@ export async function POST(
           transactionType: transaction.transactionType,
           totalAmount: total,
           reason: reason || null,
+          cylinderSummary: cylinderSummary || null,
         },
       });
 
@@ -443,10 +399,10 @@ export async function POST(
         actorId: session.user.id,
         actorName: session.user.name || session.user.email || 'A user',
         title: `B2B ${transaction.transactionType} transaction voided`,
-        message: `${session.user.name || session.user.email} voided B2B ${transaction.transactionType} of Rs ${total.toLocaleString()} for ${customerName} (Bill #${transaction.billSno}).`,
+        message: `${session.user.name || session.user.email} voided B2B ${transaction.transactionType} of Rs ${total.toLocaleString()} for ${customerName} (Bill #${transaction.billSno}).${cylinderSummary ? ` Items: ${cylinderSummary}.` : ''}`,
         link,
         priority: 'HIGH',
-        regionId,
+        regionId: activityRegionId,
         metadata: {
           domain: 'B2B_TRANSACTION_VOIDED',
           transactionId: transaction.id,
@@ -454,14 +410,15 @@ export async function POST(
           customerName,
           billSno: transaction.billSno,
           totalAmount: total,
+          cylinderSummary: cylinderSummary || null,
         },
       });
 
       const cylinderTypesAffected = transaction.items
-        .map((it: any) => it.cylinderType)
+        .map((it: any) => it.cylinderVariantKey?.trim() || it.cylinderType)
         .filter(Boolean) as string[];
       if (cylinderTypesAffected.length > 0) {
-        await checkAllCylinderTypesForLowStock(cylinderTypesAffected, regionId);
+        await checkAllCylinderTypesForLowStock(cylinderTypesAffected, activityRegionId);
       }
     } catch (sideEffectError) {
       console.error('B2B undo post-commit side effects failed:', sideEffectError);

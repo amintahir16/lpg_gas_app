@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db';
 import { generateCylinderTypeFromCapacity, normalizeTypeName } from './cylinder-utils';
 import { regionScopedWhere } from './region';
+import { buildCylinderVariantKey, buildPrismaCylinderVariantWhere } from '@/lib/cylinder-variant-key';
 
 export interface VendorPurchaseItem {
   itemName: string;
@@ -245,8 +246,8 @@ export class InventoryIntegrationService {
       return;
     }
 
-    // Determine cylinder type based on gas type - fully dynamic approach
-    // Extract capacity from item name and generate enum dynamically
+    // Variant-aware cylinder match:
+    // Match EMPTY cylinders by (cylinderType + typeName + capacity) so custom variants work.
     const name = itemName.toLowerCase();
     
     // Extract weight/capacity from item name (handles patterns like "6kg", "11.8kg", "15kg", "30kg", "45.4kg", etc.)
@@ -265,26 +266,55 @@ export class InventoryIntegrationService {
       return;
     }
     
-    // Generate enum type dynamically from capacity - fully flexible
-    const cylinderType = generateCylinderTypeFromCapacity(capacity);
+    // Extract typeName from the label if present, e.g. "Plastic 15kg" / "Plastic (15kg)"
+    const m = itemName.match(/^\s*([^\d(]+?)\s*(?:\(|\b)\s*(\d+(?:\.\d+)?)\s*kg/i);
+    const rawTypeName = m?.[1]?.trim() || '';
+    const normalizedTypeName = normalizeTypeName(rawTypeName);
+    const typeNameForKey =
+      normalizedTypeName && !/cylinder|gas/i.test(normalizedTypeName) ? normalizedTypeName : null;
 
-    console.log(`🔍 Looking for ${quantity} empty ${cylinderType} cylinders`);
+    // Prefer legacy enums for common capacities so we match existing inventory:
+    // 11.8 → DOMESTIC_11_8KG, 15 → STANDARD_15KG, 45.4 → COMMERCIAL_45_4KG
+    const generatedType = generateCylinderTypeFromCapacity(capacity);
+    const candidates: string[] = [];
+    if (Math.abs(capacity - 11.8) < 0.11 || name.includes('domestic')) {
+      candidates.push('DOMESTIC_11_8KG', generatedType);
+    } else if (Math.abs(capacity - 15) < 0.11 || name.includes('standard')) {
+      candidates.push('STANDARD_15KG', generatedType);
+    } else if (Math.abs(capacity - 45.4) < 0.11 || name.includes('commercial')) {
+      candidates.push('COMMERCIAL_45_4KG', generatedType);
+    } else {
+      candidates.push(generatedType);
+    }
 
-    // Find empty cylinders of the matching type (region-scoped)
+    const uniqueCandidates = Array.from(new Set(candidates.filter(Boolean)));
+    const variantKeys = uniqueCandidates.map((ct) =>
+      buildCylinderVariantKey({
+        cylinderType: ct,
+        typeName: typeNameForKey,
+        capacity,
+      }),
+    );
+
+    console.log(
+      `🔍 Looking for ${quantity} empty cylinders for variant: ${typeNameForKey || 'Cylinder'} (${capacity}kg) in [${uniqueCandidates.join(', ')}]`,
+    );
+
+    // Find empty cylinders matching the variant (region-scoped)
     const emptyCylinders = await prisma.cylinder.findMany({
       where: {
-        cylinderType: cylinderType as any,
         currentStatus: 'EMPTY',
         ...regionScopedWhere(regionId),
+        OR: uniqueCandidates.map((ct, idx) => ({
+          ...buildPrismaCylinderVariantWhere(ct, variantKeys[idx]),
+        })),
       },
       take: quantity,
-      orderBy: {
-        createdAt: 'asc' // Take oldest empty cylinders first
-      }
+      orderBy: { createdAt: 'asc' }, // Take oldest empty cylinders first
     });
 
     if (emptyCylinders.length < quantity) {
-      const errorMessage = `Not enough empty ${cylinderType} cylinders available. Found: ${emptyCylinders.length}, Needed: ${quantity}`;
+      const errorMessage = `Not enough empty cylinders available for ${typeNameForKey || 'Cylinder'} (${capacity}kg). Found: ${emptyCylinders.length}, Needed: ${quantity}`;
       console.error(`❌ ${errorMessage}`);
       throw new Error(errorMessage);
     }
@@ -302,7 +332,7 @@ export class InventoryIntegrationService {
       }
     });
 
-    console.log(`✅ Updated ${updateResult.count} ${cylinderType} cylinders to FULL status for gas purchase: ${itemName}`);
+    console.log(`✅ Updated ${updateResult.count} cylinder(s) to FULL for gas purchase: ${itemName}`);
   }
 
   /**

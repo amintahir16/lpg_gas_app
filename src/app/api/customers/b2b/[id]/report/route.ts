@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
+import {
+  b2bItemVariantKey,
+  formatB2bItemCylinderLabel,
+  formatB2bVariantKeyForReport,
+} from '@/lib/b2b-transaction-item-variant';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 // Helper function to format currency
@@ -24,25 +28,6 @@ function formatDate(dateString: string | Date): string {
     month: 'short',
     day: 'numeric'
   });
-}
-
-// Helper function to get cylinder type display name - uses dynamic utility
-function getCylinderTypeDisplay(type: string, cylinderTypeMap?: Map<string, { typeName: string | null, capacity: number | null }>): string {
-  if (!type) return 'N/A';
-
-  // If we have a type map with proper typeName, use it
-  if (cylinderTypeMap && cylinderTypeMap.has(type)) {
-    const cylinderInfo = cylinderTypeMap.get(type)!;
-    if (cylinderInfo.typeName && cylinderInfo.typeName.trim() !== '' && cylinderInfo.typeName.trim() !== 'Cylinder') {
-      const capacity = cylinderInfo.capacity !== null ? cylinderInfo.capacity : 'N/A';
-      return `${cylinderInfo.typeName} (${capacity}kg)`;
-    } else if (cylinderInfo.capacity !== null) {
-      return `Cylinder (${cylinderInfo.capacity}kg)`;
-    }
-  }
-
-  // Fallback to dynamic utility function
-  return getCylinderTypeDisplayName(type);
 }
 
 // Categorize items into Sale, Buyback, and Return
@@ -134,7 +119,7 @@ function buildItemsDescription(transaction: any, cylinderTypeMap?: Map<string, {
   if (saleItems.length > 0) {
     const saleDescriptions = saleItems.map((item: any) => {
       if (item.cylinderType) {
-        return `${getCylinderTypeDisplay(item.cylinderType, cylinderTypeMap)} x${item.quantity || 0}`;
+        return `${formatB2bItemCylinderLabel(item, cylinderTypeMap)} x${item.quantity || 0}`;
       } else if (item.productName) {
         let name = item.productName;
 
@@ -176,7 +161,7 @@ function buildItemsDescription(transaction: any, cylinderTypeMap?: Map<string, {
   // Buyback items
   if (buybackItems.length > 0) {
     const buybackDescriptions = buybackItems.map((item: any) => {
-      const name = item.cylinderType ? getCylinderTypeDisplay(item.cylinderType, cylinderTypeMap) : 'Item';
+      const name = item.cylinderType ? formatB2bItemCylinderLabel(item, cylinderTypeMap) : 'Item';
       const details: string[] = [];
       if (item.remainingKg && Number(item.remainingKg) > 0) {
         details.push(`${Number(item.remainingKg).toFixed(1)}kg`);
@@ -194,7 +179,7 @@ function buildItemsDescription(transaction: any, cylinderTypeMap?: Map<string, {
   // Return items
   if (returnItems.length > 0) {
     const returnDescriptions = returnItems.map((item: any) => {
-      const name = item.cylinderType ? getCylinderTypeDisplay(item.cylinderType, cylinderTypeMap) : 'Item';
+      const name = item.cylinderType ? formatB2bItemCylinderLabel(item, cylinderTypeMap) : 'Item';
       return `${name} x${item.quantity || 0}`;
     });
 
@@ -530,7 +515,7 @@ async function generatePDF(
 
     cylinderStats.forEach((stats, type) => {
       if (stats.delivered > 0 || stats.returned > 0 || stats.buyback > 0 || stats.held !== 0) {
-        const typeName = getCylinderTypeDisplay(type, cylinderTypeMap);
+        const typeName = formatB2bVariantKeyForReport(type, cylinderTypeMap);
         const row = [
           typeName,
           stats.delivered.toString(),
@@ -921,46 +906,44 @@ export async function GET(
 
       // Sale Items (Deliveries) -> ADD to delivered and held
       saleItems.forEach((item: any) => {
-        if (item.cylinderType) {
-          const current = cylinderStats.get(item.cylinderType) || { delivered: 0, returned: 0, buyback: 0, held: 0, buybackWeight: 0, buybackCredit: 0 };
-          const qty = item.quantity ? Number(item.quantity) : 0;
-          current.delivered += qty;
-          current.held += qty;
-          cylinderStats.set(item.cylinderType, current);
-        }
+        const vk = b2bItemVariantKey(item);
+        if (!vk) return;
+        const current = cylinderStats.get(vk) || { delivered: 0, returned: 0, buyback: 0, held: 0, buybackWeight: 0, buybackCredit: 0 };
+        const qty = item.quantity ? Number(item.quantity) : 0;
+        current.delivered += qty;
+        current.held += qty;
+        cylinderStats.set(vk, current);
       });
 
       // Buyback Items (Returns with value) -> ADD to returned (as empty), ADD weight/credit, SUBTRACT from held
       buybackItems.forEach((item: any) => {
-        if (item.cylinderType) {
-          const current = cylinderStats.get(item.cylinderType) || { delivered: 0, returned: 0, buyback: 0, held: 0, buybackWeight: 0, buybackCredit: 0 };
-          const qty = item.quantity ? Number(item.quantity) : 0;
-          // As requested: track cylinder count under returned, not buyback
-          current.returned += qty;
-          current.buyback += qty;
-          current.held -= qty;
+        const vk = b2bItemVariantKey(item);
+        if (!vk) return;
+        const current = cylinderStats.get(vk) || { delivered: 0, returned: 0, buyback: 0, held: 0, buybackWeight: 0, buybackCredit: 0 };
+        const qty = item.quantity ? Number(item.quantity) : 0;
+        current.returned += qty;
+        current.buyback += qty;
+        current.held -= qty;
 
-          // Accumulate weight and credit
-          if (item.remainingKg) {
-            current.buybackWeight += Number(item.remainingKg) * qty;
-          }
-          if (item.totalPrice) {
-            current.buybackCredit += Number(item.totalPrice);
-          }
-
-          cylinderStats.set(item.cylinderType, current);
+        if (item.remainingKg) {
+          current.buybackWeight += Number(item.remainingKg) * qty;
         }
+        if (item.totalPrice) {
+          current.buybackCredit += Number(item.totalPrice);
+        }
+
+        cylinderStats.set(vk, current);
       });
 
       // Return Items (Empty Returns) -> ADD to returned, SUBTRACT from held
       returnItems.forEach((item: any) => {
-        if (item.cylinderType) {
-          const current = cylinderStats.get(item.cylinderType) || { delivered: 0, returned: 0, buyback: 0, held: 0, buybackWeight: 0, buybackCredit: 0 };
-          const qty = item.quantity ? Number(item.quantity) : 0;
-          current.returned += qty;
-          current.held -= qty;
-          cylinderStats.set(item.cylinderType, current);
-        }
+        const vk = b2bItemVariantKey(item);
+        if (!vk) return;
+        const current = cylinderStats.get(vk) || { delivered: 0, returned: 0, buyback: 0, held: 0, buybackWeight: 0, buybackCredit: 0 };
+        const qty = item.quantity ? Number(item.quantity) : 0;
+        current.returned += qty;
+        current.held -= qty;
+        cylinderStats.set(vk, current);
       });
     });
 

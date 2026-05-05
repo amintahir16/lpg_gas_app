@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCylinderTypeDisplayName, normalizeTypeName } from '@/lib/cylinder-utils';
+import { buildCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
@@ -82,9 +83,16 @@ export async function GET(request: NextRequest) {
         displayType = getCylinderTypeDisplayName(type);
       }
       
+      const variantKey = buildCylinderVariantKey({
+        cylinderType: type,
+        typeName: normalizedTypeNameLowercase,
+        capacity,
+      });
+
       return {
         type: displayType,
         typeEnum: type, // Keep original enum for reference
+        variantKey,
         full,
         empty,
         withCustomer,
@@ -95,11 +103,10 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // Deduplicate stats by display type to prevent duplicates
-    // This can happen if the same combination appears multiple times
+    // Deduplicate by variantKey (same typeName+capacity+cylinderType), not display string alone
     const uniqueStatsMap = new Map<string, typeof processedStats[0]>();
     processedStats.forEach(stat => {
-      const key = stat.type; // Use display type as unique key
+      const key = stat.variantKey;
       if (!uniqueStatsMap.has(key)) {
         uniqueStatsMap.set(key, stat);
       } else {

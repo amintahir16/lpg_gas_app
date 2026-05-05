@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
-import { CylinderType, CylinderStatus } from '@prisma/client';
+import { CylinderStatus } from '@prisma/client';
 import { regionScopedWhere } from '@/lib/region';
+import { buildPrismaCylinderVariantWhere } from '@/lib/cylinder-variant-key';
 
 export interface InventoryCheck {
   cylinderType: string;
@@ -16,35 +17,29 @@ export async function checkCylinderInventory(
   cylinderType: string,
   requested: number,
   regionId?: string | null,
+  cylinderVariantKey?: string | null,
 ): Promise<InventoryCheck> {
-  // Map string cylinder type to enum (dynamic - handles any cylinder type)
-  let mappedCylinderType: CylinderType;
-  try {
-    mappedCylinderType = cylinderType as CylinderType;
-
-    if (!Object.values(CylinderType).includes(mappedCylinderType)) {
-      return { cylinderType, requested, available: 0, isValid: false };
-    }
-  } catch (error) {
-    return { cylinderType, requested, available: 0, isValid: false };
-  }
+  const echoKey = cylinderVariantKey?.trim()
+    ? cylinderVariantKey!.trim()
+    : cylinderType;
 
   try {
+    const variantWhere = buildPrismaCylinderVariantWhere(cylinderType, cylinderVariantKey);
     const availableCylinders = await prisma.cylinder.findMany({
       where: {
-        cylinderType: mappedCylinderType,
+        ...variantWhere,
         currentStatus: CylinderStatus.FULL,
         ...regionScopedWhere(regionId ?? null),
-      }
+      },
     });
 
     const available = availableCylinders.length;
     const isValid = requested <= 0 ? true : available >= requested;
 
-    return { cylinderType, requested, available, isValid };
+    return { cylinderType: echoKey, requested, available, isValid };
   } catch (error) {
     console.error('Error checking cylinder inventory:', error);
-    return { cylinderType, requested, available: 0, isValid: false };
+    return { cylinderType: echoKey, requested, available: 0, isValid: false };
   }
 }
 

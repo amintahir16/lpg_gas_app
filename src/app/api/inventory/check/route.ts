@@ -17,7 +17,12 @@ export async function POST(request: NextRequest) {
 
     if (cylinders && cylinders.length > 0) {
       for (const cylinder of cylinders) {
-        const result = await checkCylinderInventory(cylinder.cylinderType, cylinder.requested, regionId);
+        const result = await checkCylinderInventory(
+          cylinder.cylinderType,
+          cylinder.requested,
+          regionId,
+          cylinder.cylinderVariantKey ?? null,
+        );
         results.push(result);
       }
     }

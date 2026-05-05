@@ -6,6 +6,7 @@ import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity } from '@/lib/superAdminNotifier';
 import { getActiveRegionId, regionScopedWhere, withRegionScope } from '@/lib/region';
 import { requireAdmin, clampLimit } from '@/lib/apiAuth';
+import { buildCylinderVariantKey } from '@/lib/cylinder-variant-key';
 
 export async function GET(request: NextRequest) {
   try {
@@ -166,8 +167,11 @@ export async function GET(request: NextRequest) {
         if (holderId) {
           if (!map[holderId]) map[holderId] = {};
 
-          // Determine Key (Use Raw Cylinder Type Code)
-          let key = cyl.cylinderType;
+          const key = buildCylinderVariantKey({
+            cylinderType: cyl.cylinderType,
+            typeName: cyl.typeName,
+            capacity: cyl.capacity != null ? Number(cyl.capacity) : null,
+          });
 
           map[holderId][key] = (map[holderId][key] || 0) + 1;
           types.add(key);
@@ -322,7 +326,7 @@ export async function GET(request: NextRequest) {
     const allFilteredCustomerIds = filteredCustomers.map(c => c.id);
 
     // Parallel fetch: Page Holdings (Details), Total Summary Holdings (Aggregated), and Type Definitions
-    const [pageHoldings, summaryCylinderStats, cylinderDefinitions] = await Promise.all([
+    const [pageHoldings, summaryCylindersHeld, cylinderDefinitions] = await Promise.all([
       getHoldings(paginatedCustomers.map(c => ({ id: c.id, name: c.name }))),
       prisma.cylinder.findMany({
         where: {
@@ -334,19 +338,24 @@ export async function GET(request: NextRequest) {
             ...filteredCustomers.map(c => ({ location: { contains: c.name, mode: 'insensitive' as const } }))
           ]
         },
-        select: { cylinderType: true }
+        select: { cylinderType: true, typeName: true, capacity: true }
       }),
-      // Fetch definitions for all types (region-scoped)
       prisma.cylinder.findMany({
         where: { ...regionScopedWhere(regionId) },
-        distinct: ['cylinderType'],
+        distinct: ['cylinderType', 'typeName', 'capacity'],
         select: { cylinderType: true, typeName: true, capacity: true }
       })
     ]);
 
-    // Create Type Definitions Map for Frontend (matches B2C logic)
-    const typeDefinitions: Record<string, { name: string, capacity: number }> = {};
+    // Create Type Definitions Map for Frontend — one entry per (enum + typeName + capacity)
+    const typeDefinitions: Record<string, { name: string; capacity: number }> = {};
     cylinderDefinitions.forEach(def => {
+      const variantKey = buildCylinderVariantKey({
+        cylinderType: def.cylinderType,
+        typeName: def.typeName,
+        capacity: def.capacity != null ? Number(def.capacity) : null,
+      });
+
       let displayName = 'Cylinder';
       if (def.typeName && def.typeName.trim().toLowerCase() !== 'cylinder') {
         displayName = def.typeName.trim();
@@ -356,26 +365,25 @@ export async function GET(request: NextRequest) {
         else if (upperType.includes('STANDARD')) displayName = 'Standard';
         else if (upperType.includes('COMMERCIAL')) displayName = 'Commercial';
       }
-      typeDefinitions[def.cylinderType] = {
+
+      const capNum = def.capacity != null ? Number(def.capacity) : 0;
+      typeDefinitions[variantKey] = {
         name: displayName,
-        capacity: Number(def.capacity)
+        capacity: capNum,
       };
     });
-
-    // Standard Cylinder Map (Enums to Legacy Fields)
-    const STANDARD_CYLINDER_MAP: Record<string, keyof typeof allMatchingCustomers[0]> = {
-      'DOMESTIC_11_8KG': 'domestic118kgDue',
-      'STANDARD_15KG': 'standard15kgDue',
-      'COMMERCIAL_45_4KG': 'commercial454kgDue'
-    };
 
     // Calculate Global Cylinder Summary (Count by Type)
     const totalCylindersSummary: Record<string, number> = {};
     const physicalSummary: Record<string, number> = {};
 
     // Use raw cylinderType as key - NO formatting here
-    summaryCylinderStats.forEach(cyl => {
-      const key = cyl.cylinderType;
+    summaryCylindersHeld.forEach(cyl => {
+      const key = buildCylinderVariantKey({
+        cylinderType: cyl.cylinderType,
+        typeName: cyl.typeName,
+        capacity: cyl.capacity != null ? Number(cyl.capacity) : null,
+      });
       physicalSummary[key] = (physicalSummary[key] || 0) + 1;
     });
 
@@ -398,10 +406,19 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    const uniqueCylinderTypes = Array.from(new Set([
-      ...pageHoldings.types,
-      ...Object.keys(totalCylindersSummary)
-    ])).sort();
+    const uniqueCylinderTypes = Array.from(
+      new Set([...pageHoldings.types, ...Object.keys(totalCylindersSummary)]),
+    ).sort((a, b) => {
+      const da = typeDefinitions[a];
+      const db = typeDefinitions[b];
+      if (da && db) {
+        if (da.capacity !== db.capacity) return da.capacity - db.capacity;
+        return da.name.localeCompare(db.name);
+      }
+      if (da && !db) return -1;
+      if (!da && db) return 1;
+      return a.localeCompare(b);
+    });
 
     return NextResponse.json({
       customers: finalCustomers,
