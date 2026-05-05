@@ -40,32 +40,43 @@ export async function GET(request: NextRequest) {
                 ...regionScope,
             },
         });
-        // Monthly chart data for daily expenses (last 6 months)
+        // Monthly chart data for daily, rent & vehicle expenses (last 6 months)
         const chartData = [];
         for (let i = 5; i >= 0; i--) {
             const chartMonth = subMonths(now, i);
             const chartStart = new Date(chartMonth.getFullYear(), chartMonth.getMonth(), 1);
             const chartEnd = new Date(chartMonth.getFullYear(), chartMonth.getMonth() + 1, 0, 23, 59, 59, 999);
-            const dailyTotal = await prisma.officeExpense.aggregate({
-                where: {
-                    type: 'DAILY',
-                    expenseDate: { gte: chartStart, lte: chartEnd },
-                    ...regionScope,
-                },
-                _sum: { amount: true },
-            });
-            const rentTotal = await prisma.officeExpense.aggregate({
-                where: {
-                    type: 'RENT',
-                    expenseDate: { gte: chartStart, lte: chartEnd },
-                    ...regionScope,
-                },
-                _sum: { amount: true },
-            });
+            const [dailyTotal, rentTotal, vehicleTotal] = await Promise.all([
+                prisma.officeExpense.aggregate({
+                    where: {
+                        type: 'DAILY',
+                        expenseDate: { gte: chartStart, lte: chartEnd },
+                        ...regionScope,
+                    },
+                    _sum: { amount: true },
+                }),
+                prisma.officeExpense.aggregate({
+                    where: {
+                        type: 'RENT',
+                        expenseDate: { gte: chartStart, lte: chartEnd },
+                        ...regionScope,
+                    },
+                    _sum: { amount: true },
+                }),
+                prisma.officeExpense.aggregate({
+                    where: {
+                        type: 'VEHICLE',
+                        expenseDate: { gte: chartStart, lte: chartEnd },
+                        ...regionScope,
+                    },
+                    _sum: { amount: true },
+                }),
+            ]);
             chartData.push({
                 name: format(chartStart, 'MMM yyyy'),
                 daily: Number(dailyTotal._sum.amount || 0),
                 rent: Number(rentTotal._sum.amount || 0),
+                vehicle: Number(vehicleTotal._sum.amount || 0),
             });
         }
         return NextResponse.json({
@@ -98,8 +109,8 @@ export async function POST(request: NextRequest) {
                 { status: 400 }
             );
         }
-        if (!['RENT', 'DAILY'].includes(type)) {
-            return NextResponse.json({ error: 'Type must be RENT or DAILY' }, { status: 400 });
+        if (!['RENT', 'DAILY', 'VEHICLE'].includes(type)) {
+            return NextResponse.json({ error: 'Type must be RENT, DAILY, or VEHICLE' }, { status: 400 });
         }
         const parsedAmount = parseFloat(amount);
         if (isNaN(parsedAmount) || parsedAmount <= 0) {
@@ -169,10 +180,11 @@ export async function POST(request: NextRequest) {
             }
             return NextResponse.json(expense, { status: 201 });
         }
-        // DAILY type
+        // DAILY or VEHICLE type
+        const expenseType = type as 'DAILY' | 'VEHICLE';
         const expense = await prisma.officeExpense.create({
             data: {
-                type: 'DAILY',
+                type: expenseType,
                 amount: parsedAmount,
                 description,
                 expenseDate: new Date(expenseDate),
@@ -182,17 +194,18 @@ export async function POST(request: NextRequest) {
         });
         try {
             const link = `/financial/expenses`;
+            const typeLabel = expenseType === 'VEHICLE' ? 'Vehicle' : 'Daily';
             await logActivity({
                 userId: session.user.id,
                 action: ActivityAction.OFFICE_EXPENSE_CREATED,
                 entityType: 'OFFICE_EXPENSE',
                 entityId: expense.id,
-                details: `Recorded DAILY expense Rs ${parsedAmount.toLocaleString()} • ${description}`,
+                details: `Recorded ${expenseType} expense Rs ${parsedAmount.toLocaleString()} • ${description}`,
                 link,
                 regionId,
                 metadata: {
                     expenseId: expense.id,
-                    type: 'DAILY',
+                    type: expenseType,
                     amount: parsedAmount,
                     description,
                 },
@@ -200,20 +213,20 @@ export async function POST(request: NextRequest) {
             await notifyUserActivity({
                 actorId: session.user.id,
                 actorName: session.user.name || session.user.email || 'A user',
-                title: 'Daily expense recorded',
-                message: `${session.user.name || session.user.email} recorded Rs ${parsedAmount.toLocaleString()} daily expense • ${description}.`,
+                title: `${typeLabel} expense recorded`,
+                message: `${session.user.name || session.user.email} recorded Rs ${parsedAmount.toLocaleString()} ${typeLabel.toLowerCase()} expense • ${description}.`,
                 link,
                 priority: 'LOW',
                 regionId,
                 metadata: {
                     domain: 'OFFICE_EXPENSE',
                     expenseId: expense.id,
-                    type: 'DAILY',
+                    type: expenseType,
                     amount: parsedAmount,
                 },
             });
         } catch (sideEffectError) {
-            console.error('Office expense (daily) side effects failed:', sideEffectError);
+            console.error(`Office expense (${expenseType.toLowerCase()}) side effects failed:`, sideEffectError);
         }
         return NextResponse.json(expense, { status: 201 });
     } catch (error) {

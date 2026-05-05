@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
     ArrowLeftIcon, BuildingOfficeIcon, PlusIcon, CalendarIcon,
-    PencilIcon, TrashIcon, CheckCircleIcon, XCircleIcon
+    PencilIcon, TrashIcon, CheckCircleIcon, XCircleIcon, TruckIcon
 } from '@heroicons/react/24/outline';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { CustomSelect } from '@/components/ui/select-custom';
@@ -34,6 +34,7 @@ export default function ExpensesPage() {
     const [loading, setLoading] = useState(true);
     const [showRentModal, setShowRentModal] = useState(false);
     const [showDailyModal, setShowDailyModal] = useState(false);
+    const [showVehicleModal, setShowVehicleModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [editingExpense, setEditingExpense] = useState<OfficeExpense | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -74,6 +75,7 @@ export default function ExpensesPage() {
             }
             setShowRentModal(false);
             setShowDailyModal(false);
+            setShowVehicleModal(false);
             fetchData();
         } catch (err: any) {
             setError(err.message);
@@ -118,7 +120,9 @@ export default function ExpensesPage() {
     const formatDate = (date: string) => new Date(date).toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' });
     const rentExpenses = expenses.filter(e => e.type === 'RENT');
     const dailyExpenses = expenses.filter(e => e.type === 'DAILY');
+    const vehicleExpenses = expenses.filter(e => e.type === 'VEHICLE');
     const totalExpenses = expenses.reduce((s, e) => s + Number(e.amount), 0);
+    const vehicleTotal = vehicleExpenses.reduce((s, e) => s + Number(e.amount), 0);
     const now = new Date();
     return (
         <div className="space-y-6 max-w-[1200px] mx-auto">
@@ -146,7 +150,7 @@ export default function ExpensesPage() {
                 </div>
             )}
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card className="border-0 shadow-sm bg-gradient-to-br from-rose-500 to-orange-500">
                     <CardContent className="p-4">
                         <p className="text-sm font-medium text-rose-100">Total Expenses (All Time)</p>
@@ -172,6 +176,12 @@ export default function ExpensesPage() {
                     <CardContent className="p-4">
                         <p className="text-sm font-medium text-blue-100">Daily Expenses Count</p>
                         <p className="text-2xl font-bold text-white">{dailyExpenses.length}</p>
+                    </CardContent>
+                </Card>
+                <Card className="border-0 shadow-sm bg-gradient-to-br from-teal-500 to-teal-600">
+                    <CardContent className="p-4">
+                        <p className="text-sm font-medium text-teal-100">Vehicle Expenses</p>
+                        <p className="text-2xl font-bold text-white">{formatCurrency(vehicleTotal)}</p>
                     </CardContent>
                 </Card>
             </div>
@@ -279,6 +289,57 @@ export default function ExpensesPage() {
                     )}
                 </CardContent>
             </Card>
+            {/* Vehicle Expenses Section */}
+            <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                        <CardTitle className="text-lg flex items-center"><TruckIcon className="w-5 h-5 mr-2 text-teal-600" />Vehicle Expenses</CardTitle>
+                        <CardDescription>Daily vehicle operational costs (fuel, maintenance, etc.)</CardDescription>
+                    </div>
+                    <Button onClick={() => setShowVehicleModal(true)} className="bg-teal-600 hover:bg-teal-700 text-white" size="sm">
+                        <PlusIcon className="w-4 h-4 mr-2" /> Add Vehicle Expense
+                    </Button>
+                </CardHeader>
+                <CardContent>
+                    {loading ? (
+                        <div className="py-8 text-center text-gray-500">Loading...</div>
+                    ) : vehicleExpenses.length === 0 ? (
+                        <div className="py-6 text-center text-gray-500">No vehicle expenses recorded</div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <Table className="min-w-[500px]">
+                                <TableHeader>
+                                    <TableRow className="bg-gray-50/50">
+                                        <TableHead className="font-semibold">Date</TableHead>
+                                        <TableHead className="font-semibold">Description</TableHead>
+                                        <TableHead className="font-semibold text-right">Amount</TableHead>
+                                        <TableHead className="font-semibold text-center">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {vehicleExpenses.map((exp) => (
+                                        <TableRow key={exp.id}>
+                                            <TableCell className="font-medium" suppressHydrationWarning>{formatDate(exp.expenseDate)}</TableCell>
+                                            <TableCell className="text-gray-700">{exp.description}</TableCell>
+                                            <TableCell className="text-right font-bold text-teal-700">{formatCurrency(Number(exp.amount))}</TableCell>
+                                            <TableCell className="text-center">
+                                                <div className="flex items-center justify-center gap-1">
+                                                    <Button variant="ghost" size="sm" onClick={() => { setEditingExpense(exp); setShowEditModal(true); }}>
+                                                        <PencilIcon className="w-4 h-4" />
+                                                    </Button>
+                                                    <Button variant="ghost" size="sm" onClick={() => handleDeleteExpense(exp.id)} className="text-red-600 hover:text-red-800">
+                                                        <TrashIcon className="w-4 h-4" />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
             {/* Pagination */}
             {pagination.pages > 1 && (
                 <div className="flex items-center justify-between">
@@ -296,7 +357,7 @@ export default function ExpensesPage() {
                 <Card className="border shadow-sm bg-white">
                     <CardHeader>
                         <CardTitle className="text-base font-bold">Monthly Expenses Trend</CardTitle>
-                        <CardDescription className="text-xs">Last 6 months — Daily Expenses vs Rent</CardDescription>
+                        <CardDescription className="text-xs">Last 6 months — Daily Expenses vs Rent vs Vehicle</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <div className="h-[280px] w-full">
@@ -308,6 +369,7 @@ export default function ExpensesPage() {
                                     <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} formatter={(value: number) => formatCurrency(value)} />
                                     <Legend iconType="circle" />
                                     <Bar dataKey="daily" name="Daily Expenses" stackId="a" fill="#3b82f6" radius={[0, 0, 4, 4]} />
+                                    <Bar dataKey="vehicle" name="Vehicle Expenses" stackId="a" fill="#14b8a6" radius={[0, 0, 0, 0]} />
                                     <Bar dataKey="rent" name="Office Rent" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                                 </BarChart>
                             </ResponsiveContainer>
@@ -426,6 +488,55 @@ export default function ExpensesPage() {
                             <div className="flex justify-end gap-2 pt-2">
                                 <Button type="button" variant="ghost" onClick={() => { setShowDailyModal(false); setError(null); }} className="h-9 text-xs font-semibold">Cancel</Button>
                                 <Button type="submit" disabled={submitting} className="bg-blue-600 hover:bg-blue-700 text-white h-9 px-6 text-xs font-bold shadow-md shadow-blue-200">
+                                    {submitting ? 'Saving...' : 'Add Expense'}
+                                </Button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+            {/* Add Vehicle Expense Modal */}
+            {showVehicleModal && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl p-5 w-full max-w-md shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <h2 className="text-lg font-bold text-gray-900">Add Vehicle Expense</h2>
+                                <p className="text-[10px] text-gray-500 font-medium">Record daily vehicle operational cost</p>
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => { setShowVehicleModal(false); setError(null); }} className="h-8 w-8 p-0 rounded-full">
+                                <span className="text-xl">×</span>
+                            </Button>
+                        </div>
+
+                        <form onSubmit={(e) => {
+                            e.preventDefault();
+                            const fd = new FormData(e.target as HTMLFormElement);
+                            handleCreateExpense({
+                                type: 'VEHICLE',
+                                amount: fd.get('amount'),
+                                description: fd.get('description'),
+                                expenseDate: fd.get('date'),
+                            });
+                        }} className="space-y-3">
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Expense Date</label>
+                                <Input name="date" type="date" defaultValue={new Date().toISOString().split('T')[0]} required className="h-9" />
+                            </div>
+                            
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Amount (PKR)</label>
+                                <Input name="amount" type="number" placeholder="Enter amount" step="1" required className="h-9 font-bold text-teal-700" />
+                            </div>
+                            
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Description / Purpose</label>
+                                <Input name="description" type="text" placeholder="e.g., Fuel, Tyre, Oil change" required className="h-9" />
+                            </div>
+
+                            <div className="flex justify-end gap-2 pt-2">
+                                <Button type="button" variant="ghost" onClick={() => { setShowVehicleModal(false); setError(null); }} className="h-9 text-xs font-semibold">Cancel</Button>
+                                <Button type="submit" disabled={submitting} className="bg-teal-600 hover:bg-teal-700 text-white h-9 px-6 text-xs font-bold shadow-md shadow-teal-200">
                                     {submitting ? 'Saving...' : 'Add Expense'}
                                 </Button>
                             </div>

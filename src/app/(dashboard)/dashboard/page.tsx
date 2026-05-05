@@ -19,7 +19,8 @@ import {
   CheckCircleIcon,
   ArrowPathIcon,
   BuildingOfficeIcon,
-  BuildingStorefrontIcon
+  BuildingStorefrontIcon,
+  BanknotesIcon
 } from '@heroicons/react/24/outline';
 import {
   BarChart,
@@ -55,6 +56,8 @@ interface DashboardStats {
     rangeRevenue: number;
     rangeProfit: number;
     rangeExpenses: number;
+    rangeSalaries: number;
+    actualProfit: number;
     vendorBalance: number;
   };
   revenueChartData: any[];
@@ -239,7 +242,7 @@ export default function DashboardPage() {
 
       {/* Stats Cards — Period Revenue & Est. Profit: SUPER_ADMIN only */}
       <div
-        className={`grid grid-cols-2 gap-3 ${isSuperAdmin ? 'md:grid-cols-3 lg:grid-cols-6' : 'md:grid-cols-2 lg:grid-cols-4'}`}
+        className={`grid grid-cols-2 gap-3 ${isSuperAdmin ? 'md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7' : 'md:grid-cols-2 lg:grid-cols-4'}`}
       >
         <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-500 to-blue-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
           <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">
@@ -273,6 +276,17 @@ export default function DashboardPage() {
                 <p className="text-xs font-medium text-violet-100 mb-1 truncate">Est. Profit</p>
                 <h3 className="text-xl font-bold text-white truncate">{formatCurrency(stats.kpis.rangeProfit)}</h3>
                 <p className="text-[10px] text-violet-200 mt-1 truncate">Gross margins</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-teal-500 to-emerald-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
+              <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">
+                <BanknotesIcon className="w-10 h-10 text-white" />
+              </div>
+              <CardContent className="p-3 relative z-10">
+                <p className="text-xs font-medium text-teal-100 mb-1 truncate">Actual Profit</p>
+                <h3 className={`text-xl font-bold truncate ${stats.kpis.actualProfit >= 0 ? 'text-white' : 'text-red-200'}`}>{formatCurrency(stats.kpis.actualProfit)}</h3>
+                <p className="text-[10px] text-teal-200 mt-1 truncate">After all deductions</p>
               </CardContent>
             </Card>
           </>

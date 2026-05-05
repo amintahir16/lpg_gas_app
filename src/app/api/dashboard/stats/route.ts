@@ -154,11 +154,24 @@ export async function GET(request: NextRequest) {
     });
 
     // 3.5. Expenses and Vendor Balance (within date range)
+    // RENT expenses use expenseDate=15th of month which can be in the future,
+    // so we also match RENT by month/year for any month that overlaps the range.
+    const monthsCovered: Array<{ month: number; year: number }> = [];
+    const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    while (cursor <= endDate) {
+      monthsCovered.push({ month: cursor.getMonth() + 1, year: cursor.getFullYear() });
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+    const rentMonthConditions = monthsCovered.map(m => ({ type: 'RENT' as const, month: m.month, year: m.year }));
+
     const [expensesSum, purchasesSum, paymentsSum] = await Promise.all([
       prisma.officeExpense.aggregate({
         where: {
-          expenseDate: { gte: startDate, lte: endDate },
           ...regionScope,
+          OR: [
+            { expenseDate: { gte: startDate, lte: endDate }, type: { in: ['DAILY', 'VEHICLE'] } },
+            ...rentMonthConditions,
+          ],
         },
         _sum: { amount: true }
       }),
@@ -185,8 +198,30 @@ export async function GET(request: NextRequest) {
     const rangePayments = Number(paymentsSum._sum.amount || 0);
     const vendorBalance = rangePurchases - rangePayments;
 
+    // 3.6. Salaries (within date range, by paidDate)
+    const salariesSum = await prisma.salaryRecord.aggregate({
+      where: {
+        paidDate: { gte: startDate, lte: endDate },
+        ...regionScope,
+      },
+      _sum: { amount: true },
+    });
+    const rangeSalaries = Number(salariesSum._sum.amount || 0);
+
+    // 3.7. Actual Profit = Revenue - Expenses - Salaries
+    const actualProfit = rangeRevenue - rangeExpenses - rangeSalaries;
+
     // 4. Chart Data (Last 6 Months or Daily)
     const chartStartDate = isDaily ? startDate : startOfMonth(subMonths(endDate, 5));
+
+    // Pre-compute chart month/year conditions for RENT matching
+    const chartMonthsCovered: Array<{ month: number; year: number }> = [];
+    const chartCursor = new Date(chartStartDate.getFullYear(), chartStartDate.getMonth(), 1);
+    while (chartCursor <= endDate) {
+      chartMonthsCovered.push({ month: chartCursor.getMonth() + 1, year: chartCursor.getFullYear() });
+      chartCursor.setMonth(chartCursor.getMonth() + 1);
+    }
+    const chartRentConditions = chartMonthsCovered.map(m => ({ type: 'RENT' as const, month: m.month, year: m.year }));
 
     const [b2cTransChart, b2bTransChart, expensesChart] = await Promise.all([
       prisma.b2CTransaction.findMany({
@@ -202,8 +237,14 @@ export async function GET(request: NextRequest) {
         select: { date: true, totalAmount: true }
       }),
       prisma.officeExpense.findMany({
-        where: { expenseDate: { gte: chartStartDate, lte: endDate }, ...regionScope },
-        select: { expenseDate: true, amount: true }
+        where: {
+          ...regionScope,
+          OR: [
+            { expenseDate: { gte: chartStartDate, lte: endDate }, type: { in: ['DAILY', 'VEHICLE'] } },
+            ...chartRentConditions,
+          ],
+        },
+        select: { expenseDate: true, amount: true, type: true }
       })
     ]);
 
@@ -598,6 +639,8 @@ export async function GET(request: NextRequest) {
         rangeRevenue,
         rangeProfit,
         rangeExpenses,
+        rangeSalaries,
+        actualProfit,
         vendorBalance,
       },
       revenueChartData,
