@@ -112,42 +112,91 @@ export async function POST(request: NextRequest) {
     const targetDate = date ? new Date(date) : new Date();
     targetDate.setHours(0, 0, 0, 0);
 
-    const existingPrice = await prisma.dailyPlantPrice.findFirst({
-      where: { date: targetDate, ...regionScopedWhere(regionId) }
-    });
-
-    let price;
-    if (existingPrice) {
-      price = await prisma.dailyPlantPrice.update({
-        where: { id: existingPrice.id },
-        data: {
-          plantPrice118kg: parseFloat(plantPrice118kg),
-          notes: notes || null
-        },
-        include: {
-          createdByUser: {
-            select: { name: true, email: true }
-          }
-        }
+    // Identify if propagation is needed (SUPER_ADMIN in Default Region)
+    let shouldPropagate = false;
+    if (session.user.role === 'SUPER_ADMIN' && regionId) {
+      const currentRegion = await prisma.region.findUnique({
+        where: { id: regionId },
+        select: { isDefault: true }
       });
-    } else {
-      price = await prisma.dailyPlantPrice.create({
-        data: {
-          date: targetDate,
-          plantPrice118kg: parseFloat(plantPrice118kg),
-          notes: notes || null,
-          createdBy: session.user.id,
-          ...(regionId ? { regionId } : {}),
-        },
-        include: {
-          createdByUser: {
-            select: { name: true, email: true }
-          }
-        }
-      });
+      if (currentRegion?.isDefault) {
+        shouldPropagate = true;
+      }
     }
 
-    return NextResponse.json(price, { status: existingPrice ? 200 : 201 });
+    let price;
+    if (shouldPropagate) {
+      // Propagate to ALL active regions
+      const allActiveRegions = await prisma.region.findMany({
+        where: { isActive: true },
+        select: { id: true }
+      });
+
+      const upsertOps = allActiveRegions.map((r) => {
+        return prisma.dailyPlantPrice.upsert({
+          where: {
+            regionId_date: {
+              regionId: r.id,
+              date: targetDate
+            }
+          },
+          update: {
+            plantPrice118kg: parseFloat(plantPrice118kg),
+            notes: notes || null
+          },
+          create: {
+            regionId: r.id,
+            date: targetDate,
+            plantPrice118kg: parseFloat(plantPrice118kg),
+            notes: notes || null,
+            createdBy: session.user.id
+          }
+        });
+      });
+
+      const results = await prisma.$transaction(upsertOps);
+      // Return the result for the current region (or first one)
+      price = results.find(p => p.regionId === regionId) || results[0];
+      
+      console.log(`[PlantPrice] Propagated price to ${results.length} active regions`);
+    } else {
+      // Standard local-only update
+      const existingPrice = await prisma.dailyPlantPrice.findFirst({
+        where: { date: targetDate, ...regionScopedWhere(regionId) }
+      });
+
+      if (existingPrice) {
+        price = await prisma.dailyPlantPrice.update({
+          where: { id: existingPrice.id },
+          data: {
+            plantPrice118kg: parseFloat(plantPrice118kg),
+            notes: notes || null
+          }
+        });
+      } else {
+        price = await prisma.dailyPlantPrice.create({
+          data: {
+            date: targetDate,
+            plantPrice118kg: parseFloat(plantPrice118kg),
+            notes: notes || null,
+            createdBy: session.user.id,
+            ...(regionId ? { regionId } : {}),
+          }
+        });
+      }
+    }
+
+    // Refresh createdByUser info for the response
+    const finalPrice = await prisma.dailyPlantPrice.findUnique({
+      where: { id: price.id },
+      include: {
+        createdByUser: {
+          select: { name: true, email: true }
+        }
+      }
+    });
+
+    return NextResponse.json(finalPrice, { status: 200 });
   } catch (error) {
     console.error('Error setting plant price:', error);
     return NextResponse.json(
