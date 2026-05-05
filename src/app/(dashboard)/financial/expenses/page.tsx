@@ -185,16 +185,23 @@ export default function ExpensesPage() {
                     </CardContent>
                 </Card>
             </div>
+            {/* Quick Action Buttons */}
+            <div className="flex gap-2 sm:justify-end">
+                <Button onClick={() => setShowRentModal(true)} className="bg-amber-600 hover:bg-amber-700 text-white shadow-sm whitespace-nowrap" size="sm">
+                    <PlusIcon className="w-4 h-4 mr-1.5" /> Rent
+                </Button>
+                <Button onClick={() => setShowDailyModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm whitespace-nowrap" size="sm">
+                    <PlusIcon className="w-4 h-4 mr-1.5" /> Expense
+                </Button>
+                <Button onClick={() => setShowVehicleModal(true)} className="bg-teal-600 hover:bg-teal-700 text-white shadow-sm whitespace-nowrap" size="sm">
+                    <PlusIcon className="w-4 h-4 mr-1.5" /> Vehicle
+                </Button>
+            </div>
             {/* Office Rent Section */}
             <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                        <CardTitle className="text-lg">Office Rent</CardTitle>
-                        <CardDescription>Monthly office rent payments</CardDescription>
-                    </div>
-                    <Button onClick={() => setShowRentModal(true)} className="bg-amber-600 hover:bg-amber-700 text-white" size="sm">
-                        <PlusIcon className="w-4 h-4 mr-2" /> Record Rent
-                    </Button>
+                <CardHeader>
+                    <CardTitle className="text-lg">Office Rent</CardTitle>
+                    <CardDescription>Monthly office rent payments</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {rentExpenses.length === 0 ? (
@@ -240,14 +247,9 @@ export default function ExpensesPage() {
             </Card>
             {/* Daily Expenses Section */}
             <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                        <CardTitle className="text-lg">Daily Office Expenses</CardTitle>
-                        <CardDescription>Day-to-day office operational costs</CardDescription>
-                    </div>
-                    <Button onClick={() => setShowDailyModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white" size="sm">
-                        <PlusIcon className="w-4 h-4 mr-2" /> Add Expense
-                    </Button>
+                <CardHeader>
+                    <CardTitle className="text-lg">Daily Office Expenses</CardTitle>
+                    <CardDescription>Day-to-day office operational costs</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {loading ? (
@@ -291,14 +293,9 @@ export default function ExpensesPage() {
             </Card>
             {/* Vehicle Expenses Section */}
             <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                        <CardTitle className="text-lg flex items-center"><TruckIcon className="w-5 h-5 mr-2 text-teal-600" />Vehicle Expenses</CardTitle>
-                        <CardDescription>Daily vehicle operational costs (fuel, maintenance, etc.)</CardDescription>
-                    </div>
-                    <Button onClick={() => setShowVehicleModal(true)} className="bg-teal-600 hover:bg-teal-700 text-white" size="sm">
-                        <PlusIcon className="w-4 h-4 mr-2" /> Add Vehicle Expense
-                    </Button>
+                <CardHeader>
+                    <CardTitle className="text-lg flex items-center"><TruckIcon className="w-5 h-5 mr-2 text-teal-600" />Vehicle Expenses</CardTitle>
+                    <CardDescription>Daily vehicle operational costs (fuel, maintenance, etc.)</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {loading ? (
