@@ -452,13 +452,13 @@ export async function POST(request: NextRequest) {
           }
 
           // Validate inventory availability first
-          const validation = await InventoryDeductionService.validateInventoryAvailability(accessorySaleItems);
+          const validation = await InventoryDeductionService.validateInventoryAvailability(accessorySaleItems, regionId);
           if (!validation.isValid) {
             throw new Error(`Inventory validation failed: ${validation.errors.join(', ')}`);
           }
 
           // Deduct from inventory
-          await InventoryDeductionService.deductAccessoriesFromInventory(accessorySaleItems);
+          await InventoryDeductionService.deductAccessoriesFromInventory(accessorySaleItems, regionId);
           console.log('✅ B2C accessories inventory deduction completed successfully');
         }
       }

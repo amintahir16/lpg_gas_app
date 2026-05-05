@@ -210,7 +210,7 @@ export async function POST(
 
       // Integrate purchased items with inventory system
       try {
-        await InventoryIntegrationService.processPurchaseItems(items, vendor.category?.slug);
+        await InventoryIntegrationService.processPurchaseItems(items, vendor.category?.slug, regionId);
         console.log('✅ Inventory integration completed successfully');
       } catch (inventoryError) {
         console.error('❌ Inventory integration failed:', inventoryError);

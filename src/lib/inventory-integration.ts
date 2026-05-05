@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db';
 import { generateCylinderTypeFromCapacity, normalizeTypeName } from './cylinder-utils';
+import { regionScopedWhere } from './region';
 
 export interface VendorPurchaseItem {
   itemName: string;
@@ -21,13 +22,13 @@ export class InventoryIntegrationService {
   /**
    * Process vendor purchase items and add them to appropriate inventory tables
    */
-  static async processPurchaseItems(items: VendorPurchaseItem[], vendorCategory?: string): Promise<void> {
+  static async processPurchaseItems(items: VendorPurchaseItem[], vendorCategory?: string, regionId?: string | null): Promise<void> {
     console.log('🔄 Processing vendor purchase items for inventory integration...');
-    console.log(`🏪 Vendor category: ${vendorCategory}`);
+    console.log(`🏪 Vendor category: ${vendorCategory}, Region: ${regionId || 'NONE'}`);
     
     for (const item of items) {
       try {
-        await this.processItem(item, vendorCategory);
+        await this.processItem(item, vendorCategory, regionId);
         console.log(`✅ Successfully processed: ${item.itemName} (${item.quantity} units)`);
       } catch (error) {
         console.error(`❌ Failed to process item ${item.itemName}:`, error);
@@ -41,7 +42,7 @@ export class InventoryIntegrationService {
   /**
    * Process individual item based on its name and type
    */
-  private static async processItem(item: VendorPurchaseItem, vendorCategory?: string): Promise<void> {
+  private static async processItem(item: VendorPurchaseItem, vendorCategory?: string, regionId?: string | null): Promise<void> {
     const itemName = item.itemName.toLowerCase();
     const quantity = item.quantity;
     const unitPrice = item.unitPrice;
@@ -52,28 +53,28 @@ export class InventoryIntegrationService {
     // Check vendor category FIRST - if it's a gas purchase vendor, all items are gas purchases
     if (this.isGasPurchaseVendor(vendorCategory)) {
       console.log(`⛽ Processing as gas purchase (vendor category: ${vendorCategory})`);
-      await this.processGasPurchase(item);
+      await this.processGasPurchase(item, regionId);
       return;
     }
 
     // Check if this is an accessories purchase vendor
     if (this.isAccessoriesPurchaseVendor(vendorCategory)) {
       console.log(`🔧 Processing as accessories purchase (vendor category: ${vendorCategory})`);
-      await this.processAccessoriesPurchase(item);
+      await this.processAccessoriesPurchase(item, regionId);
       return;
     }
 
     // Check if this is a vaporizer purchase vendor
     if (this.isVaporizerPurchaseVendor(vendorCategory)) {
       console.log(`⚙️ Processing as vaporizer purchase (vendor category: ${vendorCategory})`);
-      await this.processVaporizerPurchase(item);
+      await this.processVaporizerPurchase(item, regionId);
       return;
     }
 
     // Check if this is a valves purchase vendor
     if (this.isValvesPurchaseVendor(vendorCategory)) {
       console.log(`🔧 Processing as valves purchase (vendor category: ${vendorCategory})`);
-      await this.processValvesPurchase(item);
+      await this.processValvesPurchase(item, regionId);
       return;
     }
 
@@ -81,7 +82,7 @@ export class InventoryIntegrationService {
     // If vendor is a cylinder purchase vendor, ALL items should be processed as cylinders
     if (this.isCylinderPurchaseVendor(vendorCategory)) {
       console.log(`📦 Processing as cylinder purchase (vendor category: ${vendorCategory})`);
-      await this.processCylinderPurchase(item);
+      await this.processCylinderPurchase(item, regionId);
       return;
     }
 
@@ -91,11 +92,11 @@ export class InventoryIntegrationService {
 
     if (this.isCylinderItem(itemName)) {
       console.log(`📦 Processing as cylinder purchase (detected from item name)`);
-      await this.processCylinderPurchase(item);
+      await this.processCylinderPurchase(item, regionId);
     } else {
       console.log(`📦 Processing as generic product`);
       // Generic product - add to Product table
-      await this.processGenericProduct(item);
+      await this.processGenericProduct(item, regionId);
     }
   }
 
@@ -233,7 +234,7 @@ export class InventoryIntegrationService {
   /**
    * Process gas purchases - automatically find and update empty cylinders to FULL status
    */
-  private static async processGasPurchase(item: VendorPurchaseItem): Promise<void> {
+  private static async processGasPurchase(item: VendorPurchaseItem, regionId?: string | null): Promise<void> {
     const { itemName, quantity: rawQuantity } = item;
     const quantity = Number(rawQuantity);
     
@@ -269,11 +270,12 @@ export class InventoryIntegrationService {
 
     console.log(`🔍 Looking for ${quantity} empty ${cylinderType} cylinders`);
 
-    // Find empty cylinders of the matching type
+    // Find empty cylinders of the matching type (region-scoped)
     const emptyCylinders = await prisma.cylinder.findMany({
       where: {
         cylinderType: cylinderType as any,
-        currentStatus: 'EMPTY'
+        currentStatus: 'EMPTY',
+        ...regionScopedWhere(regionId),
       },
       take: quantity,
       orderBy: {
@@ -306,7 +308,7 @@ export class InventoryIntegrationService {
   /**
    * Process accessories purchase - add to CustomItem table
    */
-  private static async processAccessoriesPurchase(item: VendorPurchaseItem): Promise<void> {
+  private static async processAccessoriesPurchase(item: VendorPurchaseItem, regionId?: string | null): Promise<void> {
     const itemName = item.itemName; // This becomes the "type" in inventory
     const quantity = Number(item.quantity); // Ensure it's a number
     const unitPrice = Number(item.unitPrice); // Ensure it's a number
@@ -321,13 +323,13 @@ export class InventoryIntegrationService {
     console.log(`📂 Using category: ${category} for item: ${itemName}`);
     
     // Use CustomItem table for all accessories
-    await this.processCustomItemPurchase(item, category);
+    await this.processCustomItemPurchase(item, category, regionId);
   }
 
   /**
    * Process vaporizer purchase - add to CustomItem table (same as accessories)
    */
-  private static async processVaporizerPurchase(item: VendorPurchaseItem): Promise<void> {
+  private static async processVaporizerPurchase(item: VendorPurchaseItem, regionId?: string | null): Promise<void> {
     const itemName = item.itemName; // This becomes the "type" in inventory
     const quantity = Number(item.quantity); // Ensure it's a number
     const unitPrice = Number(item.unitPrice); // Ensure it's a number
@@ -342,13 +344,13 @@ export class InventoryIntegrationService {
     console.log(`📂 Using category: ${category} for item: ${itemName}`);
     
     // Use CustomItem table for all vaporizers (same as accessories)
-    await this.processCustomItemPurchase(item, category);
+    await this.processCustomItemPurchase(item, category, regionId);
   }
 
   /**
    * Process valves purchase - add to CustomItem table with "Valves" category
    */
-  private static async processValvesPurchase(item: VendorPurchaseItem): Promise<void> {
+  private static async processValvesPurchase(item: VendorPurchaseItem, regionId?: string | null): Promise<void> {
     const itemName = item.itemName; // This becomes the "type" in inventory
     const quantity = Number(item.quantity); // Ensure it's a number
     const unitPrice = Number(item.unitPrice); // Ensure it's a number
@@ -366,14 +368,14 @@ export class InventoryIntegrationService {
     console.log(`📂 Using category: ${normalizedCategory} for item: ${itemName}`);
     
     // Use CustomItem table for all valves (same as accessories and vaporizers)
-    await this.processCustomItemPurchase(item, normalizedCategory);
+    await this.processCustomItemPurchase(item, normalizedCategory, regionId);
   }
 
 
   /**
    * Process custom item purchase - add to CustomItem table for other categories
    */
-  private static async processCustomItemPurchase(item: VendorPurchaseItem, category: string): Promise<void> {
+  private static async processCustomItemPurchase(item: VendorPurchaseItem, category: string, regionId?: string | null): Promise<void> {
     const itemName = item.itemName;
     const quantity = Number(item.quantity);
     const unitPrice = Number(item.unitPrice);
@@ -385,7 +387,7 @@ export class InventoryIntegrationService {
     const normalizedCategory = this.normalizeCategoryName(category);
     console.log(`📝 Normalized category: ${category} → ${normalizedCategory}`);
 
-    // Check if item already exists in CustomItem table (case-insensitive search)
+    // Check if item already exists in CustomItem table (case-insensitive search, region-scoped)
     const existingItem = await prisma.customItem.findFirst({
       where: {
         name: {
@@ -393,7 +395,8 @@ export class InventoryIntegrationService {
           mode: 'insensitive'
         },
         type: itemName,
-        isActive: true
+        isActive: true,
+        ...regionScopedWhere(regionId),
       }
     });
 
@@ -413,14 +416,15 @@ export class InventoryIntegrationService {
 
       console.log(`✅ Updated existing custom item: ${itemName} in ${normalizedCategory} (${existingItem.quantity} → ${newQuantity} units)`);
     } else {
-      // Create new item with normalized category name
+      // Create new item with normalized category name (region-scoped)
       await prisma.customItem.create({
         data: {
           name: normalizedCategory,
           type: itemName,
           quantity: quantity,
           costPerPiece: unitPrice,
-          totalCost: totalCost
+          totalCost: totalCost,
+          ...(regionId ? { regionId } : {}),
         }
       });
 
@@ -494,7 +498,7 @@ export class InventoryIntegrationService {
   /**
    * Process cylinder purchases - create individual cylinder records
    */
-  private static async processCylinderPurchase(item: VendorPurchaseItem): Promise<void> {
+  private static async processCylinderPurchase(item: VendorPurchaseItem, regionId?: string | null): Promise<void> {
     const { itemName, quantity: rawQuantity, unitPrice: rawUnitPrice, cylinderCodes, status } = item;
     const quantity = Number(rawQuantity);
     const unitPrice = Number(rawUnitPrice);
@@ -545,7 +549,8 @@ export class InventoryIntegrationService {
           currentStatus: cylinderStatus as any, // Use status from form
           location: 'Store',
           purchaseDate: new Date(),
-          purchasePrice: unitPrice
+          purchasePrice: unitPrice,
+          ...(regionId ? { regionId } : {}),
         }
       });
     }
@@ -556,7 +561,7 @@ export class InventoryIntegrationService {
   /**
    * Process generic products - add to Product table
    */
-  private static async processGenericProduct(item: VendorPurchaseItem): Promise<void> {
+  private static async processGenericProduct(item: VendorPurchaseItem, regionId?: string | null): Promise<void> {
     const { itemName, quantity: rawQuantity, unitPrice: rawUnitPrice } = item;
     const quantity = Number(rawQuantity);
     const unitPrice = Number(rawUnitPrice);
@@ -567,7 +572,8 @@ export class InventoryIntegrationService {
         name: {
           contains: itemName,
           mode: 'insensitive'
-        }
+        },
+        ...regionScopedWhere(regionId),
       }
     });
     
@@ -581,7 +587,7 @@ export class InventoryIntegrationService {
       });
       console.log(`📦 Updated product: ${existingProduct.name} (+${quantity} units)`);
     } else {
-      // Create new product
+      // Create new product (region-scoped)
       await prisma.product.create({
         data: {
           name: itemName,
@@ -591,7 +597,8 @@ export class InventoryIntegrationService {
           stockType: 'FILLED',
           priceSoldToCustomer: unitPrice * 1.2, // 20% markup
           lowStockThreshold: 10,
-          isActive: true
+          isActive: true,
+          ...(regionId ? { regionId } : {}),
         }
       });
       console.log(`📦 Created new product: ${itemName} (${quantity} units)`);

@@ -24,9 +24,9 @@ export async function GET(request: NextRequest) {
             }
         });
 
-        // Fetch counts for FULL cylinders specifically
+        // Fetch counts for FULL cylinders specifically (group by typeName+capacity for accuracy)
         const fullCounts = await prisma.cylinder.groupBy({
-            by: ['cylinderType'],
+            by: ['cylinderType', 'typeName', 'capacity'],
             where: {
                 currentStatus: 'FULL',
                 ...regionScope,
@@ -36,10 +36,11 @@ export async function GET(request: NextRequest) {
             }
         });
 
-        // Create a map for quick lookup of full counts
+        // Create a map for quick lookup of full counts (keyed by cylinderType|||typeName|||capacity)
         const fullCountMap = new Map<string, number>();
         fullCounts.forEach(fc => {
-            fullCountMap.set(fc.cylinderType, fc._count.id);
+            const key = `${fc.cylinderType}|||${(fc.typeName || 'null').toLowerCase()}|||${fc.capacity?.toString() || 'null'}`;
+            fullCountMap.set(key, (fullCountMap.get(key) || 0) + fc._count.id);
         });
 
         // Transform to friendly format
@@ -63,13 +64,16 @@ export async function GET(request: NextRequest) {
                 securityPrice = Math.round(parseFloat(type.capacity.toString()) * 300);
             }
 
+            // Build lookup key matching the fullCountMap key format
+            const fullCountKey = `${type.cylinderType}|||${(type.typeName || 'null').toLowerCase()}|||${type.capacity?.toString() || 'null'}`;
+
             return {
                 cylinderType: type.cylinderType,
                 typeName: type.typeName,
                 capacity: parseFloat(type.capacity.toString()),
                 label: displayType,
                 count: type._count.id, // Total count (all statuses)
-                fullCount: fullCountMap.get(type.cylinderType) || 0, // Count of FULL cylinders only
+                fullCount: fullCountMap.get(fullCountKey) || 0, // Count of FULL cylinders only
                 securityPrice: securityPrice
             };
         });

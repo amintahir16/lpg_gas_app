@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
+import { getCylinderTypeDisplayName, normalizeTypeName } from '@/lib/cylinder-utils';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
@@ -67,29 +67,55 @@ export async function GET(request: NextRequest) {
     });
 
     // Process cylinder type stats dynamically (handles any cylinder type)
-    const uniqueTypes = [...new Set(cylinderTypeStats.map(stat => stat.cylinderType))];
+    // Group by typeName + capacity + cylinderType for accurate separation of custom types
+    // Use case-insensitive typeName comparison to merge "special" and "Special"
+    const uniqueCombinations = [...new Set(
+      cylinderTypeStats.map(stat => {
+        const normalizedTypeName = stat.typeName 
+          ? stat.typeName.toLowerCase().trim() 
+          : 'null';
+        return `${stat.cylinderType}|||${stat.capacity?.toString() || 'null'}|||${normalizedTypeName}`;
+      })
+    )];
 
-    const processedStats = uniqueTypes.map(type => {
-      // Find all stats for this exact cylinderType
-      const typeStats = cylinderTypeStats.filter(stat => stat.cylinderType === type);
+    const processedStats = uniqueCombinations.map(combination => {
+      const [type, capacityStr, normalizedTypeNameLower] = combination.split('|||');
+      const capacity = capacityStr !== 'null' ? parseFloat(capacityStr) : null;
+      const normalizedTypeNameLowercase = normalizedTypeNameLower !== 'null' ? normalizedTypeNameLower : null;
 
-      // Calculate full and empty counts by aggregating across potentially different typeNames/capacities
-      const full = typeStats
+      // Find all stats for this combination using case-insensitive typeName comparison
+      const statsForCombination = cylinderTypeStats.filter(stat => {
+        const statCapacityStr = stat.capacity?.toString() || 'null';
+        const statTypeNameLower = stat.typeName 
+          ? stat.typeName.toLowerCase().trim() 
+          : 'null';
+        return (
+          stat.cylinderType === type &&
+          statCapacityStr === capacityStr &&
+          statTypeNameLower === normalizedTypeNameLowercase
+        );
+      });
+
+      const full = statsForCombination
         .filter(stat => stat.currentStatus === 'FULL')
         .reduce((sum, stat) => sum + stat._count.id, 0);
 
-      const empty = typeStats
+      const empty = statsForCombination
         .filter(stat => stat.currentStatus === 'EMPTY')
         .reduce((sum, stat) => sum + stat._count.id, 0);
 
-      // Try to find the typeName and capacity for this cylinder type
-      // We take the first one found for this cylinderType, since the enum/type string usually correlates 1:1
-      const representativeStat = typeStats.find(stat => stat.typeName || stat.capacity);
-      const typeName = representativeStat?.typeName || null;
-      const capacity = representativeStat?.capacity ? Number(representativeStat.capacity) : null;
+      // Normalize typeName to proper case format for display
+      let displayType: string;
+      const normalizedTypeName = normalizeTypeName(normalizedTypeNameLowercase);
+      const trimmedTypeName = normalizedTypeName ? String(normalizedTypeName).trim() : '';
 
-      // Format type name for display using dynamic utility - passes typeName and capacity now
-      const displayType = getCylinderTypeDisplayName(type, typeName, capacity);
+      if (trimmedTypeName && trimmedTypeName !== '' && trimmedTypeName !== 'Cylinder') {
+        displayType = `${trimmedTypeName} (${capacity !== null ? capacity : 'N/A'}kg)`;
+      } else if (capacity !== null) {
+        displayType = `Cylinder (${capacity}kg)`;
+      } else {
+        displayType = getCylinderTypeDisplayName(type);
+      }
 
       return {
         type: displayType,
@@ -99,6 +125,22 @@ export async function GET(request: NextRequest) {
         total: full + empty
       };
     });
+
+    // Deduplicate stats by display type
+    const uniqueStatsMap = new Map<string, typeof processedStats[0]>();
+    processedStats.forEach(stat => {
+      const key = stat.type;
+      if (!uniqueStatsMap.has(key)) {
+        uniqueStatsMap.set(key, stat);
+      } else {
+        const existing = uniqueStatsMap.get(key)!;
+        existing.full += stat.full;
+        existing.empty += stat.empty;
+        existing.total = existing.full + existing.empty;
+      }
+    });
+
+    const finalCylinderTypeStats = Array.from(uniqueStatsMap.values());
 
     const stats = {
       totalCylinders,
@@ -116,7 +158,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       stats,
-      cylinderTypeStats: processedStats
+      cylinderTypeStats: finalCylinderTypeStats
     });
   } catch (error) {
     console.error('Error fetching inventory stats:', error);

@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+import { regionScopedWhere } from '@/lib/region';
 
 interface AccessorySaleItem {
   category: string;
@@ -17,7 +18,7 @@ export class InventoryDeductionService {
   /**
    * Deduct sold accessories from inventory
    */
-  static async deductAccessoriesFromInventory(items: AccessorySaleItem[]): Promise<void> {
+  static async deductAccessoriesFromInventory(items: AccessorySaleItem[], regionId?: string | null): Promise<void> {
     console.log('🔄 Starting inventory deduction for accessories...');
     
     for (const item of items) {
@@ -42,12 +43,13 @@ export class InventoryDeductionService {
       }
       
       try {
-        // Find the inventory item
+        // Find the inventory item (region-scoped)
         const inventoryItem = await prisma.customItem.findFirst({
           where: {
             name: item.category,
             type: item.itemType,
-            isActive: true
+            isActive: true,
+            ...regionScopedWhere(regionId),
           }
         });
         
@@ -96,7 +98,7 @@ export class InventoryDeductionService {
   /**
    * Check if we have sufficient inventory for the requested items
    */
-  static async validateInventoryAvailability(items: AccessorySaleItem[]): Promise<{
+  static async validateInventoryAvailability(items: AccessorySaleItem[], regionId?: string | null): Promise<{
     isValid: boolean;
     errors: string[];
   }> {
@@ -109,7 +111,8 @@ export class InventoryDeductionService {
         where: {
           name: item.category,
           type: item.itemType,
-          isActive: true
+          isActive: true,
+          ...regionScopedWhere(regionId),
         }
       });
       
@@ -135,7 +138,7 @@ export class InventoryDeductionService {
   /**
    * Get current inventory levels for accessories
    */
-  static async getInventoryLevels(): Promise<Array<{
+  static async getInventoryLevels(regionId?: string | null): Promise<Array<{
     category: string;
     itemType: string;
     quantity: number;
@@ -146,7 +149,8 @@ export class InventoryDeductionService {
         isActive: true,
         quantity: {
           gt: 0
-        }
+        },
+        ...regionScopedWhere(regionId),
       },
       select: {
         name: true,
