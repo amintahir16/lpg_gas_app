@@ -14,7 +14,8 @@ const routePermissions = {
         '/services',
         '/shop',
         '/blog',
-        '/contact'
+        '/contact',
+        '/api/admin/cron'
     ],
 
     // Pages / routes accessible to ADMIN and SUPER_ADMIN.
