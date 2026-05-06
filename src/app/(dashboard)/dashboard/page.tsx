@@ -370,7 +370,9 @@ export default function DashboardPage() {
         <Card className="border shadow-sm bg-white">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-bold text-gray-900">Expenses Trend</CardTitle>
-            <CardDescription className="text-xs">Tracking office and daily operational expenses over time.</CardDescription>
+            <CardDescription className="text-xs">
+              {'Office (blue) vs vehicle (amber). Daily totals for the selected period.'}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-[260px] w-full">
@@ -391,19 +393,28 @@ export default function DashboardPage() {
                     tickFormatter={(value) => `Rs${(value / 1000)}k`}
                   />
                   <Tooltip
-                    cursor={{ stroke: '#f97316', strokeWidth: 1, strokeDasharray: '3 3' }}
+                    cursor={{ stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '3 3' }}
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                     formatter={(value: number) => formatCurrency(value)}
                   />
                   <Legend iconType="circle" wrapperStyle={{ paddingTop: '8px', fontSize: '12px' }} />
-                  <Line 
-                    type="monotone" 
-                    dataKey="expenses" 
-                    name="Period Expenses" 
-                    stroke="#f97316" 
-                    strokeWidth={3}
-                    dot={{ fill: '#f97316', strokeWidth: 2, r: 4 }}
-                    activeDot={{ r: 6, fill: '#f97316', stroke: '#fff', strokeWidth: 2 }}
+                  <Line
+                    type="monotone"
+                    dataKey="officeExpenses"
+                    name="Office"
+                    stroke="#2563eb"
+                    strokeWidth={2.5}
+                    dot={{ fill: '#2563eb', strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6, fill: '#2563eb', stroke: '#fff', strokeWidth: 2 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="vehicleExpenses"
+                    name="Vehicle"
+                    stroke="#d97706"
+                    strokeWidth={2.5}
+                    dot={{ fill: '#d97706', strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6, fill: '#d97706', stroke: '#fff', strokeWidth: 2 }}
                   />
                 </LineChart>
               </ResponsiveContainer>

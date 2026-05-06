@@ -87,7 +87,7 @@ export default function FinancialPage() {
     {
       title: 'Profit',
       value: summary?.totalProfit || 0,
-      subtitle: 'Revenue minus costs',
+      subtitle: 'Margins',
       icon: ChartBarIcon,
       href: '/financial/profit',
       gradient: 'from-violet-500 to-purple-600',

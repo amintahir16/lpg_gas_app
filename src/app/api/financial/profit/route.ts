@@ -128,6 +128,36 @@ export async function GET(request: NextRequest) {
             cost: data.cost,
             profit: data.profit,
         }));
+
+        const retentionGroups = await prisma.b2CCylinderHolding.groupBy({
+            by: ['cylinderType', 'cylinderVariantKey'],
+            where: {
+                isReturned: true,
+                returnDate: { gte: startDate, lte: endDate },
+                returnDeduction: { gt: 0 },
+                customer: regionScope,
+            },
+            _sum: {
+                returnDeduction: true,
+                quantity: true,
+            },
+        });
+
+        for (const g of retentionGroups) {
+            const retentionAmount = Number(g._sum.returnDeduction || 0);
+            if (retentionAmount <= 0) continue;
+
+            const typeLabel = typeLabels.get(g.cylinderType) || g.cylinderType;
+            cylinders.push({
+                name: `${typeLabel} — security return (25% retained)`,
+                type: 'Cylinder',
+                quantity: Number(g._sum.quantity || 0),
+                revenue: 0,
+                cost: 0,
+                profit: retentionAmount,
+            });
+        }
+
         const accessories = Array.from(accessoryMap.entries()).map(([name, data]) => ({
             name,
             type: 'Accessory',
@@ -136,6 +166,7 @@ export async function GET(request: NextRequest) {
             cost: data.cost,
             profit: data.profit,
         }));
+
         // Monthly chart data (last 6 months)
         const chartData = [];
         for (let i = 5; i >= 0; i--) {
@@ -186,9 +217,22 @@ export async function GET(request: NextRequest) {
                     }
                 }
             });
+            const b2cRetentionMonth = await prisma.b2CCylinderHolding.aggregate({
+                where: {
+                    isReturned: true,
+                    returnDate: { gte: chartStart, lte: chartEnd },
+                    returnDeduction: { gt: 0 },
+                    customer: regionScope,
+                },
+                _sum: { returnDeduction: true },
+            });
             chartData.push({
                 name: format(chartStart, 'MMM yyyy'),
-                profit: Number(b2cGasProfit._sum.profitMargin || 0) + Number(b2cAccProfit._sum.profitMargin || 0) + b2bProfit,
+                profit:
+                    Number(b2cGasProfit._sum.profitMargin || 0) +
+                    Number(b2cAccProfit._sum.profitMargin || 0) +
+                    b2bProfit +
+                    Number(b2cRetentionMonth._sum.returnDeduction || 0),
             });
         }
         return NextResponse.json({

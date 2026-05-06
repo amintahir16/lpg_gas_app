@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { adoptLegacyB2bCustomerIfNeeded, getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { requireAdmin, clampLimit } from '@/lib/apiAuth';
 import { parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 
@@ -21,9 +21,11 @@ export async function GET(
 
     const skip = (page - 1) * limit;
 
+    await adoptLegacyB2bCustomerIfNeeded(customerId, regionId);
+
     // Get customer details (region-scoped)
     const customer = await prisma.customer.findFirst({
-      where: { id: customerId, ...regionScopedWhere(regionId) },
+      where: { id: customerId, type: 'B2B', ...regionScopedWhere(regionId) },
       include: { marginCategory: true }
     });
 

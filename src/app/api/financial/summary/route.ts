@@ -19,15 +19,35 @@ export async function GET(request: NextRequest) {
         const startDate = new Date(year, month - 1, 1);
         const endDate = new Date(year, month, 0, 23, 59, 59, 999);
 
-        // 1. Revenue
-        const [b2cRevenue, b2bRevenue] = await Promise.all([
+        // 1. Revenue — B2C: gas + accessories + delivery only (security deposits/returns are not sales revenue)
+        const [b2cGasRev, b2cAccRev, b2cDeliveryRev, b2bRevenue] = await Promise.all([
+            prisma.b2CTransactionGasItem.aggregate({
+                where: {
+                    transaction: {
+                        date: { gte: startDate, lte: endDate },
+                        voided: false,
+                        ...txRegionScope,
+                    },
+                },
+                _sum: { totalPrice: true },
+            }),
+            prisma.b2CTransactionAccessoryItem.aggregate({
+                where: {
+                    transaction: {
+                        date: { gte: startDate, lte: endDate },
+                        voided: false,
+                        ...txRegionScope,
+                    },
+                },
+                _sum: { totalPrice: true },
+            }),
             prisma.b2CTransaction.aggregate({
                 where: {
                     date: { gte: startDate, lte: endDate },
                     voided: false,
                     ...txRegionScope,
                 },
-                _sum: { finalAmount: true },
+                _sum: { deliveryCharges: true },
             }),
             prisma.b2BTransactionItem.aggregate({
                 where: {
@@ -42,7 +62,12 @@ export async function GET(request: NextRequest) {
             }),
         ]);
 
-        const totalRevenue = Number(b2cRevenue._sum.finalAmount || 0) + Number(b2bRevenue._sum.totalPrice || 0);
+        const b2cSalesRevenue =
+            Number(b2cGasRev._sum.totalPrice || 0) +
+            Number(b2cAccRev._sum.totalPrice || 0) +
+            Number(b2cDeliveryRev._sum.deliveryCharges || 0);
+
+        const totalRevenue = b2cSalesRevenue + Number(b2bRevenue._sum.totalPrice || 0);
 
         // 2. Expenses (Office Rent + Daily)
         const expensesSum = await prisma.officeExpense.aggregate({

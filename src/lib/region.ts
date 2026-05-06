@@ -78,6 +78,28 @@ export function regionScopedWhere(regionId: string | null | undefined): Record<s
 }
 
 /**
+ * B2B rows created before multi-region support may have `regionId: null`.
+ * Scoped API handlers then 404 even though the customer is valid. When an
+ * admin is operating under a selected region, assign that region once so
+ * subsequent `regionScopedWhere` queries succeed.
+ */
+export async function adoptLegacyB2bCustomerIfNeeded(
+  customerId: string,
+  regionId: string | null
+): Promise<void> {
+  if (!regionId) return;
+  const legacy = await prisma.customer.findFirst({
+    where: { id: customerId, type: 'B2B', regionId: null },
+    select: { id: true },
+  });
+  if (!legacy) return;
+  await prisma.customer.update({
+    where: { id: customerId },
+    data: { regionId },
+  });
+}
+
+/**
  * Inject `regionId` into a `data` object for create operations.
  *
  * Example:

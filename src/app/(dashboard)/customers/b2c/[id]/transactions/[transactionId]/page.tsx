@@ -332,7 +332,7 @@ export default function B2CTransactionDetailPage() {
           <CardHeader>
             <CardTitle className="text-lg font-semibold text-gray-900">Security Deposit</CardTitle>
             <CardDescription className="text-gray-600 font-medium">
-              When the customer is giving us back the cylinder and wants the security back, we deduct 25% from the security
+              On return, the customer receives 75% of the original security per cylinder; 25% is retained as profit
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -357,7 +357,7 @@ export default function B2CTransactionDetailPage() {
                     <TableCell className="font-semibold">Rs {Number(item.totalPrice).toFixed(2)}</TableCell>
                     <TableCell>
                       <Badge variant={item.isReturn ? 'warning' : 'success'} className="font-semibold">
-                        {item.isReturn ? 'Return (25% off)' : 'New Deposit'}
+                        {item.isReturn ? 'Return (70% refund)' : 'New Deposit'}
                       </Badge>
                     </TableCell>
                   </TableRow>
@@ -406,9 +406,12 @@ export default function B2CTransactionDetailPage() {
                 <span className="font-semibold text-blue-700">Rs {Number(transaction.deliveryCharges).toFixed(2)}</span>
               </div>
               <div className="flex justify-between border-t pt-2">
-                <span className="font-semibold text-blue-900">Total Revenue:</span>
-                <span className="font-bold text-blue-900">Rs {Number(transaction.finalAmount).toFixed(2)}</span>
+                <span className="font-semibold text-blue-900">Total Sales Revenue:</span>
+                <span className="font-bold text-blue-900">
+                  Rs {(gasTotal + Number(accessoryTotal) + Number(transaction.deliveryCharges)).toFixed(2)}
+                </span>
               </div>
+              <p className="text-xs text-blue-800/80 mt-1">Excludes security deposits and refunds (not sales revenue)</p>
             </div>
 
             {/* Cost Column */}
@@ -449,7 +452,7 @@ export default function B2CTransactionDetailPage() {
               </div>
               {transaction.securityItems.some(item => item.isReturn) && (
                 <div className="flex justify-between">
-                  <span className="text-green-700">Security Deduction (25%):</span>
+                  <span className="text-green-700">Security retention (25%):</span>
                   <span className="font-semibold text-green-700">
                     Rs {transaction.securityItems.reduce((sum, item) => {
                       if (item.isReturn) {

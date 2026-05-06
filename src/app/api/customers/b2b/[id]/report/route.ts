@@ -7,7 +7,7 @@ import {
   formatB2bItemCylinderLabel,
   formatB2bVariantKeyForReport,
 } from '@/lib/b2b-transaction-item-variant';
-import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { adoptLegacyB2bCustomerIfNeeded, getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 // Helper function to format currency
 function formatCurrency(amount: number): string {
@@ -703,9 +703,11 @@ export async function GET(
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
+    await adoptLegacyB2bCustomerIfNeeded(customerId, regionId);
+
     // Fetch customer (region-scoped)
     const customer = await prisma.customer.findFirst({
-      where: { id: customerId, ...regionScopedWhere(regionId) },
+      where: { id: customerId, type: 'B2B', ...regionScopedWhere(regionId) },
       select: {
         name: true,
         contactPerson: true,

@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity } from '@/lib/superAdminNotifier';
-import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { adoptLegacyB2bCustomerIfNeeded, getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(
   request: NextRequest,
@@ -20,8 +20,10 @@ export async function GET(
     const regionId = getActiveRegionId(request);
     const { id: customerId } = await params;
 
+    await adoptLegacyB2bCustomerIfNeeded(customerId, regionId);
+
     const customer = await prisma.customer.findFirst({
-      where: { id: customerId, ...regionScopedWhere(regionId) },
+      where: { id: customerId, type: 'B2B', ...regionScopedWhere(regionId) },
       include: { marginCategory: true }
     });
 
@@ -55,6 +57,9 @@ export async function PUT(
 
     const regionId = getActiveRegionId(request);
     const { id: customerId } = await params;
+
+    await adoptLegacyB2bCustomerIfNeeded(customerId, regionId);
+
     const body = await request.json();
     const {
       name,
@@ -198,9 +203,11 @@ export async function DELETE(
     const regionId = getActiveRegionId(request);
     const { id: customerId } = await params;
 
+    await adoptLegacyB2bCustomerIfNeeded(customerId, regionId);
+
     // Region-scope guard: ensure the customer belongs to the active region
     const customerScopeCheck = await prisma.customer.findFirst({
-      where: { id: customerId, ...regionScopedWhere(regionId) },
+      where: { id: customerId, type: 'B2B', ...regionScopedWhere(regionId) },
       select: { id: true }
     });
 

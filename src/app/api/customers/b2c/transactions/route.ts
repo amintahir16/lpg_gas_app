@@ -166,10 +166,7 @@ export async function POST(request: NextRequest) {
       return sum + ((item.costPerPiece || 0) * item.quantity);
     }, 0);
 
-    // Calculate security return profit (25% deduction on returns)
-    // Note: We need to look up the actual security amounts from holdings to calculate correctly
-    // For now, we'll calculate it during the transaction when we have access to holdings
-    // This will be summed up from the returnDeduction values we calculate
+    // Security return: 75% of original deposit refunded to customer; 25% retention is profit (see return loop).
 
     // Calculate profit margins
     const gasProfit = (() => {
@@ -332,7 +329,7 @@ export async function POST(request: NextRequest) {
               if (remainingQuantity <= 0) break;
 
               const returnQuantity = Math.min(remainingQuantity, holding.quantity);
-              // Calculate 25% deduction per cylinder being returned (this is profit)
+              // 25% of original security per cylinder retained as profit (75% refunded to customer)
               const deductionPerCylinder = Number(holding.securityAmount) * 0.25;
               const totalDeduction = deductionPerCylinder * returnQuantity;
 

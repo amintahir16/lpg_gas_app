@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getCylinderTypeDisplayName, normalizeTypeName } from '@/lib/cylinder-utils';
 import { buildCylinderVariantKey } from '@/lib/cylinder-variant-key';
-import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { adoptLegacyB2bCustomerIfNeeded, getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 export async function GET(
   request: NextRequest,
@@ -22,9 +22,11 @@ export async function GET(
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
+    await adoptLegacyB2bCustomerIfNeeded(customerId, regionId);
+
     // Get customer to find their name for location matching (region-scoped)
     const customer = await prisma.customer.findFirst({
-      where: { id: customerId, ...regionScopedWhere(regionId) },
+      where: { id: customerId, type: 'B2B', ...regionScopedWhere(regionId) },
       select: { name: true }
     });
 

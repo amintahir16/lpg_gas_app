@@ -67,6 +67,7 @@ export async function GET(request: NextRequest) {
         },
         select: {
           totalAmount: true,
+          deliveryCharges: true,
           actualProfit: true,
           securityItems: { select: { totalPrice: true } }
         }
@@ -91,16 +92,17 @@ export async function GET(request: NextRequest) {
     let rangeProfit = 0;
 
     b2cTransInRange.forEach(t => {
-      let b2cRevenue = Number(t.totalAmount || 0);
-      // Deduct security deposits/returns from revenue (they are liabilities, not true sales revenue)
+      // Sales revenue = gas + accessories + delivery; exclude all security line amounts (deposits & refunds)
+      let securityLines = 0;
       if (t.securityItems) {
         t.securityItems.forEach(secItem => {
-          b2cRevenue -= Number(secItem.totalPrice || 0);
+          securityLines += Number(secItem.totalPrice || 0);
         });
       }
+      const b2cRevenue = Number(t.totalAmount || 0) - securityLines + Number(t.deliveryCharges || 0);
 
       rangeRevenue += b2cRevenue;
-      // Note: 25% deduction on returns is already calculated and saved into actualProfit during B2C transaction creation
+      // Security return retention (25% of original deposit) is included in actualProfit at transaction creation
       rangeProfit += Number(t.actualProfit || 0);
     });
 
@@ -199,29 +201,34 @@ export async function GET(request: NextRequest) {
     const vendorBalance = rangePurchases - rangePayments;
 
     // 3.6. Salaries (within date range, by paidDate)
-    const salariesSum = await prisma.salaryRecord.aggregate({
-      where: {
-        paidDate: { gte: startDate, lte: endDate },
-        ...regionScope,
-      },
-      _sum: { amount: true },
-    });
+    // B2C security return retention (25% of original deposit): real profit but not part of sales revenue
+    const [salariesSum, b2cSecurityRetentionSum] = await Promise.all([
+      prisma.salaryRecord.aggregate({
+        where: {
+          paidDate: { gte: startDate, lte: endDate },
+          ...regionScope,
+        },
+        _sum: { amount: true },
+      }),
+      prisma.b2CCylinderHolding.aggregate({
+        where: {
+          isReturned: true,
+          returnDate: { gte: startDate, lte: endDate },
+          returnDeduction: { gt: 0 },
+          customer: regionScope,
+        },
+        _sum: { returnDeduction: true },
+      }),
+    ]);
     const rangeSalaries = Number(salariesSum._sum.amount || 0);
+    const b2cSecurityRetention = Number(b2cSecurityRetentionSum._sum.returnDeduction || 0);
 
-    // 3.7. Actual Profit = Revenue - Expenses - Salaries
-    const actualProfit = rangeRevenue - rangeExpenses - rangeSalaries;
+    // 3.7. Actual Profit = Revenue - Expenses - Salaries + B2C security retention
+    const actualProfit = rangeRevenue - rangeExpenses - rangeSalaries + b2cSecurityRetention;
 
     // 4. Chart Data (Last 6 Months or Daily)
+    // For the Expenses Trend chart ONLY: exclude RENT. Show DAILY office expenses vs VEHICLE.
     const chartStartDate = isDaily ? startDate : startOfMonth(subMonths(endDate, 5));
-
-    // Pre-compute chart month/year conditions for RENT matching
-    const chartMonthsCovered: Array<{ month: number; year: number }> = [];
-    const chartCursor = new Date(chartStartDate.getFullYear(), chartStartDate.getMonth(), 1);
-    while (chartCursor <= endDate) {
-      chartMonthsCovered.push({ month: chartCursor.getMonth() + 1, year: chartCursor.getFullYear() });
-      chartCursor.setMonth(chartCursor.getMonth() + 1);
-    }
-    const chartRentConditions = chartMonthsCovered.map(m => ({ type: 'RENT' as const, month: m.month, year: m.year }));
 
     const [b2cTransChart, b2bTransChart, expensesChart] = await Promise.all([
       prisma.b2CTransaction.findMany({
@@ -239,10 +246,8 @@ export async function GET(request: NextRequest) {
       prisma.officeExpense.findMany({
         where: {
           ...regionScope,
-          OR: [
-            { expenseDate: { gte: chartStartDate, lte: endDate }, type: { in: ['DAILY', 'VEHICLE'] } },
-            ...chartRentConditions,
-          ],
+          expenseDate: { gte: chartStartDate, lte: endDate },
+          type: { in: ['DAILY', 'VEHICLE'] },
         },
         select: { expenseDate: true, amount: true, type: true }
       })
@@ -270,10 +275,14 @@ export async function GET(request: NextRequest) {
       
       expensesChartData = days.map(day => {
         const dateStr = format(day, 'MMM dd');
-        const expensesV = expensesChart
-          .filter(e => format(new Date(e.expenseDate), 'MMM dd') === dateStr)
+        const dayRows = expensesChart.filter(e => format(new Date(e.expenseDate), 'MMM dd') === dateStr);
+        const officeExpenses = dayRows
+          .filter(e => e.type === 'DAILY')
           .reduce((s, e) => s + Number(e.amount || 0), 0);
-        return { name: dateStr, expenses: expensesV };
+        const vehicleExpenses = dayRows
+          .filter(e => e.type === 'VEHICLE')
+          .reduce((s, e) => s + Number(e.amount || 0), 0);
+        return { name: dateStr, officeExpenses, vehicleExpenses };
       });
     } else {
       const months = eachMonthOfInterval({ start: chartStartDate, end: endDate });
@@ -294,10 +303,14 @@ export async function GET(request: NextRequest) {
 
       expensesChartData = months.map(m => {
         const monthStr = format(m, 'MMM yyyy');
-        const expensesV = expensesChart
-          .filter(e => format(new Date(e.expenseDate), 'MMM yyyy') === monthStr)
+        const monthRows = expensesChart.filter(e => format(new Date(e.expenseDate), 'MMM yyyy') === monthStr);
+        const officeExpenses = monthRows
+          .filter(e => e.type === 'DAILY')
           .reduce((s, e) => s + Number(e.amount || 0), 0);
-        return { name: monthStr, expenses: expensesV };
+        const vehicleExpenses = monthRows
+          .filter(e => e.type === 'VEHICLE')
+          .reduce((s, e) => s + Number(e.amount || 0), 0);
+        return { name: monthStr, officeExpenses, vehicleExpenses };
       });
     }
 

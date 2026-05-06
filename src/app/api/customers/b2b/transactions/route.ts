@@ -12,7 +12,7 @@ import {
   checkAllCylinderTypesForLowStock,
   checkAccessoriesForLowStock,
 } from '@/lib/superAdminNotifier';
-import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { adoptLegacyB2bCustomerIfNeeded, getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { getB2bCustomerCylinderDueAggregatesFromPhysicalStock } from '@/lib/b2b-customer-cylinder-dues-from-stock';
 import { buildCylinderVariantSummary } from '@/lib/cylinder-variant-summary';
 
@@ -107,6 +107,12 @@ export async function POST(request: NextRequest) {
         paymentStatus = 'PARTIAL';
       }
     }
+
+    if (!customerId) {
+      return NextResponse.json({ error: 'Customer ID is required' }, { status: 400 });
+    }
+
+    await adoptLegacyB2bCustomerIfNeeded(customerId, regionId);
 
     // Start a transaction to ensure data consistency
     const result = await prisma.$transaction(async (tx) => {
