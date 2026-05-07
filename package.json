@@ -10,6 +10,7 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:init": "node scripts/init-db.js",
+    "db:reset:keep-admins": "node scripts/reset-db-keep-admins.js",
     "user:reset-password": "node scripts/reset-user-password.js"
   },
   "dependencies": {
