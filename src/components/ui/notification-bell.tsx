@@ -189,7 +189,7 @@ export function NotificationBell({
         {isOpen && (
           <div
             ref={dropdownRef}
-            className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-96 overflow-hidden"
+            className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-96 flex flex-col overflow-hidden"
           >
             {/* Header */}
             <div className="p-4 border-b border-gray-200 bg-gray-50">
@@ -210,7 +210,7 @@ export function NotificationBell({
             </div>
 
             {/* Notifications List */}
-            <div className="max-h-80 overflow-y-auto">
+            <div className="overflow-y-auto flex-1">
               {notifications.length === 0 ? (
                 <div className="p-8 text-center">
                   <BellIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -218,7 +218,7 @@ export function NotificationBell({
                 </div>
               ) : (
                 <div className="divide-y divide-gray-100">
-                  {notifications.slice(0, 10).map((notification) => (
+                  {notifications.map((notification) => (
                     <div
                       key={notification.id}
                       role={notification.link ? 'button' : undefined}
@@ -306,7 +306,10 @@ export function NotificationBell({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setIsOpen(false)}
+                  onClick={() => {
+                    setIsOpen(false);
+                    router.push('/settings/notifications');
+                  }}
                   className="w-full"
                 >
                   View All Notifications
@@ -368,7 +371,7 @@ export function NotificationBell({
       {isOpen && (
         <div
           ref={dropdownRef}
-          className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-96 overflow-hidden"
+          className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-96 flex flex-col overflow-hidden"
         >
           {/* Header */}
           <div className="p-4 border-b border-gray-200 bg-gray-50">
@@ -389,7 +392,7 @@ export function NotificationBell({
           </div>
 
           {/* Notifications List */}
-          <div className="max-h-80 overflow-y-auto">
+          <div className="overflow-y-auto flex-1">
             {notifications.length === 0 ? (
               <div className="p-8 text-center">
                 <BellIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -397,7 +400,7 @@ export function NotificationBell({
               </div>
             ) : (
               <div className="divide-y divide-gray-100">
-                {notifications.slice(0, 10).map((notification) => (
+                {notifications.map((notification) => (
                   <div
                     key={notification.id}
                     role={notification.link ? 'button' : undefined}
@@ -485,7 +488,10 @@ export function NotificationBell({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setIsOpen(false)}
+                onClick={() => {
+                  setIsOpen(false);
+                  router.push('/settings/notifications');
+                }}
                 className="w-full"
               >
                 View All Notifications
