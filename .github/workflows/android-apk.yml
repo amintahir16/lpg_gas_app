@@ -1,0 +1,85 @@
+# Builds a sideloadable APK that opens your live Vercel deployment (login first).
+# Web UI/data update when Vercel redeploys; rebuild this workflow when you change
+# the Android shell, icons, or Capacitor config.
+name: Android APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Require Vercel origin for Capacitor
+        env:
+          CAPACITOR_SERVER_URL: ${{ secrets.CAPACITOR_SERVER_URL }}
+        run: |
+          if [ -z "$CAPACITOR_SERVER_URL" ]; then
+            echo "::error::Add repo secret CAPACITOR_SERVER_URL (e.g. https://your-app.vercel.app — no trailing slash)"
+            exit 1
+          fi
+
+      - name: Launcher icons & splash from logo
+        run: |
+          node tools/sync-logo-to-assets.mjs
+          npx @capacitor/assets generate --android --iconBackgroundColor '#f1f5f9' --splashBackgroundColor '#f8fafc'
+
+      - name: Capacitor sync (embeds server URL + web stub)
+        env:
+          CAPACITOR_SERVER_URL: ${{ secrets.CAPACITOR_SERVER_URL }}
+        run: npx cap sync android
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Set Android versionCode from CI run
+        run: |
+          sed -i "s/versionCode [[:digit:]]*/versionCode ${{ github.run_number }}/" android/app/build.gradle
+
+      - name: Assemble debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flamora-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Publish rolling release (stable download link)
+        uses: ncipollo/release-action@v1
+        with:
+          tag: apk-latest
+          name: FLAMORA Android (latest CI build)
+          body: |
+            Debug APK built from `${{ github.sha }}`. The app loads your Vercel site; deploy there to refresh UI without reinstalling.
+
+            Set GitHub secret `CAPACITOR_SERVER_URL` to your production origin if this build shows the wrong server.
+          artifacts: android/app/build/outputs/apk/debug/app-debug.apk
+          allowUpdates: true
+          replacesArtifacts: true
+          prerelease: true
+          token: ${{ secrets.GITHUB_TOKEN }}

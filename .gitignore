@@ -54,3 +54,11 @@ scratch/
 # local / one-off scripts (often contain secrets; do not commit)
 /scripts/
 
+# Android / Capacitor local builds (commit project; ignore outputs)
+android/app/build/
+android/.gradle/
+android/build/
+*.apk
+*.aab
+local.properties
+

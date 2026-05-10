@@ -7,6 +7,11 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
+    "cap:sync": "npx cap sync android",
+    "cap:open": "npx cap open android",
+    "cap:icons": "node tools/sync-logo-to-assets.mjs && npx @capacitor/assets generate --android --iconBackgroundColor \"#f1f5f9\" --splashBackgroundColor \"#f8fafc\"",
+    "android:release": "npx cap sync android && node tools/run-android-gradle.mjs assembleRelease",
+    "android:debug": "npx cap sync android && node tools/run-android-gradle.mjs assembleDebug",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:init": "node scripts/init-db.js",
@@ -15,6 +20,10 @@
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.10.0",
+    "@capacitor/android": "^8.3.3",
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/cli": "^8.3.3",
+    "@capacitor/core": "^8.3.3",
     "@headlessui/react": "^2.2.7",
     "@heroicons/react": "^2.2.0",
     "@hookform/resolvers": "^5.2.1",
@@ -49,6 +58,7 @@
     "zustand": "^5.0.7"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
