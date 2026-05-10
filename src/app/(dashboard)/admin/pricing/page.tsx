@@ -109,7 +109,7 @@ export default function PricingManagementPage() {
       console.error('Error fetching data:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       if (errorMessage.includes('Authentication required')) {
-        showMessage('error', 'Please log in as an admin user to access pricing management. Use admin@lpg.com / admin123');
+        showMessage('error', 'Please log in as an admin user to access pricing management. Use jawadafridi@flamora.pk / admin123');
       } else {
         showMessage('error', `Failed to load pricing data: ${errorMessage}`);
       }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
     // Create settings object with defaults and database values
     const settings = {
       companyName: settingsMap.companyName || "LPG Gas Supply Co.",
-      contactEmail: settingsMap.contactEmail || process.env.ADMIN_EMAIL || "admin@lpg.com",
+      contactEmail: settingsMap.contactEmail || process.env.ADMIN_EMAIL || "jawadafridi@flamora.pk",
       contactPhone: settingsMap.contactPhone || process.env.ADMIN_PHONE || "+1 (555) 123-4567",
       address: settingsMap.address || "123 Gas Street, Industrial District, City, State 12345",
       businessHours: settingsMap.businessHours || process.env.BUSINESS_HOURS || "Monday - Friday: 8AM - 6PM, Saturday: 9AM - 2PM",
@@ -188,17 +189,18 @@ export async function PUT(request: NextRequest) {
       message: 'Settings updated successfully',
       settings: responseSettings
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error updating settings:', error);
-    
-    // Handle Prisma errors
-    if (error.code === 'P2002') {
-      return NextResponse.json(
-        { error: 'Database Error', message: 'A setting with this key already exists' },
-        { status: 400 }
-      );
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2002') {
+        return NextResponse.json(
+          { error: 'Database Error', message: 'A setting with this key already exists' },
+          { status: 400 }
+        );
+      }
     }
-    
+
     return NextResponse.json(
       { error: 'Internal Server Error', message: 'Failed to update settings' },
       { status: 500 }
