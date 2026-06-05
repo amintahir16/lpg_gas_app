@@ -35,13 +35,13 @@ export default function Navbar() {
 
   return (
     <nav
-      className={`fixed top-0 left-0 right-0 z-50 w-full max-w-[100vw] overflow-x-hidden transition-all duration-500 ${scrolled
+      className={`fixed top-0 left-0 right-0 z-50 w-full max-w-[100vw] transition-all duration-500 ${scrolled
         ? 'glass-navbar shadow-2xl shadow-black/20'
         : 'bg-transparent'
         }`}
     >
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="flex justify-between items-center h-16 w-full min-w-0 gap-2">
+        <div className="flex justify-between items-center h-16 w-full min-w-0 gap-2 overflow-visible">
           {/* Logo */}
           <div className="min-w-0 shrink max-w-[calc(100%-7rem)] md:max-w-none translate-x-0 md:translate-x-2">
             <Link href="/" className="flex items-center min-w-0">
@@ -52,12 +52,12 @@ export default function Navbar() {
           </div>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-1 shrink-0">
+          <div className="hidden md:flex items-center space-x-1 shrink-0 overflow-visible">
             {navigation.map((item) => (
-              <div key={item.name} className="relative">
+              <div key={item.name} className="relative overflow-visible">
                 {item.hasDropdown ? (
                   <div
-                    className="relative"
+                    className="relative overflow-visible"
                     onMouseEnter={() => setIsServicesOpen(true)}
                     onMouseLeave={() => setIsServicesOpen(false)}
                   >
@@ -73,7 +73,7 @@ export default function Navbar() {
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: 8, scale: 0.96 }}
                           transition={{ duration: 0.2 }}
-                          className="absolute top-full left-0 mt-1 w-52 glass-menu-dark py-2 rounded-xl overflow-hidden"
+                          className="absolute top-full left-0 mt-1 w-52 glass-menu-dark py-2 rounded-xl z-[60]"
                         >
                           {services.map((service) => (
                             <Link
