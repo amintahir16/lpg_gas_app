@@ -22,6 +22,8 @@ const securityHeaders = [
     value: [
       "default-src 'self'",
       "base-uri 'self'",
+      // Contact page Google Maps embed (iframe src is www.google.com/maps/embed)
+      "frame-src 'self' https://www.google.com https://maps.google.com",
       "frame-ancestors 'none'",
       "form-action 'self'",
       "object-src 'none'",
