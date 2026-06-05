@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, ChevronDown, User, ChevronRight, Flame } from 'lucide-react';
+import { Menu, X, ChevronDown, User, ChevronRight, Flame, LogIn } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import FlamoraAnimatedLogo from '@/components/ui/FlamoraAnimatedLogo';
 
@@ -33,30 +33,26 @@ export default function Navbar() {
     { name: 'Distribution', href: '/services#distribution' },
   ];
 
-  const logoWidth = 170;
-  const logoMoveX = 8;
-  const logoMoveY = 0;
-
   return (
     <nav
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${scrolled
+      className={`fixed top-0 left-0 right-0 z-50 w-full max-w-[100vw] overflow-x-hidden transition-all duration-500 ${scrolled
         ? 'glass-navbar shadow-2xl shadow-black/20'
         : 'bg-transparent'
         }`}
     >
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="flex justify-between items-center h-16">
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="flex justify-between items-center h-16 w-full min-w-0 gap-2">
           {/* Logo */}
-          <div style={{ transform: `translate(${logoMoveX}px, ${logoMoveY}px)` }}>
-            <Link href="/" className="flex items-center space-x-2">
-              <div style={{ width: `${logoWidth}px` }}>
-                <FlamoraAnimatedLogo hideBadge textColor="#ffffff" />
+          <div className="min-w-0 shrink max-w-[calc(100%-7rem)] md:max-w-none translate-x-0 md:translate-x-2">
+            <Link href="/" className="flex items-center min-w-0">
+              <div className="min-w-0 overflow-hidden w-[128px] md:w-[170px]">
+                <FlamoraAnimatedLogo hideBadge textColor="#ffffff" className="[&_svg]:!px-0" />
               </div>
             </Link>
           </div>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-1">
+          <div className="hidden md:flex items-center space-x-1 shrink-0">
             {navigation.map((item) => (
               <div key={item.name} className="relative">
                 {item.hasDropdown ? (
@@ -77,13 +73,13 @@ export default function Navbar() {
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: 8, scale: 0.96 }}
                           transition={{ duration: 0.2 }}
-                          className="absolute top-full left-0 mt-1 w-52 glass-card py-2 shadow-2xl shadow-black/30 rounded-xl overflow-hidden"
+                          className="absolute top-full left-0 mt-1 w-52 glass-menu-dark py-2 rounded-xl overflow-hidden"
                         >
                           {services.map((service) => (
                             <Link
                               key={service.name}
                               href={service.href}
-                              className="block px-4 py-2.5 text-sm text-white/60 hover:text-[#f8a11b] hover:bg-white/5 transition-colors duration-200"
+                              className="block px-4 py-2.5 text-sm text-white/90 hover:text-[#f8a11b] hover:bg-white/10 transition-colors duration-200"
                             >
                               {service.name}
                             </Link>
@@ -105,7 +101,7 @@ export default function Navbar() {
           </div>
 
           {/* Right Side Actions */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 shrink-0 ml-auto">
             {/* Order CTA */}
             <Link
               href="/shop"
@@ -126,10 +122,22 @@ export default function Navbar() {
               </Link>
             )}
 
+            {!session && (
+              <Link
+                href="/login"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 text-sm font-semibold text-white/90 bg-white/5 border border-white/10 hover:border-[#f8a11b]/30 hover:text-[#f8a11b] rounded-lg md:rounded-xl transition-all duration-300 shrink-0"
+              >
+                <LogIn className="w-4 h-4" />
+                Login
+              </Link>
+            )}
+
             {/* Mobile Menu Button */}
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className="md:hidden p-2 text-white/70 hover:text-[#f8a11b] transition-colors rounded-lg"
+              aria-label={isOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={isOpen}
+              className="md:hidden p-2 text-white/90 hover:text-[#f8a11b] transition-colors rounded-lg shrink-0"
             >
               {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
@@ -144,7 +152,7 @@ export default function Navbar() {
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.3 }}
-              className="md:hidden border-t border-white/5 glass-card rounded-b-2xl mt-1 overflow-hidden"
+              className="md:hidden border-t border-white/10 glass-menu-dark rounded-b-2xl mt-1 overflow-hidden w-full"
             >
               <div className="py-4 space-y-1 px-2">
                 {navigation.map((item) => (
@@ -153,7 +161,7 @@ export default function Navbar() {
                       <div>
                         <button
                           onClick={() => setIsServicesOpen(!isServicesOpen)}
-                          className="flex items-center justify-between w-full text-left px-4 py-3 text-white/70 hover:text-[#f8a11b] transition-colors rounded-lg"
+                          className="flex items-center justify-between w-full text-left px-4 py-3 text-white/90 hover:text-[#f8a11b] hover:bg-white/5 transition-colors rounded-lg"
                         >
                           {item.name}
                           <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isServicesOpen ? 'rotate-180' : ''}`} />
@@ -164,14 +172,17 @@ export default function Navbar() {
                               initial={{ opacity: 0, height: 0 }}
                               animate={{ opacity: 1, height: 'auto' }}
                               exit={{ opacity: 0, height: 0 }}
-                              className="pl-6 space-y-1"
+                              className="mx-2 mb-1 rounded-xl glass-menu-dark border border-white/10 overflow-hidden"
                             >
                               {services.map((service) => (
                                 <Link
                                   key={service.name}
                                   href={service.href}
-                                  className="block px-4 py-2 text-sm text-white/50 hover:text-[#f8a11b] transition-colors"
-                                  onClick={() => setIsOpen(false)}
+                                  className="block px-4 py-2.5 text-sm text-white/90 hover:text-[#f8a11b] hover:bg-white/10 transition-colors"
+                                  onClick={() => {
+                                    setIsOpen(false);
+                                    setIsServicesOpen(false);
+                                  }}
                                 >
                                   {service.name}
                                 </Link>
@@ -183,7 +194,7 @@ export default function Navbar() {
                     ) : (
                       <Link
                         href={item.href}
-                        className="block px-4 py-3 text-white/70 hover:text-[#f8a11b] transition-colors rounded-lg"
+                        className="block px-4 py-3 text-white/90 hover:text-[#f8a11b] hover:bg-white/5 transition-colors rounded-lg"
                         onClick={() => setIsOpen(false)}
                       >
                         {item.name}

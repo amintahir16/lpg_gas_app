@@ -37,7 +37,7 @@ export default function LandingLayout({
   return (
     <>
       <Navbar />
-      <main>{children}</main>
+      <main className="w-full max-w-[100vw] overflow-x-hidden">{children}</main>
       <Footer />
     </>
   );
