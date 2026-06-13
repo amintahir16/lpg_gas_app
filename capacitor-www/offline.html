@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <title>FLAMORA — No Connection</title>
+    <style>
+      :root {
+        --bg: #f8fafc;
+        --card: #ffffff;
+        --ink: #0f172a;
+        --muted: #64748b;
+        --brand: #4f46e5;
+        --brand-dark: #4338ca;
+        --ring: #e2e8f0;
+      }
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        padding-top: calc(24px + env(safe-area-inset-top));
+        padding-bottom: calc(24px + env(safe-area-inset-bottom));
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        background:
+          radial-gradient(1200px 600px at 50% -10%, #eef2ff 0%, rgba(238, 242, 255, 0) 60%),
+          var(--bg);
+        color: var(--ink);
+      }
+      .card {
+        width: 100%;
+        max-width: 360px;
+        background: var(--card);
+        border: 1px solid var(--ring);
+        border-radius: 20px;
+        padding: 32px 24px 28px;
+        text-align: center;
+        box-shadow: 0 12px 40px rgba(15, 23, 42, 0.08);
+        animation: rise 0.4s ease both;
+      }
+      @keyframes rise {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .icon-wrap {
+        width: 84px;
+        height: 84px;
+        margin: 0 auto 20px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #eef2ff;
+        color: var(--brand);
+      }
+      .icon-wrap svg { width: 42px; height: 42px; }
+      h1 {
+        font-size: 1.3rem;
+        line-height: 1.3;
+        margin: 0 0 8px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      p {
+        margin: 0;
+        font-size: 0.95rem;
+        line-height: 1.55;
+        color: var(--muted);
+      }
+      .btn {
+        margin-top: 24px;
+        width: 100%;
+        border: none;
+        cursor: pointer;
+        border-radius: 12px;
+        padding: 14px 18px;
+        font-size: 1rem;
+        font-weight: 600;
+        color: #fff;
+        background: var(--brand);
+        transition: background 0.15s ease, transform 0.1s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+      .btn:active { transform: scale(0.985); background: var(--brand-dark); }
+      .btn[disabled] { opacity: 0.7; cursor: default; }
+      .btn .spinner {
+        width: 18px; height: 18px;
+        border: 2px solid rgba(255, 255, 255, 0.45);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .status {
+        margin-top: 16px;
+        font-size: 0.82rem;
+        color: var(--muted);
+        min-height: 1.1em;
+      }
+      .brand {
+        margin-top: 26px;
+        font-size: 0.72rem;
+        letter-spacing: 0.18em;
+        font-weight: 700;
+        color: #94a3b8;
+      }
+      .hidden { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <div class="icon-wrap" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 1l22 22" />
+          <path d="M16.72 11.06A10.94 10.94 0 0119 12.55" />
+          <path d="M5 12.55a10.94 10.94 0 015.17-2.39" />
+          <path d="M10.71 5.05A16 16 0 0122.58 9" />
+          <path d="M1.42 9a15.91 15.91 0 014.7-2.88" />
+          <path d="M8.53 16.11a6 6 0 016.95 0" />
+          <line x1="12" y1="20" x2="12.01" y2="20" />
+        </svg>
+      </div>
+      <h1>No Internet Connection</h1>
+      <p>
+        FLAMORA needs an active internet connection. Please connect to Wi-Fi or
+        mobile data, then tap retry to continue.
+      </p>
+
+      <button id="retryBtn" class="btn" type="button">
+        <span id="btnLabel">Retry</span>
+        <span id="btnSpinner" class="spinner hidden"></span>
+      </button>
+
+      <div id="status" class="status"></div>
+      <div class="brand">FLAMORA</div>
+    </main>
+
+    <script>
+      // The native shell injects the URL that failed to load so retry reloads
+      // the real app, regardless of which deployment URL is configured.
+      var RETRY_URL = "%%RETRY_URL%%";
+
+      var retryBtn = document.getElementById("retryBtn");
+      var btnLabel = document.getElementById("btnLabel");
+      var btnSpinner = document.getElementById("btnSpinner");
+      var statusEl = document.getElementById("status");
+      var navigating = false;
+
+      function reconnect() {
+        if (navigating) return;
+        navigating = true;
+        btnLabel.textContent = "Connecting";
+        btnSpinner.classList.remove("hidden");
+        retryBtn.setAttribute("disabled", "true");
+        statusEl.textContent = "Reconnecting…";
+        var target = RETRY_URL && RETRY_URL.indexOf("%%") === -1 ? RETRY_URL : null;
+        if (target) {
+          window.location.href = target;
+        } else {
+          window.location.reload();
+        }
+      }
+
+      retryBtn.addEventListener("click", function () {
+        if (navigator.onLine === false) {
+          statusEl.textContent = "Still offline — check your connection.";
+          return;
+        }
+        reconnect();
+      });
+
+      // Auto-recover the moment the device regains connectivity.
+      window.addEventListener("online", reconnect);
+
+      // Gentle poll as a fallback for cases where the "online" event is missed.
+      setInterval(function () {
+        if (!navigating && navigator.onLine) reconnect();
+      }, 3000);
+    </script>
+  </body>
+</html>
