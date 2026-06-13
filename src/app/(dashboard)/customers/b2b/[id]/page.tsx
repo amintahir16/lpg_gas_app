@@ -1827,9 +1827,9 @@ export default function B2BCustomerDetailPage() {
                 return (
                   <div className="space-y-1.5">
                     {visibleDues.map((due) => (
-                      <div key={due.variantKey || due.displayName} className="flex justify-between">
-                        <span className="text-xs text-gray-700">{due.displayName}</span>
-                        <Badge variant="destructive" className="h-5 text-[10px] px-1.5">
+                      <div key={due.variantKey || due.displayName} className="flex justify-between items-center">
+                        <span className="text-sm text-gray-700">{due.displayName}</span>
+                        <Badge variant="destructive" className="h-6 text-[12px] px-2">
                           {due.count}
                         </Badge>
                       </div>
@@ -2043,6 +2043,7 @@ export default function B2BCustomerDetailPage() {
                           }}
                           placeholder="0"
                           disabled={!row.variantKey}
+                          className="h-9"
                         />
                       </div>
                       {openingDuesRows.length > 1 && (
