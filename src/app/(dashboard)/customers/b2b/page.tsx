@@ -23,7 +23,8 @@ import {
   UserGroupIcon,
   BanknotesIcon,
   ArrowUpIcon,
-  ArrowDownIcon
+  ArrowDownIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
 import { parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
@@ -987,46 +988,98 @@ export default function B2BCustomersPage() {
       {deleteConfirm && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95">
-            <div className="p-6 text-center">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <TrashIcon className="w-6 h-6 text-red-600" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Customer?</h3>
-              <p className="text-gray-500 text-sm mb-6">
-                To confirm deletion, please type the customer name: <span className="font-bold text-gray-900">{customers.find(c => c.id === deleteConfirm)?.name}</span>.
-                <br /><span className="text-red-500 text-xs mt-2 block">This action cannot be undone.</span>
-              </p>
+            {(() => {
+              const target = customers.find(c => c.id === deleteConfirm);
+              const cylindersHeld = target ? getTotalCylindersDue(target) : 0;
+              const netBalance = target ? -(target.ledgerBalance) : 0;
+              const hasOutstandingBalance = Math.abs(netBalance) >= 0.01;
+              const hasCylinderHoldings = cylindersHeld > 0;
+              // A customer can only be deleted when fully settled: zero net
+              // balance AND no cylinders held. Otherwise we block here so the
+              // user never even types the name (server enforces this too).
+              const blocked = hasOutstandingBalance || hasCylinderHoldings;
 
-              <Input
-                placeholder="Type customer name..."
-                value={deleteConfirmationName}
-                onChange={(e) => {
-                  setDeleteConfirmationName(e.target.value);
-                  setDeleteError(null); // Clear error on typing
-                }}
-                className={`mb-4 ${deleteError ? 'border-red-500 focus:ring-red-500' : ''}`}
-              />
+              if (blocked) {
+                return (
+                  <div className="p-6 text-center">
+                    <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <ExclamationTriangleIcon className="w-6 h-6 text-amber-600" />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Can&apos;t delete {target?.name}</h3>
+                    <p className="text-gray-500 text-sm mb-4">
+                      This customer&apos;s account isn&apos;t settled. Deletion is only allowed when the balance is zero and no cylinders are held.
+                    </p>
 
-              {deleteError && (
-                <div className="mb-4 p-3 rounded-md bg-red-50 border border-red-200 text-left animate-in fade-in-50">
-                  <div className="flex gap-2">
-                    <TrashIcon className="h-5 w-5 text-red-600 shrink-0" />
-                    <p className="text-sm text-red-700 font-medium">{deleteError}</p>
+                    <div className="mb-5 p-3 rounded-md bg-amber-50 border border-amber-200 text-left space-y-2">
+                      {hasOutstandingBalance && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-700">Net balance</span>
+                          <span className={`font-semibold ${netBalance < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            {formatCurrency(netBalance)} {netBalance < 0 ? '(owes you)' : '(credit)'}
+                          </span>
+                        </div>
+                      )}
+                      {hasCylinderHoldings && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-700">Cylinders held</span>
+                          <span className="font-semibold text-red-600">{cylindersHeld}</span>
+                        </div>
+                      )}
+                      <p className="text-xs text-amber-700 pt-1 border-t border-amber-200">
+                        Settle the balance to zero and collect all cylinders, then you can delete this customer.
+                      </p>
+                    </div>
+
+                    <div className="flex justify-center gap-3">
+                      <Button variant="outline" onClick={() => { setDeleteConfirm(null); setDeleteConfirmationName(''); setDeleteError(null); }}>Close</Button>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="p-6 text-center">
+                  <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <TrashIcon className="w-6 h-6 text-red-600" />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Customer?</h3>
+                  <p className="text-gray-500 text-sm mb-6">
+                    To confirm deletion, please type the customer name: <span className="font-bold text-gray-900">{target?.name}</span>.
+                    <br /><span className="text-red-500 text-xs mt-2 block">This action cannot be undone.</span>
+                  </p>
+
+                  <Input
+                    placeholder="Type customer name..."
+                    value={deleteConfirmationName}
+                    onChange={(e) => {
+                      setDeleteConfirmationName(e.target.value);
+                      setDeleteError(null); // Clear error on typing
+                    }}
+                    className={`mb-4 ${deleteError ? 'border-red-500 focus:ring-red-500' : ''}`}
+                  />
+
+                  {deleteError && (
+                    <div className="mb-4 p-3 rounded-md bg-red-50 border border-red-200 text-left animate-in fade-in-50">
+                      <div className="flex gap-2">
+                        <TrashIcon className="h-5 w-5 text-red-600 shrink-0" />
+                        <p className="text-sm text-red-700 font-medium">{deleteError}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-center gap-3">
+                    <Button variant="outline" onClick={() => { setDeleteConfirm(null); setDeleteConfirmationName(''); setDeleteError(null); }}>Cancel</Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() => handleDeleteCustomer(deleteConfirm)}
+                      disabled={isLoading || deleteConfirmationName !== target?.name}
+                    >
+                      {isLoading ? 'Deleting...' : 'Delete Customer'}
+                    </Button>
                   </div>
                 </div>
-              )}
-
-              <div className="flex justify-center gap-3">
-                <Button variant="outline" onClick={() => { setDeleteConfirm(null); setDeleteConfirmationName(''); setDeleteError(null); }}>Cancel</Button>
-                <Button
-                  variant="destructive"
-                  onClick={() => handleDeleteCustomer(deleteConfirm)}
-                  disabled={isLoading || deleteConfirmationName !== customers.find(c => c.id === deleteConfirm)?.name}
-                >
-                  {isLoading ? 'Deleting...' : 'Delete Customer'}
-                </Button>
-              </div>
-            </div>
+              );
+            })()}
           </div>
         </div>
       )}

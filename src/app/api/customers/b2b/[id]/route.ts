@@ -206,60 +206,31 @@ export async function DELETE(
     await adoptLegacyB2bCustomerIfNeeded(customerId, regionId);
 
     // Region-scope guard: ensure the customer belongs to the active region
-    const customerScopeCheck = await prisma.customer.findFirst({
+    const customerRecord = await prisma.customer.findFirst({
       where: { id: customerId, type: 'B2B', ...regionScopedWhere(regionId) },
-      select: { id: true }
-    });
-
-    if (!customerScopeCheck) {
-      return NextResponse.json({ error: 'Customer not found in current region' }, { status: 404 });
-    }
-
-    // Step 1: Find all transaction IDs
-    const transactions = await prisma.b2BTransaction.findMany({
-      where: { customerId },
-      select: { id: true }
-    });
-
-    const transactionIds = transactions.map(t => t.id);
-
-    if (transactionIds.length > 0) {
-      // Step 2: Delete transaction items
-      await prisma.b2BTransactionItem.deleteMany({
-        where: { transactionId: { in: transactionIds } }
-      });
-
-      // Step 3: Delete transactions
-      await prisma.b2BTransaction.deleteMany({
-        where: { customerId }
-      });
-    }
-
-    // Step 4: Delete Customer Ledger entries
-    await prisma.customerLedger.deleteMany({
-      where: { customerId }
-    });
-
-    // Step 5: Delete Support Requests
-    await prisma.supportRequest.deleteMany({
-      where: { customerId }
-    });
-
-    // Step 5.5: Check for active assigned cylinders (Physical Only)
-    // We strictly check physical records. Legacy counters are ignored.
-    const customerRecord = await prisma.customer.findUnique({
-      where: { id: customerId },
-      select: { name: true }
+      select: { id: true, name: true, isActive: true, ledgerBalance: true }
     });
 
     if (!customerRecord) {
-      return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Customer not found in current region' }, { status: 404 });
     }
 
-    // Check physical cylinder records (Rentals OR Location Match by ID/Name)
+    // ----------------------------------------------------------------------
+    // PRE-DELETE GUARDS — run BEFORE touching any data.
+    // A B2B customer may only be deleted when their account is fully closed:
+    //   1) Net balance is settled (ledgerBalance == 0), and
+    //   2) No cylinders are still physically held by the customer.
+    // If either fails we return WITHOUT deleting anything, so transactions,
+    // ledger, balances and profit history are never lost.
+    // ----------------------------------------------------------------------
+    const ledgerBalance = Number(customerRecord.ledgerBalance);
+    const hasOutstandingBalance = Math.abs(ledgerBalance) >= 0.01;
+
+    // Physical cylinder holdings (Rentals OR location match by ID/Name), region-scoped
     const assignedCylindersCount = await prisma.cylinder.count({
       where: {
         currentStatus: 'WITH_CUSTOMER',
+        ...regionScopedWhere(regionId),
         OR: [
           { cylinderRentals: { some: { customerId: customerId, status: 'ACTIVE' } } },
           { location: { contains: customerId } },
@@ -267,22 +238,56 @@ export async function DELETE(
         ]
       }
     });
+    const hasCylinderHoldings = assignedCylindersCount > 0;
 
-    if (assignedCylindersCount > 0) {
+    if (hasOutstandingBalance || hasCylinderHoldings) {
+      const reasons: string[] = [];
+      if (hasOutstandingBalance) {
+        const owes = ledgerBalance > 0;
+        const amountText = `Rs ${Math.round(Math.abs(ledgerBalance)).toLocaleString('en-PK')}`;
+        reasons.push(
+          owes
+            ? `an unsettled balance (customer owes you ${amountText})`
+            : `an unsettled balance (customer has ${amountText} credit)`,
+        );
+      }
+      if (hasCylinderHoldings) {
+        reasons.push(`${assignedCylindersCount} cylinder${assignedCylindersCount === 1 ? '' : 's'} still held`);
+      }
       return NextResponse.json(
-        { error: 'Cannot delete customer with cylinders due. Please return cylinders first.' },
+        {
+          error: `Cannot delete "${customerRecord.name}" — customer has ${reasons.join(' and ')}. Settle the balance to zero and collect all cylinders before deleting.`,
+          code: 'CUSTOMER_NOT_SETTLED',
+          hasOutstandingBalance,
+          hasCylinderHoldings,
+          cylindersHeld: assignedCylindersCount,
+          ledgerBalance,
+        },
         { status: 400 }
       );
     }
 
-    // Step 6: Delete Cylinder Rentals
-    await prisma.cylinderRental.deleteMany({
-      where: { customerId }
-    });
+    // ----------------------------------------------------------------------
+    // All guards passed — delete atomically so a partial failure never leaves
+    // orphaned/half-deleted data behind.
+    // ----------------------------------------------------------------------
+    const customer = await prisma.$transaction(async (tx) => {
+      const transactions = await tx.b2BTransaction.findMany({
+        where: { customerId },
+        select: { id: true },
+      });
+      const transactionIds = transactions.map(t => t.id);
 
-    // Step 7: Delete the customer
-    const customer = await prisma.customer.delete({
-      where: { id: customerId }
+      if (transactionIds.length > 0) {
+        await tx.b2BTransactionItem.deleteMany({ where: { transactionId: { in: transactionIds } } });
+        await tx.b2BTransaction.deleteMany({ where: { customerId } });
+      }
+
+      await tx.customerLedger.deleteMany({ where: { customerId } });
+      await tx.supportRequest.deleteMany({ where: { customerId } });
+      await tx.cylinderRental.deleteMany({ where: { customerId } });
+
+      return tx.customer.delete({ where: { id: customerId } });
     });
 
     try {
