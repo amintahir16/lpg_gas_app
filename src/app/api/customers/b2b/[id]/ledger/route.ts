@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { adoptLegacyB2bCustomerIfNeeded, getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { requireAdmin, clampLimit } from '@/lib/apiAuth';
 import { parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
+import { isOpeningDuesTransaction } from '@/lib/b2b-opening-entries';
 
 export async function GET(
   request: NextRequest,
@@ -199,6 +200,11 @@ export async function GET(
     allTransactions.forEach(transaction => {
       // Safely skip voided transactions from affecting lifetime totals
       if (transaction.voided) return;
+
+      // Opening cylinder dues only record cylinders the customer already holds
+      // (a price-0 SALE). They are not a real sale, so they must not contribute
+      // any gas margin to "Total profit" or inflate Total In/Out.
+      if (isOpeningDuesTransaction(transaction)) return;
 
       const totalAmount = parseFloat(transaction.totalAmount.toString());
       switch (transaction.transactionType) {

@@ -15,6 +15,7 @@ import { CustomSelect } from '@/components/ui/select-custom';
 import { getCylinderTypeDisplayName, getCapacityFromTypeString } from '@/lib/cylinder-utils';
 import { parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { formatB2bItemCylinderLabel } from '@/lib/b2b-transaction-item-variant';
+import { OPENING_BALANCE_NOTE, OPENING_DUES_NOTE } from '@/lib/b2b-opening-entries';
 import {
   ArrowLeftIcon,
   DocumentTextIcon,
@@ -230,6 +231,21 @@ export default function B2BCustomerDetailPage() {
   const [hasInventoryErrors, setHasInventoryErrors] = useState(false);
   const [firstInvalidInventoryItem, setFirstInvalidInventoryItem] = useState<{ category: string, index: number } | null>(null);
   const [firstInvalidCylinderIndex, setFirstInvalidCylinderIndex] = useState<number | null>(null);
+
+  // Opening balances setup (only available for brand-new B2B customers).
+  // These reuse the standard transaction pipeline so net balance & cylinder
+  // dues update exactly like any other transaction — nothing is altered.
+  // Note markers live in '@/lib/b2b-opening-entries' (shared with the reports).
+  const [showOpeningBalanceModal, setShowOpeningBalanceModal] = useState(false);
+  const [openingBalanceAmount, setOpeningBalanceAmount] = useState('');
+  const [openingBalanceDirection, setOpeningBalanceDirection] = useState<'OWES' | 'CREDIT'>('OWES');
+  const [submittingOpeningBalance, setSubmittingOpeningBalance] = useState(false);
+
+  const [showOpeningDuesModal, setShowOpeningDuesModal] = useState(false);
+  const [openingDuesRows, setOpeningDuesRows] = useState<Array<{ variantKey: string; quantity: number }>>([
+    { variantKey: '', quantity: 0 },
+  ]);
+  const [submittingOpeningDues, setSubmittingOpeningDues] = useState(false);
 
   // Margin category editing
   const [showCategoryEdit, setShowCategoryEdit] = useState(false);
@@ -1378,6 +1394,155 @@ export default function B2BCustomerDetailPage() {
     }
   };
 
+  // ----- Opening balances (new-customer setup) ------------------------------
+  // Opening entries are normal transactions tagged via their notes. They are
+  // excluded from the "operational" check so that adding one type doesn't hide
+  // the other button, and each prevents its own duplicate. Voided opening
+  // entries are ignored so they can be redone.
+  const isOpeningBalanceTxn = (t: B2BTransaction) => !t.voided && t.notes === OPENING_BALANCE_NOTE;
+  const isOpeningDuesTxn = (t: B2BTransaction) => !t.voided && t.notes === OPENING_DUES_NOTE;
+  const hasOperationalTransactions = transactions.some(
+    (t) => t.notes !== OPENING_BALANCE_NOTE && t.notes !== OPENING_DUES_NOTE,
+  );
+  const canSetupOpening = !loading && !!customer && !hasOperationalTransactions;
+  const showAddBalanceButton = canSetupOpening && !transactions.some(isOpeningBalanceTxn);
+  const showAddDuesButton = canSetupOpening && !transactions.some(isOpeningDuesTxn);
+
+  const refreshAfterOpeningEntry = async () => {
+    await fetchCustomerLedger();
+    const duesParams = new URLSearchParams();
+    if (dateFilter.startDate) duesParams.append('startDate', dateFilter.startDate);
+    if (dateFilter.endDate) duesParams.append('endDate', dateFilter.endDate);
+    try {
+      const duesResponse = await fetch(`/api/customers/b2b/${customerId}/cylinder-dues?${duesParams.toString()}`);
+      if (duesResponse.ok) {
+        const duesData = await duesResponse.json();
+        if (duesData.success && duesData.cylinderDues) {
+          setCylinderDues(duesData.cylinderDues);
+        }
+      }
+    } catch (err) {
+      console.error('Error refreshing cylinder dues:', err);
+    }
+  };
+
+  const handleOpeningBalanceSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amount = parseFloat(openingBalanceAmount);
+    if (!amount || amount <= 0) {
+      setError('Please enter a valid opening balance amount greater than 0.');
+      return;
+    }
+
+    setSubmittingOpeningBalance(true);
+    setError(null);
+    try {
+      // OWES  -> SALE (unpaid) increases ledgerBalance -> "Customer owes you"
+      // CREDIT-> CREDIT_NOTE decreases ledgerBalance   -> "Customer has credit"
+      const now = new Date();
+      const payload = {
+        transactionType: openingBalanceDirection === 'OWES' ? 'SALE' : 'CREDIT_NOTE',
+        customerId,
+        date: now.toISOString().split('T')[0],
+        time: now.toTimeString().slice(0, 5),
+        totalAmount: amount,
+        ...(openingBalanceDirection === 'OWES' ? { paidAmount: 0, paymentMethod: 'CASH' } : {}),
+        notes: OPENING_BALANCE_NOTE,
+        gasItems: [],
+        accessoryItems: [],
+      };
+
+      const response = await fetch('/api/customers/b2b/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to add opening balance');
+      }
+
+      setShowOpeningBalanceModal(false);
+      setOpeningBalanceAmount('');
+      setOpeningBalanceDirection('OWES');
+      await refreshAfterOpeningEntry();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add opening balance');
+    } finally {
+      setSubmittingOpeningBalance(false);
+    }
+  };
+
+  const handleOpeningDuesSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Build gas items from selected rows (no charge — these only record holdings)
+    const selected = openingDuesRows.filter((r) => r.variantKey && r.quantity > 0);
+    if (selected.length === 0) {
+      setError('Please select at least one cylinder type and quantity.');
+      return;
+    }
+
+    // Validate against available FULL stock
+    for (const row of selected) {
+      const stat = availableCylinderTypes.find((s) => s.variantKey === row.variantKey);
+      const available = stat?.full ?? 0;
+      if (row.quantity > available) {
+        setError(
+          `Only ${available} full ${stat?.type || 'cylinder'} available in inventory, but ${row.quantity} requested.`,
+        );
+        return;
+      }
+    }
+
+    setSubmittingOpeningDues(true);
+    setError(null);
+    try {
+      const now = new Date();
+      const gasItems = selected.map((row) => {
+        const stat = availableCylinderTypes.find((s) => s.variantKey === row.variantKey);
+        return {
+          cylinderType: stat?.typeEnum || '',
+          cylinderVariantKey: row.variantKey,
+          delivered: row.quantity,
+          pricePerItem: 0,
+          emptyReturned: 0,
+        };
+      });
+
+      const payload = {
+        transactionType: 'SALE',
+        customerId,
+        date: now.toISOString().split('T')[0],
+        time: now.toTimeString().slice(0, 5),
+        totalAmount: 0,
+        notes: OPENING_DUES_NOTE,
+        gasItems,
+        accessoryItems: [],
+      };
+
+      const response = await fetch('/api/customers/b2b/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to add cylinder dues');
+      }
+
+      setShowOpeningDuesModal(false);
+      setOpeningDuesRows([{ variantKey: '', quantity: 0 }]);
+      await refreshAfterOpeningEntry();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add cylinder dues');
+    } finally {
+      setSubmittingOpeningDues(false);
+    }
+  };
+
   if (loading && !customer) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
@@ -1600,6 +1765,23 @@ export default function B2BCustomerDetailPage() {
                   })()}
                 </>
               )}
+              {showAddBalanceButton && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setError(null);
+                    setOpeningBalanceAmount('');
+                    setOpeningBalanceDirection('OWES');
+                    setShowOpeningBalanceModal(true);
+                  }}
+                  className="mt-2 h-7 text-[11px] px-3 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                >
+                  <PlusIcon className="w-3.5 h-3.5 mr-1" />
+                  Add Balance
+                </Button>
+              )}
             </div>
 
 
@@ -1655,6 +1837,22 @@ export default function B2BCustomerDetailPage() {
                   </div>
                 );
               })()}
+              {showAddDuesButton && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setError(null);
+                    setOpeningDuesRows([{ variantKey: '', quantity: 0 }]);
+                    setShowOpeningDuesModal(true);
+                  }}
+                  className="mt-2 h-7 text-[11px] px-3 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                >
+                  <CubeIcon className="w-3.5 h-3.5 mr-1" />
+                  Add Cylinder Dues
+                </Button>
+              )}
             </div>
 
             {/* Quick Actions - Unified Transaction */}
@@ -1679,6 +1877,224 @@ export default function B2BCustomerDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Opening Balance Modal (new-customer setup) */}
+      {showOpeningBalanceModal && (
+        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm overflow-y-auto h-full w-full z-50">
+          <div className="relative top-16 mx-auto p-0 border-0 w-11/12 max-w-md shadow-2xl rounded-xl bg-white overflow-hidden">
+            <div className="bg-white px-6 py-4 border-b flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Add Opening Balance</h3>
+                <p className="text-sm text-gray-500">Set the starting balance carried over for this customer</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowOpeningBalanceModal(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <XMarkIcon className="w-6 h-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleOpeningBalanceSubmit} className="p-6 space-y-4">
+              {error && (
+                <div className="p-3 bg-red-50 border-l-4 border-red-500 rounded-lg">
+                  <p className="text-sm font-medium text-red-800">{error}</p>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">Balance Type</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOpeningBalanceDirection('OWES')}
+                    className={`h-10 rounded-lg border text-sm font-medium transition-colors ${openingBalanceDirection === 'OWES'
+                      ? 'border-red-500 bg-red-50 text-red-700'
+                      : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}
+                  >
+                    Customer owes you
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOpeningBalanceDirection('CREDIT')}
+                    className={`h-10 rounded-lg border text-sm font-medium transition-colors ${openingBalanceDirection === 'CREDIT'
+                      ? 'border-green-500 bg-green-50 text-green-700'
+                      : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}
+                  >
+                    Customer has credit
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">Amount (Rs)</label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={openingBalanceAmount}
+                  onChange={(e) => setOpeningBalanceAmount(e.target.value)}
+                  placeholder="Enter opening balance amount"
+                  autoFocus
+                />
+                <p className="mt-1.5 text-[11px] text-gray-500">
+                  Recorded as an opening entry in the ledger. The net balance updates exactly like any other transaction.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2 border-t border-gray-200">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowOpeningBalanceModal(false)}
+                  className="px-6 h-9 text-sm"
+                  disabled={submittingOpeningBalance}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  className="px-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 h-9 text-sm"
+                  disabled={submittingOpeningBalance}
+                >
+                  {submittingOpeningBalance ? 'Saving...' : 'Save Opening Balance'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Opening Cylinder Dues Modal (new-customer setup) */}
+      {showOpeningDuesModal && (
+        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm overflow-y-auto h-full w-full z-50">
+          <div className="relative top-12 mx-auto p-0 border-0 w-11/12 max-w-lg shadow-2xl rounded-xl bg-white mb-10 overflow-hidden">
+            <div className="bg-white px-6 py-4 border-b flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Add Cylinder Dues</h3>
+                <p className="text-sm text-gray-500">Record cylinders the customer is already holding</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowOpeningDuesModal(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <XMarkIcon className="w-6 h-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleOpeningDuesSubmit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+              {error && (
+                <div className="p-3 bg-red-50 border-l-4 border-red-500 rounded-lg">
+                  <p className="text-sm font-medium text-red-800">{error}</p>
+                </div>
+              )}
+
+              <p className="text-[11px] text-gray-500">
+                Selected cylinders move from <span className="font-medium">Full</span> stock to{' '}
+                <span className="font-medium">With Customer</span>. This does not affect the net balance.
+              </p>
+
+              <div className="space-y-3">
+                {openingDuesRows.map((row, index) => {
+                  const selectedStat = availableCylinderTypes.find((s) => s.variantKey === row.variantKey);
+                  const availableFull = selectedStat?.full ?? 0;
+                  // Variant keys already chosen in other rows (prevent duplicates)
+                  const usedKeys = openingDuesRows
+                    .filter((_, i) => i !== index)
+                    .map((r) => r.variantKey)
+                    .filter(Boolean);
+                  const options = availableCylinderTypes
+                    .filter((s) => !usedKeys.includes(s.variantKey))
+                    .map((s) => ({
+                      value: s.variantKey,
+                      label: `${s.type} — ${s.full} full available`,
+                    }));
+
+                  return (
+                    <div key={index} className="flex items-end gap-2 p-3 rounded-lg border border-gray-200 bg-gray-50/60">
+                      <div className="flex-1">
+                        <label className="block text-[11px] font-medium text-gray-600 mb-1">Cylinder Type</label>
+                        <CustomSelect
+                          value={row.variantKey}
+                          onChange={(value) => {
+                            setOpeningDuesRows((prev) =>
+                              prev.map((r, i) => (i === index ? { ...r, variantKey: value, quantity: 0 } : r)),
+                            );
+                          }}
+                          options={options}
+                          placeholder={loadingCylinderTypes ? 'Loading...' : 'Select cylinder type'}
+                        />
+                      </div>
+                      <div className="w-24">
+                        <label className="block text-[11px] font-medium text-gray-600 mb-1">Quantity</label>
+                        <Input
+                          type="number"
+                          min="0"
+                          max={availableFull}
+                          value={row.quantity || ''}
+                          onChange={(e) => {
+                            const q = parseInt(e.target.value, 10) || 0;
+                            setOpeningDuesRows((prev) =>
+                              prev.map((r, i) => (i === index ? { ...r, quantity: Math.max(0, q) } : r)),
+                            );
+                          }}
+                          placeholder="0"
+                          disabled={!row.variantKey}
+                        />
+                      </div>
+                      {openingDuesRows.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setOpeningDuesRows((prev) => prev.filter((_, i) => i !== index))}
+                          className="h-9 w-9 flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          aria-label="Remove row"
+                        >
+                          <XMarkIcon className="w-5 h-5" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {openingDuesRows.length < availableCylinderTypes.length && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setOpeningDuesRows((prev) => [...prev, { variantKey: '', quantity: 0 }])}
+                  className="h-8 text-xs"
+                >
+                  <PlusIcon className="w-3.5 h-3.5 mr-1" />
+                  Add another cylinder type
+                </Button>
+              )}
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-gray-200">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowOpeningDuesModal(false)}
+                  className="px-6 h-9 text-sm"
+                  disabled={submittingOpeningDues}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  className="px-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 h-9 text-sm"
+                  disabled={submittingOpeningDues}
+                >
+                  {submittingOpeningDues ? 'Saving...' : 'Save Cylinder Dues'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Unified Transaction Form Modal */}
       {showTransactionForm && (
@@ -2731,6 +3147,24 @@ export default function B2BCustomerDetailPage() {
                             {/* PAYMENT-ONLY transactions */}
                             {transaction.transactionType === 'PAYMENT' && transaction.items.length === 0 && (
                               <span className="text-xs text-gray-500 italic">Payment received</span>
+                            )}
+
+                            {/* Opening balance entry */}
+                            {transaction.notes === 'Opening Balance' && (
+                              <span className="text-xs text-indigo-600 italic font-medium">Opening balance</span>
+                            )}
+
+                            {/* Opening cylinder dues entry */}
+                            {transaction.notes === 'Opening Cylinder Dues' && (
+                              <div>
+                                <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 px-1 rounded">Opening dues:</span>
+                                {transaction.items.map((item: any, index: number) => (
+                                  <span key={`opening-${index}`} className="text-xs text-gray-700 ml-1">
+                                    {getTransactionItemDisplayName(item)} x{item.quantity}
+                                    {index < transaction.items.length - 1 ? ', ' : ''}
+                                  </span>
+                                ))}
+                              </div>
                             )}
                           </div>
                         );

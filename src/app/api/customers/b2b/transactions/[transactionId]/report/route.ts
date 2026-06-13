@@ -8,6 +8,7 @@ import {
   formatB2bVariantKeyForReport,
 } from '@/lib/b2b-transaction-item-variant';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { isOpeningBalanceTransaction, isOpeningDuesTransaction } from '@/lib/b2b-opening-entries';
 
 // Helper function to format currency
 function formatCurrency(amount: number): string {
@@ -31,7 +32,7 @@ function formatDate(dateString: string | Date): string {
 }
 
 // Categorize items into Sale, Buyback, and Return
-function categorizeItems(items: any[], transactionType: string): {
+function categorizeItems(items: any[], transactionType: string, isOpeningDues: boolean = false): {
   saleItems: any[];
   buybackItems: any[];
   returnItems: any[];
@@ -39,6 +40,12 @@ function categorizeItems(items: any[], transactionType: string): {
   const saleItems: any[] = [];
   const buybackItems: any[] = [];
   const returnItems: any[] = [];
+
+  // Opening cylinder dues record cylinders already held by the customer
+  // (deliveries at price 0). Treat them all as deliveries, not empty returns.
+  if (isOpeningDues) {
+    return { saleItems: [...items], buybackItems, returnItems };
+  }
 
   items.forEach(item => {
     const hasRegularPrice = item.pricePerItem && Number(item.pricePerItem) > 0;
@@ -192,8 +199,13 @@ async function generatePDF(
   yPosition += (customer.email && customer.address ? 30 : customer.email || customer.address ? 24 : 18);
 
   // Categorize items
-  const { saleItems, buybackItems, returnItems } = categorizeItems(transaction.items || [], transaction.transactionType);
-  const badges = getTransactionTypeBadges(saleItems, buybackItems, returnItems, transaction.transactionType);
+  const openingDues = isOpeningDuesTransaction(transaction);
+  const { saleItems, buybackItems, returnItems } = categorizeItems(transaction.items || [], transaction.transactionType, openingDues);
+  const badges = openingDues
+    ? ['OPENING DUES']
+    : isOpeningBalanceTransaction(transaction)
+      ? ['OPENING BALANCE']
+      : getTransactionTypeBadges(saleItems, buybackItems, returnItems, transaction.transactionType);
 
   // Transaction Details Header
   if (yPosition > pageHeight - 100) {
@@ -395,7 +407,7 @@ async function generatePDF(
 
   // Draw Sale Items table
   if (saleItems.length > 0) {
-    drawItemsTable('SOLD ITEMS', saleItems, false, false, [34, 197, 94]);
+    drawItemsTable(openingDues ? 'OPENING CYLINDER DUES' : 'SOLD ITEMS', saleItems, false, false, [34, 197, 94]);
   }
 
   // Draw Buyback Items table
@@ -704,7 +716,7 @@ export async function GET(
 
     allTransactions.forEach(t => {
       const items = t.items || [];
-      const { saleItems, buybackItems, returnItems } = categorizeItems(items, t.transactionType);
+      const { saleItems, buybackItems, returnItems } = categorizeItems(items, t.transactionType, isOpeningDuesTransaction(t));
 
       saleItems.forEach((item: any) => {
         const vk = b2bItemVariantKey(item);

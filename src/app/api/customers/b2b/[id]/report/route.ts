@@ -8,6 +8,7 @@ import {
   formatB2bVariantKeyForReport,
 } from '@/lib/b2b-transaction-item-variant';
 import { adoptLegacyB2bCustomerIfNeeded, getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { isOpeningBalanceTransaction, isOpeningDuesTransaction } from '@/lib/b2b-opening-entries';
 
 // Helper function to format currency
 function formatCurrency(amount: number): string {
@@ -75,6 +76,11 @@ function categorizeItems(items: any[]): {
 
 // Get transaction type display text with unified transaction support
 function getTransactionTypeText(transaction: any, cylinderTypeMap?: Map<string, { typeName: string | null, capacity: number | null }>): string {
+  // Opening entries (new-customer setup) are labelled explicitly so they are
+  // never mistaken for a normal Sale/Return.
+  if (isOpeningDuesTransaction(transaction)) return 'Opening Dues';
+  if (isOpeningBalanceTransaction(transaction)) return 'Opening Balance';
+
   const { saleItems, buybackItems, returnItems } = categorizeItems(transaction.items || []);
 
   const types: string[] = [];
@@ -111,6 +117,19 @@ function getTransactionTypeText(transaction: any, cylinderTypeMap?: Map<string, 
 
 // Build items description with proper categorization
 function buildItemsDescription(transaction: any, cylinderTypeMap?: Map<string, { typeName: string | null, capacity: number | null }>): string {
+  // Opening cylinder dues are cylinders the customer already holds (deliveries),
+  // recorded at price 0 — describe them as opening dues, not empty returns.
+  if (isOpeningDuesTransaction(transaction)) {
+    const items = (transaction.items || []).filter((item: any) => item.cylinderType);
+    const descriptions = items.map(
+      (item: any) => `${formatB2bItemCylinderLabel(item, cylinderTypeMap)} x${item.quantity || 0}`,
+    );
+    return descriptions.length > 0 ? `Opening Dues: ${descriptions.join(', ')}` : 'Opening Cylinder Dues';
+  }
+  if (isOpeningBalanceTransaction(transaction)) {
+    return 'Opening Balance';
+  }
+
   const { saleItems, buybackItems, returnItems } = categorizeItems(transaction.items || []);
 
   const parts: string[] = [];
@@ -904,6 +923,23 @@ export async function GET(
 
     holdingCalculationTransactions.forEach(transaction => {
       const items = transaction.items || [];
+
+      // Opening cylinder dues = cylinders already with the customer. Count them
+      // as deliveries (delivered + held), never as returns.
+      if (isOpeningDuesTransaction(transaction)) {
+        items.forEach((item: any) => {
+          if (!item.cylinderType) return;
+          const vk = b2bItemVariantKey(item);
+          if (!vk) return;
+          const current = cylinderStats.get(vk) || { delivered: 0, returned: 0, buyback: 0, held: 0, buybackWeight: 0, buybackCredit: 0 };
+          const qty = item.quantity ? Number(item.quantity) : 0;
+          current.delivered += qty;
+          current.held += qty;
+          cylinderStats.set(vk, current);
+        });
+        return;
+      }
+
       const { saleItems, buybackItems, returnItems } = categorizeItems(items);
 
       // Sale Items (Deliveries) -> ADD to delivered and held
