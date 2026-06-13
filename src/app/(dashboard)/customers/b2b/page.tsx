@@ -992,7 +992,9 @@ export default function B2BCustomersPage() {
               const target = customers.find(c => c.id === deleteConfirm);
               const cylindersHeld = target ? getTotalCylindersDue(target) : 0;
               const netBalance = target ? -(target.ledgerBalance) : 0;
-              const hasOutstandingBalance = Math.abs(netBalance) >= 0.01;
+              // Settled = rounds to Rs 0 (sub-rupee residue from buyback/percentage
+              // math is ignored, matching the displayed whole-rupee balance).
+              const hasOutstandingBalance = Math.abs(netBalance) >= 0.5;
               const hasCylinderHoldings = cylindersHeld > 0;
               // A customer can only be deleted when fully settled: zero net
               // balance AND no cylinders held. Otherwise we block here so the

@@ -224,7 +224,10 @@ export async function DELETE(
     // ledger, balances and profit history are never lost.
     // ----------------------------------------------------------------------
     const ledgerBalance = Number(customerRecord.ledgerBalance);
-    const hasOutstandingBalance = Math.abs(ledgerBalance) >= 0.01;
+    // Settled = rounds to Rs 0. Sub-rupee residue (e.g. from buyback percentage
+    // math) is ignored so it matches the whole-rupee balance shown in the UI and
+    // can't permanently block deletion when payments are made in whole rupees.
+    const hasOutstandingBalance = Math.abs(ledgerBalance) >= 0.5;
 
     // Physical cylinder holdings (Rentals OR location match by ID/Name), region-scoped
     const assignedCylindersCount = await prisma.cylinder.count({
