@@ -58,8 +58,8 @@ export default function ProfitPage() {
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex items-center gap-4">
-                    <Button variant="outline" size="sm" onClick={() => router.push('/financial')} className="h-9">
-                        <ArrowLeftIcon className="w-4 h-4 mr-2" /> Back
+                    <Button variant="outline" size="sm" onClick={() => router.push('/financial')} className="flex items-center justify-center h-9 w-9 p-0 shrink-0" aria-label="Back">
+                        <ArrowLeftIcon className="w-4 h-4" />
                     </Button>
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900 flex items-center">

@@ -430,13 +430,13 @@ export default function AccessoriesInventoryPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center space-x-4">
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
             onClick={() => window.location.href = '/inventory'}
-            className="text-gray-500 hover:text-gray-900 -ml-2"
+            className="flex items-center justify-center h-9 w-9 p-0 shrink-0 -ml-2"
+            aria-label="Back"
           >
-            <ArrowLeftIcon className="w-4 h-4 mr-1" />
-            Back
+            <ArrowLeftIcon className="w-4 h-4" />
           </Button>
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Accessories & Equipment</h1>

@@ -58,11 +58,12 @@ export default function NewCustomerPage() {
       <div className="flex items-center space-x-4">
         <Button
           variant="outline"
+          size="sm"
           onClick={() => router.back()}
-          className="flex items-center"
+          className="flex items-center justify-center h-9 w-9 p-0 shrink-0"
+          aria-label="Back"
         >
-          <ArrowLeftIcon className="w-4 h-4 mr-2" />
-          Back
+          <ArrowLeftIcon className="w-4 h-4" />
         </Button>
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Add New B2B Customer</h1>

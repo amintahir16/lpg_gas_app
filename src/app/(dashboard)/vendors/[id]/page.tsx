@@ -1248,8 +1248,10 @@ export default function VendorDetailPage() {
             <h3 className="text-lg font-medium text-gray-900 mb-2">
               Vendor not found
             </h3>
-            <Link href="/vendors">
-              <Button>Back to Vendors</Button>
+            <Link href="/vendors" aria-label="Back">
+              <Button variant="outline" size="sm" className="flex items-center justify-center h-9 w-9 p-0 shrink-0">
+                <ArrowLeftIcon className="w-4 h-4" />
+              </Button>
             </Link>
           </CardContent>
         </Card>
@@ -1261,12 +1263,10 @@ export default function VendorDetailPage() {
     <div className="p-6">
       {/* Header */}
       <div className="mb-6">
-        <Link
-          href={`/vendors/category/${vendor.category.id}`}
-          className="inline-flex items-center text-blue-600 hover:text-blue-700 mb-4"
-        >
-          <ArrowLeftIcon className="w-4 h-4 mr-2" />
-          Back to {vendor.category.name}
+        <Link href={`/vendors/category/${vendor.category.id}`} aria-label="Back" className="inline-flex mb-4">
+          <Button variant="outline" size="sm" className="flex items-center justify-center h-9 w-9 p-0 shrink-0">
+            <ArrowLeftIcon className="w-4 h-4" />
+          </Button>
         </Link>
 
         <div className="flex justify-between items-start">

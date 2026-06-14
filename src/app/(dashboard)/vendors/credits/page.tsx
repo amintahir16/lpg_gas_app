@@ -131,10 +131,9 @@ export default function VendorCreditsPage() {
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-4 mb-4">
-          <Link href="/vendors">
-            <Button variant="outline" size="sm" className="flex items-center gap-2">
+          <Link href="/vendors" aria-label="Back">
+            <Button variant="outline" size="sm" className="flex items-center justify-center h-9 w-9 p-0 shrink-0">
               <ArrowLeftIcon className="h-4 w-4" />
-              Back to Vendors
             </Button>
           </Link>
         </div>

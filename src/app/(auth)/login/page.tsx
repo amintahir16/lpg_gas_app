@@ -16,7 +16,8 @@ import {
   CubeIcon,
   ExclamationCircleIcon,
   CheckCircleIcon,
-  ShieldCheckIcon
+  ShieldCheckIcon,
+  ArrowLeftIcon
 } from '@heroicons/react/24/outline';
 
 function LoginForm() {
@@ -189,11 +190,10 @@ function LoginForm() {
 
               {/* Links */}
               <div className="text-center space-y-3 pt-2">
-                <Link
-                  href="/"
-                  className="inline-block text-sm text-gray-500 hover:text-gray-800 transition-colors font-medium"
-                >
-                  ← Back to Landing Page
+                <Link href="/" aria-label="Back">
+                  <Button variant="outline" size="sm" className="flex items-center justify-center h-9 w-9 p-0 mx-auto">
+                    <ArrowLeftIcon className="w-4 h-4" />
+                  </Button>
                 </Link>
               </div>
             </form>

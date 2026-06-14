@@ -246,22 +246,22 @@ export default function PricingManagementPage() {
   return (
     <div className="p-4 md:p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center space-x-4">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => router.push('/settings')}
+          className="flex items-center justify-center h-9 w-9 p-0 shrink-0"
+          aria-label="Back"
+        >
+          <ArrowLeftIcon className="w-4 h-4" />
+        </Button>
         <div>
           <h1 className="text-2xl font-bold mb-1">Margin-Based Pricing Management</h1>
           <p className="text-sm text-gray-600">
             Manage pricing categories, margins, and daily plant prices
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => router.push('/settings')}
-          className="flex items-center gap-2 hover:bg-gray-50 transition-colors"
-        >
-          <ArrowLeftIcon className="w-4 h-4" />
-          Back to Settings
-        </Button>
       </div>
 
       {/* Message */}

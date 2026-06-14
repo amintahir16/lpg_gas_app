@@ -89,10 +89,10 @@ export default function B2CLedgerPage() {
               variant="outline"
               size="sm"
               onClick={() => router.push('/customers/b2c')}
-              className="mr-4 flex items-center"
+              className="flex items-center justify-center h-9 w-9 p-0 shrink-0 mr-4"
+              aria-label="Back"
             >
-              <ArrowLeftIcon className="w-4 h-4 mr-2" />
-              Back to B2C Customers
+              <ArrowLeftIcon className="w-4 h-4" />
             </Button>
           </div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center">

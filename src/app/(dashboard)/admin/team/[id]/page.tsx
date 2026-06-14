@@ -358,13 +358,13 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
     return (
         <div className="space-y-6 max-w-6xl mx-auto">
             <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
                 onClick={() => router.back()}
-                className="mb-4 pl-0 hover:bg-transparent hover:text-blue-600 h-8 text-xs"
+                className="flex items-center justify-center h-9 w-9 p-0 shrink-0 mb-4"
+                aria-label="Back"
             >
-                <ArrowLeftIcon className="w-3 h-3 mr-2" />
-                Back to Team
+                <ArrowLeftIcon className="w-4 h-4" />
             </Button>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:items-start">

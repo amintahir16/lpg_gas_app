@@ -212,9 +212,10 @@ export default function CategoryVendorsPage() {
     <div className="p-6">
       {/* Header */}
       <div className="mb-6">
-        <Link href="/vendors" className="inline-flex items-center text-blue-600 hover:text-blue-700 mb-4">
-          <ArrowLeftIcon className="w-4 h-4 mr-2" />
-          Back to Categories
+        <Link href="/vendors" aria-label="Back" className="inline-flex mb-4">
+          <Button variant="outline" size="sm" className="flex items-center justify-center h-9 w-9 p-0 shrink-0">
+            <ArrowLeftIcon className="w-4 h-4" />
+          </Button>
         </Link>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
           {category?.name || 'Vendors'}
