@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireSuperAdmin } from '@/lib/apiAuth';
+import { databaseActionErrorMessage } from '@/lib/database-errors';
 import {
   parseShopCatalogPayload,
   seedShopCatalogIfEmpty,
@@ -26,7 +27,10 @@ export async function GET() {
     });
   } catch (error) {
     console.error('Admin shop catalog fetch error:', error);
-    return NextResponse.json({ error: 'Failed to fetch shop items' }, { status: 500 });
+    return NextResponse.json(
+      { error: databaseActionErrorMessage(error, 'Failed to fetch shop items') },
+      { status: 500 }
+    );
   }
 }
 
@@ -45,6 +49,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(serializeShopCatalogItem(item), { status: 201 });
   } catch (error) {
     console.error('Admin shop catalog create error:', error);
-    return NextResponse.json({ error: 'Failed to create shop item' }, { status: 500 });
+    return NextResponse.json(
+      { error: databaseActionErrorMessage(error, 'Failed to create shop item') },
+      { status: 500 }
+    );
   }
 }

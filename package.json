@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "prisma generate && next build",
+    "vercel-build": "prisma migrate deploy && prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
     "cap:sync": "npx cap sync android",
@@ -14,6 +15,8 @@
     "android:debug": "npx cap sync android && node tools/run-android-gradle.mjs assembleDebug",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
+    "db:deploy": "prisma migrate deploy",
+    "db:baseline-production": "node scripts/baseline-migrations.js",
     "db:init": "node scripts/init-db.js",
     "db:reset:keep-admins": "node scripts/reset-db-keep-admins.js",
     "user:reset-password": "node scripts/reset-user-password.js"
