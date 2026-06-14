@@ -64,6 +64,8 @@ export default function ShopCatalogAdminPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<ShopItem | null>(null);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const fetchItems = async () => {
     setLoading(true);
@@ -145,7 +147,8 @@ export default function ShopCatalogAdminPage() {
 
   const handleDelete = async () => {
     if (!deleteConfirm) return;
-    setSubmitting(true);
+    setDeleting(true);
+    setDeleteError('');
     try {
       const res = await fetch(`/api/admin/shop-items/${deleteConfirm.id}`, { method: 'DELETE' });
       if (!res.ok) {
@@ -155,10 +158,15 @@ export default function ShopCatalogAdminPage() {
       setDeleteConfirm(null);
       await fetchItems();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete item');
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete item');
     } finally {
-      setSubmitting(false);
+      setDeleting(false);
     }
+  };
+
+  const openDeleteConfirm = (item: ShopItem) => {
+    setDeleteError('');
+    setDeleteConfirm(item);
   };
 
   if (!session?.user || session.user.role !== 'SUPER_ADMIN') {
@@ -253,7 +261,8 @@ export default function ShopCatalogAdminPage() {
                           variant="outline"
                           size="sm"
                           className="h-7 px-2 text-xs text-red-600 border-red-200 hover:bg-red-50"
-                          onClick={() => setDeleteConfirm(item)}
+                          onClick={() => openDeleteConfirm(item)}
+                          aria-label="Delete item"
                         >
                           <TrashIcon className="w-3.5 h-3.5" />
                         </Button>
@@ -392,24 +401,44 @@ export default function ShopCatalogAdminPage() {
         </DialogContent>
       </Dialog>
 
-      {deleteConfirm && (
-        <Dialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Delete shop item?</DialogTitle>
-              <DialogDescription>
-                Remove <strong>{deleteConfirm.name}</strong> from the public shop. This cannot be undone.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
-              <Button variant="destructive" onClick={handleDelete} disabled={submitting}>
-                {submitting ? 'Deleting...' : 'Delete'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
+      <Dialog open={!!deleteConfirm} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <TrashIcon className="w-5 h-5 text-red-600" />
+              Delete shop item
+            </DialogTitle>
+            <DialogDescription>
+              You are about to permanently remove{' '}
+              <span className="font-semibold text-gray-900">{deleteConfirm?.name}</span>{' '}
+              from the public shop. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteError && (
+            <div className="mx-6 p-3 text-xs font-medium text-red-700 bg-red-50 rounded-md border border-red-200">
+              {deleteError}
+            </div>
+          )}
+          <DialogFooter className="px-6 pb-6 pt-2 border-t border-gray-100 gap-2 sm:gap-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setDeleteConfirm(null)}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {deleting ? 'Deleting…' : 'Delete item'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
