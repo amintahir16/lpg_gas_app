@@ -473,6 +473,27 @@ model WebsiteInquiry {
   @@map("website_inquiries")
 }
 
+/// Public-facing shop catalogue (landing `/shop`). Separate from branch
+/// inventory `Product` rows — prices here are marketing/checkout quotes only.
+model ShopCatalogItem {
+  id               String          @id @default(cuid())
+  name             String
+  description      String
+  price            Decimal         @default(0) @db.Decimal(12, 2)
+  sizeLabel        String?
+  deliveryTimeNote String?
+  icon             ShopCatalogIcon @default(PACKAGE)
+  accentColor      String          @default("#f36523")
+  inStock          Boolean         @default(true)
+  isActive         Boolean         @default(true)
+  sortOrder        Int             @default(0)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([isActive, sortOrder])
+  @@map("shop_catalog_items")
+}
+
 model VendorOrder {
   id          String            @id @default(cuid())
   vendorId    String
@@ -890,6 +911,15 @@ enum WebsiteInquiryStatus {
   IN_PROGRESS
   RESOLVED
   CLOSED
+}
+
+enum ShopCatalogIcon {
+  HOME
+  BUILDING
+  FACTORY
+  FLAME
+  PACKAGE
+  TRUCK
 }
 
 enum VendorCategory {

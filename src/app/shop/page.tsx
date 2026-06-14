@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useContext, createContext } from 'react';
+import { useState, useContext, createContext, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, Plus, Minus, X, Truck, Package, Flame, Home, Building2, Factory, ChevronRight } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, X, Truck, Package, Flame, ChevronRight, Clock } from 'lucide-react';
 import Link from 'next/link';
+import { getShopIconComponent, type PublicShopProduct } from '@/lib/shop-catalog-icons';
 
 /* ─── Animation Variants ─── */
 const fadeUp = {
@@ -49,7 +50,8 @@ function CartProvider({ children }: { children: React.ReactNode }) {
 }
 
 /* ─── Product Card ─── */
-function ProductCard({ product, index, onAdd }: { product: any; index: number; onAdd: (p: any) => void }) {
+function ProductCard({ product, index, onAdd }: { product: PublicShopProduct; index: number; onAdd: (p: PublicShopProduct) => void }) {
+  const Icon = getShopIconComponent(product.icon);
   return (
     <motion.div
       variants={scaleIn} initial="hidden" whileInView="visible" viewport={{ once: true }} custom={index}
@@ -57,15 +59,21 @@ function ProductCard({ product, index, onAdd }: { product: any; index: number; o
     >
       {/* Header - grows to fill space */}
       <div className="p-6 pb-4 relative">
-        <div className="absolute top-0 right-0 w-32 h-32 rounded-full blur-[60px] opacity-20" style={{ background: product.color }} />
+        <div className="absolute top-0 right-0 w-32 h-32 rounded-full blur-[60px] opacity-20" style={{ background: product.accentColor }} />
         <div
           className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-500"
-          style={{ background: `${product.color}15`, border: `1px solid ${product.color}25` }}
+          style={{ background: `${product.accentColor}15`, border: `1px solid ${product.accentColor}25` }}
         >
-          <product.icon className="w-7 h-7" style={{ color: product.color }} />
+          <Icon className="w-7 h-7" style={{ color: product.accentColor }} />
         </div>
         <h3 className="text-xl font-bold text-white mb-1">{product.name}</h3>
-        {product.size && <p className="text-sm font-bold mb-2" style={{ color: product.color }}>{product.size}</p>}
+        {product.sizeLabel && <p className="text-sm font-bold mb-2" style={{ color: product.accentColor }}>{product.sizeLabel}</p>}
+        {product.deliveryTimeNote && (
+          <p className="inline-flex items-center gap-1.5 text-xs font-medium text-white/50 mb-2">
+            <Clock className="w-3.5 h-3.5" />
+            {product.deliveryTimeNote}
+          </p>
+        )}
         <p className="text-white/40 text-sm leading-relaxed">{product.description}</p>
       </div>
 
@@ -83,7 +91,7 @@ function ProductCard({ product, index, onAdd }: { product: any; index: number; o
           onClick={() => onAdd(product)}
           disabled={!product.inStock}
           className="w-full py-3 rounded-xl font-bold text-white disabled:opacity-30 flex items-center justify-center gap-2 transition-all duration-300 hover:-translate-y-0.5"
-          style={{ background: product.inStock ? `linear-gradient(135deg, ${product.color}, ${product.color}cc)` : undefined }}
+          style={{ background: product.inStock ? `linear-gradient(135deg, ${product.accentColor}, ${product.accentColor}cc)` : undefined }}
         >
           <ShoppingCart className="w-5 h-5" />
           {product.price > 0 ? 'Add to Cart' : 'Request Quote'}
@@ -317,19 +325,34 @@ function CartDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
 /* ─── Main Shop ─── */
 function ShopContent() {
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [products, setProducts] = useState<PublicShopProduct[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
   const cart = useCart();
 
-  const products = [
-    { id: '1', name: 'Domestic Cylinder', description: 'Perfect for everyday home cooking and small household needs.', price: 2500, size: '11.8 KG', icon: Home, color: '#f8a11b', inStock: true },
-    { id: '2', name: 'Standard Cylinder', description: 'Ideal for larger families and small business operations.', price: 3200, size: '15 KG', icon: Building2, color: '#f36523', inStock: true },
-    { id: '3', name: 'Commercial Cylinder', description: 'Heavy-duty supply for restaurants, factories, and industrial use.', price: 8500, size: '44.5 KG', icon: Factory, color: '#e1382b', inStock: true },
-    { id: '4', name: 'Refill Service', description: 'Professional, certified refill for your existing LPG cylinders.', price: 1200, size: 'Any Size', icon: Flame, color: '#f8a11b', inStock: true },
-    { id: '5', name: 'Bulk Order Package', description: 'Custom bulk pricing for businesses. Contact us for a tailored quote.', price: 0, icon: Package, color: '#f36523', inStock: true },
-    { id: '6', name: 'Safety Equipment Kit', description: 'Complete safety kit: gloves, regulator wrench, leak detector & guide.', price: 3500, icon: Package, color: '#e1382b', inStock: true },
-  ];
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/public/shop-items', { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          setProducts(data.items || []);
+        }
+      } catch (error) {
+        console.error('Failed to load shop items', error);
+      } finally {
+        setLoadingProducts(false);
+      }
+    })();
+  }, []);
 
-  const handleAddToCart = (product: any) => {
-    cart.addToCart({ id: product.id, name: product.name, price: product.price, size: product.size, quantity: 1 });
+  const handleAddToCart = (product: PublicShopProduct) => {
+    cart.addToCart({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      size: product.sizeLabel || undefined,
+      quantity: 1,
+    });
   };
 
   return (
@@ -391,9 +414,19 @@ function ShopContent() {
           </motion.div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {products.map((product, i) => (
-              <ProductCard key={product.id} product={product} index={i} onAdd={handleAddToCart} />
-            ))}
+            {loadingProducts ? (
+              [...Array(3)].map((_, i) => (
+                <div key={i} className="glass-card h-80 animate-pulse bg-white/5" />
+              ))
+            ) : products.length === 0 ? (
+              <div className="col-span-full text-center py-16 text-white/40">
+                No products available at the moment. Please check back soon.
+              </div>
+            ) : (
+              products.map((product, i) => (
+                <ProductCard key={product.id} product={product} index={i} onAdd={handleAddToCart} />
+              ))
+            )}
           </div>
         </div>
       </section>
