@@ -3,8 +3,11 @@
 import Link from 'next/link';
 import { Facebook, Instagram, Linkedin, Mail, Phone, MapPin, Flame, ArrowUp } from 'lucide-react';
 import FlamoraAnimatedLogo from '@/components/ui/FlamoraAnimatedLogo';
+import { usePublicSiteSettings } from '@/components/providers/PublicSiteSettingsProvider';
+import { phoneToTelHref } from '@/lib/public-site-settings';
 
 export default function Footer() {
+  const { settings } = usePublicSiteSettings();
   const currentYear = new Date().getFullYear();
 
   const quickLinks = [
@@ -50,8 +53,7 @@ export default function Footer() {
               <FlamoraAnimatedLogo hideBadge textColor="#ffffff" />
             </div>
             <p className="text-white/40 text-sm leading-relaxed mb-6">
-              Premium LPG distribution — delivering clean, safe, and affordable
-              energy solutions to homes and businesses across Pakistan.
+              {settings.footerTagline}
             </p>
             <div className="flex gap-3">
               {socialLinks.map((social) => (
@@ -111,7 +113,9 @@ export default function Footer() {
                   <Phone className="w-4 h-4 text-[#f36523]" />
                 </div>
                 <div>
-                  <p className="text-white/60 text-sm">+92 300 1234567</p>
+                  <a href={phoneToTelHref(settings.phonePrimary)} className="text-white/60 text-sm hover:text-[#f8a11b] transition-colors">
+                    {settings.phonePrimary}
+                  </a>
                   <p className="text-white/30 text-xs">WhatsApp Available</p>
                 </div>
               </div>
@@ -120,7 +124,9 @@ export default function Footer() {
                   <Mail className="w-4 h-4 text-[#f36523]" />
                 </div>
                 <div>
-                  <p className="text-white/60 text-sm">info@flamora.pk</p>
+                  <a href={`mailto:${settings.emailPrimary}`} className="text-white/60 text-sm hover:text-[#f8a11b] transition-colors">
+                    {settings.emailPrimary}
+                  </a>
                   <p className="text-white/30 text-xs">24hr Response</p>
                 </div>
               </div>
@@ -129,8 +135,8 @@ export default function Footer() {
                   <MapPin className="w-4 h-4 text-[#f36523]" />
                 </div>
                 <div>
-                  <p className="text-white/60 text-sm">Peshawar, Pakistan</p>
-                  <p className="text-white/30 text-xs">Nationwide Coverage</p>
+                  <p className="text-white/60 text-sm">{settings.addressLine1}</p>
+                  <p className="text-white/30 text-xs">{settings.addressLine2 || settings.locationSubtitle}</p>
                 </div>
               </div>
             </div>
@@ -141,7 +147,7 @@ export default function Footer() {
         <div className="border-t border-white/5 pt-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <p className="text-white/25 text-sm">
-              © {currentYear} Flamora LPG Distribution. All rights reserved.
+              © {currentYear} {settings.companyName}. All rights reserved.
             </p>
             <div className="flex items-center gap-6">
               <Link href="/privacy" className="text-white/25 hover:text-white/50 text-sm transition-colors">

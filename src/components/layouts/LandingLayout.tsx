@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import Navbar from './Navbar';
 import Footer from './Footer';
+import { PublicSiteSettingsProvider } from '@/components/providers/PublicSiteSettingsProvider';
 
 export default function LandingLayout({
   children,
@@ -35,10 +36,10 @@ export default function LandingLayout({
   }
 
   return (
-    <>
+    <PublicSiteSettingsProvider>
       <Navbar />
       <main className="relative w-full max-w-[100vw] overflow-x-hidden">{children}</main>
       <Footer />
-    </>
+    </PublicSiteSettingsProvider>
   );
 } 

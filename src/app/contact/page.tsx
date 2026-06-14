@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Phone, Mail, MapPin, Clock, MessageCircle, Send, CheckCircle, Flame } from 'lucide-react';
+import { usePublicSiteSettings } from '@/components/providers/PublicSiteSettingsProvider';
+import { phoneToTelHref, phoneToWhatsAppHref } from '@/lib/public-site-settings';
 
 /* ─── Animation Variants ─── */
 const fadeUp = {
@@ -21,6 +23,7 @@ const scaleIn = {
 };
 
 export default function ContactPage() {
+  const { settings } = usePublicSiteSettings();
   const [formData, setFormData] = useState({
     name: '', email: '', phone: '', subject: '', message: ''
   });
@@ -59,12 +62,18 @@ export default function ContactPage() {
     }
   };
 
-  const contactInfo = [
-    { icon: Phone, title: 'Phone', details: ['+92 300 1234567', '+92 301 9876543'], color: '#f8a11b' },
-    { icon: Mail, title: 'Email', details: ['info@flamora.pk', 'support@flamora.pk'], color: '#f36523' },
-    { icon: MapPin, title: 'Address', details: ['193 Industrial Estate Rd, Hayatabad', 'Peshawar, Pakistan'], color: '#e1382b' },
-    { icon: Clock, title: 'Hours', details: ['Mon – Fri: 8:00 AM – 6:00 PM', 'Sat: 9:00 AM – 4:00 PM'], color: '#f8a11b' }
-  ];
+  const contactInfo = useMemo(() => {
+    const phoneDetails = [settings.phonePrimary, settings.phoneSecondary].filter(Boolean);
+    const emailDetails = [settings.emailPrimary, settings.emailSupport].filter(Boolean);
+    const addressDetails = [settings.addressLine1, settings.addressLine2].filter(Boolean);
+    const hoursDetails = [settings.businessHoursWeekday, settings.businessHoursSaturday].filter(Boolean);
+    return [
+      { icon: Phone, title: 'Phone', details: phoneDetails, color: '#f8a11b' },
+      { icon: Mail, title: 'Email', details: emailDetails, color: '#f36523' },
+      { icon: MapPin, title: 'Address', details: addressDetails, color: '#e1382b' },
+      { icon: Clock, title: 'Hours', details: hoursDetails, color: '#f8a11b' },
+    ];
+  }, [settings]);
 
   const subjects = ['General Inquiry', 'LPG Refill', 'Bulk Order Quote', 'Safety Training', 'Equipment Maintenance', 'Emergency Support', 'Other'];
 
@@ -86,7 +95,7 @@ export default function ContactPage() {
             variants={fadeUp} initial="hidden" animate="visible" custom={1}
             className="text-5xl md:text-7xl font-black text-white mb-6 leading-tight"
           >
-            Contact <span className="text-gradient-flamora">Flamora</span>
+            Contact <span className="text-gradient-flamora">{settings.companyName}</span>
           </motion.h1>
           <motion.p
             variants={fadeUp} initial="hidden" animate="visible" custom={2}
@@ -241,10 +250,10 @@ export default function ContactPage() {
               <p className="text-white/40 mb-8">Visit our office or find us on the map below.</p>
               <div className="w-full h-[420px] rounded-2xl overflow-hidden border border-white/10">
                 <iframe
-                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3308.1234567890123!2d71.4309233!3d33.9763911!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x38d9108a64127615%3A0x6d377cbefcb04e67!2s193%20Industrial%20Estate%20Rd%2C%20Phase-1%20Hayatabad%2C%20Peshawar%2C%20Pakistan!5e0!3m2!1sen!2spk!4v1234567890123"
+                  src={settings.mapEmbedUrl}
                   width="100%" height="100%" style={{ border: 0 }}
                   allowFullScreen loading="lazy" referrerPolicy="no-referrer-when-downgrade"
-                  title="Flamora - 193 Industrial Estate Rd, Phase-1 Hayatabad, Peshawar"
+                  title={settings.mapTitle}
                 />
               </div>
             </motion.div>
@@ -267,17 +276,19 @@ export default function ContactPage() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <a
-                href="tel:+923001234567"
+                href={phoneToTelHref(settings.phonePrimary)}
                 className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-[#e1382b] text-white font-bold rounded-xl hover:-translate-y-1 hover:shadow-[0_0_25px_rgba(225,56,43,0.3)] transition-all duration-300"
               >
-                <Phone className="w-5 h-5" /> Emergency: +92 300 1234567
+                <Phone className="w-5 h-5" /> Emergency: {settings.phonePrimary}
               </a>
-              <a
-                href="mailto:emergency@flamora.pk"
-                className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-transparent text-[#e1382b] font-bold border-2 border-[#e1382b]/30 rounded-xl hover:bg-[#e1382b]/10 transition-all duration-300"
-              >
-                <Mail className="w-5 h-5" /> Emergency Email
-              </a>
+              {settings.emailEmergency && (
+                <a
+                  href={`mailto:${settings.emailEmergency}`}
+                  className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-transparent text-[#e1382b] font-bold border-2 border-[#e1382b]/30 rounded-xl hover:bg-[#e1382b]/10 transition-all duration-300"
+                >
+                  <Mail className="w-5 h-5" /> Emergency Email
+                </a>
+              )}
             </div>
           </motion.div>
         </div>
@@ -286,7 +297,7 @@ export default function ContactPage() {
       {/* WhatsApp Floating Button */}
       <div className="fixed bottom-6 right-6 z-50">
         <a
-          href="https://wa.me/923001234567?text=Hi, I'm interested in your LPG services"
+          href={phoneToWhatsAppHref(settings.whatsappNumber || settings.phonePrimary, "Hi, I'm interested in your LPG services")}
           target="_blank" rel="noopener noreferrer"
           className="bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-lg transition-all duration-300 hover:scale-110 flex items-center justify-center"
           aria-label="Contact us on WhatsApp"

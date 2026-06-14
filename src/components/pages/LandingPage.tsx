@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
+import { usePublicSiteSettings } from '@/components/providers/PublicSiteSettingsProvider';
+import { phoneToTelHref, phoneToWhatsAppHref } from '@/lib/public-site-settings';
 
 
 /* ─── Animated Counter Hook ─── */
@@ -173,6 +175,7 @@ const features = [
 
 export default function LandingPage() {
   const { data: session } = useSession();
+  const { settings } = usePublicSiteSettings();
   const [activeTab, setActiveTab] = useState<'b2c' | 'b2b'>('b2c');
   const heroRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
@@ -258,8 +261,7 @@ export default function LandingPage() {
             custom={2}
             className="text-lg md:text-xl text-white/60 max-w-2xl mx-auto mb-10 leading-relaxed"
           >
-            Premium LPG cylinder delivery for homes, restaurants & industries.
-            Three cylinder types. One trusted name — <strong className="text-white/90">Flamora</strong>.
+            {settings.heroSubtitle}
           </motion.p>
 
           <motion.div
@@ -899,7 +901,7 @@ export default function LandingPage() {
               Get In Touch
             </span>
             <h2 className="text-4xl md:text-5xl font-black text-white mb-4">
-              Contact <span className="text-gradient-flamora">Flamora</span>
+              Contact <span className="text-gradient-flamora">{settings.companyName}</span>
             </h2>
             <p className="text-white/40 text-lg max-w-xl mx-auto">
               Have questions? Need a quote? Reach out to us anytime — we&apos;re here to help.
@@ -908,10 +910,10 @@ export default function LandingPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
-              { icon: Phone, title: 'Call Us', info: '+92 300 1234567', sub: 'Mon-Sat, 8AM-10PM' },
-              { icon: MessageCircle, title: 'WhatsApp', info: '+92 300 1234567', sub: 'Quick Response' },
-              { icon: Mail, title: 'Email', info: 'info@flamora.pk', sub: '24hr Response' },
-              { icon: MapPin, title: 'Head Office', info: 'Peshawar, Pakistan', sub: 'Nationwide Delivery' }
+              { icon: Phone, title: 'Call Us', info: settings.phonePrimary, sub: settings.businessHoursWeekday, href: phoneToTelHref(settings.phonePrimary) },
+              { icon: MessageCircle, title: 'WhatsApp', info: settings.phonePrimary, sub: 'Quick Response', href: phoneToWhatsAppHref(settings.whatsappNumber || settings.phonePrimary) },
+              { icon: Mail, title: 'Email', info: settings.emailPrimary, sub: '24hr Response', href: `mailto:${settings.emailPrimary}` },
+              { icon: MapPin, title: 'Head Office', info: settings.locationHeadline, sub: settings.locationSubtitle, href: undefined as string | undefined },
             ].map((item, i) => (
               <motion.div
                 key={item.title}
@@ -926,7 +928,13 @@ export default function LandingPage() {
                   <item.icon className="w-7 h-7 text-[#f36523]" />
                 </div>
                 <h3 className="text-lg font-bold text-white mb-1">{item.title}</h3>
-                <p className="text-[#f8a11b] font-semibold mb-1">{item.info}</p>
+                {item.href ? (
+                  <a href={item.href} className="text-[#f8a11b] font-semibold mb-1 block hover:underline">
+                    {item.info}
+                  </a>
+                ) : (
+                  <p className="text-[#f8a11b] font-semibold mb-1">{item.info}</p>
+                )}
                 <p className="text-white/30 text-sm">{item.sub}</p>
               </motion.div>
             ))}
