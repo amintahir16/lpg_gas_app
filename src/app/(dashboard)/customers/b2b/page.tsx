@@ -385,8 +385,8 @@ export default function B2BCustomersPage() {
               <ArrowLeftIcon className="w-4 h-4" />
             </Button>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center">
-            <BuildingOfficeIcon className="w-8 h-8 mr-3 text-blue-600" />
+          <h1 className="text-2xl font-bold text-blue-600 flex items-center">
+            <BuildingOfficeIcon className="w-7 h-7 mr-3 text-blue-600" />
             Industries & Restaurants (B2B)
           </h1>
           <p className="mt-1 text-gray-500">
