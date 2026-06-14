@@ -450,6 +450,29 @@ model SupportRequest {
   @@map("support_requests")
 }
 
+/// Public website leads — contact form submissions and shop trolley checkouts.
+/// Kept separate from B2B/B2C customer records so landing-page traffic does
+/// not alter operational customer/inventory flows until staff follow up.
+model WebsiteInquiry {
+  id              String               @id @default(cuid())
+  type            WebsiteInquiryType
+  status          WebsiteInquiryStatus @default(NEW)
+  name            String
+  email           String?
+  phone           String?
+  subject         String?
+  message         String?
+  deliveryAddress String?
+  cartItems       Json?
+  totalAmount     Decimal?             @db.Decimal(15, 2)
+  adminNotes      String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([type, status, createdAt])
+  @@map("website_inquiries")
+}
+
 model VendorOrder {
   id          String            @id @default(cuid())
   vendorId    String
@@ -854,6 +877,18 @@ enum SupportRequestStatus {
   IN_PROGRESS
   RESOLVED
   CANCELLED
+  CLOSED
+}
+
+enum WebsiteInquiryType {
+  CONTACT
+  SHOP_ORDER
+}
+
+enum WebsiteInquiryStatus {
+  NEW
+  IN_PROGRESS
+  RESOLVED
   CLOSED
 }
 

@@ -18,7 +18,8 @@ import {
   UserCircleIcon,
   ArrowRightOnRectangleIcon,
   ChevronRightIcon,
-  UserGroupIcon
+  UserGroupIcon,
+  EnvelopeIcon
 } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -41,6 +42,7 @@ const superAdminNavigation: NavigationItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, roles: ['SUPER_ADMIN'] },
   { name: 'Regions', href: '/admin/regions', icon: BuildingOffice2Icon, roles: ['SUPER_ADMIN'] },
   { name: 'Team Management', href: '/admin/team', icon: UserGroupIcon, roles: ['SUPER_ADMIN'] },
+  { name: 'Website Inquiries', href: '/admin/website-inquiries', icon: EnvelopeIcon, roles: ['SUPER_ADMIN'] },
   { name: 'Customers', href: '/customers', icon: UsersIcon, roles: ['SUPER_ADMIN'] },
   { name: 'Inventory', href: '/inventory', icon: CubeIcon, roles: ['SUPER_ADMIN'] },
   { name: 'Financial', href: '/financial', icon: CurrencyDollarIcon, roles: ['SUPER_ADMIN'] },

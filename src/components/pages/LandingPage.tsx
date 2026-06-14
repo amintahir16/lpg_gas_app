@@ -181,7 +181,7 @@ export default function LandingPage() {
   const heroY = useTransform(scrollYProgress, [0, 1], [0, 100]);
 
   return (
-    <div className="landing-page min-h-screen bg-[#0a0e14]">
+    <div className="landing-page relative min-h-screen bg-[#0a0e14]">
 
       {/* ═══════════════════════════════════════════
           SECTION 1: HERO

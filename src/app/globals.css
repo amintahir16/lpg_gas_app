@@ -488,3 +488,48 @@ select::-ms-expand {
 .landing-page a:hover {
   text-decoration: none !important;
 }
+
+/* Landing page dark forms — global input rules above force dark text for the
+   admin dashboard; restore light text + caret on public marketing pages. */
+.landing-page input:not([type='hidden']),
+.landing-page textarea,
+.landing-page select {
+  color: #ffffff !important;
+  caret-color: #ffffff;
+  -webkit-text-fill-color: #ffffff;
+}
+
+.landing-page input::placeholder,
+.landing-page textarea::placeholder {
+  color: rgba(255, 255, 255, 0.35) !important;
+  font-weight: 400;
+}
+
+.landing-page input:focus,
+.landing-page textarea:focus,
+.landing-page select:focus {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff;
+  font-weight: 500;
+}
+
+.landing-page select {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+.landing-page select option {
+  color: #ffffff;
+  background-color: #0d1117;
+}
+
+.landing-page input:-webkit-autofill,
+.landing-page input:-webkit-autofill:hover,
+.landing-page input:-webkit-autofill:focus,
+.landing-page textarea:-webkit-autofill,
+.landing-page textarea:-webkit-autofill:hover,
+.landing-page textarea:-webkit-autofill:focus {
+  -webkit-text-fill-color: #ffffff !important;
+  -webkit-box-shadow: 0 0 0 1000px #141a24 inset !important;
+  box-shadow: 0 0 0 1000px #141a24 inset !important;
+  transition: background-color 9999s ease-out 0s;
+}

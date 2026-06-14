@@ -96,11 +96,65 @@ function ProductCard({ product, index, onAdd }: { product: any; index: number; o
 /* ─── Cart Drawer ─── */
 function CartDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const cart = useCart();
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [checkoutForm, setCheckoutForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    deliveryAddress: '',
+    notes: '',
+  });
+
+  const resetCheckout = () => {
+    setShowCheckout(false);
+    setSubmitError(null);
+    setIsSubmitted(false);
+    setCheckoutForm({ name: '', email: '', phone: '', deliveryAddress: '', notes: '' });
+  };
+
+  const handleClose = () => {
+    resetCheckout();
+    onClose();
+  };
+
+  const handleCheckoutSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      const response = await fetch('/api/public/shop-orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...checkoutForm,
+          items: cart.items,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to submit order');
+      }
+      setIsSubmitted(true);
+      cart.clearCart();
+      setTimeout(() => {
+        resetCheckout();
+        onClose();
+      }, 2500);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Failed to submit order');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
         <>
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onClick={onClose} />
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" onClick={handleClose} />
           <motion.div
             initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
@@ -108,11 +162,89 @@ function CartDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
           >
             <div className="flex flex-col h-full">
               <div className="flex items-center justify-between p-6 border-b border-white/10">
-                <h2 className="text-xl font-bold text-white">Cart ({cart.totalItems})</h2>
-                <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-xl text-white/50 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
+                <h2 className="text-xl font-bold text-white">
+                  {showCheckout ? 'Checkout' : `Cart (${cart.totalItems})`}
+                </h2>
+                <button onClick={handleClose} className="p-2 hover:bg-white/5 rounded-xl text-white/50 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
               </div>
               <div className="flex-1 overflow-y-auto p-6">
-                {cart.items.length === 0 ? (
+                {isSubmitted ? (
+                  <div className="text-center py-12">
+                    <div className="w-16 h-16 rounded-full bg-green-500/15 flex items-center justify-center mx-auto mb-4">
+                      <Flame className="w-8 h-8 text-green-400" />
+                    </div>
+                    <h3 className="text-xl font-bold text-white mb-2">Order Request Sent</h3>
+                    <p className="text-white/50 text-sm">Our team will contact you shortly to confirm delivery.</p>
+                  </div>
+                ) : showCheckout ? (
+                  <form id="shop-checkout-form" onSubmit={handleCheckoutSubmit} className="space-y-4">
+                    <input type="text" name="company" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden="true" />
+                    {submitError && (
+                      <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                        {submitError}
+                      </div>
+                    )}
+                    <div>
+                      <label className="block text-sm text-white/60 mb-2">Full Name *</label>
+                      <input
+                        required
+                        value={checkoutForm.name}
+                        onChange={(e) => setCheckoutForm((prev) => ({ ...prev, name: e.target.value }))}
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white outline-none focus:border-[#f36523]/40"
+                        placeholder="Your name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-white/60 mb-2">Phone *</label>
+                      <input
+                        required
+                        value={checkoutForm.phone}
+                        onChange={(e) => setCheckoutForm((prev) => ({ ...prev, phone: e.target.value }))}
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white outline-none focus:border-[#f36523]/40"
+                        placeholder="+92 3XX XXXXXXX"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-white/60 mb-2">Email</label>
+                      <input
+                        type="email"
+                        value={checkoutForm.email}
+                        onChange={(e) => setCheckoutForm((prev) => ({ ...prev, email: e.target.value }))}
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white outline-none focus:border-[#f36523]/40"
+                        placeholder="your@email.com"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-white/60 mb-2">Delivery Address *</label>
+                      <textarea
+                        required
+                        rows={3}
+                        value={checkoutForm.deliveryAddress}
+                        onChange={(e) => setCheckoutForm((prev) => ({ ...prev, deliveryAddress: e.target.value }))}
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white outline-none focus:border-[#f36523]/40 resize-none"
+                        placeholder="House, street, area, city"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-white/60 mb-2">Notes</label>
+                      <textarea
+                        rows={2}
+                        value={checkoutForm.notes}
+                        onChange={(e) => setCheckoutForm((prev) => ({ ...prev, notes: e.target.value }))}
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white outline-none focus:border-[#f36523]/40 resize-none"
+                        placeholder="Preferred delivery time, etc."
+                      />
+                    </div>
+                    <div className="glass-card p-4 space-y-2">
+                      {cart.items.map((item) => (
+                        <div key={item.id} className="flex justify-between text-sm text-white/70">
+                          <span>{item.name} × {item.quantity}</span>
+                          <span>PKR {(item.price * item.quantity).toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </form>
+                ) : cart.items.length === 0 ? (
                   <div className="text-center py-12">
                     <ShoppingCart className="w-16 h-16 text-white/10 mx-auto mb-4" />
                     <p className="text-white/30">Your cart is empty</p>
@@ -140,18 +272,38 @@ function CartDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
                   </div>
                 )}
               </div>
-              {cart.items.length > 0 && (
+              {cart.items.length > 0 && !isSubmitted && (
                 <div className="border-t border-white/10 p-6">
                   <div className="flex justify-between items-center mb-4">
                     <span className="text-white/50">Total:</span>
                     <span className="text-2xl font-black text-gradient-flamora">PKR {cart.totalPrice.toLocaleString()}</span>
                   </div>
-                  <button
-                    onClick={() => alert('Checkout coming soon!')}
-                    className="w-full py-4 flame-gradient text-white font-bold rounded-xl hover:shadow-[0_0_25px_rgba(243,101,35,0.3)] transition-all duration-300"
-                  >
-                    Proceed to Checkout
-                  </button>
+                  {showCheckout ? (
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowCheckout(false)}
+                        className="w-full py-4 border border-white/15 text-white font-bold rounded-xl hover:bg-white/5 transition-all duration-300"
+                      >
+                        Back
+                      </button>
+                      <button
+                        type="submit"
+                        form="shop-checkout-form"
+                        disabled={isSubmitting}
+                        className="w-full py-4 flame-gradient text-white font-bold rounded-xl hover:shadow-[0_0_25px_rgba(243,101,35,0.3)] transition-all duration-300 disabled:opacity-50"
+                      >
+                        {isSubmitting ? 'Submitting...' : 'Submit Order'}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowCheckout(true)}
+                      className="w-full py-4 flame-gradient text-white font-bold rounded-xl hover:shadow-[0_0_25px_rgba(243,101,35,0.3)] transition-all duration-300"
+                    >
+                      Proceed to Checkout
+                    </button>
+                  )}
                 </div>
               )}
             </div>
