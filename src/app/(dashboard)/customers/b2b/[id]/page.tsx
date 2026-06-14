@@ -1561,9 +1561,10 @@ export default function B2BCustomerDetailPage() {
           <p className="text-gray-600 font-medium">Customer not found</p>
           <Button
             onClick={() => router.push('/customers/b2b')}
-            className="mt-4"
+            className="mt-4 h-9 w-9 p-0"
+            aria-label="Back"
           >
-            Back to B2B Customers
+            <ArrowLeftIcon className="w-4 h-4" />
           </Button>
         </div>
       </div>
@@ -1578,10 +1579,10 @@ export default function B2BCustomerDetailPage() {
           variant="outline"
           size="sm"
           onClick={() => router.push('/customers/b2b')}
-          className="flex items-center h-9 text-xs"
+          className="flex items-center justify-center h-9 w-9 p-0 shrink-0"
+          aria-label="Back"
         >
-          <ArrowLeftIcon className="w-4 h-4 mr-2" />
-          Back to B2B Customers
+          <ArrowLeftIcon className="w-4 h-4" />
         </Button>
         <div className="flex-1">
           <h1 className="text-3xl font-bold text-gray-900 flex items-center">

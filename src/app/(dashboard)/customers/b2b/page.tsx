@@ -376,13 +376,13 @@ export default function B2BCustomersPage() {
         <div>
           <div className="flex items-center mb-2">
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={() => router.push('/customers')}
-              className="mr-2 text-gray-500 hover:text-gray-900 -ml-2"
+              className="flex items-center justify-center h-9 w-9 p-0 shrink-0 mr-2 -ml-2"
+              aria-label="Back"
             >
-              <ArrowLeftIcon className="w-4 h-4 mr-1" />
-              Back
+              <ArrowLeftIcon className="w-4 h-4" />
             </Button>
           </div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center">

@@ -405,13 +405,12 @@ export default function TeamManagementPage() {
                                 <th className="px-4 py-3 font-medium">Contact</th>
                                 <th className="px-4 py-3 font-medium">CNIC</th>
                                 <th className="px-4 py-3 font-medium">Status</th>
-                                <th className="px-4 py-3 font-medium text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {isLoading ? (
                                 <tr>
-                                    <td colSpan={7} className="px-4 py-6 text-center text-gray-500">
+                                    <td colSpan={6} className="px-4 py-6 text-center text-gray-500">
                                         <div className="flex items-center justify-center space-x-2">
                                             <div className="h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                                             <span>Loading...</span>
@@ -420,13 +419,25 @@ export default function TeamManagementPage() {
                                 </tr>
                             ) : teamMembers.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} className="px-4 py-6 text-center text-gray-500">
+                                    <td colSpan={6} className="px-4 py-6 text-center text-gray-500">
                                         No team members found
                                     </td>
                                 </tr>
                             ) : (
                                 teamMembers.map((member) => (
-                                    <tr key={member.id} className="hover:bg-gray-50/50 transition-colors">
+                                    <tr
+                                        key={member.id}
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={() => router.push(`/admin/team/${member.id}`)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                e.preventDefault();
+                                                router.push(`/admin/team/${member.id}`);
+                                            }
+                                        }}
+                                        className="hover:bg-gray-50 transition-colors cursor-pointer"
+                                    >
                                         <td className="px-4 py-3">
                                             <div className="flex flex-col">
                                                 <span className="font-medium text-gray-900">{member.name}</span>
@@ -500,16 +511,6 @@ export default function TeamManagementPage() {
                                                     <span>{new Date(member.lastActiveAt).toLocaleDateString()}</span>
                                                 </div>
                                             )}
-                                        </td>
-                                        <td className="px-4 py-3 text-right">
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => router.push(`/admin/team/${member.id}`)}
-                                                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200 h-7 px-2 text-xs"
-                                            >
-                                                Profile
-                                            </Button>
                                         </td>
                                     </tr>
                                 ))
