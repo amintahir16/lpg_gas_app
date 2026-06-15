@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { getActiveRegionId, regionScopedWhereIncludingLegacy } from '@/lib/region';
 
 // PUT - Update category name (rename category)
 export async function PUT(
@@ -25,7 +25,7 @@ export async function PUT(
       where: { 
         name: oldName,
         isActive: true,
-        ...regionScopedWhere(regionId),
+        ...regionScopedWhereIncludingLegacy(regionId),
       }
     });
 
@@ -41,7 +41,7 @@ export async function PUT(
       where: { 
         name: newName,
         isActive: true,
-        ...regionScopedWhere(regionId),
+        ...regionScopedWhereIncludingLegacy(regionId),
       }
     });
 
@@ -57,7 +57,7 @@ export async function PUT(
       where: { 
         name: oldName,
         isActive: true,
-        ...regionScopedWhere(regionId),
+        ...regionScopedWhereIncludingLegacy(regionId),
       },
       data: { name: newName }
     });
@@ -89,7 +89,7 @@ export async function DELETE(
       where: { 
         name: name,
         isActive: true,
-        ...regionScopedWhere(regionId),
+        ...regionScopedWhereIncludingLegacy(regionId),
       }
     });
 
@@ -105,7 +105,7 @@ export async function DELETE(
       where: { 
         name: name,
         isActive: true,
-        ...regionScopedWhere(regionId),
+        ...regionScopedWhereIncludingLegacy(regionId),
       },
       data: { isActive: false }
     });

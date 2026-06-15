@@ -100,6 +100,37 @@ export async function adoptLegacyB2bCustomerIfNeeded(
 }
 
 /**
+ * Custom accessory rows created before multi-region support may have `regionId: null`.
+ * When an admin is operating under a selected region, assign that region once so
+ * subsequent scoped queries and deletes succeed.
+ */
+export async function adoptLegacyCustomItemIfNeeded(
+  itemId: string,
+  regionId: string | null
+): Promise<void> {
+  if (!regionId) return;
+  const legacy = await prisma.customItem.findFirst({
+    where: { id: itemId, regionId: null },
+    select: { id: true },
+  });
+  if (!legacy) return;
+  await prisma.customItem.update({
+    where: { id: itemId },
+    data: { regionId },
+  });
+}
+
+/**
+ * Include branch-scoped rows plus legacy rows with no region (pre–multi-region data).
+ */
+export function regionScopedWhereIncludingLegacy(
+  regionId: string | null | undefined
+): Record<string, unknown> {
+  if (!regionId) return {};
+  return { OR: [{ regionId }, { regionId: null }] };
+}
+
+/**
  * Inject `regionId` into a `data` object for create operations.
  *
  * Example:

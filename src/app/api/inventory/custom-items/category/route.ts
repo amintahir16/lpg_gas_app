@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { getActiveRegionId, regionScopedWhereIncludingLegacy } from '@/lib/region';
 
 // GET - Get all custom item categories (unique names)
 export async function GET(request: NextRequest) {
   try {
     const regionId = getActiveRegionId(request);
     const categories = await prisma.customItem.findMany({
-      where: { isActive: true, ...regionScopedWhere(regionId) },
+      where: { isActive: true, ...regionScopedWhereIncludingLegacy(regionId) },
       select: { name: true },
       distinct: ['name'],
       orderBy: { name: 'asc' }
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
       where: { 
         name: name,
         isActive: true,
-        ...regionScopedWhere(regionId),
+        ...regionScopedWhereIncludingLegacy(regionId),
       }
     });
 

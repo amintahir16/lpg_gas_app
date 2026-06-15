@@ -1,12 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity, checkAndNotifyLowAccessoryStock } from '@/lib/superAdminNotifier';
-import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import {
+  adoptLegacyCustomItemIfNeeded,
+  getActiveRegionId,
+  regionScopedWhereIncludingLegacy,
+} from '@/lib/region';
 
-const prisma = new PrismaClient();
+async function findCustomItemForRegion(id: string, regionId: string | null) {
+  await adoptLegacyCustomItemIfNeeded(id, regionId);
+  return prisma.customItem.findFirst({
+    where: {
+      id,
+      isActive: true,
+      ...regionScopedWhereIncludingLegacy(regionId),
+    },
+  });
+}
 
 // PUT - Update custom item
 export async function PUT(
@@ -27,10 +40,7 @@ export async function PUT(
       );
     }
 
-    // Check if custom item exists in this region
-    const existingItem = await prisma.customItem.findFirst({
-      where: { id, ...regionScopedWhere(regionId) }
-    });
+    const existingItem = await findCustomItemForRegion(id, regionId);
 
     if (!existingItem) {
       return NextResponse.json(
@@ -46,7 +56,7 @@ export async function PUT(
         type,
         isActive: true,
         id: { not: id },
-        ...regionScopedWhere(regionId),
+        ...regionScopedWhereIncludingLegacy(regionId),
       }
     });
 
@@ -128,10 +138,7 @@ export async function DELETE(
     const regionId = getActiveRegionId(request);
     const { id } = await params;
 
-    // Check if custom item exists in this region
-    const existingItem = await prisma.customItem.findFirst({
-      where: { id, ...regionScopedWhere(regionId) }
-    });
+    const existingItem = await findCustomItemForRegion(id, regionId);
 
     if (!existingItem) {
       return NextResponse.json(

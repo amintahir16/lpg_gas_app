@@ -158,11 +158,37 @@ export default function DashboardPage() {
   const cylinderNames = ['With Customers', 'Full (In Stock)', 'Empty (In Stock)'];
   const CustomPieTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
+      const entry = payload[0].payload ?? payload[0];
       const isCylinder = cylinderNames.includes(payload[0].name);
+
+      if (entry.category) {
+        return (
+          <div className="bg-white p-3 border border-gray-100 shadow-lg rounded-lg max-w-xs">
+            <p className="text-xs font-medium text-gray-500">{entry.category}</p>
+            <p className="font-semibold text-gray-800">{entry.type}</p>
+            <p className="text-blue-600 font-bold">{payload[0].value} Units</p>
+          </div>
+        );
+      }
+
+      const breakdown = entry.breakdown as { type: string; quantity: number }[] | undefined;
+
       return (
-        <div className="bg-white p-3 border border-gray-100 shadow-lg rounded-lg">
+        <div className="bg-white p-3 border border-gray-100 shadow-lg rounded-lg max-w-xs">
           <p className="font-semibold text-gray-800">{payload[0].name}</p>
-          <p className="text-blue-600 font-bold">{payload[0].value} {isCylinder ? 'Cylinders' : 'Units'}</p>
+          <p className="text-blue-600 font-bold">
+            {payload[0].value} {isCylinder ? 'Cylinders' : 'Units'}
+          </p>
+          {breakdown && breakdown.length > 0 && (
+            <ul className="mt-2 pt-2 border-t border-gray-100 space-y-0.5">
+              {breakdown.map((line) => (
+                <li key={line.type} className="text-xs text-gray-600 flex justify-between gap-3">
+                  <span>{line.type}</span>
+                  <span className="font-medium text-gray-800">{line.quantity}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       );
     }
@@ -472,7 +498,7 @@ export default function DashboardPage() {
                       cy="50%"
                       innerRadius={55}
                       outerRadius={85}
-                      paddingAngle={5}
+                      paddingAngle={2}
                       dataKey="value"
                     >
                       {stats.accessoryInventoryData.map((entry, index) => (
@@ -481,22 +507,20 @@ export default function DashboardPage() {
                     </Pie>
                     <Tooltip content={<CustomPieTooltip />} />
                     <Legend verticalAlign="bottom" height={50} content={() => {
-                      // Group items by category for a compact legend
-                      const grouped: Record<string, { color: string; items: string[] }> = {};
-                      stats!.accessoryInventoryData.forEach((entry: any) => {
-                        const [category, itemName] = entry.name.split(' - ');
-                        if (!grouped[category]) {
-                          grouped[category] = { color: entry.fill, items: [] };
+                      const grouped: Record<string, { color: string; types: string[] }> = {};
+                      stats!.accessoryInventoryData.forEach((entry: { category: string; categoryColor: string; type: string }) => {
+                        if (!grouped[entry.category]) {
+                          grouped[entry.category] = { color: entry.categoryColor, types: [] };
                         }
-                        grouped[category].items.push(itemName);
+                        grouped[entry.category].types.push(entry.type);
                       });
                       return (
                         <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-2 px-2">
-                          {Object.entries(grouped).map(([cat, { color, items }]) => (
+                          {Object.entries(grouped).map(([cat, { color, types }]) => (
                             <span key={cat} className="inline-flex items-center text-xs text-gray-600">
                               <span className="w-2.5 h-2.5 rounded-full mr-1.5 flex-shrink-0" style={{ backgroundColor: color }} />
                               <span className="font-semibold text-gray-800">{cat}</span>
-                              <span className="ml-1 text-gray-500">- {items.join(', ')}</span>
+                              <span className="ml-1 text-gray-500">- {types.join(', ')}</span>
                             </span>
                           ))}
                         </div>

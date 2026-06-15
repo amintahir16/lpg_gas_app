@@ -52,6 +52,8 @@ export default function AccessoriesInventoryPage() {
   const [selectedItem, setSelectedItem] = useState<CustomItem | null>(null);
   const [showAddItemForm, setShowAddItemForm] = useState(false);
   const [newItemName, setNewItemName] = useState('');
+  const [newCategoryError, setNewCategoryError] = useState('');
+  const [creatingCategory, setCreatingCategory] = useState(false);
   const [showRenameCategoryForm, setShowRenameCategoryForm] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
 
@@ -107,7 +109,9 @@ export default function AccessoriesInventoryPage() {
   }, []);
 
   useEffect(() => {
-    fetchStats();
+    const totalCustomItems = customItems.reduce((sum, item) => sum + Number(item.quantity), 0);
+    const totalValue = customItems.reduce((sum, item) => sum + Number(item.totalCost), 0);
+    setStats({ totalCustomItems, totalValue });
   }, [customItems]);
 
   const fetchData = async () => {
@@ -142,20 +146,6 @@ export default function AccessoriesInventoryPage() {
       console.error('Failed to fetch custom items:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchStats = async () => {
-    try {
-      const response = await fetch('/api/inventory/accessories/stats', {
-        credentials: 'include'
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data.stats);
-      }
-    } catch (error) {
-      console.error('Failed to fetch equipment stats:', error);
     }
   };
 
@@ -223,19 +213,25 @@ export default function AccessoriesInventoryPage() {
   };
 
   const handleDeleteCustomItem = async (id: string) => {
-    if (confirm('Are you sure you want to delete this item?')) {
-      try {
-        const response = await fetch(`/api/inventory/custom-items/${id}`, {
-          method: 'DELETE',
-          credentials: 'include'
-        });
+    if (!confirm('Are you sure you want to delete this item?')) {
+      return;
+    }
 
-        if (response.ok) {
-          fetchData();
-        }
-      } catch (error) {
-        console.error('Failed to delete custom item:', error);
+    try {
+      const response = await fetch(`/api/inventory/custom-items/${id}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to delete item');
       }
+
+      await fetchData();
+    } catch (error) {
+      console.error('Failed to delete custom item:', error);
+      alert(error instanceof Error ? error.message : 'Failed to delete item');
     }
   };
 
@@ -269,13 +265,23 @@ export default function AccessoriesInventoryPage() {
   };
 
   const handleCreateCustomItem = async (itemName: string) => {
-    // First normalize the category name, then format it
     const normalizedCategoryName = normalizeAndFormatCategoryName(itemName);
 
     if (!normalizedCategoryName) {
-      alert('Please enter a valid category name');
+      setNewCategoryError('Please enter a valid category name.');
       return;
     }
+
+    const alreadyExists = categories.some(
+      (cat) => cat.toLowerCase() === normalizedCategoryName.toLowerCase()
+    );
+    if (alreadyExists) {
+      setNewCategoryError(`"${normalizedCategoryName}" already exists. Choose a different name.`);
+      return;
+    }
+
+    setCreatingCategory(true);
+    setNewCategoryError('');
 
     try {
       const response = await fetch('/api/inventory/custom-items', {
@@ -284,8 +290,8 @@ export default function AccessoriesInventoryPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          name: normalizedCategoryName, // This creates a new category (normalized and formatted)
-          type: normalizedCategoryName, // This is the first item in the category
+          name: normalizedCategoryName,
+          type: normalizedCategoryName,
           quantity: 0,
           costPerPiece: 0,
           totalCost: 0
@@ -295,18 +301,32 @@ export default function AccessoriesInventoryPage() {
 
       if (response.ok) {
         await fetchData();
-        setActiveTab(normalizedCategoryName); // Set the new category as active tab
+        setActiveTab(normalizedCategoryName);
         setShowAddItemForm(false);
         setNewItemName('');
-        alert('Custom item category created successfully!');
+        setNewCategoryError('');
       } else {
         const errorData = await response.json();
-        alert(`Error: ${errorData.error}`);
+        setNewCategoryError(errorData.error || 'Failed to create category.');
       }
     } catch (error) {
       console.error('Failed to create custom item:', error);
-      alert('Error: Failed to create custom item');
+      setNewCategoryError('Failed to create category. Please try again.');
+    } finally {
+      setCreatingCategory(false);
     }
+  };
+
+  const openAddCategoryForm = () => {
+    setNewItemName('');
+    setNewCategoryError('');
+    setShowAddItemForm(true);
+  };
+
+  const closeAddCategoryForm = () => {
+    setShowAddItemForm(false);
+    setNewItemName('');
+    setNewCategoryError('');
   };
 
   const handleRenameCategory = async () => {
@@ -447,7 +467,7 @@ export default function AccessoriesInventoryPage() {
         </div>
         <div className="mt-4 sm:mt-0">
           <Button
-            onClick={() => setShowAddItemForm(true)}
+            onClick={openAddCategoryForm}
             size="sm"
             className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold shadow-sm h-9"
           >
@@ -754,7 +774,7 @@ export default function AccessoriesInventoryPage() {
                 </h3>
                 <p className="text-xs text-gray-500 mt-0.5">Create a new inventory category</p>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => setShowAddItemForm(false)} className="h-8 w-8 p-0 rounded-full">
+              <Button variant="ghost" size="sm" onClick={closeAddCategoryForm} className="h-8 w-8 p-0 rounded-full">
                 <span className="sr-only">Close</span>
                 <span className="text-xl">×</span>
               </Button>
@@ -772,10 +792,20 @@ export default function AccessoriesInventoryPage() {
                     type="text"
                     placeholder="e.g., Pipes, Regulators, etc."
                     value={newItemName}
-                    onChange={(e) => setNewItemName(e.target.value)}
+                    onChange={(e) => {
+                      setNewItemName(e.target.value);
+                      if (newCategoryError) setNewCategoryError('');
+                    }}
                     required
-                    className="h-9"
+                    aria-invalid={!!newCategoryError}
+                    aria-describedby={newCategoryError ? 'category-name-error' : undefined}
+                    className={`h-9 ${newCategoryError ? 'border-red-300 focus-visible:ring-red-500' : ''}`}
                   />
+                  {newCategoryError && (
+                    <p id="category-name-error" className="mt-1.5 text-xs text-red-600">
+                      {newCategoryError}
+                    </p>
+                  )}
                 </div>
                 <div className="flex justify-end gap-3 pt-2 mt-2">
                   <Button
@@ -783,15 +813,12 @@ export default function AccessoriesInventoryPage() {
                     variant="ghost"
                     size="sm"
                     className="h-9"
-                    onClick={() => {
-                      setShowAddItemForm(false);
-                      setNewItemName('');
-                    }}
+                    onClick={closeAddCategoryForm}
                   >
                     Cancel
                   </Button>
-                  <Button type="submit" size="sm" className="bg-blue-600 h-9">
-                    Create Category
+                  <Button type="submit" size="sm" className="bg-blue-600 h-9" disabled={creatingCategory}>
+                    {creatingCategory ? 'Creating...' : 'Create Category'}
                   </Button>
                 </div>
               </form>

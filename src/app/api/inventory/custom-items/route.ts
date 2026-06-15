@@ -1,19 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/db';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity, checkAndNotifyLowAccessoryStock } from '@/lib/superAdminNotifier';
-import { getActiveRegionId, regionScopedWhere, withRegionScope } from '@/lib/region';
-
-const prisma = new PrismaClient();
+import {
+  adoptLegacyCustomItemIfNeeded,
+  getActiveRegionId,
+  regionScopedWhere,
+  regionScopedWhereIncludingLegacy,
+  withRegionScope,
+} from '@/lib/region';
 
 // GET - Fetch all custom items
 export async function GET(request: NextRequest) {
   try {
     const regionId = getActiveRegionId(request);
     const customItems = await prisma.customItem.findMany({
-      where: { isActive: true, ...regionScopedWhere(regionId) },
+      where: { isActive: true, ...regionScopedWhereIncludingLegacy(regionId) },
       orderBy: { createdAt: 'desc' }
     });
 
@@ -48,7 +52,7 @@ export async function POST(request: NextRequest) {
         name,
         type,
         isActive: true,
-        ...regionScopedWhere(regionId),
+        ...regionScopedWhereIncludingLegacy(regionId),
       }
     });
 

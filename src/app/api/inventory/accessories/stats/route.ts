@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhereIncludingLegacy } from '@/lib/region';
 
 export async function GET(request: NextRequest) {
   try {
     const regionId = getActiveRegionId(request);
     const customItems = await prisma.customItem.findMany({
-      where: { isActive: true, ...regionScopedWhere(regionId) }
+      where: { isActive: true, ...regionScopedWhereIncludingLegacy(regionId) }
     });
 
     // Calculate totals
