@@ -305,6 +305,30 @@ select::-ms-expand {
   background-clip: text;
 }
 
+/* Left-to-right brand gradient motion */
+@keyframes gradient-slide-x {
+  0% {
+    background-position: 200% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animated-gradient-x {
+  background-size: 220% 100%;
+  animation: gradient-slide-x 4s linear infinite;
+}
+
+.text-gradient-flamora.animated-gradient-x {
+  background-image: linear-gradient(90deg, #f8a11b 0%, #f36523 25%, #e1382b 50%, #f8a11b 75%, #f36523 100%);
+}
+
+.flame-gradient.animated-gradient-x {
+  background-image: linear-gradient(90deg, #e1382b 0%, #f36523 25%, #f8a11b 50%, #e1382b 75%, #f36523 100%);
+}
+
 /* Floating Animation */
 @keyframes float {
 

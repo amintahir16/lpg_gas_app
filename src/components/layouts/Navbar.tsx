@@ -105,7 +105,7 @@ export default function Navbar() {
             {/* Order CTA */}
             <Link
               href="/shop"
-              className="hidden md:inline-flex items-center gap-2 px-5 py-2 text-sm font-bold text-white flame-gradient rounded-xl hover:shadow-[0_0_20px_rgba(243,101,35,0.3)] transition-all duration-300 hover:-translate-y-0.5"
+              className="hidden md:inline-flex items-center gap-2 px-5 py-2 text-sm font-bold text-white flame-gradient animated-gradient-x rounded-xl hover:shadow-[0_0_20px_rgba(243,101,35,0.3)] transition-all duration-300 hover:-translate-y-0.5"
             >
               <Flame className="w-4 h-4" />
               Order Now
@@ -207,7 +207,7 @@ export default function Navbar() {
                 <div className="pt-3 px-2 border-t border-white/5">
                   <Link
                     href="/shop"
-                    className="flex items-center justify-center gap-2 w-full py-3 flame-gradient text-white font-bold rounded-xl"
+                    className="flex items-center justify-center gap-2 w-full py-3 flame-gradient animated-gradient-x text-white font-bold rounded-xl"
                     onClick={() => setIsOpen(false)}
                   >
                     <Flame className="w-4 h-4" />

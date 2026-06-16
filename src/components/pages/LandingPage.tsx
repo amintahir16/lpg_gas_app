@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { usePublicSiteSettings } from '@/components/providers/PublicSiteSettingsProvider';
 import { phoneToTelHref, phoneToWhatsAppHref } from '@/lib/public-site-settings';
+import FlamoraHero from '@/components/pages/FlamoraHero';
 
 
 /* ─── Animated Counter Hook ─── */
@@ -187,18 +188,17 @@ export default function LandingPage() {
     <div className="landing-page relative min-h-screen bg-[#0a0e14]">
 
       {/* ═══════════════════════════════════════════
-          SECTION 1: HERO
+          SECTION 1: HERO (Flamora Cylinder)
           ═══════════════════════════════════════════ */}
-      <section ref={heroRef} id="hero" className="relative min-h-screen flex items-center justify-center overflow-hidden">
-        {/* Parallax Background */}
-        <motion.div className="absolute inset-0 z-0" style={{ scale: heroScale }}>
-          <img
-            src="/images/hero-bg.png"
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#0a0e14]/30 via-[#0a0e14]/40 to-[#0a0e14]" />
-        </motion.div>
+      <section
+        ref={heroRef}
+        id="hero"
+        className="relative min-h-screen flex items-center justify-center overflow-hidden bg-black"
+      >
+        {/* Cylinder + flame visual */}
+        <div className="absolute inset-0 z-0">
+          <FlamoraHero />
+        </div>
 
         {/* Floating Ember Particles */}
         <div className="absolute inset-0 z-10 overflow-hidden pointer-events-none">
@@ -228,20 +228,10 @@ export default function LandingPage() {
         </div>
 
         {/* Hero Content */}
-        <motion.div className="relative z-20 text-center px-4 max-w-5xl mx-auto" style={{ opacity: heroOpacity, y: heroY }}>
-          <motion.div
-            variants={fadeUp}
-            initial="hidden"
-            animate="visible"
-            custom={0}
-            className="mb-6"
-          >
-            <span className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium bg-white/5 border border-white/10 text-white/80 backdrop-blur-sm">
-              <Sparkles className="w-4 h-4 text-[#f8a11b]" />
-              Trusted LPG Distribution Partner
-            </span>
-          </motion.div>
-
+        <motion.div
+          className="relative top-12 md:top-16 z-20 text-center px-4 max-w-5xl mx-auto"
+          style={{ opacity: heroOpacity, y: heroY }}
+        >
           <motion.h1
             variants={fadeUp}
             initial="hidden"
@@ -251,7 +241,7 @@ export default function LandingPage() {
           >
             <span className="text-white">Gas Right To</span>
             <br />
-            <span className="text-gradient-flamora">Your Doorstep</span>
+            <span className="text-gradient-flamora animated-gradient-x">Your Doorstep</span>
           </motion.h1>
 
           <motion.p
@@ -259,7 +249,7 @@ export default function LandingPage() {
             initial="hidden"
             animate="visible"
             custom={2}
-            className="text-lg md:text-xl text-white/60 max-w-2xl mx-auto mb-10 leading-relaxed"
+            className="text-lg md:text-xl text-white/60 max-w-2xl mx-auto mb-5 leading-relaxed"
           >
             {settings.heroSubtitle}
           </motion.p>
@@ -269,11 +259,24 @@ export default function LandingPage() {
             initial="hidden"
             animate="visible"
             custom={3}
+            className="mb-6"
+          >
+            <span className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium bg-white/5 border border-white/10 text-white/80 backdrop-blur-sm">
+              <Sparkles className="w-4 h-4 text-[#f8a11b]" />
+              Trusted LPG Distribution Partner
+            </span>
+          </motion.div>
+
+          <motion.div
+            variants={fadeUp}
+            initial="hidden"
+            animate="visible"
+            custom={4}
             className="flex flex-col sm:flex-row gap-4 justify-center items-center"
           >
             <Link
               href="/shop"
-              className="group relative inline-flex items-center justify-center px-8 py-4 text-lg font-bold text-white flame-gradient rounded-2xl shadow-[0_0_30px_rgba(243,101,35,0.3)] hover:shadow-[0_0_50px_rgba(243,101,35,0.5)] transform hover:-translate-y-1 transition-all duration-300"
+              className="group relative inline-flex items-center justify-center px-8 py-4 text-lg font-bold text-white flame-gradient animated-gradient-x rounded-2xl shadow-[0_0_30px_rgba(243,101,35,0.3)] hover:shadow-[0_0_50px_rgba(243,101,35,0.5)] transform hover:-translate-y-1 transition-all duration-300"
             >
               <span className="flex items-center gap-3">
                 <Flame className="w-5 h-5" />
@@ -500,8 +503,10 @@ export default function LandingPage() {
 
                 <Link
                   href="/shop"
-                  className="inline-flex items-center justify-center w-full py-3 px-6 rounded-xl font-bold text-white transition-all duration-300 hover:-translate-y-1"
-                  style={{ background: `linear-gradient(135deg, ${cyl.color}, ${cyl.color}cc)` }}
+                  className="inline-flex items-center justify-center w-full py-3 px-6 rounded-xl font-bold text-white animated-gradient-x transition-all duration-300 hover:-translate-y-1"
+                  style={{
+                    backgroundImage: `linear-gradient(90deg, ${cyl.color} 0%, ${cyl.color}cc 25%, #f8a11b 50%, ${cyl.color} 75%, ${cyl.color}cc 100%)`,
+                  }}
                 >
                   <span className="flex items-center gap-2">
                     Order Now
@@ -607,7 +612,7 @@ export default function LandingPage() {
                   <p className="text-white/40 mb-6">11.8 KG & 15 KG options available</p>
                   <Link
                     href="/shop"
-                    className="inline-flex items-center gap-2 px-6 py-3 flame-gradient text-white font-bold rounded-xl hover:-translate-y-1 transition-all duration-300"
+                    className="inline-flex items-center gap-2 px-6 py-3 flame-gradient animated-gradient-x text-white font-bold rounded-xl hover:-translate-y-1 transition-all duration-300"
                   >
                     Order for Home <ArrowRight className="w-4 h-4" />
                   </Link>
@@ -830,7 +835,9 @@ export default function LandingPage() {
       <section className="relative py-24 overflow-hidden">
         {/* Animated gradient background */}
         <div className="absolute inset-0 flame-gradient animate-gradient opacity-90" />
-        <div className="absolute inset-0 bg-[url('/images/section-pattern.png')] bg-cover opacity-10 mix-blend-overlay" />
+        <div className="absolute inset-0 opacity-10 mix-blend-overlay pointer-events-none">
+          <FlamoraHero />
+        </div>
 
         {/* Floating Particles */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
