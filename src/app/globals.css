@@ -305,6 +305,18 @@ select::-ms-expand {
   background-clip: text;
 }
 
+/* Public site typography: keep sizes/layout, only swap font families. */
+.public-site :is(p, li, input, textarea, select) {
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-weight: 400;
+}
+
+.public-site :is(h1, h2, h3, h4, h5, h6, button),
+.public-site :is(a, button)[class*="rounded"],
+.public-site :is([class*="font-semibold"], [class*="font-bold"], [class*="font-black"]) {
+  font-family: var(--font-space-grotesk), system-ui, sans-serif;
+}
+
 /* Left-to-right brand gradient motion */
 @keyframes gradient-slide-x {
   0% {

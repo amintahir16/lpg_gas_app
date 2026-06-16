@@ -229,85 +229,74 @@ export default function LandingPage() {
 
         {/* Hero Content */}
         <motion.div
-          className="relative top-12 md:top-16 z-20 text-center px-4 max-w-5xl mx-auto"
+          className="relative z-20 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
           style={{ opacity: heroOpacity, y: heroY }}
         >
-          <motion.h1
-            variants={fadeUp}
-            initial="hidden"
-            animate="visible"
-            custom={1}
-            className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black mt-4 mb-6 leading-[0.95] tracking-tight"
-          >
-            <span className="text-white">Gas Right To</span>
-            <br />
-            <span className="text-gradient-flamora animated-gradient-x">Your Doorstep</span>
-          </motion.h1>
-
-          <motion.p
-            variants={fadeUp}
-            initial="hidden"
-            animate="visible"
-            custom={2}
-            className="text-lg md:text-xl text-white/60 max-w-2xl mx-auto mb-5 leading-relaxed"
-          >
-            {settings.heroSubtitle}
-          </motion.p>
-
-          <motion.div
-            variants={fadeUp}
-            initial="hidden"
-            animate="visible"
-            custom={3}
-            className="mb-6"
-          >
-            <span className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium bg-white/5 border border-white/10 text-white/80 backdrop-blur-sm">
-              <Sparkles className="w-4 h-4 text-[#f8a11b]" />
-              Trusted LPG Distribution Partner
-            </span>
-          </motion.div>
-
-          <motion.div
-            variants={fadeUp}
-            initial="hidden"
-            animate="visible"
-            custom={4}
-            className="flex flex-col sm:flex-row gap-4 justify-center items-center"
-          >
-            <Link
-              href="/shop"
-              className="group relative inline-flex items-center justify-center px-8 py-4 text-lg font-bold text-white flame-gradient animated-gradient-x rounded-2xl shadow-[0_0_30px_rgba(243,101,35,0.3)] hover:shadow-[0_0_50px_rgba(243,101,35,0.5)] transform hover:-translate-y-1 transition-all duration-300"
+          <div className="flex min-h-screen translate-y-16 flex-col items-center justify-center gap-5 pt-28 pb-16 lg:translate-y-0 lg:grid lg:grid-cols-[minmax(0,0.95fr)_minmax(280px,0.9fr)_minmax(0,1.05fr)] lg:gap-10 lg:py-16">
+            <motion.div
+              variants={fadeUp}
+              initial="hidden"
+              animate="visible"
+              custom={1}
+              className="text-center lg:text-left lg:pr-4"
             >
-              <span className="flex items-center gap-3">
-                <Flame className="w-5 h-5" />
-                Order Now
-                <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </span>
-            </Link>
+              <h1 className="font-[var(--font-space-grotesk)] text-5xl sm:text-6xl md:text-7xl lg:text-[clamp(3.6rem,5.2vw,6.25rem)] font-bold leading-[0.95] tracking-tight drop-shadow-[0_10px_36px_rgba(0,0,0,0.55)]">
+                <span className="text-white lg:hidden">Gas Right To</span>
+                <span className="hidden text-white lg:inline lg:whitespace-nowrap">Gas Right</span>
+                <br />
+                <span className="text-gradient-flamora animated-gradient-x lg:hidden">Your Doorstep</span>
+                <span className="hidden text-white lg:inline lg:whitespace-nowrap">To </span>
+                <span className="hidden text-gradient-flamora animated-gradient-x lg:inline lg:whitespace-nowrap">Your</span>
+                <br />
+                <span className="hidden text-gradient-flamora animated-gradient-x lg:inline lg:whitespace-nowrap">Doorstep</span>
+              </h1>
+            </motion.div>
 
-            <Link
-              href="/contact"
-              className="group inline-flex items-center justify-center px-8 py-4 text-lg font-semibold text-white bg-white/5 border border-white/15 hover:bg-white/10 hover:border-white/25 rounded-2xl backdrop-blur-sm transition-all duration-300 hover:-translate-y-1"
+            <div aria-hidden="true" className="hidden lg:block" />
+
+            <motion.div
+              variants={fadeUp}
+              initial="hidden"
+              animate="visible"
+              custom={2}
+              className="mx-auto flex max-w-xl flex-col items-center text-center lg:ml-auto lg:mr-0 lg:-translate-y-1"
             >
-              <span className="flex items-center gap-3">
-                <Phone className="w-5 h-5 text-[#f8a11b]" />
-                Contact Us
-              </span>
-            </Link>
-
-            {session && (
-              <Link
-                href="/dashboard"
-                className="group inline-flex items-center justify-center px-8 py-4 text-lg font-semibold text-white bg-white/5 border border-white/15 hover:bg-white/10 rounded-2xl backdrop-blur-sm transition-all duration-300 hover:-translate-y-1"
-              >
-                <span className="flex items-center gap-3">
-                  <User className="w-5 h-5 text-[#f8a11b]" />
-                  Dashboard
-                  <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              <div className="mb-6">
+                <span className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium bg-white/5 border border-white/10 text-white/80 backdrop-blur-sm">
+                  <Sparkles className="w-4 h-4 text-[#f8a11b]" />
+                  Trusted LPG Distribution Partner
                 </span>
-              </Link>
-            )}
-          </motion.div>
+              </div>
+
+              <p className="max-w-2xl font-[var(--font-inter)] text-lg md:text-xl font-normal text-white/68 leading-relaxed drop-shadow-[0_8px_28px_rgba(0,0,0,0.55)] lg:max-w-xl">
+                {settings.heroSubtitle}
+              </p>
+
+              <div className="mt-6 flex flex-col items-center gap-4 sm:flex-row lg:flex-row">
+                <Link
+                  href="/shop"
+                  className="group relative inline-flex w-[220px] items-center justify-center px-8 py-4 text-lg font-bold text-white flame-gradient animated-gradient-x rounded-2xl shadow-[0_0_30px_rgba(243,101,35,0.3)] hover:shadow-[0_0_50px_rgba(243,101,35,0.5)] transform hover:-translate-y-1 transition-all duration-300 sm:w-auto lg:min-w-[180px]"
+                >
+                  <span className="flex items-center gap-3 whitespace-nowrap">
+                    <Flame className="w-5 h-5" />
+                    Order Now
+                    <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </span>
+                </Link>
+
+                <Link
+                  href="/contact"
+                  className="group inline-flex w-[190px] items-center justify-center px-8 py-4 text-lg font-semibold text-white bg-white/5 border border-white/15 hover:bg-white/10 hover:border-white/25 rounded-2xl backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 sm:w-auto lg:min-w-[180px]"
+                >
+                  <span className="flex items-center gap-3 whitespace-nowrap">
+                    <Phone className="w-5 h-5 text-[#f8a11b]" />
+                    Contact Us
+                  </span>
+                </Link>
+
+              </div>
+            </motion.div>
+          </div>
         </motion.div>
 
         {/* Scroll Indicator */}
@@ -503,7 +492,7 @@ export default function LandingPage() {
 
                 <Link
                   href="/shop"
-                  className="inline-flex items-center justify-center w-full py-3 px-6 rounded-xl font-bold text-white animated-gradient-x transition-all duration-300 hover:-translate-y-1"
+                  className="group relative z-10 inline-flex w-full cursor-pointer items-center justify-center py-3 px-6 rounded-xl font-bold text-white animated-gradient-x transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_24px_rgba(243,101,35,0.3)]"
                   style={{
                     backgroundImage: `linear-gradient(90deg, ${cyl.color} 0%, ${cyl.color}cc 25%, #f8a11b 50%, ${cyl.color} 75%, ${cyl.color}cc 100%)`,
                   }}

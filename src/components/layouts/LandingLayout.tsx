@@ -37,9 +37,11 @@ export default function LandingLayout({
 
   return (
     <PublicSiteSettingsProvider>
-      <Navbar />
-      <main className="relative w-full max-w-[100vw] overflow-x-hidden">{children}</main>
-      <Footer />
+      <div className="public-site">
+        <Navbar />
+        <main className="relative w-full max-w-[100vw] overflow-x-hidden">{children}</main>
+        <Footer />
+      </div>
     </PublicSiteSettingsProvider>
   );
 } 
