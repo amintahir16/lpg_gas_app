@@ -237,7 +237,7 @@ export default function LandingPage() {
             initial="hidden"
             animate="visible"
             custom={1}
-            className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black mb-6 leading-[0.95] tracking-tight"
+            className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black mt-4 mb-6 leading-[0.95] tracking-tight"
           >
             <span className="text-white">Gas Right To</span>
             <br />
