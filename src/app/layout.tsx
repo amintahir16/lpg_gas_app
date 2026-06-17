@@ -96,7 +96,7 @@ export const metadata: Metadata = {
     },
   },
   verification: {
-    google: "your-google-verification-code",
+    google: "5ga-3-Y7UUfHNVVf6JMdZKf6txNLtjVdidIuEphaBdg",
   },
   category: "energy",
 };
