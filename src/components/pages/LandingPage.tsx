@@ -490,7 +490,7 @@ export default function LandingPage() {
             >
               <div className="relative rounded-3xl overflow-hidden animate-float">
                 <img
-                  src="/images/section-pattern.png"
+                  src="/images/section-pattern.webp"
                   alt="Flamora warehouse operations"
                   className="object-cover rounded-3xl w-full h-[450px]"
                 />

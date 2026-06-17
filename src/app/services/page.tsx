@@ -326,7 +326,7 @@ export default function ServicesPage() {
       {/* ═══ CTA ═══ */}
       <section className="relative py-24 overflow-hidden">
         <div className="absolute inset-0 flame-gradient animate-gradient opacity-90" />
-        <div className="absolute inset-0 bg-[url('/images/section-pattern.png')] bg-cover opacity-10 mix-blend-overlay" />
+        <div className="absolute inset-0 bg-[url('/images/section-pattern.webp')] bg-cover opacity-10 mix-blend-overlay" />
 
         <div className="relative max-w-4xl mx-auto text-center px-4">
           <motion.div variants={fadeUp} initial="hidden" whileInView="visible" viewport={{ once: true }}>

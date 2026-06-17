@@ -451,7 +451,7 @@ const FlamoraHero = () => {
       />
       <img
         id="cyl-img"
-        src="/images/cylinder.png"
+        src="/images/cylinder.webp"
         alt="Cylinder"
         style={{
           position: 'absolute',
