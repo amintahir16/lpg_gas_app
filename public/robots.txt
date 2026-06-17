@@ -1,0 +1,14 @@
+# Flamora LPG - Robots.txt
+# https://www.robotstxt.org/robotstxt.html
+
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /(auth)/
+Disallow: /(dashboard)/
+Disallow: /settings/
+Disallow: /select-region/
+Disallow: /test-notifications/
+
+# Sitemap
+Sitemap: https://flamora.pk/sitemap.xml

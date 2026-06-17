@@ -28,32 +28,61 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'https://lpgcompany.com'),
-  title: "LPG Gas Company - Your Trusted Energy Partner",
-  description: "Leading LPG provider in Pakistan since 2005. Quality gas cylinders, refill services, bulk deliveries, and 24/7 support. Safe, reliable, and affordable energy solutions.",
-  keywords: "LPG, gas cylinders, Pakistan, Karachi, energy, cooking gas, bulk delivery, refill service",
-  authors: [{ name: "LPG Gas Company" }],
+  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'https://flamora.pk'),
+  title: {
+    default: "Flamora LPG | #1 Trusted LPG Gas Supplier in Pakistan — Home & Business Delivery",
+    template: "%s | Flamora LPG Pakistan",
+  },
+  description: "Flamora is Pakistan's leading LPG gas distributor since 2015. Order 11.8 KG, 15 KG & 44.5 KG cylinders online. Same-day doorstep delivery, safety-certified, competitive prices. Serving Peshawar, Lahore, Islamabad, Karachi & 50+ cities.",
+  keywords: [
+    "LPG gas Pakistan",
+    "LPG cylinder delivery",
+    "cooking gas cylinder",
+    "buy LPG online Pakistan",
+    "Flamora LPG",
+    "gas cylinder Peshawar",
+    "gas cylinder Lahore",
+    "gas cylinder Islamabad",
+    "gas cylinder Karachi",
+    "11.8 KG cylinder",
+    "15 KG cylinder",
+    "44.5 KG commercial cylinder",
+    "bulk LPG delivery",
+    "B2B LPG supply",
+    "restaurant gas supply Pakistan",
+    "industrial LPG",
+    "doorstep gas delivery",
+    "safe LPG cylinders",
+    "LPG refill service",
+    "energy solutions Pakistan",
+  ],
+  authors: [{ name: "Flamora LPG", url: "https://flamora.pk" }],
+  creator: "Flamora LPG",
+  publisher: "Flamora LPG",
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
-    title: "LPG Gas Company - Your Trusted Energy Partner",
-    description: "Leading LPG provider in Pakistan since 2005. Quality gas cylinders, refill services, bulk deliveries, and 24/7 support.",
-    url: "https://lpgcompany.com",
-    siteName: "LPG Gas Company",
+    title: "Flamora LPG | Pakistan's Trusted Energy Partner — Order LPG Online",
+    description: "Order LPG gas cylinders online in Pakistan. Same-day doorstep delivery for homes, restaurants & industries. 11.8 KG, 15 KG, 44.5 KG options. Safety certified. 24/7 support.",
+    url: "https://flamora.pk",
+    siteName: "Flamora LPG",
     images: [
       {
-        url: "/og-image.jpg",
+        url: "/images/cylinder.webp",
         width: 1200,
         height: 630,
-        alt: "LPG Gas Company",
+        alt: "Flamora LPG Gas Cylinders — Premium Energy Solutions in Pakistan",
       },
     ],
-    locale: "en_US",
+    locale: "en_PK",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "LPG Gas Company - Your Trusted Energy Partner",
-    description: "Leading LPG provider in Pakistan since 2005. Quality gas cylinders, refill services, bulk deliveries, and 24/7 support.",
-    images: ["/og-image.jpg"],
+    title: "Flamora LPG | Pakistan's #1 LPG Gas Delivery Service",
+    description: "Same-day LPG cylinder delivery across Pakistan. Order 11.8 KG, 15 KG & 44.5 KG cylinders. Safety certified. Competitive prices.",
+    images: ["/images/cylinder.webp"],
   },
   robots: {
     index: true,
@@ -69,6 +98,35 @@ export const metadata: Metadata = {
   verification: {
     google: "your-google-verification-code",
   },
+  category: "energy",
+};
+
+/* ─── JSON-LD Structured Data ─── */
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "Flamora LPG",
+  url: "https://flamora.pk",
+  logo: "https://flamora.pk/logo.png",
+  description:
+    "Flamora is Pakistan's leading LPG gas distributor, offering safe, certified, and affordable cooking gas cylinders with same-day doorstep delivery for homes and businesses since 2015.",
+  foundingDate: "2015",
+  areaServed: {
+    "@type": "Country",
+    name: "Pakistan",
+  },
+  address: {
+    "@type": "PostalAddress",
+    addressCountry: "PK",
+  },
+  contactPoint: [
+    {
+      "@type": "ContactPoint",
+      contactType: "customer service",
+      availableLanguage: ["English", "Urdu"],
+    },
+  ],
+  sameAs: [],
 };
 
 export default function RootLayout({
@@ -78,6 +136,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" data-scroll-behavior="smooth">
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${inter.variable} antialiased`}
         suppressHydrationWarning
