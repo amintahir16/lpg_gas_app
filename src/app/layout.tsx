@@ -35,6 +35,7 @@ export const metadata: Metadata = {
   },
   description: "Flamora is Pakistan's leading LPG gas distributor since 2015. Order 11.8 KG, 15 KG & 44.5 KG cylinders online. Same-day doorstep delivery, safety-certified, competitive prices. Serving Peshawar, Lahore, Islamabad, Karachi & 50+ cities.",
   keywords: [
+    "flamora",
     "LPG gas Pakistan",
     "LPG cylinder delivery",
     "cooking gas cylinder",

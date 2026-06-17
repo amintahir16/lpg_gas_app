@@ -98,56 +98,156 @@ const cylinders = [
 
 /* ─── Testimonials ─── */
 const testimonials = [
-  { name: 'Ahmed Hassan', role: 'Restaurant Owner, Peshawar', content: 'Flamora transformed our kitchen operations. The 44.5KG cylinders last longer and their delivery is always on time. Absolutely the best LPG provider.', rating: 5 },
-  { name: 'Fatima Bibi', role: 'Homemaker, Islamabad', content: 'I switched to Flamora for my home cooking needs and the difference is remarkable. Clean gas, safe cylinders, and doorstep delivery!', rating: 5 },
-  { name: 'Tariq Mehmood', role: 'Industrial Manager, Lahore', content: 'Managing fuel for our factory was always a headache until we partnered with Flamora. Reliable supply chain and competitive pricing.', rating: 5 },
-  { name: 'Ayesha Khan', role: 'Hotel Manager, Karachi', content: 'We run a 200-room hotel and Flamora has never missed a single delivery. Their bulk packages save us thousands every month.', rating: 5 },
-  { name: 'Mohammad Ali', role: 'Baker, Rawalpindi', content: 'My bakery depends on consistent gas supply. Flamora ensures I never run out during peak hours. Best decision for my business.', rating: 5 },
-  { name: 'Sana Malik', role: 'Homemaker, Faisalabad', content: 'The safety features on Flamora cylinders give me peace of mind. Their team even taught us proper handling. Truly caring service!', rating: 5 },
-  { name: 'Usman Sheikh', role: 'Factory Supervisor, Sialkot', content: 'We switched from our old supplier to Flamora and saw a 20% cost reduction. The commercial cylinders are top-notch quality.', rating: 5 },
-  { name: 'Nadia Javed', role: 'Café Owner, Multan', content: 'Flamora customer service is incredible. One call and they are at our doorstep within hours. Cannot imagine going back.', rating: 5 },
-  { name: 'Bilal Raza', role: 'Dhaba Owner, Mardan', content: 'Running a roadside dhaba needs constant gas. Flamora keeps us fueled even during peak dinner rush. Excellent reliability!', rating: 5 },
-  { name: 'Hira Noor', role: 'Homemaker, Abbottabad', content: 'Living in the hills makes delivery tricky but Flamora reaches us without fail. Their drivers are polite and professional.', rating: 5 },
-  { name: 'Kamran Yousaf', role: 'Restaurant Chain Manager, Lahore', content: 'We operate 12 branches and Flamora supplies all of them. Consistent quality across every single delivery.', rating: 5 },
-  { name: 'Zainab Fatima', role: 'Homemaker, Quetta', content: 'Before Flamora, getting a cylinder refilled was a whole day task. Now it is just one phone call. Life-changing convenience.', rating: 5 },
-  { name: 'Asad Iqbal', role: 'Textile Mill Owner, Faisalabad', content: 'Our textile operations need precise heat control. Flamora commercial grade cylinders deliver consistent pressure every time.', rating: 5 },
-  { name: 'Mehreen Abbas', role: 'Caterer, Islamabad', content: 'As a professional caterer, I need gas at multiple event locations. Flamora delivers wherever I need them, on time every single event.', rating: 5 },
-  { name: 'Faisal Nawaz', role: 'Dairy Farm Owner, Sahiwal', content: 'Our dairy processing unit relies on Flamora for steam generation. Zero downtime since we made the switch. Superb service!', rating: 5 },
-  { name: 'Rabia Aslam', role: 'Homemaker, Gujranwala', content: 'The 11.8KG cylinder is perfect for my small family. Lasts a whole month and the price is very reasonable. Happy customer!', rating: 5 },
-  { name: 'Nawaz Sharif', role: 'Brick Kiln Operator, Jhang', content: 'Switched our kiln auxiliary heating to Flamora LPG. Cleaner operations and better compliance with environmental standards.', rating: 5 },
-  { name: 'Amna Khalid', role: 'School Principal, Peshawar', content: 'We use Flamora for our school kitchen that feeds 500 students daily. Safe, reliable and affordable. Great for institutions.', rating: 5 },
-  { name: 'Rizwan Ahmed', role: 'Hotel Chef, Swat', content: 'Cooking for tourists in Swat valley requires top-notch gas supply. Flamora delivers even to remote areas. Truly impressive reach!', rating: 5 },
-  { name: 'Shabana Gul', role: 'Homemaker, DI Khan', content: 'I was nervous about gas safety but Flamora provided a free inspection and educated my family. They genuinely care about customers.', rating: 5 },
-  { name: 'Imran Qureshi', role: 'Auto Workshop Owner, Lahore', content: 'We use LPG for our paint booth heating system. Flamora commercial supply is consistent and their pricing is unbeatable in the market.', rating: 5 },
-  { name: 'Kiran Batool', role: 'Homemaker, Sargodha', content: 'Flamora replaced my old leaky cylinder for free during a routine delivery. That level of customer care is rare these days.', rating: 5 },
-  { name: 'Waqas Ali', role: 'Food Truck Owner, Karachi', content: 'My food truck needs portable reliable gas. Flamora 15KG cylinders are perfect. Easy to transport and long-lasting performance.', rating: 5 },
-  { name: 'Samina Rafiq', role: 'Boutique Hotel Owner, Nathia Gali', content: 'Running a boutique hotel in the mountains means unpredictable supply chains. Flamora never disappoints regardless of weather or terrain.', rating: 5 },
-  { name: 'Zahid Hussain', role: 'Poultry Farm Manager, Chakwal', content: 'Our brooder heating systems run on Flamora LPG. Consistent heat output means healthier chicks and better farm productivity overall.', rating: 5 },
-  { name: 'Nasreen Akhtar', role: 'Homemaker, Bahawalpur', content: 'Five years with Flamora and not a single safety incident. Their cylinders are always in perfect condition and properly maintained.', rating: 5 },
-  { name: 'Hamza Tariq', role: 'Pizza Restaurant Owner, Islamabad', content: 'Our wood-fired pizza oven backup runs on Flamora. Perfect flame control and the gas burns cleanly. Our pizzas taste even better!', rating: 5 },
-  { name: 'Aqsa Mahmood', role: 'Homemaker, Hyderabad', content: 'Flamora WhatsApp ordering is so convenient. I just message them and the cylinder is at my door within 3 hours. Modern and efficient service.', rating: 5 },
-  { name: 'Shahbaz Gill', role: 'Construction Site Manager, Gwadar', content: 'Supplying gas to remote construction sites is challenging. Flamora logistics team handles it professionally every single time.', rating: 5 },
-  { name: 'Farah Deeba', role: 'Cooking Class Instructor, Lahore', content: 'I run cooking classes for 30 students and need reliable gas. Flamora keeps my kitchen running smoothly session after session.', rating: 5 },
-  { name: 'Junaid Akbar', role: 'Greenhouse Operator, Swabi', content: 'Our greenhouse heating depends entirely on Flamora. Even in harsh winters they deliver on schedule. Crops have never been healthier.', rating: 5 },
-  { name: 'Rubina Shah', role: 'Homemaker, Kohat', content: 'The delivery boy always checks the regulator and connection before leaving. Such attention to detail sets Flamora apart from competitors.', rating: 5 },
-  { name: 'Owais Rauf', role: 'Laundry Business Owner, Rawalpindi', content: 'Our industrial irons and dryers need constant heat. Flamora commercial supply keeps our laundry business running without any interruptions.', rating: 5 },
-  { name: 'Tahira Parveen', role: 'Homemaker, Okara', content: 'My neighbor recommended Flamora and now my whole street uses them. Best gas company in Punjab without any doubt at all.', rating: 5 },
-  { name: 'Danish Mirza', role: 'Biryani Restaurant Owner, Karachi', content: 'Making biryani for 1000 people daily requires serious gas. Flamora 44.5KG cylinders handle the load easily. Outstanding product quality!', rating: 5 },
-  { name: 'Saima Naz', role: 'Homemaker, Mingora', content: 'Even in Swat where supply chains struggle, Flamora delivers on time consistently. They have truly expanded their reach impressively.', rating: 5 },
-  { name: 'Amir Sohail', role: 'Ceramics Factory Owner, Gujrat', content: 'Our kilns need precise temperature control and clean fuel. Flamora premium LPG delivers exactly that with consistent quality every batch.', rating: 5 },
-  { name: 'Bushra Amin', role: 'Daycare Center Owner, Islamabad', content: 'Safety is my top priority with children around. Flamora cylinders have the best safety certifications. I trust them completely.', rating: 5 },
-  { name: 'Raza Khan', role: 'Trucking Company Owner, Quetta', content: 'We converted some fleet vehicles to LPG with Flamora supply. Fuel costs dropped 35% and emissions improved significantly.', rating: 5 },
-  { name: 'Nimra Zafar', role: 'Homemaker, Sukkur', content: 'Flamora offers the most transparent pricing I have seen. No hidden charges, no surprises. Just honest fair business every time.', rating: 5 },
-  { name: 'Kashif Mehmood', role: 'Banquet Hall Manager, Lahore', content: 'We host events for 2000+ guests regularly. Flamora ensures we never run out of gas during peak service hours. Absolute professionals!', rating: 5 },
-  { name: 'Aliya Saeed', role: 'Homemaker, Peshawar', content: 'I love that Flamora sends a reminder when my cylinder is likely running low. Proactive service that shows they truly care.', rating: 5 },
-  { name: 'Naveed Anjum', role: 'Ice Cream Factory Owner, Sahiwal', content: 'Our production line needs uninterrupted gas supply. Flamora bulk delivery contract keeps us running 24/7 without a single hiccup.', rating: 5 },
-  { name: 'Misbah Urooj', role: 'Homemaker, Larkana', content: 'My mother-in-law was skeptical but after one month of using Flamora she became their biggest fan. Quality speaks for itself.', rating: 5 },
-  { name: 'Farhan Saeed', role: 'BBQ Restaurant Owner, Islamabad', content: 'Our live BBQ stations need perfect flame. Flamora gas gives us the cleanest burn and our customers notice the difference in taste.', rating: 5 },
-  { name: 'Zara Batool', role: 'Homemaker, Muzaffarabad', content: 'In AJK where winters are brutal, having reliable LPG is essential. Flamora has been our lifeline for three years running.', rating: 5 },
-  { name: 'Hassan Raza', role: 'Glass Manufacturing, Sheikhupura', content: 'Glass blowing needs extremely high and consistent temperatures. Flamora industrial-grade LPG exceeds our quality requirements.', rating: 5 },
-  { name: 'Sidra Amin', role: 'Homemaker, Mardan', content: 'Switched from firewood to Flamora LPG and our kitchen is cleaner and cooking is faster. Should have done this years ago!', rating: 5 },
-  { name: 'Qaiser Abbas', role: 'Fish Farm Owner, Thatta', content: 'We use Flamora LPG for our fish processing unit. Clean fuel means cleaner product. Our export quality has improved dramatically.', rating: 5 },
-  { name: 'Parveen Akhtar', role: 'Homemaker, Turbat', content: 'Even in remote Balochistan, Flamora delivers. I never thought premium LPG service would reach our area. Truly grateful for them.', rating: 5 },
+  { 
+    name: 'Ahmed Hassan', 
+    role: 'Restaurant Owner, Peshawar', 
+    content: 'We run a busy restaurant in Peshawar. Sui gas pressure is always low in winters, so we shifted to Flamora. Their 44.5KG cylinders last us about a week and delivery is very prompt. 4 stars because once they got late by an hour during heavy rain, but overall highly recommended.', 
+    rating: 4 
+  },
+  { 
+    name: 'Fatima Bibi', 
+    role: 'Homemaker, Islamabad', 
+    content: 'Ordered for the first time on recommendation of my neighbor. The gas burns very clean, no black soot on my pots. Direct doorstep delivery is super convenient for household chores.', 
+    rating: 5 
+  },
+  { 
+    name: 'Tariq Mehmood', 
+    role: 'Industrial Manager, Lahore', 
+    content: 'Excellent rates and very professional commercial supply.', 
+    rating: 5 
+  },
+  { 
+    name: 'Ayesha Khan', 
+    role: 'Hotel Manager, Karachi', 
+    content: 'We run a hotel in Karachi. Flamora handles our bulk delivery safely. Their staff is well trained and always double checks the connection valves for leaks. Great safety standards.', 
+    rating: 5 
+  },
+  { 
+    name: 'Mohammad Ali', 
+    role: 'Baker, Rawalpindi', 
+    content: 'Bohat acchi service hai, deliveries are always quick!', 
+    rating: 5 
+  },
+  { 
+    name: 'Sana Malik', 
+    role: 'Homemaker, Faisalabad', 
+    content: 'Highly satisfied with their customer care. The delivery person actually inspected my stove hose pipe and recommended a change because it was getting old. Safety first!', 
+    rating: 5 
+  },
+  { 
+    name: 'Usman Sheikh', 
+    role: 'Factory Supervisor, Sialkot', 
+    content: 'Decent prices, accurate weight, and quick response.', 
+    rating: 4 
+  },
+  { 
+    name: 'Nadia Javed', 
+    role: 'Café Owner, Multan', 
+    content: 'Ordering through WhatsApp is super convenient. Usually gets delivered within 2 hours of booking.', 
+    rating: 5 
+  },
+  { 
+    name: 'Bilal Raza', 
+    role: 'Dhaba Owner, Mardan', 
+    content: 'Sui gas ka pressure boht kam hota hai winter mein. Flamora is our main source now. Best decision for my shop.', 
+    rating: 5 
+  },
+  { 
+    name: 'Hira Noor', 
+    role: 'Homemaker, Abbottabad', 
+    content: 'Best gas delivery service in Abbottabad.', 
+    rating: 5 
+  },
+  { 
+    name: 'Zainab Fatima', 
+    role: 'Homemaker, Quetta', 
+    content: 'Now ordering gas is just one call away. Very convenient.', 
+    rating: 5 
+  },
+  { 
+    name: 'Asad Iqbal', 
+    role: 'Textile Mill Owner, Faisalabad', 
+    content: 'Been using their commercial cylinders for 6 months now. High pressure, consistent flow, and very transparent billing system. Good B2B partner.', 
+    rating: 5 
+  },
+  { 
+    name: 'Mehreen Abbas', 
+    role: 'Caterer, Islamabad', 
+    content: 'Super reliable LPG delivery for our catering business.', 
+    rating: 5 
+  },
+  { 
+    name: 'Kamran Yousaf', 
+    role: 'Restaurant Chain Manager, Lahore', 
+    content: 'We operate 12 branches and Flamora supplies all of them. The billing process is streamlined, and their customer portal makes tracking easy.', 
+    rating: 5 
+  },
+  { 
+    name: 'Rizwan Ahmed', 
+    role: 'Hotel Chef, Swat', 
+    content: 'Great service and delivery even in Swat valley.', 
+    rating: 5 
+  },
+  { 
+    name: 'Kiran Batool', 
+    role: 'Homemaker, Sargodha', 
+    content: 'Highly recommended! Clean gas and safe cylinders.', 
+    rating: 5 
+  },
+  { 
+    name: 'Waqas Ali', 
+    role: 'Food Truck Owner, Karachi', 
+    content: 'We use the 15KG cylinder on our food truck. Easy to transport and burns cleanly. Delivery is sometimes delayed in heavy Karachi traffic but they keep us updated.', 
+    rating: 4 
+  },
+  { 
+    name: 'Samina Rafiq', 
+    role: 'Boutique Hotel Owner, Nathia Gali', 
+    content: 'Running a boutique hotel in the mountains means unpredictable supply chains. Flamora never disappoints regardless of weather or terrain. Outstanding service!', 
+    rating: 5 
+  },
+  { 
+    name: 'Hamza Tariq', 
+    role: 'Pizza Restaurant Owner, Islamabad', 
+    content: 'Perfect pressure consistency for baking ovens.', 
+    rating: 5 
+  },
+  { 
+    name: 'Aqsa Mahmood', 
+    role: 'Homemaker, Hyderabad', 
+    content: 'Ordered on WhatsApp and got delivery in 90 mins.', 
+    rating: 5 
+  },
+  { 
+    name: 'Tahira Parveen', 
+    role: 'Homemaker, Okara', 
+    content: 'Extremely safe cylinders and helpful delivery boys.', 
+    rating: 5 
+  },
+  { 
+    name: 'Danish Mirza', 
+    role: 'Biryani Restaurant Owner, Karachi', 
+    content: 'Making biryani for 1000 people daily requires serious gas. Flamora 44.5KG cylinders handle the load easily without drops in pressure.', 
+    rating: 5 
+  },
+  { 
+    name: 'Saima Naz', 
+    role: 'Homemaker, Mingora', 
+    content: 'Service is good. Sometimes in extreme snow it takes a bit longer, but they are the only ones who deliver to our doorstep in Mingora.', 
+    rating: 4 
+  },
+  { 
+    name: 'Amir Sohail', 
+    role: 'Ceramics Factory Owner, Gujrat', 
+    content: 'Our kilns need precise temperature control. Flamora premium LPG delivers exactly that. Highly professional team.', 
+    rating: 5 
+  },
+  { 
+    name: 'Raza Khan', 
+    role: 'Trucking Company Owner, Quetta', 
+    content: 'Very satisfied with their commercial supply in Quetta.', 
+    rating: 5 
+  },
 ];
 
 /* ─── Stats ─── */
