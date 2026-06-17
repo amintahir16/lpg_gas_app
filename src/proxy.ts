@@ -16,7 +16,11 @@ const routePermissions = {
         '/blog',
         '/contact',
         '/api/public',
-        '/api/admin/cron'
+        '/api/admin/cron',
+        '/robots.txt',
+        '/sitemap.xml',
+        '/logo.png',
+        '/logo.webp'
     ],
 
     // Pages / routes accessible to ADMIN and SUPER_ADMIN.
@@ -274,6 +278,6 @@ export const config = {
          * - favicon.ico (favicon file)
          * - public folder
          */
-        '/((?!_next/static|_next/image|favicon.ico|public/|images/).*)',
+        '/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|logo.png|logo.webp|public/|images/).*)',
     ],
 };
