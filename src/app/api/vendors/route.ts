@@ -5,9 +5,9 @@ import { prisma } from '@/lib/db';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 // GET all vendors or filter by category
-// NOTE: Vendor entities are GLOBAL (shared across regions); however the
-// purchase_entries / payments aggregates returned here are region-scoped so
-// totals reflect activity in the currently-selected region only.
+// NOTE: Vendor entities are REGION-SCOPED — each region (branch) owns its own
+// vendors. The purchase_entries / payments aggregates are also region-scoped
+// so totals reflect activity in the currently-selected region only.
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
 
     const where: any = {
       isActive: true,
+      ...regionScope,
     };
 
     if (categoryId) {
@@ -32,7 +33,6 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
         { companyName: { contains: search, mode: 'insensitive' } },
         { vendorCode: { contains: search, mode: 'insensitive' } },
       ];
@@ -104,6 +104,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const regionId = getActiveRegionId(request);
+
     const body = await request.json();
     const { name, categoryId, contactPerson, phone, email, address } = body;
 
@@ -114,9 +116,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate vendor code
+    // Generate vendor code (codes stay globally unique across regions).
+    // Loop guards against collisions left behind by per-region duplication.
     const count = await prisma.vendor.count();
-    const vendorCode = `VND-${String(count + 1).padStart(5, '0')}`;
+    let vendorCode = '';
+    for (let next = count + 1; ; next++) {
+      vendorCode = `VND-${String(next).padStart(5, '0')}`;
+      const taken = await prisma.vendor.findUnique({
+        where: { vendorCode },
+        select: { id: true }
+      });
+      if (!taken) break;
+    }
 
     const vendor = await prisma.vendor.create({
       data: {
@@ -126,7 +137,8 @@ export async function POST(request: NextRequest) {
         contactPerson,
         phone,
         email,
-        address
+        address,
+        ...(regionId ? { regionId } : {})
       },
       include: {
         category: true
@@ -163,7 +175,6 @@ export async function PUT(request: NextRequest) {
 
     const updateData: any = {};
     if (name !== undefined) {
-      updateData.name = name;
       updateData.companyName = name;
     }
     if (contactPerson !== undefined) updateData.contactPerson = contactPerson;

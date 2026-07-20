@@ -129,7 +129,7 @@ export async function PUT(
     const updatedVendor = await prisma.vendor.update({
       where: { id },
       data: {
-        name: name.trim(),
+        companyName: name.trim(),
         contactPerson: contactPerson?.trim() || null,
         phone: phone?.trim() || null,
         email: email?.trim() || null,

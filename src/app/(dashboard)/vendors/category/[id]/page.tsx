@@ -84,7 +84,14 @@ export default function CategoryVendorsPage() {
       if (!response.ok) throw new Error('Failed to fetch category');
       const data = await response.json();
       const cat = data.categories.find((c: Category) => c.id === categoryId);
-      setCategory(cat || null);
+      if (!cat) {
+        // Categories are region-scoped: this id belongs to another region
+        // (e.g. stale URL from history after a branch switch). Send the user
+        // to the vendors hub so they see the active region's own categories.
+        router.replace('/vendors');
+        return;
+      }
+      setCategory(cat);
     } catch (error) {
       console.error('Error fetching category:', error);
     }

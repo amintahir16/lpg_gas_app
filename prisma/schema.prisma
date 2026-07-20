@@ -233,16 +233,21 @@ model DailyPlantPrice {
 
 model VendorCategoryConfig {
   id          String   @id @default(cuid())
-  name        String   @unique
-  slug        String   @unique
+  name        String
+  slug        String
   description String?
   icon        String?
   sortOrder   Int      @default(0)
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  regionId    String?
+  region      Region?  @relation(fields: [regionId], references: [id])
   vendors     Vendor[]
 
+  @@unique([regionId, name])
+  @@unique([regionId, slug])
+  @@index([regionId])
   @@map("vendor_category_configs")
 }
 
@@ -342,6 +347,8 @@ model Vendor {
   createdAt        DateTime                @default(now())
   updatedAt        DateTime                @updatedAt
   categoryId       String?
+  regionId         String?
+  region           Region?                 @relation(fields: [regionId], references: [id])
   invoices         Invoice[]
   purchase_entries PurchaseEntry[]
   bankDetails      VendorBankDetails[]
@@ -352,6 +359,7 @@ model Vendor {
   supportRequests  VendorSupportRequest[]
   category         VendorCategoryConfig?   @relation(fields: [categoryId], references: [id])
 
+  @@index([regionId])
   @@map("vendors")
 }
 
@@ -1070,6 +1078,8 @@ model Region {
   vendorOrders           VendorOrder[]
   vendorInventories      VendorInventory[]
   vendorFinancialReports VendorFinancialReport[]
+  vendors                Vendor[]
+  vendorCategoryConfigs  VendorCategoryConfig[]
   b2bTransactions        B2BTransaction[]
   b2cTransactions        B2CTransaction[]
   notifications          Notification[]

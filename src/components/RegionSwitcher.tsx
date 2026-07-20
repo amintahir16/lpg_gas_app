@@ -130,7 +130,21 @@ export function RegionSwitcher() {
         // on a soft `router.refresh()`. Reloading guarantees every page picks
         // up the new region cookie and refetches with it.
         if (typeof window !== 'undefined') {
-          window.location.reload();
+          // Vendors and their categories are region-scoped, so the IDs in
+          // /vendors/category/<id> and /vendors/<id> belong to the region we
+          // are leaving. Reloading those URLs under the new region would show
+          // "no vendors" / "not found" — go back to the vendors hub instead,
+          // which lists the new region's own categories.
+          const path = window.location.pathname;
+          const isVendorIdRoute =
+            /^\/vendors\/.+/.test(path) &&
+            path !== '/vendors/credits' &&
+            path !== '/vendors/debug';
+          if (isVendorIdRoute) {
+            window.location.href = '/vendors';
+          } else {
+            window.location.reload();
+          }
         }
       } else {
         setSwitching(false);

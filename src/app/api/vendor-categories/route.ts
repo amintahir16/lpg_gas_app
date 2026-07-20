@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 
 // GET all vendor categories
+// NOTE: Vendor categories are REGION-SCOPED — each region (branch) owns its
+// own set of categories. Requests are filtered by the active region cookie.
 export async function GET(request: NextRequest) {
   try {
     console.log('🔍 API called: GET /api/vendor-categories');
@@ -23,8 +26,10 @@ export async function GET(request: NextRequest) {
 
     console.log('✅ User authenticated, fetching categories...');
 
+    const regionId = getActiveRegionId(request);
+
     const categories = await prisma.vendorCategoryConfig.findMany({
-      where: { isActive: true },
+      where: { isActive: true, ...regionScopedWhere(regionId) },
       include: {
         vendors: {
           where: { isActive: true },
@@ -48,7 +53,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('❌ Error fetching vendor categories:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch categories', details: error.message },
+      { error: 'Failed to fetch categories', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }
@@ -63,7 +68,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, description, icon } = body;
+    const { description, icon } = body;
+    const name = typeof body.name === 'string' ? body.name.trim() : body.name;
 
     if (!name) {
       return NextResponse.json(
@@ -72,16 +78,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate slug from name
+    const regionId = getActiveRegionId(request);
+
+    // Generate slug from name (trimmed, so no trailing underscores)
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
 
-    // Check if category already exists
+    // Check if category already exists within the active region
     const existing = await prisma.vendorCategoryConfig.findFirst({
       where: {
         OR: [
           { name },
           { slug }
-        ]
+        ],
+        ...regionScopedWhere(regionId)
       }
     });
 
@@ -92,8 +101,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get max sort order
+    // Get max sort order within the active region
     const maxSort = await prisma.vendorCategoryConfig.findFirst({
+      where: regionScopedWhere(regionId),
       orderBy: { sortOrder: 'desc' },
       select: { sortOrder: true }
     });
@@ -104,7 +114,8 @@ export async function POST(request: NextRequest) {
         slug,
         description,
         icon,
-        sortOrder: (maxSort?.sortOrder || 0) + 1
+        sortOrder: (maxSort?.sortOrder || 0) + 1,
+        ...(regionId ? { regionId } : {})
       }
     });
 
@@ -138,8 +149,9 @@ export async function PUT(request: NextRequest) {
 
     const updateData: any = {};
     if (name !== undefined) {
-      updateData.name = name;
-      updateData.slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+      const trimmedName = typeof name === 'string' ? name.trim() : name;
+      updateData.name = trimmedName;
+      updateData.slug = trimmedName.toLowerCase().replace(/[^a-z0-9]+/g, '_');
     }
     if (description !== undefined) updateData.description = description;
     if (icon !== undefined) updateData.icon = icon;

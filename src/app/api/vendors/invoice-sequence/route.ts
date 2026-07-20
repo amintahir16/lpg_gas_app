@@ -21,19 +21,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create category-specific prefixes
-    const categoryPrefixes: Record<string, string> = {
-      'cylinder_purchase': 'CYL',
-      'gas_purchase': 'GAS',
-      'vaporizer_purchase': 'VAP',
-      'accessories_purchase': 'ACC',
-      'valves_purchase': 'VAL'
+    // Map the category slug to a valid VendorCategory enum value. Slugs can
+    // contain extra characters (e.g. "cylinder_purchase_" from a category name
+    // with a trailing space), so match loosely — same logic as the purchase
+    // creation route.
+    const getCategoryEnum = (slug: string): string => {
+      const slugLower = slug.toLowerCase();
+      if (slugLower.includes('cylinder')) return 'CYLINDER_PURCHASE';
+      if (slugLower.includes('gas')) return 'GAS_PURCHASE';
+      if (slugLower.includes('vaporizer')) return 'VAPORIZER_PURCHASE';
+      if (slugLower.includes('accessories')) return 'ACCESSORIES_PURCHASE';
+      if (slugLower.includes('valve')) return 'VALVES_PURCHASE';
+      return 'GAS_PURCHASE'; // Default fallback
     };
 
-    const prefix = categoryPrefixes[categorySlug as string] || 'VEN';
+    const categoryEnumStr = getCategoryEnum(categorySlug as string);
 
-    // Map categorySlug to VendorCategory enum string
-    const categoryEnumStr = (categorySlug as string).toUpperCase();
+    // Category-specific invoice prefixes, keyed by the resolved enum so
+    // imperfect slugs still get the right prefix.
+    const categoryPrefixes: Record<string, string> = {
+      CYLINDER_PURCHASE: 'CYL',
+      GAS_PURCHASE: 'GAS',
+      VAPORIZER_PURCHASE: 'VAP',
+      ACCESSORIES_PURCHASE: 'ACC',
+      VALVES_PURCHASE: 'VAL'
+    };
+
+    const prefix = categoryPrefixes[categoryEnumStr] || 'VEN';
 
     const regionId = getActiveRegionId(request);
 
