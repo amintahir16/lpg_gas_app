@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { getActiveRegionId, regionScopedWhere, belongsToActiveRegion } from '@/lib/region';
 
 // GET all vendors or filter by category
 // NOTE: Vendor entities are REGION-SCOPED — each region (branch) owns its own
@@ -116,6 +116,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // The category must exist and belong to the active region — otherwise a
+    // crafted request could attach a vendor to another region's category.
+    const category = await prisma.vendorCategoryConfig.findUnique({
+      where: { id: categoryId },
+      select: { regionId: true }
+    });
+    if (!category || !belongsToActiveRegion(category.regionId, regionId)) {
+      return NextResponse.json(
+        { error: 'Category not found in the active region' },
+        { status: 400 }
+      );
+    }
+
     // Generate vendor code (codes stay globally unique across regions).
     // Loop guards against collisions left behind by per-region duplication.
     const count = await prisma.vendor.count();
@@ -173,6 +186,15 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    const regionId = getActiveRegionId(request);
+    const existing = await prisma.vendor.findUnique({
+      where: { id },
+      select: { regionId: true }
+    });
+    if (!existing || !belongsToActiveRegion(existing.regionId, regionId)) {
+      return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
+    }
+
     const updateData: any = {};
     if (name !== undefined) {
       updateData.companyName = name;
@@ -217,6 +239,15 @@ export async function DELETE(request: NextRequest) {
         { error: 'Vendor ID is required' },
         { status: 400 }
       );
+    }
+
+    const regionId = getActiveRegionId(request);
+    const existing = await prisma.vendor.findUnique({
+      where: { id },
+      select: { regionId: true }
+    });
+    if (!existing || !belongsToActiveRegion(existing.regionId, regionId)) {
+      return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
     }
 
     // Soft delete

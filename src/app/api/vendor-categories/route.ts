@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { getActiveRegionId, regionScopedWhere, belongsToActiveRegion } from '@/lib/region';
 
 // GET all vendor categories
 // NOTE: Vendor categories are REGION-SCOPED — each region (branch) owns its
@@ -147,6 +147,15 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    const regionId = getActiveRegionId(request);
+    const existing = await prisma.vendorCategoryConfig.findUnique({
+      where: { id },
+      select: { regionId: true }
+    });
+    if (!existing || !belongsToActiveRegion(existing.regionId, regionId)) {
+      return NextResponse.json({ error: 'Category not found' }, { status: 404 });
+    }
+
     const updateData: any = {};
     if (name !== undefined) {
       const trimmedName = typeof name === 'string' ? name.trim() : name;
@@ -189,6 +198,15 @@ export async function DELETE(request: NextRequest) {
         { error: 'Category ID is required' },
         { status: 400 }
       );
+    }
+
+    const regionId = getActiveRegionId(request);
+    const existing = await prisma.vendorCategoryConfig.findUnique({
+      where: { id },
+      select: { regionId: true }
+    });
+    if (!existing || !belongsToActiveRegion(existing.regionId, regionId)) {
+      return NextResponse.json({ error: 'Category not found' }, { status: 404 });
     }
 
     // Check if category has vendors

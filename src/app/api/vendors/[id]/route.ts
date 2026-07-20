@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { getActiveRegionId, regionScopedWhere, belongsToActiveRegion } from '@/lib/region';
 
 export async function GET(
   request: NextRequest,
@@ -39,7 +39,7 @@ export async function GET(
       }
     });
 
-    if (!vendor) {
+    if (!vendor || !belongsToActiveRegion(vendor.regionId, regionId)) {
       return NextResponse.json(
         { error: 'Vendor not found' },
         { status: 404 }
@@ -113,12 +113,13 @@ export async function PUT(
       );
     }
 
-    // Check if vendor exists
+    // Check if vendor exists and belongs to the active region
+    const regionId = getActiveRegionId(request);
     const existingVendor = await prisma.vendor.findUnique({
       where: { id }
     });
 
-    if (!existingVendor) {
+    if (!existingVendor || !belongsToActiveRegion(existingVendor.regionId, regionId)) {
       return NextResponse.json(
         { error: 'Vendor not found' },
         { status: 404 }

@@ -144,6 +144,23 @@ export function withRegionScope<T extends Record<string, unknown>>(
   return { ...data, regionId };
 }
 
+/**
+ * Region-ownership guard for reads/writes on region-scoped records fetched by id.
+ *
+ * Returns true when the record may be accessed under the active region:
+ * - no active region selected (region-agnostic context) → allow
+ * - record has no region (legacy row) → allow
+ * - otherwise the record's region must match the active region.
+ */
+export function belongsToActiveRegion(
+  recordRegionId: string | null | undefined,
+  activeRegionId: string | null | undefined
+): boolean {
+  if (!activeRegionId) return true;
+  if (!recordRegionId) return true;
+  return recordRegionId === activeRegionId;
+}
+
 export type ApiUserContext = {
   userId: string;
   userRole: 'USER' | 'ADMIN' | 'SUPER_ADMIN' | 'VENDOR' | string;
