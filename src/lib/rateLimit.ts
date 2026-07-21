@@ -133,6 +133,5 @@ if (typeof setInterval !== 'undefined') {
     }
   }, PRUNE_INTERVAL_MS);
   // Allow the process to exit even with the timer pending.
-  // @ts-expect-error - unref exists in Node but not in DOM types
   if (typeof timer.unref === 'function') timer.unref();
 }

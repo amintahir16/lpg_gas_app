@@ -31,8 +31,10 @@ import {
   CalendarIcon,
   FunnelIcon,
   XMarkIcon,
-  PlusIcon
+  PlusIcon,
+  ShareIcon
 } from '@heroicons/react/24/outline';
+import { sharePdfFromUrl } from '@/lib/sharePdf';
 
 interface B2BCustomer {
   id: string;
@@ -154,6 +156,8 @@ export default function B2BCustomerDetailPage() {
   });
   const [showReportDateFilter, setShowReportDateFilter] = useState(false);
   const [downloadingReport, setDownloadingReport] = useState(false);
+  const [sharingReport, setSharingReport] = useState(false);
+  const [sharingTransaction, setSharingTransaction] = useState(false);
 
   // Transaction form states
   const [showTransactionForm, setShowTransactionForm] = useState(false);
@@ -521,6 +525,65 @@ export default function B2BCustomerDetailPage() {
       alert('Failed to download transaction report. Please try again.');
     } finally {
       setDownloadingReport(false);
+    }
+  };
+
+  // Shares the same date-range report PDF via the native share sheet
+  // (WhatsApp, Email, ...). Falls back to downloading on unsupported browsers.
+  const handleShareReport = async () => {
+    if (!customer) return;
+
+    setSharingReport(true);
+    try {
+      const params = new URLSearchParams();
+      if (reportDateFilter.startDate) {
+        params.append('startDate', reportDateFilter.startDate);
+      }
+      if (reportDateFilter.endDate) {
+        params.append('endDate', reportDateFilter.endDate);
+      }
+
+      const result = await sharePdfFromUrl({
+        url: `/api/customers/b2b/${customerId}/report?${params.toString()}`,
+        fileName: `B2B-Transaction-Report-${customer.name}-${new Date().toISOString().split('T')[0]}.pdf`,
+        title: `Transaction Report - ${customer.name}`,
+        text: `Transaction report for ${customer.name}`
+      });
+
+      if (result === 'shared') {
+        setShowReportDateFilter(false);
+      } else if (result === 'downloaded') {
+        alert('Sharing is not supported on this browser, so the PDF was downloaded instead — you can attach it manually.');
+        setShowReportDateFilter(false);
+      }
+    } catch (error) {
+      console.error('Error sharing report:', error);
+      alert('Failed to share transaction report. Please try again.');
+    } finally {
+      setSharingReport(false);
+    }
+  };
+
+  const handleShareTransaction = async () => {
+    if (!selectedTransaction) return;
+
+    setSharingTransaction(true);
+    try {
+      const result = await sharePdfFromUrl({
+        url: `/api/customers/b2b/transactions/${selectedTransaction.id}/report`,
+        fileName: `Transaction-${selectedTransaction.billSno}.pdf`,
+        title: `Transaction ${selectedTransaction.billSno}`,
+        text: `Transaction receipt ${selectedTransaction.billSno}${customer ? ` - ${customer.name}` : ''}`
+      });
+
+      if (result === 'downloaded') {
+        alert('Sharing is not supported on this browser, so the PDF was downloaded instead — you can attach it manually.');
+      }
+    } catch (error) {
+      console.error('Error sharing transaction:', error);
+      alert('Failed to share transaction report. Please try again.');
+    } finally {
+      setSharingTransaction(false);
     }
   };
 
@@ -2915,9 +2978,23 @@ export default function B2BCustomerDetailPage() {
                           Clear
                         </Button>
                         <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleShareReport}
+                          disabled={sharingReport || downloadingReport}
+                          className="px-3 text-xs"
+                          title="Share report PDF (WhatsApp, Email, ...)"
+                        >
+                          {sharingReport ? (
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600"></div>
+                          ) : (
+                            <ShareIcon className="w-4 h-4" />
+                          )}
+                        </Button>
+                        <Button
                           size="sm"
                           onClick={handleDownloadReport}
-                          disabled={downloadingReport}
+                          disabled={downloadingReport || sharingReport}
                           className="flex-1 text-xs"
                         >
                           {downloadingReport ? (
@@ -3395,12 +3472,12 @@ export default function B2BCustomerDetailPage() {
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
           <div className="relative top-10 mx-auto p-5 border w-11/12 max-w-5xl shadow-lg rounded-md bg-white">
             <div className="mt-3">
-              {/* Header with buttons */}
-              <div className="flex items-center justify-between mb-4">
+              {/* Header with buttons — on mobile the actions stack above the title */}
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">
                   Transaction Details - {selectedTransaction.billSno}
                 </h3>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Button
                     variant="outline"
                     size="sm"
@@ -3429,6 +3506,20 @@ export default function B2BCustomerDetailPage() {
                   >
                     <DocumentArrowDownIcon className="w-4 h-4" />
                     Download Transaction
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleShareTransaction}
+                    disabled={sharingTransaction}
+                    className="flex items-center gap-2"
+                    title="Share transaction PDF (WhatsApp, Email, ...)"
+                  >
+                    {sharingTransaction ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                    ) : (
+                      <ShareIcon className="w-4 h-4" />
+                    )}
                   </Button>
                   <Button
                     variant="outline"

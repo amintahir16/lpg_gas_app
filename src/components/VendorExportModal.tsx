@@ -4,9 +4,10 @@ import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { XMarkIcon, DocumentArrowDownIcon, CalendarIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, DocumentArrowDownIcon, CalendarIcon, ShareIcon } from '@heroicons/react/24/outline';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { sharePdfBlob } from '@/lib/sharePdf';
 
 interface VendorExportModalProps {
   isOpen: boolean;
@@ -31,6 +32,7 @@ export default function VendorExportModal({
   const [endDate, setEndDate] = useState('');
   const [exportType, setExportType] = useState<'purchases' | 'payments' | 'both'>('both');
   const [loading, setLoading] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [allPayments, setAllPayments] = useState<any[]>([]);
   const [allPurchases, setAllPurchases] = useState<any[]>([]);
   const [vendorCategorySlug, setVendorCategorySlug] = useState<string | null>(null);
@@ -155,8 +157,11 @@ export default function VendorExportModal({
     };
   };
 
-  const generatePDF = async () => {
-    setLoading(true);
+  // Builds the PDF, then either saves it (download) or opens the native share
+  // sheet (WhatsApp, Email, ...) with the same file attached.
+  const generatePDF = async (mode: 'download' | 'share' = 'download') => {
+    const setBusy = mode === 'share' ? setSharing : setLoading;
+    setBusy(true);
 
     try {
       const { purchases, payments } = getExportData();
@@ -175,13 +180,11 @@ export default function VendorExportModal({
 
       if (hasPurchases && purchases.length === 0) {
         alert('No purchase entries found for the selected date range.');
-        setLoading(false);
         return;
       }
 
       if (hasPayments && payments.length === 0) {
         alert('No payment history found for the selected date range.');
-        setLoading(false);
         return;
       }
       const doc = new jsPDF();
@@ -585,21 +588,37 @@ export default function VendorExportModal({
         doc.text('Contact No: 03339109535', pageWidth / 2, footerY + 16, { align: 'center' });
       }
 
-      // Save PDF
+      // Save or share the PDF
       const fileName = `${vendorName.replace(/\s+/g, '_')}_Report_${new Date().toISOString().split('T')[0]}.pdf`;
-      doc.save(fileName);
+      if (mode === 'share') {
+        const result = await sharePdfBlob({
+          blob: doc.output('blob'),
+          fileName,
+          title: `Vendor Report - ${vendorName}`,
+          text: `Vendor financial report for ${vendorName}`
+        });
+        if (result === 'downloaded') {
+          alert('Sharing is not supported on this browser, so the PDF was downloaded instead — you can attach it manually.');
+        }
+      } else {
+        doc.save(fileName);
+      }
 
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('Error generating PDF. Please try again.');
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   };
 
 
   const handleExport = async () => {
-    await generatePDF();
+    await generatePDF('download');
+  };
+
+  const handleShare = async () => {
+    await generatePDF('share');
   };
 
   return (
@@ -702,7 +721,7 @@ export default function VendorExportModal({
               type="button"
               variant="outline"
               onClick={onClose}
-              disabled={loading}
+              disabled={loading || sharing}
               className="flex-1 h-9 border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50 text-gray-700 font-semibold"
             >
               <XMarkIcon className="h-5 w-5 mr-2" />
@@ -710,8 +729,22 @@ export default function VendorExportModal({
             </Button>
             <Button
               type="button"
+              variant="outline"
+              onClick={handleShare}
+              disabled={loading || sharing}
+              className="h-9 px-5 border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50 text-gray-700 font-semibold"
+              title="Share report PDF (WhatsApp, Email, ...)"
+            >
+              {sharing ? (
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600" />
+              ) : (
+                <ShareIcon className="h-5 w-5" />
+              )}
+            </Button>
+            <Button
+              type="button"
               onClick={handleExport}
-              disabled={loading}
+              disabled={loading || sharing}
               className="flex-1 h-9 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold shadow-lg hover:shadow-xl transition-all duration-200"
             >
               {loading ? (
