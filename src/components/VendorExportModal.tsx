@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { XMarkIcon, DocumentArrowDownIcon, CalendarIcon, ShareIcon } from '@heroicons/react/24/outline';
+import { DocumentArrowDownIcon, CalendarIcon, ShareIcon } from '@heroicons/react/24/outline';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { sharePdfBlob, downloadPdfBlob } from '@/lib/sharePdf';
@@ -718,16 +718,6 @@ export default function VendorExportModal({
             <Button
               type="button"
               variant="outline"
-              onClick={onClose}
-              disabled={loading || sharing}
-              className="flex-1 h-9 border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50 text-gray-700 font-semibold"
-            >
-              <XMarkIcon className="h-5 w-5 mr-2" />
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
               onClick={handleShare}
               disabled={loading || sharing}
               className="h-9 px-5 border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50 text-gray-700 font-semibold"
@@ -748,12 +738,12 @@ export default function VendorExportModal({
               {loading ? (
                 <>
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2" />
-                  Generating...
+                  Downloading...
                 </>
               ) : (
                 <>
                   <DocumentArrowDownIcon className="h-5 w-5 mr-2" />
-                  Generate PDF Report
+                  Download
                 </>
               )}
             </Button>
