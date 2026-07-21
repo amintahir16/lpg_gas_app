@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { XMarkIcon, DocumentArrowDownIcon, CalendarIcon, ShareIcon } from '@heroicons/react/24/outline';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { sharePdfBlob } from '@/lib/sharePdf';
+import { sharePdfBlob, downloadPdfBlob } from '@/lib/sharePdf';
 
 interface VendorExportModalProps {
   isOpen: boolean;
@@ -588,20 +588,18 @@ export default function VendorExportModal({
         doc.text('Contact No: 03339109535', pageWidth / 2, footerY + 16, { align: 'center' });
       }
 
-      // Save or share the PDF
+      // Same PDF bytes as before — deliver via native share/save on APK, web download/share in browser
       const fileName = `${vendorName.replace(/\s+/g, '_')}_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+      const pdfBlob = doc.output('blob');
       if (mode === 'share') {
-        const result = await sharePdfBlob({
-          blob: doc.output('blob'),
+        await sharePdfBlob({
+          blob: pdfBlob,
           fileName,
           title: `Vendor Report - ${vendorName}`,
-          text: `Vendor financial report for ${vendorName}`
+          text: `Vendor financial report for ${vendorName}`,
         });
-        if (result === 'downloaded') {
-          alert('Sharing is not supported on this browser, so the PDF was downloaded instead — you can attach it manually.');
-        }
       } else {
-        doc.save(fileName);
+        await downloadPdfBlob(pdfBlob, fileName);
       }
 
     } catch (error) {

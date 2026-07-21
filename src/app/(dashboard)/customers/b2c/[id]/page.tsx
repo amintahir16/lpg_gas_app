@@ -269,7 +269,7 @@ export default function B2CCustomerDetailPage() {
       }
 
       const blob = await response.blob();
-      downloadPdfBlob(blob, `B2C-Transaction-Report-${customer.name}-${new Date().toISOString().split('T')[0]}.pdf`);
+      await downloadPdfBlob(blob, `B2C-Transaction-Report-${customer.name}-${new Date().toISOString().split('T')[0]}.pdf`);
 
       setShowReportDateFilter(false);
     } catch (error) {
@@ -298,10 +298,7 @@ export default function B2CCustomerDetailPage() {
         text: `Transaction report for ${customer.name}`
       });
 
-      if (result === 'shared') {
-        setShowReportDateFilter(false);
-      } else if (result === 'downloaded') {
-        alert('Sharing is not supported on this browser, so the PDF was downloaded instead — you can attach it manually.');
+      if (result === 'shared' || result === 'downloaded') {
         setShowReportDateFilter(false);
       }
     } catch (error) {
@@ -317,16 +314,12 @@ export default function B2CCustomerDetailPage() {
 
     setSharingTransaction(true);
     try {
-      const result = await sharePdfFromUrl({
+      await sharePdfFromUrl({
         url: `/api/customers/b2c/transactions/${selectedTransaction.id}/report`,
         fileName: `Transaction-${selectedTransaction.billSno}.pdf`,
         title: `Transaction ${selectedTransaction.billSno}`,
         text: `Transaction receipt ${selectedTransaction.billSno}${customer ? ` - ${customer.name}` : ''}`
       });
-
-      if (result === 'downloaded') {
-        alert('Sharing is not supported on this browser, so the PDF was downloaded instead — you can attach it manually.');
-      }
     } catch (error) {
       console.error('Error sharing transaction:', error);
       alert('Failed to share transaction report. Please try again.');
@@ -866,7 +859,7 @@ export default function B2CCustomerDetailPage() {
                       const response = await fetch(`/api/customers/b2c/transactions/${selectedTransaction.id}/report`);
                       if (response.ok) {
                         const blob = await response.blob();
-                        downloadPdfBlob(blob, `Transaction-${selectedTransaction.billSno}.pdf`);
+                        await downloadPdfBlob(blob, `Transaction-${selectedTransaction.billSno}.pdf`);
                       } else {
                         alert('Failed to download receipt');
                       }
