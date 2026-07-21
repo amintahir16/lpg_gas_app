@@ -26,7 +26,7 @@ import {
   ArrowPathIcon,
   ShareIcon
 } from '@heroicons/react/24/outline';
-import { sharePdfFromUrl } from '@/lib/sharePdf';
+import { sharePdfFromUrl, downloadPdfBlob } from '@/lib/sharePdf';
 
 function b2cDetailHoldingKey(h: { cylinderType: string; cylinderVariantKey?: string | null }) {
   if (h.cylinderVariantKey?.trim()) return h.cylinderVariantKey.trim();
@@ -269,14 +269,7 @@ export default function B2CCustomerDetailPage() {
       }
 
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `B2C-Transaction-Report-${customer.name}-${new Date().toISOString().split('T')[0]}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      downloadPdfBlob(blob, `B2C-Transaction-Report-${customer.name}-${new Date().toISOString().split('T')[0]}.pdf`);
 
       setShowReportDateFilter(false);
     } catch (error) {
@@ -873,14 +866,7 @@ export default function B2CCustomerDetailPage() {
                       const response = await fetch(`/api/customers/b2c/transactions/${selectedTransaction.id}/report`);
                       if (response.ok) {
                         const blob = await response.blob();
-                        const url = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `Transaction-${selectedTransaction.billSno}.pdf`;
-                        document.body.appendChild(a);
-                        a.click();
-                        window.URL.revokeObjectURL(url);
-                        document.body.removeChild(a);
+                        downloadPdfBlob(blob, `Transaction-${selectedTransaction.billSno}.pdf`);
                       } else {
                         alert('Failed to download receipt');
                       }

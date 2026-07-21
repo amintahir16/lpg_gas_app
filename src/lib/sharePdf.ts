@@ -26,15 +26,24 @@ export interface SharePdfOptions {
   text?: string;
 }
 
-function triggerDownload(blob: Blob, fileName: string): void {
+/**
+ * Download a blob as a file, mobile-safe.
+ *
+ * IMPORTANT: the object URL must NOT be revoked synchronously after click().
+ * Mobile browsers (iOS Safari, Chrome Android) start the download
+ * asynchronously, and revoking immediately aborts it silently. Revoke on a
+ * delay instead.
+ */
+export function downloadPdfBlob(blob: Blob, fileName: string): void {
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = fileName;
+  a.rel = 'noopener';
   document.body.appendChild(a);
   a.click();
-  window.URL.revokeObjectURL(url);
   document.body.removeChild(a);
+  setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
 }
 
 export interface SharePdfBlobOptions {
@@ -65,13 +74,13 @@ export async function sharePdfBlob(options: SharePdfBlobOptions): Promise<ShareP
         return 'cancelled';
       }
       // Share sheet failed (e.g. lost user-gesture window) — fall back to download.
-      triggerDownload(blob, fileName);
+      downloadPdfBlob(blob, fileName);
       return 'downloaded';
     }
   }
 
   // Browser cannot share files — download instead so the user can attach it manually.
-  triggerDownload(blob, fileName);
+  downloadPdfBlob(blob, fileName);
   return 'downloaded';
 }
 

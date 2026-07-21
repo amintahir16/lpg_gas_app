@@ -34,7 +34,7 @@ import {
   PlusIcon,
   ShareIcon
 } from '@heroicons/react/24/outline';
-import { sharePdfFromUrl } from '@/lib/sharePdf';
+import { sharePdfFromUrl, downloadPdfBlob } from '@/lib/sharePdf';
 
 interface B2BCustomer {
   id: string;
@@ -510,14 +510,7 @@ export default function B2BCustomerDetailPage() {
       }
 
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `B2B-Transaction-Report-${customer.name}-${new Date().toISOString().split('T')[0]}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      downloadPdfBlob(blob, `B2B-Transaction-Report-${customer.name}-${new Date().toISOString().split('T')[0]}.pdf`);
 
       setShowReportDateFilter(false);
     } catch (error) {
@@ -3486,14 +3479,7 @@ export default function B2BCustomerDetailPage() {
                         const response = await fetch(`/api/customers/b2b/transactions/${selectedTransaction.id}/report`);
                         if (response.ok) {
                           const blob = await response.blob();
-                          const url = window.URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = `Transaction-${selectedTransaction.billSno}.pdf`;
-                          document.body.appendChild(a);
-                          a.click();
-                          window.URL.revokeObjectURL(url);
-                          document.body.removeChild(a);
+                          downloadPdfBlob(blob, `Transaction-${selectedTransaction.billSno}.pdf`);
                         } else {
                           alert('Failed to download transaction report');
                         }
