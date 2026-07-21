@@ -284,11 +284,24 @@ export async function DELETE(
         // If they have created transactions, we might need to keep them or use cascade delete
         // For now, let's try to delete and handle error
         try {
-            await prisma.user.delete({
-                where: { id }
-            });
+            // Activity logs reference the user with a RESTRICT constraint and
+            // would block deletion — remove them together with the account.
+            // If the user has OTHER blocking records (purchases, expenses,
+            // invoices...), the transaction rolls back and we fall back to
+            // deactivation below, keeping the logs intact.
+            await prisma.$transaction([
+                prisma.activityLog.deleteMany({ where: { userId: id } }),
+                prisma.user.delete({ where: { id } }),
+            ]);
         } catch (error: any) {
-            if (error.code === 'P2003') { // Foreign key constraint failed
+            // Prisma reports FK violations as P2003, but Postgres RESTRICT
+            // violations (code 23001) surface as an "unknown" error without
+            // that code — detect both so the deactivation fallback works.
+            const message = typeof error?.message === 'string' ? error.message : '';
+            const isConstraintError =
+                error?.code === 'P2003' ||
+                /foreign key|RESTRICT|violates/i.test(message);
+            if (isConstraintError) {
                 // Fallback to deactivation if they have related data
                 await prisma.user.update({
                     where: { id },
