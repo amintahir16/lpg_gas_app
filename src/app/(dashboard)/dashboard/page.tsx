@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { CustomSelect } from '@/components/ui/select-custom';
 import {
   UsersIcon,
   CubeIcon,
@@ -38,7 +37,14 @@ import {
   Pie,
   Cell
 } from 'recharts';
-import { format, subDays, startOfMonth, endOfMonth } from 'date-fns';
+import {
+  buildFinancialPeriodQuery,
+  chartDescriptionForPeriod,
+  resolveFinancialPeriod,
+  todayLocalDate,
+  type FinancialPeriodMode,
+} from '@/lib/financial-period';
+import { FinancialPeriodFilter } from '@/components/FinancialPeriodFilter';
 
 interface RecentActivity {
   id: string;
@@ -62,6 +68,8 @@ interface DashboardStats {
     rangePayments: number;
     vendorBalance: number;
   };
+  period?: FinancialPeriodMode;
+  label?: string;
   revenueChartData: any[];
   expensesChartData: any[];
   cylinderStatusData: any[];
@@ -76,38 +84,29 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Date Filter State
-  const [dateRangeFilter, setDateRangeFilter] = useState('30days');
+  const [period, setPeriod] = useState<FinancialPeriodMode>('month');
+  const [date, setDate] = useState(todayLocalDate);
+  const [month, setMonth] = useState(new Date().getMonth() + 1);
+  const [year, setYear] = useState(new Date().getFullYear());
+
+  const periodLabel = useMemo(
+    () => resolveFinancialPeriod({ period, date, month, year }).label,
+    [period, date, month, year]
+  );
 
   useEffect(() => {
-    fetchDashboardStats(dateRangeFilter);
-  }, [dateRangeFilter]);
+    fetchDashboardStats();
+  }, [period, date, month, year]);
 
-  const fetchDashboardStats = async (filter: string) => {
+  const fetchDashboardStats = async () => {
     try {
       setLoading(true);
+      setError(null);
 
-      let startDateStr = '';
-      let endDateStr = new Date().toISOString();
-      const today = new Date();
-
-      if (filter === '7days') {
-        startDateStr = subDays(today, 7).toISOString();
-      } else if (filter === '30days') {
-        startDateStr = subDays(today, 30).toISOString();
-      } else if (filter === 'thisMonth') {
-        startDateStr = startOfMonth(today).toISOString();
-        endDateStr = endOfMonth(today).toISOString();
-      } else if (filter === '6months') {
-        startDateStr = subDays(today, 180).toISOString();
-      } else if (filter === 'allTime') {
-        startDateStr = new Date('2020-01-01').toISOString();
-      }
-
-      const params = new URLSearchParams();
-      if (startDateStr) params.append('startDate', startDateStr);
-      if (endDateStr) params.append('endDate', endDateStr);
-      params.append('_t', Date.now().toString()); // Cache buster
+      const params = new URLSearchParams(
+        buildFinancialPeriodQuery({ period, date, month, year })
+      );
+      params.append('_t', Date.now().toString());
 
       const response = await fetch(`/api/dashboard/stats?${params.toString()}`);
 
@@ -220,7 +219,7 @@ export default function DashboardPage() {
             <ExclamationTriangleIcon className="w-12 h-12 text-red-500 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Error Loading Dashboard</h3>
             <p className="text-gray-500 mb-6">{error}</p>
-            <Button onClick={() => fetchDashboardStats(dateRangeFilter)}>Try Again</Button>
+            <Button onClick={() => fetchDashboardStats()}>Try Again</Button>
           </CardContent>
         </Card>
       </div>
@@ -242,21 +241,19 @@ export default function DashboardPage() {
             Analytics and key metrics for selected period
           </p>
         </div>
-        <div className="flex items-center space-x-3">
-          <CustomSelect
-            value={dateRangeFilter}
-            onChange={(val) => setDateRangeFilter(val)}
-            options={[
-              { value: '7days', label: 'Last 7 Days' },
-              { value: '30days', label: 'Last 30 Days' },
-              { value: 'thisMonth', label: 'This Month' },
-              { value: '6months', label: 'Last 6 Months' },
-              { value: 'allTime', label: 'All Time' },
-            ]}
-            className="w-[160px]"
+        <div className="flex flex-wrap items-center gap-3">
+          <FinancialPeriodFilter
+            period={period}
+            date={date}
+            month={month}
+            year={year}
+            onPeriodChange={setPeriod}
+            onDateChange={setDate}
+            onMonthChange={setMonth}
+            onYearChange={setYear}
           />
           <Button
-            onClick={() => fetchDashboardStats(dateRangeFilter)}
+            onClick={() => fetchDashboardStats()}
             variant="outline"
             size="sm"
             className="h-9"
@@ -292,7 +289,7 @@ export default function DashboardPage() {
               <CardContent className="p-3 relative z-10">
                 <p className="text-xs font-medium text-emerald-100 mb-1 truncate">Period Revenue</p>
                 <h3 className="text-xl font-bold text-white truncate">{formatCurrency(stats.kpis.rangeRevenue)}</h3>
-                <p className="text-[10px] text-emerald-200 mt-1 truncate">Selected dates</p>
+                <p className="text-[10px] text-emerald-200 mt-1 truncate">{stats.label || periodLabel}</p>
               </CardContent>
             </Card>
 
@@ -371,7 +368,7 @@ export default function DashboardPage() {
         <Card className="border shadow-sm bg-white">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-bold text-gray-900">Revenue Trend (B2B vs B2C)</CardTitle>
-            <CardDescription className="text-xs">Visualizing revenue across sales channels over time.</CardDescription>
+            <CardDescription className="text-xs">{chartDescriptionForPeriod(period)}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-[260px] w-full">
@@ -410,7 +407,7 @@ export default function DashboardPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-bold text-gray-900">Expenses Trend</CardTitle>
             <CardDescription className="text-xs">
-              {'Office (blue) vs vehicle (amber). Daily totals for the selected period.'}
+              Office (blue) vs vehicle (amber) — {chartDescriptionForPeriod(period).toLowerCase()}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -556,6 +553,9 @@ export default function DashboardPage() {
             <ClockIcon className="w-4 h-4 mr-1.5 text-gray-500" />
             Recent Sales Activities
           </CardTitle>
+          <CardDescription className="text-xs">
+            Sales in {stats.label || periodLabel}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">

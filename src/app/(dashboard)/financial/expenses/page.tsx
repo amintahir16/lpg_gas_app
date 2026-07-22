@@ -1,17 +1,29 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
-    ArrowLeftIcon, BuildingOfficeIcon, PlusIcon, CalendarIcon,
+    ArrowLeftIcon, BuildingOfficeIcon, PlusIcon,
     PencilIcon, TrashIcon, CheckCircleIcon, XCircleIcon, TruckIcon
 } from '@heroicons/react/24/outline';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { CustomSelect } from '@/components/ui/select-custom';
+import {
+    PAYMENT_METHOD_OPTIONS,
+    formatPaymentMethodLabel,
+} from '@/lib/payment-methods';
+import {
+    buildFinancialPeriodQuery,
+    chartDescriptionForPeriod,
+    resolveFinancialPeriod,
+    todayLocalDate,
+    type FinancialPeriodMode,
+} from '@/lib/financial-period';
+import { FinancialPeriodFilter } from '@/components/FinancialPeriodFilter';
+
 interface OfficeExpense {
     id: string;
     type: string;
@@ -20,17 +32,26 @@ interface OfficeExpense {
     expenseDate: string;
     month?: number;
     year?: number;
+    paymentMethod?: string;
     createdAt: string;
 }
+
 const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
 ];
+
 export default function ExpensesPage() {
     const router = useRouter();
     const [expenses, setExpenses] = useState<OfficeExpense[]>([]);
     const [chartData, setChartData] = useState<any[]>([]);
     const [currentMonthRent, setCurrentMonthRent] = useState<OfficeExpense | null>(null);
+    const [summary, setSummary] = useState({
+        totalExpenses: 0,
+        dailyCount: 0,
+        vehicleTotal: 0,
+        rentAmount: 0,
+    });
     const [loading, setLoading] = useState(true);
     const [showRentModal, setShowRentModal] = useState(false);
     const [showDailyModal, setShowDailyModal] = useState(false);
@@ -39,20 +60,46 @@ export default function ExpensesPage() {
     const [editingExpense, setEditingExpense] = useState<OfficeExpense | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
-    const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, pages: 0 });
+    const [pagination, setPagination] = useState({ page: 1, limit: 100, total: 0, pages: 0 });
+    const [period, setPeriod] = useState<FinancialPeriodMode>('month');
+    const [date, setDate] = useState(todayLocalDate);
+    const [month, setMonth] = useState(new Date().getMonth() + 1);
+    const [year, setYear] = useState(new Date().getFullYear());
+    const [periodLabel, setPeriodLabel] = useState('');
+
+    const resolvedLabel = useMemo(
+        () => resolveFinancialPeriod({ period, date, month, year }).label,
+        [period, date, month, year]
+    );
+
+    useEffect(() => {
+        setPagination((p) => ({ ...p, page: 1 }));
+    }, [period, date, month, year]);
+
     useEffect(() => {
         fetchData();
-    }, [pagination.page]);
+    }, [pagination.page, period, date, month, year]);
+
     const fetchData = async () => {
         try {
             setLoading(true);
-            const res = await fetch(`/api/financial/expenses?page=${pagination.page}&limit=${pagination.limit}`);
+            const periodQuery = buildFinancialPeriodQuery({ period, date, month, year });
+            const res = await fetch(
+                `/api/financial/expenses?page=${pagination.page}&limit=${pagination.limit}&${periodQuery}`
+            );
             if (res.ok) {
                 const data = await res.json();
                 setExpenses(data.expenses || []);
                 setCurrentMonthRent(data.currentMonthRent);
                 setChartData(data.chartData || []);
-                setPagination(data.pagination);
+                setSummary(data.summary || {
+                    totalExpenses: 0,
+                    dailyCount: 0,
+                    vehicleTotal: 0,
+                    rentAmount: 0,
+                });
+                setPeriodLabel(data.label || resolvedLabel);
+                if (data.pagination) setPagination(data.pagination);
             }
         } catch (err) {
             console.error('Error:', err);
@@ -121,9 +168,8 @@ export default function ExpensesPage() {
     const rentExpenses = expenses.filter(e => e.type === 'RENT');
     const dailyExpenses = expenses.filter(e => e.type === 'DAILY');
     const vehicleExpenses = expenses.filter(e => e.type === 'VEHICLE');
-    const totalExpenses = expenses.reduce((s, e) => s + Number(e.amount), 0);
-    const vehicleTotal = vehicleExpenses.reduce((s, e) => s + Number(e.amount), 0);
-    const now = new Date();
+    const displayLabel = periodLabel || resolvedLabel;
+    const rentPaidInPeriod = summary.rentAmount > 0;
     return (
         <div className="space-y-6 max-w-[1200px] mx-auto">
             {/* Header */}
@@ -139,6 +185,16 @@ export default function ExpensesPage() {
                         <p className="text-sm text-gray-600">Manage office rent and daily expenses</p>
                     </div>
                 </div>
+                <FinancialPeriodFilter
+                    period={period}
+                    date={date}
+                    month={month}
+                    year={year}
+                    onPeriodChange={setPeriod}
+                    onDateChange={setDate}
+                    onMonthChange={setMonth}
+                    onYearChange={setYear}
+                />
             </div>
             {/* Error Display */}
             {error && (
@@ -153,35 +209,49 @@ export default function ExpensesPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card className="border-0 shadow-sm bg-gradient-to-br from-rose-500 to-orange-500">
                     <CardContent className="p-4">
-                        <p className="text-sm font-medium text-rose-100">Total Expenses (All Time)</p>
-                        <p className="text-2xl font-bold text-white">{formatCurrency(totalExpenses)}</p>
+                        <p className="text-sm font-medium text-rose-100">Total Expenses</p>
+                        <p className="text-2xl font-bold text-white">
+                            {loading ? '…' : formatCurrency(summary.totalExpenses)}
+                        </p>
+                        <p className="text-[10px] text-rose-200 mt-1 truncate">{displayLabel}</p>
                     </CardContent>
                 </Card>
                 <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-500 to-amber-600">
                     <CardContent className="p-4">
-                        <p className="text-sm font-medium text-amber-100">Current Month Rent</p>
+                        <p className="text-sm font-medium text-amber-100">Rent in Period</p>
                         <div className="flex items-center gap-2">
                             <p className="text-2xl font-bold text-white">
-                                {currentMonthRent ? formatCurrency(Number(currentMonthRent.amount)) : 'Not Paid'}
+                                {loading
+                                    ? '…'
+                                    : rentPaidInPeriod
+                                        ? formatCurrency(summary.rentAmount)
+                                        : 'Not Paid'}
                             </p>
-                            {currentMonthRent ? (
+                            {!loading && (rentPaidInPeriod ? (
                                 <CheckCircleIcon className="w-6 h-6 text-green-300" />
                             ) : (
                                 <XCircleIcon className="w-6 h-6 text-red-300" />
-                            )}
+                            ))}
                         </div>
+                        <p className="text-[10px] text-amber-200 mt-1 truncate">
+                            Calendar month: {currentMonthRent ? 'Paid' : 'Unpaid'}
+                        </p>
                     </CardContent>
                 </Card>
                 <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-500 to-blue-600">
                     <CardContent className="p-4">
                         <p className="text-sm font-medium text-blue-100">Daily Expenses Count</p>
-                        <p className="text-2xl font-bold text-white">{dailyExpenses.length}</p>
+                        <p className="text-2xl font-bold text-white">
+                            {loading ? '…' : summary.dailyCount}
+                        </p>
                     </CardContent>
                 </Card>
                 <Card className="border-0 shadow-sm bg-gradient-to-br from-teal-500 to-teal-600">
                     <CardContent className="p-4">
                         <p className="text-sm font-medium text-teal-100">Vehicle Expenses</p>
-                        <p className="text-2xl font-bold text-white">{formatCurrency(vehicleTotal)}</p>
+                        <p className="text-2xl font-bold text-white">
+                            {loading ? '…' : formatCurrency(summary.vehicleTotal)}
+                        </p>
                     </CardContent>
                 </Card>
             </div>
@@ -201,7 +271,7 @@ export default function ExpensesPage() {
             <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
                 <CardHeader>
                     <CardTitle className="text-lg">Office Rent</CardTitle>
-                    <CardDescription>Monthly office rent payments</CardDescription>
+                    <CardDescription>Monthly office rent payments — {displayLabel}</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {rentExpenses.length === 0 ? (
@@ -213,6 +283,7 @@ export default function ExpensesPage() {
                                     <TableRow className="bg-gray-50/50">
                                         <TableHead className="font-semibold">Month</TableHead>
                                         <TableHead className="font-semibold text-right">Amount</TableHead>
+                                        <TableHead className="font-semibold">Method</TableHead>
                                         <TableHead className="font-semibold">Description</TableHead>
                                         <TableHead className="font-semibold">Paid Date</TableHead>
                                         <TableHead className="font-semibold text-center">Actions</TableHead>
@@ -225,6 +296,7 @@ export default function ExpensesPage() {
                                                 {exp.month && exp.year ? `${monthNames[(exp.month || 1) - 1]} ${exp.year}` : formatDate(exp.expenseDate)}
                                             </TableCell>
                                             <TableCell className="text-right font-bold text-amber-700">{formatCurrency(Number(exp.amount))}</TableCell>
+                                            <TableCell className="text-gray-700">{formatPaymentMethodLabel(exp.paymentMethod)}</TableCell>
                                             <TableCell className="text-gray-600">{exp.description}</TableCell>
                                             <TableCell className="text-gray-600" suppressHydrationWarning>{formatDate(exp.expenseDate)}</TableCell>
                                             <TableCell className="text-center">
@@ -249,7 +321,7 @@ export default function ExpensesPage() {
             <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
                 <CardHeader>
                     <CardTitle className="text-lg">Daily Office Expenses</CardTitle>
-                    <CardDescription>Day-to-day office operational costs</CardDescription>
+                    <CardDescription>Day-to-day office operational costs — {displayLabel}</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {loading ? (
@@ -263,6 +335,7 @@ export default function ExpensesPage() {
                                     <TableRow className="bg-gray-50/50">
                                         <TableHead className="font-semibold">Date</TableHead>
                                         <TableHead className="font-semibold">Description</TableHead>
+                                        <TableHead className="font-semibold">Method</TableHead>
                                         <TableHead className="font-semibold text-right">Amount</TableHead>
                                         <TableHead className="font-semibold text-center">Actions</TableHead>
                                     </TableRow>
@@ -272,6 +345,7 @@ export default function ExpensesPage() {
                                         <TableRow key={exp.id}>
                                             <TableCell className="font-medium" suppressHydrationWarning>{formatDate(exp.expenseDate)}</TableCell>
                                             <TableCell className="text-gray-700">{exp.description}</TableCell>
+                                            <TableCell className="text-gray-700">{formatPaymentMethodLabel(exp.paymentMethod)}</TableCell>
                                             <TableCell className="text-right font-bold text-blue-700">{formatCurrency(Number(exp.amount))}</TableCell>
                                             <TableCell className="text-center">
                                                 <div className="flex items-center justify-center gap-1">
@@ -295,7 +369,7 @@ export default function ExpensesPage() {
             <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
                 <CardHeader>
                     <CardTitle className="text-lg flex items-center"><TruckIcon className="w-5 h-5 mr-2 text-teal-600" />Vehicle Expenses</CardTitle>
-                    <CardDescription>Daily vehicle operational costs (fuel, maintenance, etc.)</CardDescription>
+                    <CardDescription>Daily vehicle operational costs — {displayLabel}</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {loading ? (
@@ -309,6 +383,7 @@ export default function ExpensesPage() {
                                     <TableRow className="bg-gray-50/50">
                                         <TableHead className="font-semibold">Date</TableHead>
                                         <TableHead className="font-semibold">Description</TableHead>
+                                        <TableHead className="font-semibold">Method</TableHead>
                                         <TableHead className="font-semibold text-right">Amount</TableHead>
                                         <TableHead className="font-semibold text-center">Actions</TableHead>
                                     </TableRow>
@@ -318,6 +393,7 @@ export default function ExpensesPage() {
                                         <TableRow key={exp.id}>
                                             <TableCell className="font-medium" suppressHydrationWarning>{formatDate(exp.expenseDate)}</TableCell>
                                             <TableCell className="text-gray-700">{exp.description}</TableCell>
+                                            <TableCell className="text-gray-700">{formatPaymentMethodLabel(exp.paymentMethod)}</TableCell>
                                             <TableCell className="text-right font-bold text-teal-700">{formatCurrency(Number(exp.amount))}</TableCell>
                                             <TableCell className="text-center">
                                                 <div className="flex items-center justify-center gap-1">
@@ -353,8 +429,10 @@ export default function ExpensesPage() {
             {chartData.length > 0 && (
                 <Card className="border shadow-sm bg-white">
                     <CardHeader>
-                        <CardTitle className="text-base font-bold">Monthly Expenses Trend</CardTitle>
-                        <CardDescription className="text-xs">Last 6 months — Daily Expenses vs Rent vs Vehicle</CardDescription>
+                        <CardTitle className="text-base font-bold">Expenses Trend</CardTitle>
+                        <CardDescription className="text-xs">
+                            {chartDescriptionForPeriod(period)} — Daily vs Rent vs Vehicle
+                        </CardDescription>
                     </CardHeader>
                     <CardContent>
                         <div className="h-[280px] w-full">
@@ -391,41 +469,37 @@ export default function ExpensesPage() {
                         <form onSubmit={(e) => {
                             e.preventDefault();
                             const fd = new FormData(e.target as HTMLFormElement);
-                            const rentMonth = parseInt(fd.get('month') as string);
-                            const rentYear = parseInt(fd.get('year') as string);
+                            const expenseDateStr = String(fd.get('date') || '');
+                            const [yStr, mStr] = expenseDateStr.split('-');
+                            const rentYear = parseInt(yStr, 10) || new Date().getFullYear();
+                            const rentMonth = parseInt(mStr, 10) || (new Date().getMonth() + 1);
                             handleCreateExpense({
                                 type: 'RENT',
                                 amount: fd.get('amount'),
                                 description: fd.get('description') || `Office Rent - ${monthNames[rentMonth - 1]} ${rentYear}`,
-                                expenseDate: new Date(rentYear, rentMonth - 1, 15).toISOString(),
+                                expenseDate: expenseDateStr || new Date().toISOString().split('T')[0],
                                 month: rentMonth,
                                 year: rentYear,
+                                paymentMethod: fd.get('paymentMethod') || 'CASH',
                             });
                         }} className="space-y-3">
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1">
-                                    <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Month</label>
-                                    <CustomSelect 
-                                        name="month" 
-                                        defaultValue={(now.getMonth() + 1).toString()}
-                                        options={monthNames.map((name, i) => ({ value: (i + 1).toString(), label: name }))}
-                                        required
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Year</label>
-                                    <CustomSelect 
-                                        name="year" 
-                                        defaultValue={now.getFullYear().toString()}
-                                        options={Array.from({ length: 5 }, (_, i) => now.getFullYear() - 2 + i).map(y => ({ value: y.toString(), label: y.toString() }))}
-                                        required
-                                    />
-                                </div>
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Expense Date</label>
+                                <Input name="date" type="date" defaultValue={new Date().toISOString().split('T')[0]} required className="h-9" />
                             </div>
                             
                             <div className="space-y-1">
                                 <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Amount (PKR)</label>
                                 <Input name="amount" type="number" placeholder="Enter rent amount" step="1" required className="h-9 font-bold text-amber-700" />
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Payment Method</label>
+                                <CustomSelect
+                                    name="paymentMethod"
+                                    defaultValue="CASH"
+                                    options={[...PAYMENT_METHOD_OPTIONS]}
+                                />
                             </div>
                             
                             <div className="space-y-1">
@@ -465,6 +539,7 @@ export default function ExpensesPage() {
                                 amount: fd.get('amount'),
                                 description: fd.get('description'),
                                 expenseDate: fd.get('date'),
+                                paymentMethod: fd.get('paymentMethod') || 'CASH',
                             });
                         }} className="space-y-3">
                             <div className="space-y-1">
@@ -475,6 +550,15 @@ export default function ExpensesPage() {
                             <div className="space-y-1">
                                 <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Amount (PKR)</label>
                                 <Input name="amount" type="number" placeholder="Enter amount" step="1" required className="h-9 font-bold text-blue-700" />
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Payment Method</label>
+                                <CustomSelect
+                                    name="paymentMethod"
+                                    defaultValue="CASH"
+                                    options={[...PAYMENT_METHOD_OPTIONS]}
+                                />
                             </div>
                             
                             <div className="space-y-1">
@@ -514,6 +598,7 @@ export default function ExpensesPage() {
                                 amount: fd.get('amount'),
                                 description: fd.get('description'),
                                 expenseDate: fd.get('date'),
+                                paymentMethod: fd.get('paymentMethod') || 'CASH',
                             });
                         }} className="space-y-3">
                             <div className="space-y-1">
@@ -524,6 +609,15 @@ export default function ExpensesPage() {
                             <div className="space-y-1">
                                 <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Amount (PKR)</label>
                                 <Input name="amount" type="number" placeholder="Enter amount" step="1" required className="h-9 font-bold text-teal-700" />
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Payment Method</label>
+                                <CustomSelect
+                                    name="paymentMethod"
+                                    defaultValue="CASH"
+                                    options={[...PAYMENT_METHOD_OPTIONS]}
+                                />
                             </div>
                             
                             <div className="space-y-1">
@@ -562,6 +656,7 @@ export default function ExpensesPage() {
                                 amount: fd.get('amount'),
                                 description: fd.get('description'),
                                 expenseDate: fd.get('date'),
+                                paymentMethod: fd.get('paymentMethod') || editingExpense.paymentMethod || 'CASH',
                             });
                         }} className="space-y-3">
                             <div className="space-y-1">
@@ -572,6 +667,15 @@ export default function ExpensesPage() {
                             <div className="space-y-1">
                                 <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Amount (PKR)</label>
                                 <Input name="amount" type="number" defaultValue={Number(editingExpense.amount)} step="1" required className="h-9 font-bold text-indigo-700" />
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Payment Method</label>
+                                <CustomSelect
+                                    name="paymentMethod"
+                                    defaultValue={editingExpense.paymentMethod || 'CASH'}
+                                    options={[...PAYMENT_METHOD_OPTIONS]}
+                                />
                             </div>
                             
                             <div className="space-y-1">

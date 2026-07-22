@@ -1009,18 +1009,19 @@ model ActivityLog {
 }
 
 model OfficeExpense {
-  id          String   @id @default(cuid())
-  type        String // "RENT" or "DAILY"
-  amount      Decimal  @db.Decimal(10, 2)
-  description String
-  expenseDate DateTime
-  month       Int? // 1-12 (for RENT type, to enforce one rent per month)
-  year        Int? // e.g. 2026 (for RENT type)
-  createdBy   String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  regionId    String?
-  region      Region?  @relation(fields: [regionId], references: [id])
+  id            String   @id @default(cuid())
+  type          String // "RENT", "DAILY", or "VEHICLE"
+  amount        Decimal  @db.Decimal(10, 2)
+  description   String
+  expenseDate   DateTime
+  month         Int? // 1-12 (for RENT type, to enforce one rent per month)
+  year          Int? // e.g. 2026 (for RENT type)
+  paymentMethod String   @default("CASH")
+  createdBy     String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  regionId      String?
+  region        Region?  @relation(fields: [regionId], references: [id])
 
   @@unique([regionId, type, month, year])
   @@index([regionId])

@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import {
   startOfMonth,
-  subMonths,
   format,
   eachMonthOfInterval,
   eachDayOfInterval,
@@ -14,6 +13,7 @@ import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { requireAdmin } from '@/lib/apiAuth';
 import { parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { getCapacityFromTypeString, getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
+import { resolveFinancialPeriod } from '@/lib/financial-period';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,16 +26,41 @@ export async function GET(request: NextRequest) {
     const regionScope = regionScopedWhere(regionId);
     const txRegionScope = regionId ? { regionId } : {};
     const { searchParams } = new URL(request.url);
-    const startDateParam = searchParams.get('startDate');
-    const endDateParam = searchParams.get('endDate');
 
-    // Default to last 30 days if not provided
-    const endDate = endDateParam ? endOfDay(new Date(endDateParam)) : endOfDay(new Date());
-    const startDate = startDateParam
-      ? startOfDay(new Date(startDateParam))
-      : startOfDay(new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000));
+    const hasPeriodParams =
+      searchParams.has('period') ||
+      searchParams.has('date') ||
+      searchParams.has('month') ||
+      searchParams.has('year');
 
-    const isDaily = differenceInDays(endDate, startDate) <= 35;
+    let startDate: Date;
+    let endDate: Date;
+    let period: 'day' | 'month' | 'year' = 'month';
+    let periodLabel = '';
+
+    if (hasPeriodParams) {
+      const resolved = resolveFinancialPeriod({
+        period: searchParams.get('period'),
+        date: searchParams.get('date'),
+        month: searchParams.get('month'),
+        year: searchParams.get('year'),
+      });
+      startDate = resolved.startDate;
+      endDate = resolved.endDate;
+      period = resolved.period;
+      periodLabel = resolved.label;
+    } else {
+      // Legacy startDate/endDate support (presets)
+      const startDateParam = searchParams.get('startDate');
+      const endDateParam = searchParams.get('endDate');
+      endDate = endDateParam ? endOfDay(new Date(endDateParam)) : endOfDay(new Date());
+      startDate = startDateParam
+        ? startOfDay(new Date(startDateParam))
+        : startOfDay(new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000));
+      periodLabel = `${format(startDate, 'dd MMM yyyy')} – ${format(endDate, 'dd MMM yyyy')}`;
+    }
+
+    const rangeDays = differenceInDays(endDate, startDate);
 
     // 1. Total Customers (point in time)
     const [totalB2b, totalB2c] = await Promise.all([
@@ -227,9 +252,23 @@ export async function GET(request: NextRequest) {
     const actualProfit =
       rangeRevenue - rangeExpenses - rangeSalaries - rangePayments + b2cSecurityRetention;
 
-    // 4. Chart Data (Last 6 Months or Daily)
-    // For the Expenses Trend chart ONLY: exclude RENT. Show DAILY office expenses vs VEHICLE.
-    const chartStartDate = isDaily ? startDate : startOfMonth(subMonths(endDate, 5));
+    // 4. Chart Data — aligned to selected period
+    // Day: last 7 days ending on selected day (KPI still that day)
+    // Month: daily bars within the month
+    // Year: monthly bars for all 12 months
+    let chartStartDate: Date;
+    let isDaily: boolean;
+    if (period === 'day') {
+      chartStartDate = startOfDay(new Date(endDate));
+      chartStartDate.setDate(chartStartDate.getDate() - 6);
+      isDaily = true;
+    } else if (period === 'month' || rangeDays <= 35) {
+      chartStartDate = startOfDay(startDate);
+      isDaily = true;
+    } else {
+      chartStartDate = startOfMonth(startDate);
+      isDaily = false;
+    }
 
     const [b2cTransChart, b2bTransChart, expensesChart] = await Promise.all([
       prisma.b2CTransaction.findMany({
@@ -261,8 +300,9 @@ export async function GET(request: NextRequest) {
       const days = eachDayOfInterval({ start: chartStartDate, end: endDate });
       revenueChartData = days.map(day => {
         const dateStr = format(day, 'MMM dd');
+        const dayKey = format(day, 'yyyy-MM-dd');
         const b2cV = b2cTransChart
-          .filter(t => format(new Date(t.date), 'MMM dd') === dateStr)
+          .filter(t => format(new Date(t.date), 'yyyy-MM-dd') === dayKey)
           .reduce((s, t) => {
             let amount = Number(t.totalAmount || 0);
             if (t.securityItems) {
@@ -270,13 +310,16 @@ export async function GET(request: NextRequest) {
             }
             return s + amount;
           }, 0);
-        const b2bV = b2bTransChart.filter(t => format(new Date(t.date), 'MMM dd') === dateStr).reduce((s, t) => s + Number(t.totalAmount || 0), 0);
+        const b2bV = b2bTransChart
+          .filter(t => format(new Date(t.date), 'yyyy-MM-dd') === dayKey)
+          .reduce((s, t) => s + Number(t.totalAmount || 0), 0);
         return { name: dateStr, b2b: b2bV, b2c: b2cV };
       });
       
       expensesChartData = days.map(day => {
         const dateStr = format(day, 'MMM dd');
-        const dayRows = expensesChart.filter(e => format(new Date(e.expenseDate), 'MMM dd') === dateStr);
+        const dayKey = format(day, 'yyyy-MM-dd');
+        const dayRows = expensesChart.filter(e => format(new Date(e.expenseDate), 'yyyy-MM-dd') === dayKey);
         const officeExpenses = dayRows
           .filter(e => e.type === 'DAILY')
           .reduce((s, e) => s + Number(e.amount || 0), 0);
@@ -315,16 +358,24 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 5. Recent Activities
+    // 5. Recent Activities — same selected period
     const [recentB2B, recentB2C] = await Promise.all([
       prisma.b2BTransaction.findMany({
-        where: txRegionScope,
+        where: {
+          date: { gte: startDate, lte: endDate },
+          voided: false,
+          ...txRegionScope,
+        },
         take: 8,
         orderBy: { createdAt: 'desc' },
         include: { customer: true, items: true }
       }),
       prisma.b2CTransaction.findMany({
-        where: txRegionScope,
+        where: {
+          date: { gte: startDate, lte: endDate },
+          voided: false,
+          ...txRegionScope,
+        },
         take: 8,
         orderBy: { createdAt: 'desc' },
         include: {
@@ -679,6 +730,8 @@ export async function GET(request: NextRequest) {
         rangePayments,
         vendorBalance,
       },
+      period,
+      label: periodLabel,
       revenueChartData,
       expensesChartData,
       cylinderStatusData,

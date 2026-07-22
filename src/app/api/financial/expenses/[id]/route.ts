@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { requireAdmin } from '@/lib/apiAuth';
+import { normalizePaymentMethodKey } from '@/lib/payment-methods';
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
@@ -10,7 +11,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         const regionId = getActiveRegionId(request);
         const { id } = await params;
         const body = await request.json();
-        const { amount, description, expenseDate } = body;
+        const { amount, description, expenseDate, paymentMethod } = body;
         const existing = await prisma.officeExpense.findFirst({
             where: { id, ...regionScopedWhere(regionId) },
         });
@@ -23,6 +24,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 ...(amount !== undefined && { amount: parseFloat(amount) }),
                 ...(description !== undefined && { description }),
                 ...(expenseDate !== undefined && { expenseDate: new Date(expenseDate) }),
+                ...(paymentMethod !== undefined && {
+                    paymentMethod: normalizePaymentMethodKey(paymentMethod) || existing.paymentMethod || 'CASH',
+                }),
             },
         });
         return NextResponse.json(updated);

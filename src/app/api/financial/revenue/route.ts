@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
         });
         const { startDate, endDate, period, month, year, date, label } = resolved;
 
-        const [b2cGasItems, b2cAccessoryItems, b2bItems, b2bPaidSales, b2bPaymentTxs, b2cPayments, vendorPayments] = await Promise.all([
+        const [b2cGasItems, b2cAccessoryItems, b2bItems, b2bPaidSales, b2bPaymentTxs, b2cPayments, vendorPayments, officeExpenses] = await Promise.all([
             prisma.b2CTransactionGasItem.findMany({
                 where: {
                     transaction: {
@@ -112,6 +112,14 @@ export async function GET(request: NextRequest) {
                     ...txRegionScope,
                 },
                 select: { amount: true, method: true },
+            }),
+            // Office rent / daily / vehicle expenses paid via selected method
+            prisma.officeExpense.findMany({
+                where: {
+                    expenseDate: { gte: startDate, lte: endDate },
+                    ...txRegionScope,
+                },
+                select: { amount: true, paymentMethod: true },
             }),
         ]);
 
@@ -190,6 +198,9 @@ export async function GET(request: NextRequest) {
         });
         vendorPayments.forEach((payment) => {
             adjustPaymentMethodAmount(byPaymentMethod, payment.method, -Number(payment.amount || 0));
+        });
+        officeExpenses.forEach((expense) => {
+            adjustPaymentMethodAmount(byPaymentMethod, expense.paymentMethod, -Number(expense.amount || 0));
         });
 
         const chartBuckets = getFinancialChartBuckets(resolved);

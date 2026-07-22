@@ -2,11 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { format, subMonths } from 'date-fns';
+import { format } from 'date-fns';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity } from '@/lib/superAdminNotifier';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { requireAdmin, clampLimit } from '@/lib/apiAuth';
+import { normalizePaymentMethodKey } from '@/lib/payment-methods';
+import {
+    getFinancialChartBuckets,
+    resolveFinancialPeriod,
+} from '@/lib/financial-period';
+
 export async function GET(request: NextRequest) {
     try {
         const auth = await requireAdmin();
@@ -16,12 +22,25 @@ export async function GET(request: NextRequest) {
         const regionScope = regionScopedWhere(regionId);
         const { searchParams } = new URL(request.url);
         const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
-        const limit = clampLimit(searchParams.get('limit'), 20);
-        const type = searchParams.get('type') || ''; // 'RENT' or 'DAILY' or '' for all
+        const limit = clampLimit(searchParams.get('limit'), 100);
+        const type = searchParams.get('type') || '';
         const skip = (page - 1) * limit;
-        const where: any = { ...regionScope };
+
+        const resolved = resolveFinancialPeriod({
+            period: searchParams.get('period'),
+            date: searchParams.get('date'),
+            month: searchParams.get('month'),
+            year: searchParams.get('year'),
+        });
+        const { startDate, endDate, period, month, year, date, label } = resolved;
+
+        const where: any = {
+            ...regionScope,
+            expenseDate: { gte: startDate, lte: endDate },
+        };
         if (type) where.type = type;
-        const [expenses, total] = await Promise.all([
+
+        const [expenses, total, periodAgg, dailyCount, rentAgg, vehicleAgg] = await Promise.all([
             prisma.officeExpense.findMany({
                 where,
                 skip,
@@ -29,8 +48,30 @@ export async function GET(request: NextRequest) {
                 orderBy: { expenseDate: 'desc' },
             }),
             prisma.officeExpense.count({ where }),
+            prisma.officeExpense.aggregate({
+                where,
+                _sum: { amount: true },
+            }),
+            prisma.officeExpense.count({
+                where: { ...where, type: 'DAILY' },
+            }),
+            prisma.officeExpense.aggregate({
+                where: { ...where, type: 'RENT' },
+                _sum: { amount: true },
+                _count: true,
+            }),
+            prisma.officeExpense.aggregate({
+                where: { ...where, type: 'VEHICLE' },
+                _sum: { amount: true },
+            }),
         ]);
-        // Current month rent status
+
+        const rentInPeriod = await prisma.officeExpense.findFirst({
+            where: { ...where, type: 'RENT' },
+            orderBy: { expenseDate: 'desc' },
+        });
+
+        // Calendar "current month rent" status (operational, independent of filter)
         const now = new Date();
         const currentMonthRent = await prisma.officeExpense.findFirst({
             where: {
@@ -40,17 +81,15 @@ export async function GET(request: NextRequest) {
                 ...regionScope,
             },
         });
-        // Monthly chart data for daily, rent & vehicle expenses (last 6 months)
+
+        const chartBuckets = getFinancialChartBuckets(resolved);
         const chartData = [];
-        for (let i = 5; i >= 0; i--) {
-            const chartMonth = subMonths(now, i);
-            const chartStart = new Date(chartMonth.getFullYear(), chartMonth.getMonth(), 1);
-            const chartEnd = new Date(chartMonth.getFullYear(), chartMonth.getMonth() + 1, 0, 23, 59, 59, 999);
+        for (const bucket of chartBuckets) {
             const [dailyTotal, rentTotal, vehicleTotal] = await Promise.all([
                 prisma.officeExpense.aggregate({
                     where: {
                         type: 'DAILY',
-                        expenseDate: { gte: chartStart, lte: chartEnd },
+                        expenseDate: { gte: bucket.startDate, lte: bucket.endDate },
                         ...regionScope,
                     },
                     _sum: { amount: true },
@@ -58,7 +97,7 @@ export async function GET(request: NextRequest) {
                 prisma.officeExpense.aggregate({
                     where: {
                         type: 'RENT',
-                        expenseDate: { gte: chartStart, lte: chartEnd },
+                        expenseDate: { gte: bucket.startDate, lte: bucket.endDate },
                         ...regionScope,
                     },
                     _sum: { amount: true },
@@ -66,28 +105,42 @@ export async function GET(request: NextRequest) {
                 prisma.officeExpense.aggregate({
                     where: {
                         type: 'VEHICLE',
-                        expenseDate: { gte: chartStart, lte: chartEnd },
+                        expenseDate: { gte: bucket.startDate, lte: bucket.endDate },
                         ...regionScope,
                     },
                     _sum: { amount: true },
                 }),
             ]);
             chartData.push({
-                name: format(chartStart, 'MMM yyyy'),
+                name: bucket.name,
                 daily: Number(dailyTotal._sum.amount || 0),
                 rent: Number(rentTotal._sum.amount || 0),
                 vehicle: Number(vehicleTotal._sum.amount || 0),
             });
         }
+
         return NextResponse.json({
             expenses,
             currentMonthRent,
+            rentInPeriod,
             chartData,
+            summary: {
+                totalExpenses: Number(periodAgg._sum.amount || 0),
+                dailyCount,
+                vehicleTotal: Number(vehicleAgg._sum.amount || 0),
+                rentAmount: Number(rentAgg._sum.amount || 0),
+                rentCount: rentAgg._count || 0,
+            },
+            period,
+            date,
+            month,
+            year,
+            label,
             pagination: {
                 page,
                 limit,
                 total,
-                pages: Math.ceil(total / limit),
+                pages: Math.ceil(total / limit) || 1,
             },
         });
     } catch (error) {
@@ -102,7 +155,7 @@ export async function POST(request: NextRequest) {
         const session = auth.session;
         const regionId = getActiveRegionId(request);
         const body = await request.json();
-        const { type, amount, description, expenseDate, month, year } = body;
+        const { type, amount, description, expenseDate, month, year, paymentMethod } = body;
         if (!type || !amount || !description || !expenseDate) {
             return NextResponse.json(
                 { error: 'Missing required fields: type, amount, description, expenseDate' },
@@ -116,6 +169,7 @@ export async function POST(request: NextRequest) {
         if (isNaN(parsedAmount) || parsedAmount <= 0) {
             return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
         }
+        const methodKey = normalizePaymentMethodKey(paymentMethod) || 'CASH';
         // For RENT type, enforce one per month
         if (type === 'RENT') {
             const rentMonth = month || new Date(expenseDate).getMonth() + 1;
@@ -137,6 +191,7 @@ export async function POST(request: NextRequest) {
                     expenseDate: new Date(expenseDate),
                     month: rentMonth,
                     year: rentYear,
+                    paymentMethod: methodKey,
                     createdBy: session.user.id,
                     ...(regionId ? { regionId } : {}),
                 },
@@ -188,6 +243,7 @@ export async function POST(request: NextRequest) {
                 amount: parsedAmount,
                 description,
                 expenseDate: new Date(expenseDate),
+                paymentMethod: methodKey,
                 createdBy: session.user.id,
                 ...(regionId ? { regionId } : {}),
             },
