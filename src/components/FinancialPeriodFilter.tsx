@@ -36,11 +36,11 @@ export function FinancialPeriodFilter({
   const yearOptions = useMemo(() => financialYearOptions(5), []);
 
   const selectBtn =
-    'border-none focus:ring-0 shadow-none h-7 sm:h-8 text-xs sm:text-sm pl-1.5 pr-6 sm:pl-3 sm:pr-10';
+    'border-none focus:ring-0 shadow-none h-7 text-xs sm:text-sm pl-1.5 pr-6 sm:pl-2.5 sm:pr-8';
 
   return (
-    <div className="flex flex-nowrap items-center gap-1 sm:gap-2 bg-white border border-gray-200 rounded-lg px-1.5 sm:px-2 py-0.5 sm:py-1 shadow-sm min-h-8 sm:min-h-10 w-full sm:w-auto max-w-full overflow-hidden">
-      <CalendarIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 ml-0.5 sm:ml-1 shrink-0" />
+    <div className="flex flex-nowrap items-center gap-1 sm:gap-1.5 bg-white border border-gray-200 rounded-lg h-9 px-1.5 sm:px-2 shadow-sm w-full sm:w-auto max-w-full overflow-hidden">
+      <CalendarIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 shrink-0" />
       <CustomSelect
         value={period}
         onChange={(val) => onPeriodChange(val as FinancialPeriodMode)}
@@ -48,14 +48,14 @@ export function FinancialPeriodFilter({
         className="w-[72px] sm:w-[100px] shrink-0"
         buttonClassName={selectBtn}
       />
-      <div className="w-[1px] h-3.5 sm:h-4 bg-gray-200 shrink-0" />
+      <div className="w-[1px] h-3.5 bg-gray-200 shrink-0" />
 
       {period === 'day' && (
         <Input
           type="date"
           value={date}
           onChange={(e) => onDateChange(e.target.value || todayLocalDate())}
-          className="h-7 sm:h-8 w-[130px] sm:w-[150px] border-0 shadow-none focus:ring-0 px-1 py-0 text-xs sm:text-sm min-w-0"
+          className="h-7 w-[130px] sm:w-[150px] border-0 shadow-none focus:ring-0 px-1 py-0 text-xs sm:text-sm min-w-0"
         />
       )}
 
@@ -68,7 +68,7 @@ export function FinancialPeriodFilter({
             className="w-[78px] sm:w-[120px] shrink-0 min-w-0"
             buttonClassName={selectBtn}
           />
-          <div className="w-[1px] h-3.5 sm:h-4 bg-gray-200 shrink-0" />
+          <div className="w-[1px] h-3.5 bg-gray-200 shrink-0" />
           <CustomSelect
             value={year.toString()}
             onChange={(val) => onYearChange(parseInt(val, 10))}
