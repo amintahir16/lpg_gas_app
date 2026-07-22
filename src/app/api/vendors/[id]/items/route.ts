@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { ActivityAction, logActivity } from '@/lib/activityLogger';
 
 // GET all items for a vendor
 export async function GET(
@@ -74,6 +75,22 @@ export async function POST(
       }
     });
 
+    await logActivity({
+      userId: session.user.id,
+      action: ActivityAction.VENDOR_ITEM_CREATED,
+      entityType: 'VENDOR_INVENTORY',
+      entityId: item.id,
+      details: `Added vendor item "${item.name}"`,
+      link: `/vendors/${id}`,
+      regionId,
+      metadata: {
+        vendorId: id,
+        itemId: item.id,
+        name: item.name,
+        category: item.category,
+      },
+    });
+
     return NextResponse.json({ item }, { status: 201 });
   } catch (error) {
     console.error('Error creating vendor item:', error);
@@ -93,7 +110,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, name, description, category, defaultUnit, isActive } = body;
+    const { id, name, description, category, quantity, unitPrice, status } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -102,6 +119,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    const regionId = getActiveRegionId(request);
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
     if (description !== undefined) updateData.description = description;
@@ -113,6 +131,21 @@ export async function PUT(request: NextRequest) {
     const item = await prisma.vendorInventory.update({
       where: { id },
       data: updateData
+    });
+
+    await logActivity({
+      userId: session.user.id,
+      action: ActivityAction.VENDOR_ITEM_UPDATED,
+      entityType: 'VENDOR_INVENTORY',
+      entityId: item.id,
+      details: `Updated vendor item "${item.name}"`,
+      link: item.vendorId ? `/vendors/${item.vendorId}` : null,
+      regionId,
+      metadata: {
+        vendorId: item.vendorId,
+        itemId: item.id,
+        name: item.name,
+      },
     });
 
     return NextResponse.json({ item });
@@ -144,9 +177,25 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Soft delete by changing status
-    await prisma.vendorInventory.update({
+    const item = await prisma.vendorInventory.update({
       where: { id },
       data: { status: 'OUT_OF_STOCK' }
+    });
+
+    const regionId = getActiveRegionId(request);
+    await logActivity({
+      userId: session.user.id,
+      action: ActivityAction.VENDOR_ITEM_DELETED,
+      entityType: 'VENDOR_INVENTORY',
+      entityId: item.id,
+      details: `Removed vendor item "${item.name}"`,
+      link: item.vendorId ? `/vendors/${item.vendorId}` : null,
+      regionId,
+      metadata: {
+        vendorId: item.vendorId,
+        itemId: item.id,
+        name: item.name,
+      },
     });
 
     return NextResponse.json({ success: true });

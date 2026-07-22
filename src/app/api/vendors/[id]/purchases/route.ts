@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { InventoryIntegrationService } from '@/lib/inventory-integration';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { ActivityAction, logActivity } from '@/lib/activityLogger';
 
 // GET all purchases for a vendor
 export async function GET(
@@ -231,6 +232,28 @@ export async function POST(
       purchaseEntriesCount: purchase.purchaseEntries.length,
       invoiceNumber,
       totalAmount: purchase.totalAmount
+    });
+
+    const vendorLabel = await prisma.vendor.findUnique({
+      where: { id },
+      select: { companyName: true, vendorCode: true },
+    });
+
+    await logActivity({
+      userId: session.user.id,
+      action: ActivityAction.VENDOR_PURCHASE_CREATED,
+      entityType: 'VENDOR_PURCHASE',
+      entityId: purchase.purchaseEntries[0]?.id || id,
+      details: `Created purchase for "${vendorLabel?.companyName || 'vendor'}" • Invoice: ${invoiceNumber || 'N/A'} • Amount: Rs ${Number(purchase.totalAmount).toLocaleString()}${paid > 0 ? ` • Paid: Rs ${paid.toLocaleString()}` : ''}`,
+      link: `/vendors/${id}`,
+      regionId,
+      metadata: {
+        vendorId: id,
+        invoiceNumber: invoiceNumber || null,
+        totalAmount: Number(purchase.totalAmount),
+        paidAmount: paid,
+        entryCount: purchase.purchaseEntries.length,
+      },
     });
 
     return NextResponse.json({ 

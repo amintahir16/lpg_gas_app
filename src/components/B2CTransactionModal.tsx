@@ -951,7 +951,7 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                                                     {(() => {
                                                                         const typeInfo = inventoryCylinderTypes.find(t => t.variantKey === item.cylinderVariantKey);
                                                                         const typeStock = typeInfo?.fullCount ?? 0;
-                                                                        const isLow = typeStock < 5;
+                                                                        const isLow = typeStock <= 10;
                                                                         return (
                                                                             <span className={typeStock === 0 || isLow ? "text-red-500 font-bold" : ""}>
                                                                                 Stock: {typeStock}

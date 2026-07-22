@@ -331,8 +331,8 @@ export class NotificationService {
         }
       });
 
-      // If less than 5 cylinders available, create low inventory notification
-      if (lowInventoryCylinders.length < 5) {
+      // If 10 or fewer cylinders available, create low inventory notification
+      if (lowInventoryCylinders.length <= 10) {
         await createLowInventoryNotification(
           'GENERAL',
           lowInventoryCylinders.length

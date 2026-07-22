@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { ActivityAction, logActivity } from '@/lib/activityLogger';
+import { getActiveRegionId } from '@/lib/region';
 
 // GET - Get all vendor credit balances
 export async function GET(request: NextRequest) {
@@ -164,6 +166,22 @@ export async function POST(request: NextRequest) {
         reference: `CREDIT-${Date.now()}`,
         notes: notes || `Credit application of Rs ${creditAmount.toLocaleString()}`
       }
+    });
+
+    const regionId = getActiveRegionId(request);
+    await logActivity({
+      userId: session.user.id,
+      action: ActivityAction.VENDOR_CREDIT_APPLIED,
+      entityType: 'VENDOR_PAYMENT',
+      entityId: creditApplication.id,
+      details: `Applied credit of Rs ${Number(creditAmount).toLocaleString()} to vendor purchase`,
+      link: `/vendors/${vendorId}`,
+      regionId,
+      metadata: {
+        vendorId,
+        purchaseId,
+        creditAmount: Number(creditAmount),
+      },
     });
 
     return NextResponse.json({ 

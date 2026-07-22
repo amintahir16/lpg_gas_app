@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getActiveRegionId, regionScopedWhere, belongsToActiveRegion } from '@/lib/region';
+import { ActivityAction, logActivity } from '@/lib/activityLogger';
 
 export async function GET(
   request: NextRequest,
@@ -137,6 +138,21 @@ export async function PUT(
         address: address?.trim() || null,
         updatedAt: new Date()
       }
+    });
+
+    await logActivity({
+      userId: session.user.id,
+      action: ActivityAction.VENDOR_UPDATED,
+      entityType: 'VENDOR',
+      entityId: updatedVendor.id,
+      details: `Updated vendor "${updatedVendor.companyName}" (${updatedVendor.vendorCode})`,
+      link: `/vendors/${updatedVendor.id}`,
+      regionId,
+      metadata: {
+        vendorId: updatedVendor.id,
+        vendorCode: updatedVendor.vendorCode,
+        companyName: updatedVendor.companyName,
+      },
     });
 
     return NextResponse.json({

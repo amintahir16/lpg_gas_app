@@ -74,6 +74,16 @@ const ACTIVITY_ICON_MAP: Record<string, React.ComponentType<{ className?: string
     CUSTOM_ITEM_DELETED: WrenchScrewdriverIcon,
     OFFICE_EXPENSE_CREATED: BuildingOfficeIcon,
     SALARY_PAID: CurrencyDollarIcon,
+    VENDOR_CREATED: BuildingOfficeIcon,
+    VENDOR_UPDATED: PencilSquareIcon,
+    VENDOR_DELETED: TrashIcon,
+    VENDOR_PURCHASE_CREATED: ShoppingCartIcon,
+    VENDOR_PAYMENT_RECORDED: BanknotesIcon,
+    VENDOR_PAYMENT_DELETED: TrashIcon,
+    VENDOR_CREDIT_APPLIED: CurrencyDollarIcon,
+    VENDOR_ITEM_CREATED: CubeIcon,
+    VENDOR_ITEM_UPDATED: CubeIcon,
+    VENDOR_ITEM_DELETED: CubeIcon,
 };
 
 const ACTIVITY_TONE_MAP: Record<string, { dot: string; ring: string; iconColor: string; chip: string }> = {
@@ -90,7 +100,9 @@ function getActivityTone(action: string) {
     if (action.endsWith('_UPDATED')) return ACTIVITY_TONE_MAP.UPDATED;
     if (action.endsWith('_DELETED')) return ACTIVITY_TONE_MAP.DELETED;
     if (action.endsWith('_VOIDED')) return ACTIVITY_TONE_MAP.VOIDED;
-    if (action === 'SALARY_PAID') return ACTIVITY_TONE_MAP.PAID;
+    if (action === 'SALARY_PAID' || action.endsWith('_RECORDED') || action.endsWith('_APPLIED')) {
+        return ACTIVITY_TONE_MAP.PAID;
+    }
     return ACTIVITY_TONE_MAP.DEFAULT;
 }
 

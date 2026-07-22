@@ -174,7 +174,7 @@ export class NotificationIntegrationService {
   }
 
   // Inventory Alerts
-  async notifyLowInventory(cylinderType: string, currentCount: number, threshold: number = 5) {
+  async notifyLowInventory(cylinderType: string, currentCount: number, threshold: number = 10) {
     return createNotification({
       type: 'LOW_INVENTORY',
       title: 'Low Inventory Alert',

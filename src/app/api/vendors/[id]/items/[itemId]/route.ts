@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { ActivityAction, logActivity } from '@/lib/activityLogger';
 
 // PUT - Update vendor item
 export async function PUT(
@@ -55,6 +56,21 @@ export async function PUT(
       }
     });
 
+    await logActivity({
+      userId: session.user.id,
+      action: ActivityAction.VENDOR_ITEM_UPDATED,
+      entityType: 'VENDOR_INVENTORY',
+      entityId: updatedItem.id,
+      details: `Updated vendor item "${updatedItem.name}"`,
+      link: `/vendors/${id}`,
+      regionId,
+      metadata: {
+        vendorId: id,
+        itemId: updatedItem.id,
+        name: updatedItem.name,
+      },
+    });
+
     return NextResponse.json({
       message: 'Item updated successfully',
       item: updatedItem
@@ -102,6 +118,21 @@ export async function DELETE(
     // Delete item
     await prisma.vendorInventory.delete({
       where: { id: itemId }
+    });
+
+    await logActivity({
+      userId: session.user.id,
+      action: ActivityAction.VENDOR_ITEM_DELETED,
+      entityType: 'VENDOR_INVENTORY',
+      entityId: itemId,
+      details: `Deleted vendor item "${existingItem.name}"`,
+      link: `/vendors/${id}`,
+      regionId,
+      metadata: {
+        vendorId: id,
+        itemId,
+        name: existingItem.name,
+      },
     });
 
     return NextResponse.json({

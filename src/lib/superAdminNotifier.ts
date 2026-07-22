@@ -67,6 +67,7 @@ export async function formatMessageWithRegion(
 }
 
 const SUPER_ADMIN_ROLE = 'SUPER_ADMIN' as const;
+const ADMIN_ROLE = 'ADMIN' as const;
 
 async function getSuperAdminUserIds(excludeUserId?: string | null): Promise<string[]> {
   const admins = await prisma.user.findMany({
@@ -78,6 +79,48 @@ async function getSuperAdminUserIds(excludeUserId?: string | null): Promise<stri
     select: { id: true },
   });
   return admins.map((a) => a.id);
+}
+
+/**
+ * Recipients for operational alerts (e.g. low stock):
+ * - all active SUPER_ADMINs
+ * - active ADMINs with access to the event's branch (primary or userRegions)
+ * - if no regionId, all active ADMINs
+ */
+async function getAdminAndSuperAdminUserIds(opts: {
+  excludeUserId?: string | null;
+  regionId?: string | null;
+}): Promise<string[]> {
+  const exclude = opts.excludeUserId ? { id: { not: opts.excludeUserId } } : {};
+
+  const [superAdmins, admins] = await Promise.all([
+    prisma.user.findMany({
+      where: {
+        role: SUPER_ADMIN_ROLE,
+        isActive: true,
+        ...exclude,
+      },
+      select: { id: true },
+    }),
+    prisma.user.findMany({
+      where: {
+        role: ADMIN_ROLE,
+        isActive: true,
+        ...exclude,
+        ...(opts.regionId
+          ? {
+              OR: [
+                { regionId: opts.regionId },
+                { userRegions: { some: { regionId: opts.regionId } } },
+              ],
+            }
+          : {}),
+      },
+      select: { id: true },
+    }),
+  ]);
+
+  return Array.from(new Set([...superAdmins, ...admins].map((u) => u.id)));
 }
 
 /**
@@ -130,6 +173,56 @@ export async function notifySuperAdmins(input: NotifySuperAdminsInput) {
   }
 }
 
+/**
+ * Notify ADMIN + SUPER_ADMIN users (branch-scoped for ADMINs when regionId is set).
+ * Used for operational alerts like low inventory.
+ */
+export async function notifyAdminsAndSuperAdmins(input: NotifySuperAdminsInput) {
+  try {
+    const recipientIds = await getAdminAndSuperAdminUserIds({
+      excludeUserId: input.excludeUserId ?? null,
+      regionId: input.regionId ?? null,
+    });
+    if (recipientIds.length === 0) return [];
+
+    const safeTitle = sanitizeNotificationField(input.title, 200);
+    const safeInputMessage = sanitizeNotificationField(input.message, 2000);
+
+    const { message: finalMessage, regionName, regionCode } = await formatMessageWithRegion(
+      safeInputMessage,
+      input.regionId
+    );
+    const meta: Record<string, unknown> = { ...(input.metadata ?? {}) };
+    if (input.regionId) {
+      meta.regionId = input.regionId;
+      if (regionName) meta.regionName = regionName;
+      if (regionCode) meta.regionCode = regionCode;
+    }
+    const metadata = Object.keys(meta).length > 0 ? JSON.stringify(meta) : null;
+
+    const created = await prisma.$transaction(
+      recipientIds.map((userId) =>
+        prisma.notification.create({
+          data: {
+            type: input.type,
+            title: safeTitle,
+            message: finalMessage,
+            priority: input.priority ?? 'MEDIUM',
+            link: input.link ?? null,
+            metadata,
+            userId,
+            regionId: input.regionId ?? null,
+          },
+        }),
+      ),
+    );
+    return created;
+  } catch (error) {
+    console.error('[superAdminNotifier] Failed to notify admins:', error);
+    return [];
+  }
+}
+
 interface UserActivityNotificationInput {
   actorId: string;
   actorName: string;
@@ -163,8 +256,8 @@ export async function notifyUserActivity(input: UserActivityNotificationInput) {
 // Low stock – idempotent helpers
 // ---------------------------------------------------------------------------
 
-const LOW_CYLINDER_THRESHOLD = 5;
-const LOW_ACCESSORY_THRESHOLD = 5;
+const LOW_CYLINDER_THRESHOLD = 10;
+const LOW_ACCESSORY_THRESHOLD = 10;
 
 /**
  * Stable key fragments inside `metadata` (string column). We use
@@ -229,7 +322,7 @@ async function clearResolvedLowStockNotifications(marker: string) {
 
 /**
  * Check FULL cylinder stock for a given type in one branch and notify
- * SUPER_ADMINs when the count drops below the threshold.
+ * ADMIN + SUPER_ADMIN when the count drops to the threshold or below.
  * Idempotent – one open alert per (cylinderType × region) until read or
  * stock recovers.
  *
@@ -261,7 +354,7 @@ export async function checkAndNotifyLowCylinderStock(
       const count = await prisma.cylinder.count({ where });
       const marker = lowStockCylinderVariantMarker(variantKey, regionScope);
 
-      if (count >= LOW_CYLINDER_THRESHOLD) {
+      if (count > LOW_CYLINDER_THRESHOLD) {
         await clearResolvedLowStockNotifications(marker);
         return;
       }
@@ -271,7 +364,7 @@ export async function checkAndNotifyLowCylinderStock(
         regionScope === undefined ? undefined : (regionScope as string | null);
       const friendly = formatCylinderVariantLabel(variantKey);
 
-      await notifySuperAdmins({
+      await notifyAdminsAndSuperAdmins({
         type: 'LOW_INVENTORY',
         title: 'Low Cylinder Stock',
         message: `Only ${count} FULL ${friendly} cylinders left in inventory. Please restock soon.`,
@@ -305,7 +398,7 @@ export async function checkAndNotifyLowCylinderStock(
 
     const marker = lowStockCylinderMarker(cylinderType, regionScope);
 
-    if (count >= LOW_CYLINDER_THRESHOLD) {
+    if (count > LOW_CYLINDER_THRESHOLD) {
       await clearResolvedLowStockNotifications(marker);
       return;
     }
@@ -328,7 +421,7 @@ export async function checkAndNotifyLowCylinderStock(
     const notifyRegionId: string | null | undefined =
       regionScope === undefined ? undefined : (regionScope as string | null);
 
-    await notifySuperAdmins({
+    await notifyAdminsAndSuperAdmins({
       type: 'LOW_INVENTORY',
       title: 'Low Cylinder Stock',
       message: `Only ${count} FULL ${friendly} cylinders left in inventory. Please restock soon.`,
@@ -411,7 +504,7 @@ export async function checkAllCylinderTypesForLowStock(
 
 /**
  * Check a custom accessory item's stock. If quantity has dropped to
- * threshold or below, fire one URGENT notification for SUPER_ADMINs.
+ * threshold or below, fire one URGENT notification for ADMIN + SUPER_ADMIN.
  */
 export async function checkAndNotifyLowAccessoryStock(itemId: string) {
   if (!itemId) return;
@@ -438,7 +531,7 @@ export async function checkAndNotifyLowAccessoryStock(itemId: string) {
 
     if (await hasOpenLowStockNotification(marker)) return;
 
-    await notifySuperAdmins({
+    await notifyAdminsAndSuperAdmins({
       type: 'LOW_INVENTORY',
       title: 'Low Accessory Stock',
       message: `Only ${item.quantity} units left of ${item.name} – ${item.type}. Please restock soon.`,

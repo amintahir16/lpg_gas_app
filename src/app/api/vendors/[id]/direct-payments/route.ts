@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { ActivityAction, logActivity } from '@/lib/activityLogger';
 
 // GET - Get all direct payments for a vendor
 export async function GET(
@@ -167,12 +168,34 @@ export async function POST(
 
       console.log('✅ Direct payment created:', {
         id: payment.id,
-        vendor: vendor.name,
+        vendor: vendor.companyName,
         amount: payment.amount,
         invoiceNumber: invoiceNumber || 'N/A'
       });
 
       return { payment };
+    });
+
+    const vendorLabel = await prisma.vendor.findUnique({
+      where: { id },
+      select: { companyName: true, vendorCode: true },
+    });
+
+    await logActivity({
+      userId: session.user.id,
+      action: ActivityAction.VENDOR_PAYMENT_RECORDED,
+      entityType: 'VENDOR_PAYMENT',
+      entityId: result.payment.id,
+      details: `Recorded payment of Rs ${Number(result.payment.amount).toLocaleString()} to "${vendorLabel?.companyName || 'vendor'}"${invoiceNumber ? ` • Invoice: ${invoiceNumber}` : ''} • Method: ${result.payment.method}`,
+      link: `/vendors/${id}`,
+      regionId,
+      metadata: {
+        vendorId: id,
+        paymentId: result.payment.id,
+        amount: Number(result.payment.amount),
+        method: result.payment.method,
+        invoiceNumber: invoiceNumber || null,
+      },
     });
 
     return NextResponse.json({ 
@@ -199,6 +222,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { id } = await params;
     const { searchParams } = new URL(request.url);
     const paymentId = searchParams.get('paymentId');
 
@@ -209,9 +233,42 @@ export async function DELETE(
       );
     }
 
+    const regionId = getActiveRegionId(request);
+    const existingPayment = await prisma.vendorPayment.findUnique({
+      where: { id: paymentId },
+      select: {
+        id: true,
+        amount: true,
+        method: true,
+        description: true,
+        vendorId: true,
+        vendor: { select: { companyName: true, vendorCode: true } },
+      },
+    });
+
+    if (!existingPayment || existingPayment.vendorId !== id) {
+      return NextResponse.json({ error: 'Payment not found' }, { status: 404 });
+    }
+
     // Delete the payment
     await prisma.vendorPayment.delete({
       where: { id: paymentId }
+    });
+
+    await logActivity({
+      userId: session.user.id,
+      action: ActivityAction.VENDOR_PAYMENT_DELETED,
+      entityType: 'VENDOR_PAYMENT',
+      entityId: paymentId,
+      details: `Deleted payment of Rs ${Number(existingPayment.amount).toLocaleString()} for "${existingPayment.vendor.companyName}"`,
+      link: `/vendors/${id}`,
+      regionId,
+      metadata: {
+        vendorId: id,
+        paymentId,
+        amount: Number(existingPayment.amount),
+        method: existingPayment.method,
+      },
     });
 
     return NextResponse.json({ 

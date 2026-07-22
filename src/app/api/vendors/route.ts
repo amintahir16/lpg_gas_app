@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getActiveRegionId, regionScopedWhere, belongsToActiveRegion } from '@/lib/region';
+import { ActivityAction, logActivity } from '@/lib/activityLogger';
 
 // GET all vendors or filter by category
 // NOTE: Vendor entities are REGION-SCOPED — each region (branch) owns its own
@@ -158,6 +159,22 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    await logActivity({
+      userId: session.user.id,
+      action: ActivityAction.VENDOR_CREATED,
+      entityType: 'VENDOR',
+      entityId: vendor.id,
+      details: `Created vendor "${vendor.companyName}" (${vendor.vendorCode})`,
+      link: `/vendors/${vendor.id}`,
+      regionId,
+      metadata: {
+        vendorId: vendor.id,
+        vendorCode: vendor.vendorCode,
+        companyName: vendor.companyName,
+        categoryId: vendor.categoryId,
+      },
+    });
+
     return NextResponse.json({ vendor }, { status: 201 });
   } catch (error) {
     console.error('Error creating vendor:', error);
@@ -189,7 +206,7 @@ export async function PUT(request: NextRequest) {
     const regionId = getActiveRegionId(request);
     const existing = await prisma.vendor.findUnique({
       where: { id },
-      select: { regionId: true }
+      select: { regionId: true, companyName: true, vendorCode: true }
     });
     if (!existing || !belongsToActiveRegion(existing.regionId, regionId)) {
       return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
@@ -211,6 +228,21 @@ export async function PUT(request: NextRequest) {
       include: {
         category: true
       }
+    });
+
+    await logActivity({
+      userId: session.user.id,
+      action: ActivityAction.VENDOR_UPDATED,
+      entityType: 'VENDOR',
+      entityId: vendor.id,
+      details: `Updated vendor "${vendor.companyName}" (${vendor.vendorCode})`,
+      link: `/vendors/${vendor.id}`,
+      regionId,
+      metadata: {
+        vendorId: vendor.id,
+        vendorCode: vendor.vendorCode,
+        companyName: vendor.companyName,
+      },
     });
 
     return NextResponse.json({ vendor });
@@ -244,7 +276,7 @@ export async function DELETE(request: NextRequest) {
     const regionId = getActiveRegionId(request);
     const existing = await prisma.vendor.findUnique({
       where: { id },
-      select: { regionId: true }
+      select: { regionId: true, companyName: true, vendorCode: true }
     });
     if (!existing || !belongsToActiveRegion(existing.regionId, regionId)) {
       return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
@@ -254,6 +286,21 @@ export async function DELETE(request: NextRequest) {
     await prisma.vendor.update({
       where: { id },
       data: { isActive: false }
+    });
+
+    await logActivity({
+      userId: session.user.id,
+      action: ActivityAction.VENDOR_DELETED,
+      entityType: 'VENDOR',
+      entityId: id,
+      details: `Deleted vendor "${existing.companyName}" (${existing.vendorCode})`,
+      link: `/vendors/${id}`,
+      regionId,
+      metadata: {
+        vendorId: id,
+        vendorCode: existing.vendorCode,
+        companyName: existing.companyName,
+      },
     });
 
     return NextResponse.json({ success: true });
