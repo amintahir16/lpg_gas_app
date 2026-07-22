@@ -7,7 +7,11 @@ import { Input } from '@/components/ui/input';
 import { XMarkIcon, BanknotesIcon, CreditCardIcon, CheckIcon } from '@heroicons/react/24/outline';
 import { CustomSelect } from '@/components/ui/select-custom';
 import { PAYMENT_METHOD_OPTIONS } from '@/lib/payment-methods';
-import { todayLocalDate } from '@/lib/financial-period';
+import {
+  combineLocalDateAndTime,
+  nowLocalTime,
+  todayLocalDate,
+} from '@/lib/financial-period';
 
 interface VendorPaymentModalProps {
   isOpen: boolean;
@@ -32,16 +36,18 @@ export default function VendorPaymentModal({
 }: VendorPaymentModalProps) {
   const [amount, setAmount] = useState('');
   const [paymentDate, setPaymentDate] = useState(todayLocalDate);
+  const [paymentTime, setPaymentTime] = useState(nowLocalTime);
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [reference, setReference] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Always refresh to today's local date (and clear form) whenever the modal opens
+  // Always refresh to today's local date/time (and clear form) whenever the modal opens
   useEffect(() => {
     if (!isOpen) return;
     setPaymentDate(todayLocalDate());
+    setPaymentTime(nowLocalTime());
     setAmount('');
     setPaymentMethod('CASH');
     setReference('');
@@ -71,12 +77,13 @@ export default function VendorPaymentModal({
     setLoading(true);
 
     try {
+      const paymentDateTime = combineLocalDateAndTime(paymentDate, paymentTime).toISOString();
       const response = await fetch(`/api/vendors/${vendorId}/direct-payments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: paymentAmount,
-          paymentDate,
+          paymentDate: paymentDateTime,
           method: paymentMethod,
           reference: reference || null,
           description: description || (invoiceNumber ? `Payment for invoice ${invoiceNumber}` : `Payment to ${vendorName}`),
@@ -92,6 +99,7 @@ export default function VendorPaymentModal({
       // Success - reset form and close
       setAmount('');
       setPaymentDate(todayLocalDate());
+      setPaymentTime(nowLocalTime());
       setReference('');
       setDescription('');
       onPaymentSuccess();
@@ -298,7 +306,7 @@ export default function VendorPaymentModal({
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             {/* Payment Date */}
             <div>
               <label htmlFor="paymentDate" className="block text-sm font-semibold text-gray-700 mb-2">
@@ -310,6 +318,21 @@ export default function VendorPaymentModal({
                 value={paymentDate}
                 onChange={(e) => setPaymentDate(e.target.value)}
                 max={todayLocalDate()}
+                className="h-9 border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg text-sm"
+                required
+              />
+            </div>
+
+            {/* Payment Time */}
+            <div>
+              <label htmlFor="paymentTime" className="block text-sm font-semibold text-gray-700 mb-2">
+                Time <span className="text-red-500">*</span>
+              </label>
+              <Input
+                id="paymentTime"
+                type="time"
+                value={paymentTime}
+                onChange={(e) => setPaymentTime(e.target.value)}
                 className="h-9 border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg text-sm"
                 required
               />

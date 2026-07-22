@@ -24,6 +24,11 @@ import { generateCylinderTypeFromCapacity } from '@/lib/cylinder-utils';
 import { CustomSelect } from '@/components/ui/select-custom';
 import { buildCylinderVariantKey, parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { PAYMENT_METHOD_OPTIONS, formatPaymentMethodLabel } from '@/lib/payment-methods';
+import {
+  combineLocalDateAndTime,
+  nowLocalTime,
+  todayLocalDate,
+} from '@/lib/financial-period';
 
 interface Vendor {
   id: string;
@@ -285,6 +290,7 @@ export default function VendorDetailPage() {
   const [purchaseFormData, setPurchaseFormData] = useState({
     invoiceNumber: '',
     notes: '',
+    time: nowLocalTime(),
     paidAmount: 0,
     paymentMethod: 'CASH' as string
   });
@@ -797,6 +803,7 @@ export default function VendorDetailPage() {
     setPurchaseFormData({
       invoiceNumber: invoiceNumber,
       notes: '',
+      time: nowLocalTime(),
       paidAmount: 0,
       paymentMethod: 'CASH'
     });
@@ -1127,10 +1134,15 @@ export default function VendorDetailPage() {
 
 
     console.log('Submitting purchase with invoice number:', purchaseFormData.invoiceNumber);
+    const purchaseDateTime = combineLocalDateAndTime(
+      todayLocalDate(),
+      purchaseFormData.time
+    ).toISOString();
     console.log('Purchase data:', {
       items: validItems,
       invoiceNumber: purchaseFormData.invoiceNumber,
       notes: purchaseFormData.notes,
+      purchaseDate: purchaseDateTime,
       paidAmount: purchaseFormData.paidAmount
     });
 
@@ -1142,6 +1154,7 @@ export default function VendorDetailPage() {
           items: validItems,
           invoiceNumber: purchaseFormData.invoiceNumber,
           notes: purchaseFormData.notes,
+          purchaseDate: purchaseDateTime,
           paidAmount: purchaseFormData.paidAmount,
           paymentMethod: purchaseFormData.paymentMethod
         })
@@ -1180,7 +1193,7 @@ export default function VendorDetailPage() {
         setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0 }]);
       }
 
-      setPurchaseFormData({ invoiceNumber: '', notes: '', paidAmount: 0, paymentMethod: 'CASH' });
+      setPurchaseFormData({ invoiceNumber: '', notes: '', time: nowLocalTime(), paidAmount: 0, paymentMethod: 'CASH' });
       fetchVendor();
     } catch (error) {
       console.error('Error creating purchase:', error);
@@ -1228,6 +1241,17 @@ export default function VendorDetailPage() {
       year: 'numeric',
       month: 'short',
       day: 'numeric'
+    });
+  };
+
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString('en-PK', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
     });
   };
 
@@ -1530,7 +1554,7 @@ export default function VendorDetailPage() {
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmitPurchase} className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Invoice Number
@@ -1556,6 +1580,21 @@ export default function VendorDetailPage() {
                           notes: e.target.value
                         })}
                         placeholder="Additional notes"
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Time
+                      </label>
+                      <Input
+                        type="time"
+                        value={purchaseFormData.time}
+                        onChange={(e) => setPurchaseFormData({
+                          ...purchaseFormData,
+                          time: e.target.value
+                        })}
+                        required
                         className="h-9 text-sm"
                       />
                     </div>
@@ -2381,7 +2420,7 @@ export default function VendorDetailPage() {
                           setPurchaseItems([{ itemName: '', quantity: 1, unitPrice: 0, totalPrice: 0 }]);
                         }
 
-                        setPurchaseFormData({ invoiceNumber: '', notes: '', paidAmount: 0, paymentMethod: 'CASH' });
+                        setPurchaseFormData({ invoiceNumber: '', notes: '', time: nowLocalTime(), paidAmount: 0, paymentMethod: 'CASH' });
                         setUsedCodes(new Set()); // Reset used codes
                       }}
                     >
@@ -2436,7 +2475,7 @@ export default function VendorDetailPage() {
                             {purchase.invoiceNumber || 'No Invoice Number'}
                           </h3>
                           <p className="text-xs text-gray-500">
-                            {formatDate(purchase.purchaseDate)}
+                            {formatDateTime(purchase.purchaseDate)}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -2608,7 +2647,7 @@ export default function VendorDetailPage() {
                                   className="flex justify-between text-xs"
                                 >
                                   <span className="text-gray-600">
-                                    {formatDate(payment.paymentDate)} - {formatPaymentMethodLabel(payment.method)}
+                                    {formatDateTime(payment.paymentDate)} - {formatPaymentMethodLabel(payment.method)}
                                   </span>
                                   <span className="font-medium text-green-600">
                                     {formatCurrency(Math.round(Number(payment.amount)))}
@@ -2959,7 +2998,7 @@ export default function VendorDetailPage() {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                                   <div className="flex items-center gap-2">
                                     <span className="text-gray-500 font-medium">Date:</span>
-                                    <span className="text-gray-700 font-semibold">{formatDate(payment.paymentDate)}</span>
+                                    <span className="text-gray-700 font-semibold">{formatDateTime(payment.paymentDate)}</span>
                                   </div>
 
                                   <div className="flex items-center gap-2">

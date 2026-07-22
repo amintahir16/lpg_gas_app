@@ -9,7 +9,11 @@ import {
   formatPaymentMethodLabel,
   type PaymentMethodValue,
 } from '@/lib/payment-methods';
-import { todayLocalDate } from '@/lib/financial-period';
+import {
+  combineLocalDateAndTime,
+  nowLocalTime,
+  todayLocalDate,
+} from '@/lib/financial-period';
 
 type ModalMode = 'deposit' | 'transfer' | null;
 
@@ -46,7 +50,9 @@ export function BankMovementActions({ onSaved, lockedMethod }: BankMovementActio
     const fd = new FormData(e.currentTarget);
     const amount = Number(fd.get('amount'));
     const date = String(fd.get('date') || todayLocalDate());
+    const time = String(fd.get('time') || nowLocalTime());
     const notes = String(fd.get('notes') || '').trim();
+    const movementDate = combineLocalDateAndTime(date, time).toISOString();
 
     const payload =
       mode === 'deposit'
@@ -54,7 +60,7 @@ export function BankMovementActions({ onSaved, lockedMethod }: BankMovementActio
             type: 'DEPOSIT',
             toMethod: lockedMethod || String(fd.get('toMethod')),
             amount,
-            date,
+            date: movementDate,
             notes: notes || null,
           }
         : {
@@ -62,7 +68,7 @@ export function BankMovementActions({ onSaved, lockedMethod }: BankMovementActio
             fromMethod: lockedMethod || String(fd.get('fromMethod')),
             toMethod: String(fd.get('toMethod')),
             amount,
-            date,
+            date: movementDate,
             notes: notes || null,
           };
 
@@ -226,17 +232,31 @@ export function BankMovementActions({ onSaved, lockedMethod }: BankMovementActio
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">
-                  Date
-                </label>
-                <Input
-                  name="date"
-                  type="date"
-                  defaultValue={todayLocalDate()}
-                  required
-                  className="h-9"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">
+                    Date
+                  </label>
+                  <Input
+                    name="date"
+                    type="date"
+                    defaultValue={todayLocalDate()}
+                    required
+                    className="h-9"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">
+                    Time
+                  </label>
+                  <Input
+                    name="time"
+                    type="time"
+                    defaultValue={nowLocalTime()}
+                    required
+                    className="h-9"
+                  />
+                </div>
               </div>
 
               <div className="space-y-1">

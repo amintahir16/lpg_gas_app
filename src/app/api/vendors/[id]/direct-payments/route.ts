@@ -82,6 +82,11 @@ export async function POST(
       );
     }
 
+    const resolvedPaymentDate = paymentDate ? new Date(paymentDate) : new Date();
+    if (Number.isNaN(resolvedPaymentDate.getTime())) {
+      return NextResponse.json({ error: 'Invalid payment date/time' }, { status: 400 });
+    }
+
     // Use transaction to ensure payment and entry status updates are atomic
     const result = await prisma.$transaction(async (tx) => {
       // Verify vendor exists
@@ -98,7 +103,7 @@ export async function POST(
         data: {
           vendorId: id,
           amount: Number(amount),
-          paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
+          paymentDate: resolvedPaymentDate,
           method: method || 'CASH',
           status: 'COMPLETED',
           reference: reference || null,

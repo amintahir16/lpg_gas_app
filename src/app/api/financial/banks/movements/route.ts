@@ -7,27 +7,22 @@ import {
   isSelectablePaymentMethod,
   normalizePaymentMethodKey,
 } from '@/lib/payment-methods';
-import { resolveFinancialPeriod } from '@/lib/financial-period';
+import { resolveFinancialPeriod, combineLocalDateAndTime } from '@/lib/financial-period';
 import { userDisplayName } from '@/lib/bank-ledger';
 
 type MovementType = 'DEPOSIT' | 'TRANSFER';
 
-function parseMovementDate(value: unknown): Date {
+function parseMovementDate(value: unknown, time?: unknown): Date {
   if (typeof value === 'string' && value.trim()) {
-    // date-only YYYY-MM-DD → local noon to avoid timezone day-shift noise
-    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
-    if (match) {
-      return new Date(
-        parseInt(match[1], 10),
-        parseInt(match[2], 10) - 1,
-        parseInt(match[3], 10),
-        12,
-        0,
-        0,
-        0
-      );
+    const trimmed = value.trim();
+    // date-only YYYY-MM-DD (+ optional HH:MM) → local datetime
+    const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+    if (dateOnly) {
+      const timeStr =
+        typeof time === 'string' && time.trim() ? time.trim() : undefined;
+      return combineLocalDateAndTime(trimmed, timeStr);
     }
-    const d = new Date(value);
+    const d = new Date(trimmed);
     if (!Number.isNaN(d.getTime())) return d;
   }
   return new Date();
@@ -93,7 +88,7 @@ export async function POST(request: NextRequest) {
     const typeRaw = String(body.type || '').toUpperCase() as MovementType;
     const amount = Number(body.amount);
     const notes = typeof body.notes === 'string' ? body.notes.trim() || null : null;
-    const movementDate = parseMovementDate(body.date || body.movementDate);
+    const movementDate = parseMovementDate(body.date || body.movementDate, body.time);
 
     if (typeRaw !== 'DEPOSIT' && typeRaw !== 'TRANSFER') {
       return NextResponse.json(

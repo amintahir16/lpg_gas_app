@@ -60,6 +60,30 @@ export function todayLocalDate(): string {
   return toLocalDateString(new Date());
 }
 
+/** Current local time as HH:MM for `<input type="time">`. */
+export function nowLocalTime(): string {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+/**
+ * Combine a local YYYY-MM-DD date and HH:MM time into a Date in the
+ * operator's timezone (avoids UTC midnight shifts from `new Date('YYYY-MM-DD')`).
+ */
+export function combineLocalDateAndTime(
+  date: string | null | undefined,
+  time: string | null | undefined
+): Date {
+  const dateStr =
+    date && /^\d{4}-\d{2}-\d{2}$/.test(date.trim()) ? date.trim() : todayLocalDate();
+  const rawTime = (time || '').trim();
+  const timeMatch = /^(\d{1,2}):(\d{2})/.exec(rawTime);
+  const hours = timeMatch ? parseInt(timeMatch[1], 10) : new Date().getHours();
+  const minutes = timeMatch ? parseInt(timeMatch[2], 10) : new Date().getMinutes();
+  const [year, month, day] = dateStr.split('-').map((part) => parseInt(part, 10));
+  return new Date(year, month - 1, day, hours, minutes, 0, 0);
+}
+
 function parseLocalDate(isoDate: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate.trim());
   if (!match) return null;

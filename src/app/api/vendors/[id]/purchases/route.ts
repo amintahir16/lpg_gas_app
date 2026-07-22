@@ -88,6 +88,7 @@ export async function POST(
       invoiceNumber,
       itemsCount: items?.length,
       notes,
+      purchaseDate,
       paidAmount,
       paymentMethod
     });
@@ -97,6 +98,11 @@ export async function POST(
         { error: 'At least one item is required' },
         { status: 400 }
       );
+    }
+
+    const resolvedPurchaseDate = purchaseDate ? new Date(purchaseDate) : new Date();
+    if (Number.isNaN(resolvedPurchaseDate.getTime())) {
+      return NextResponse.json({ error: 'Invalid purchase date/time' }, { status: 400 });
     }
 
     // Calculate total
@@ -184,7 +190,7 @@ export async function POST(
               unitPrice: Number(item.unitPrice),
               totalPrice: Number(item.totalPrice),
               status: entryStatus as any,
-              purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),
+              purchaseDate: resolvedPurchaseDate,
               invoiceNumber,
               notes,
               ...(regionId ? { regionId } : {}),
@@ -200,7 +206,7 @@ export async function POST(
           data: {
             vendorId: id,
             amount: paid,
-            paymentDate: new Date(),
+            paymentDate: resolvedPurchaseDate,
             method: (paymentMethod || 'CASH') as any,
             status: 'COMPLETED',
             description: `Payment for invoice ${invoiceNumber}`,
