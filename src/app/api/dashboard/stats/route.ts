@@ -223,8 +223,9 @@ export async function GET(request: NextRequest) {
     const rangeSalaries = Number(salariesSum._sum.amount || 0);
     const b2cSecurityRetention = Number(b2cSecurityRetentionSum._sum.returnDeduction || 0);
 
-    // 3.7. Actual Profit = Revenue - Expenses - Salaries + B2C security retention
-    const actualProfit = rangeRevenue - rangeExpenses - rangeSalaries + b2cSecurityRetention;
+    // 3.7. Actual Profit = Revenue - Expenses - Salaries - Vendor payments + B2C security retention
+    const actualProfit =
+      rangeRevenue - rangeExpenses - rangeSalaries - rangePayments + b2cSecurityRetention;
 
     // 4. Chart Data (Last 6 Months or Daily)
     // For the Expenses Trend chart ONLY: exclude RENT. Show DAILY office expenses vs VEHICLE.
@@ -675,6 +676,7 @@ export async function GET(request: NextRequest) {
         rangeExpenses,
         rangeSalaries,
         actualProfit,
+        rangePayments,
         vendorBalance,
       },
       revenueChartData,

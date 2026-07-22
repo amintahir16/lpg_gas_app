@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
           totalAmount: parseFloat(totalAmount),
           ...(paidAmountValue !== null && { paidAmount: paidAmountValue }),
           ...(unpaidAmountValue !== null && { unpaidAmount: unpaidAmountValue }),
-          ...(transactionType === 'SALE' && paymentMethod && { paymentMethod: paymentMethod as any }),
+          ...((transactionType === 'SALE' || transactionType === 'PAYMENT') && paymentMethod && { paymentMethod: paymentMethod as any }),
           ...(transactionType === 'SALE' && paymentStatus && { paymentStatus: paymentStatus as any }),
           paymentReference: paymentReference || null,
           notes: notes || null,

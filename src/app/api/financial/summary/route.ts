@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { requireAdmin } from '@/lib/apiAuth';
+import { resolveFinancialPeriod } from '@/lib/financial-period';
 
 export async function GET(request: NextRequest) {
     try {
@@ -13,11 +14,13 @@ export async function GET(request: NextRequest) {
         const txRegionScope = regionId ? { regionId } : {};
 
         const { searchParams } = new URL(request.url);
-        const month = parseInt(searchParams.get('month') || String(new Date().getMonth() + 1));
-        const year = parseInt(searchParams.get('year') || String(new Date().getFullYear()));
-
-        const startDate = new Date(year, month - 1, 1);
-        const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+        const resolved = resolveFinancialPeriod({
+            period: searchParams.get('period'),
+            date: searchParams.get('date'),
+            month: searchParams.get('month'),
+            year: searchParams.get('year'),
+        });
+        const { startDate, endDate, period, month, year, date, label } = resolved;
 
         // 1. Revenue — B2C: gas + accessories + delivery only (security deposits/returns are not sales revenue)
         const [b2cGasRev, b2cAccRev, b2cDeliveryRev, b2bRevenue] = await Promise.all([
@@ -69,7 +72,7 @@ export async function GET(request: NextRequest) {
 
         const totalRevenue = b2cSalesRevenue + Number(b2bRevenue._sum.totalPrice || 0);
 
-        // 2. Expenses (Office Rent + Daily)
+        // 2. Expenses (Office Rent + Daily) — by expenseDate within the selected period
         const expensesSum = await prisma.officeExpense.aggregate({
             where: {
                 expenseDate: { gte: startDate, lte: endDate },
@@ -81,7 +84,6 @@ export async function GET(request: NextRequest) {
         const totalExpenses = Number(expensesSum._sum.amount || 0);
 
         // 3. Profit (Gross Profit)
-        // B2C Gross Profit is directly stored
         const b2cProfit = await prisma.b2CTransaction.aggregate({
             where: {
                 date: { gte: startDate, lte: endDate },
@@ -91,9 +93,6 @@ export async function GET(request: NextRequest) {
             _sum: { actualProfit: true },
         });
 
-        // B2B Gross Profit needs to be calculated or approximated
-        // For B2B, we use a margin-based calculation in the profit page
-        // Here we'll do a similar aggregation for summary
         const b2bItems = await prisma.b2BTransactionItem.findMany({
             where: {
                 transaction: {
@@ -116,7 +115,6 @@ export async function GET(request: NextRequest) {
         b2bItems.forEach(item => {
             if (item.cylinderType) {
                 const marginPerKg = Number(item.transaction.customer?.marginCategory?.marginPerKg || 0);
-                // Extract capacity from cylinderType (e.g., DOMESTIC_11_8KG -> 11.8)
                 let capacity = 15;
                 const match = item.cylinderType.match(/(\d+)(?:_(\d+))?/);
                 if (match) {
@@ -124,25 +122,27 @@ export async function GET(request: NextRequest) {
                 }
                 b2bGrossProfit += Number(item.quantity) * capacity * marginPerKg;
             } else {
-                // Accessories profit
                 const costPrice = Number(item.costPrice || 0);
                 if (costPrice > 0) {
                     b2bGrossProfit += Number(item.totalPrice) - (costPrice * Number(item.quantity));
                 } else {
-                    b2bGrossProfit += Number(item.totalPrice) * 0.2; // 20% fallback
+                    b2bGrossProfit += Number(item.totalPrice) * 0.2;
                 }
             }
         });
 
         const totalProfit = Number(b2cProfit._sum.actualProfit || 0) + b2bGrossProfit;
 
-        // 4. Salaries
+        // 4. Salaries — month/year fields for Month & Year modes; paidDate for Day mode
+        const salaryWhere =
+            period === 'day'
+                ? { paidDate: { gte: startDate, lte: endDate }, ...regionScope }
+                : period === 'year'
+                    ? { year, ...regionScope }
+                    : { month: month!, year, ...regionScope };
+
         const salariesSum = await prisma.salaryRecord.aggregate({
-            where: {
-                month,
-                year,
-                ...regionScope,
-            },
+            where: salaryWhere,
             _sum: { amount: true },
         });
 
@@ -153,8 +153,11 @@ export async function GET(request: NextRequest) {
             totalExpenses,
             totalProfit,
             totalSalaries,
+            period,
+            date,
             month,
             year,
+            label,
         });
 
     } catch (error) {

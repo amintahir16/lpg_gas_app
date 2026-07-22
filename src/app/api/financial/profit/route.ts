@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { subMonths, format } from 'date-fns';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { requireAdmin } from '@/lib/apiAuth';
+import {
+    getFinancialChartBuckets,
+    resolveFinancialPeriod,
+} from '@/lib/financial-period';
+
 export async function GET(request: NextRequest) {
     try {
         const auth = await requireAdmin();
@@ -11,10 +15,14 @@ export async function GET(request: NextRequest) {
         const regionScope = regionScopedWhere(regionId);
         const txRegionScope = regionId ? { regionId } : {};
         const { searchParams } = new URL(request.url);
-        const month = parseInt(searchParams.get('month') || String(new Date().getMonth() + 1));
-        const year = parseInt(searchParams.get('year') || String(new Date().getFullYear()));
-        const startDate = new Date(year, month - 1, 1);
-        const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+        const resolved = resolveFinancialPeriod({
+            period: searchParams.get('period'),
+            date: searchParams.get('date'),
+            month: searchParams.get('month'),
+            year: searchParams.get('year'),
+        });
+        const { startDate, endDate, period, month, year, date, label } = resolved;
+
         const cylinderTypes = await prisma.cylinder.findMany({
             where: regionScope,
             distinct: ['cylinderType'],
@@ -167,12 +175,12 @@ export async function GET(request: NextRequest) {
             profit: data.profit,
         }));
 
-        // Monthly chart data (last 6 months)
+        // Chart data — buckets follow selected period (7 days / 6 months / 12 months)
+        const chartBuckets = getFinancialChartBuckets(resolved);
         const chartData = [];
-        for (let i = 5; i >= 0; i--) {
-            const chartMonth = subMonths(new Date(year, month - 1, 15), i);
-            const chartStart = new Date(chartMonth.getFullYear(), chartMonth.getMonth(), 1);
-            const chartEnd = new Date(chartMonth.getFullYear(), chartMonth.getMonth() + 1, 0, 23, 59, 59, 999);
+        for (const bucket of chartBuckets) {
+            const chartStart = bucket.startDate;
+            const chartEnd = bucket.endDate;
             // B2C profit from gas items
             const b2cGasProfit = await prisma.b2CTransactionGasItem.aggregate({
                 where: { transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false, ...txRegionScope } },
@@ -227,7 +235,7 @@ export async function GET(request: NextRequest) {
                 _sum: { returnDeduction: true },
             });
             chartData.push({
-                name: format(chartStart, 'MMM yyyy'),
+                name: bucket.name,
                 profit:
                     Number(b2cGasProfit._sum.profitMargin || 0) +
                     Number(b2cAccProfit._sum.profitMargin || 0) +
@@ -238,8 +246,11 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({
             items: [...cylinders, ...accessories],
             chartData,
+            period,
+            date,
             month,
             year,
+            label,
         });
     } catch (error) {
         console.error('Profit API error:', error);

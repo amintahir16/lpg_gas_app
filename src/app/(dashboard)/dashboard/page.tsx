@@ -20,7 +20,8 @@ import {
   ArrowPathIcon,
   BuildingOfficeIcon,
   BuildingStorefrontIcon,
-  BanknotesIcon
+  BanknotesIcon,
+  CreditCardIcon,
 } from '@heroicons/react/24/outline';
 import {
   BarChart,
@@ -58,6 +59,7 @@ interface DashboardStats {
     rangeExpenses: number;
     rangeSalaries: number;
     actualProfit: number;
+    rangePayments: number;
     vendorBalance: number;
   };
   revenueChartData: any[];
@@ -268,7 +270,7 @@ export default function DashboardPage() {
 
       {/* Stats Cards — Period Revenue & Est. Profit: SUPER_ADMIN only */}
       <div
-        className={`grid grid-cols-2 gap-3 ${isSuperAdmin ? 'md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7' : 'md:grid-cols-2 lg:grid-cols-4'}`}
+        className={`grid grid-cols-2 gap-3 ${isSuperAdmin ? 'md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8' : 'md:grid-cols-2 lg:grid-cols-4'}`}
       >
         <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-500 to-blue-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
           <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">
@@ -317,6 +319,17 @@ export default function DashboardPage() {
             </Card>
           </>
         )}
+
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-fuchsia-500 to-pink-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
+          <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">
+            <CreditCardIcon className="w-10 h-10 text-white" />
+          </div>
+          <CardContent className="p-3 relative z-10">
+            <p className="text-xs font-medium text-fuchsia-100 mb-1 truncate">Vendor Payments</p>
+            <h3 className="text-xl font-bold text-white truncate">{formatCurrency(stats.kpis.rangePayments || 0)}</h3>
+            <p className="text-[10px] text-fuchsia-200 mt-1 truncate">Paid to all vendors</p>
+          </CardContent>
+        </Card>
 
         <Card className="border-0 shadow-sm bg-gradient-to-br from-rose-500 to-orange-500 relative overflow-hidden group hover:shadow-lg transition-shadow">
           <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">

@@ -1,41 +1,93 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeftIcon, CurrencyDollarIcon, CalendarIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, CurrencyDollarIcon } from '@heroicons/react/24/outline';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { CustomSelect } from '@/components/ui/select-custom';
+import {
+    PAYMENT_METHOD_OPTIONS,
+    emptyPaymentMethodTotals,
+    type PaymentMethodValue,
+} from '@/lib/payment-methods';
+import {
+    buildFinancialPeriodQuery,
+    chartDescriptionForPeriod,
+    resolveFinancialPeriod,
+    todayLocalDate,
+    type FinancialPeriodMode,
+} from '@/lib/financial-period';
+import { FinancialPeriodFilter } from '@/components/FinancialPeriodFilter';
+
 interface RevenueItem {
     name: string;
     type: string;
     quantity: number;
     revenue: number;
 }
-const monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-];
+
+const PAYMENT_METHOD_CARD_STYLES: Record<
+    PaymentMethodValue,
+    { gradient: string; labelTone: string }
+> = {
+    CASH: {
+        gradient: 'from-amber-500 to-amber-600',
+        labelTone: 'text-amber-100',
+    },
+    BANK_TRANSFER: {
+        gradient: 'from-indigo-500 to-indigo-600',
+        labelTone: 'text-indigo-100',
+    },
+    EASYPAISA: {
+        gradient: 'from-lime-500 to-green-600',
+        labelTone: 'text-lime-100',
+    },
+    JAZZ_CASH: {
+        gradient: 'from-rose-500 to-rose-600',
+        labelTone: 'text-rose-100',
+    },
+};
+
 export default function RevenuePage() {
     const router = useRouter();
     const [items, setItems] = useState<RevenueItem[]>([]);
     const [chartData, setChartData] = useState<any[]>([]);
+    const [byPaymentMethod, setByPaymentMethod] = useState<Record<PaymentMethodValue, number>>(
+        emptyPaymentMethodTotals()
+    );
     const [loading, setLoading] = useState(true);
+    const [period, setPeriod] = useState<FinancialPeriodMode>('month');
+    const [date, setDate] = useState(todayLocalDate);
     const [month, setMonth] = useState(new Date().getMonth() + 1);
     const [year, setYear] = useState(new Date().getFullYear());
+    const [periodLabel, setPeriodLabel] = useState('');
+
+    const resolvedLabel = useMemo(
+        () => resolveFinancialPeriod({ period, date, month, year }).label,
+        [period, date, month, year]
+    );
+
     useEffect(() => {
         fetchData();
-    }, [month, year]);
+    }, [period, date, month, year]);
+
     const fetchData = async () => {
         try {
             setLoading(true);
-            const res = await fetch(`/api/financial/revenue?month=${month}&year=${year}`);
+            const res = await fetch(
+                `/api/financial/revenue?${buildFinancialPeriodQuery({ period, date, month, year })}`
+            );
             if (res.ok) {
                 const data = await res.json();
                 setItems(data.items || []);
                 setChartData(data.chartData || []);
+                setByPaymentMethod({
+                    ...emptyPaymentMethodTotals(),
+                    ...(data.byPaymentMethod || {}),
+                });
+                setPeriodLabel(data.label || resolvedLabel);
             }
         } catch (err) {
             console.error('Error:', err);
@@ -43,15 +95,17 @@ export default function RevenuePage() {
             setLoading(false);
         }
     };
+
     const formatCurrency = (amount: number) =>
         new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
     const totalQty = items.reduce((s, i) => s + i.quantity, 0);
     const totalRevenue = items.reduce((s, i) => s + i.revenue, 0);
     const cylinders = items.filter(i => i.type === 'Cylinder');
     const accessories = items.filter(i => i.type === 'Accessory');
+    const displayLabel = periodLabel || resolvedLabel;
+
     return (
         <div className="space-y-6 max-w-[1200px] mx-auto">
-            {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex items-center gap-4">
                     <Button variant="outline" size="sm" onClick={() => router.push('/financial')} className="flex items-center justify-center h-9 w-9 p-0 shrink-0" aria-label="Back">
@@ -64,26 +118,18 @@ export default function RevenuePage() {
                         <p className="text-sm text-gray-600">Products sold with quantities and revenue</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-2 py-1 shadow-sm h-10">
-                    <CalendarIcon className="w-4 h-4 text-gray-400 ml-1" />
-                    <CustomSelect 
-                        value={month.toString()} 
-                        onChange={(val) => setMonth(parseInt(val))}
-                        options={monthNames.map((name, i) => ({ value: (i + 1).toString(), label: name }))}
-                        className="w-[120px]"
-                        buttonClassName="border-none focus:ring-0 shadow-none h-8"
-                    />
-                    <div className="w-[1px] h-4 bg-gray-200" />
-                    <CustomSelect 
-                        value={year.toString()} 
-                        onChange={(val) => setYear(parseInt(val))}
-                        options={Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => ({ value: y.toString(), label: y.toString() }))}
-                        className="w-[90px]"
-                        buttonClassName="border-none focus:ring-0 shadow-none h-8"
-                    />
-                </div>
+                <FinancialPeriodFilter
+                    period={period}
+                    date={date}
+                    month={month}
+                    year={year}
+                    onPeriodChange={setPeriod}
+                    onDateChange={setDate}
+                    onMonthChange={setMonth}
+                    onYearChange={setYear}
+                />
             </div>
-            {/* Summary Cards */}
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-500 to-emerald-600">
                     <CardContent className="p-4">
@@ -104,11 +150,30 @@ export default function RevenuePage() {
                     </CardContent>
                 </Card>
             </div>
-            {/* Products Table */}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {PAYMENT_METHOD_OPTIONS.map((method) => {
+                    const styles = PAYMENT_METHOD_CARD_STYLES[method.value];
+                    return (
+                        <Card
+                            key={method.value}
+                            className={`border-0 shadow-sm bg-gradient-to-br ${styles.gradient}`}
+                        >
+                            <CardContent className="p-4">
+                                <p className={`text-sm font-medium ${styles.labelTone}`}>{method.label}</p>
+                                <p className="text-2xl font-bold text-white">
+                                    {loading ? '…' : formatCurrency(byPaymentMethod[method.value] || 0)}
+                                </p>
+                            </CardContent>
+                        </Card>
+                    );
+                })}
+            </div>
+
             <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
                 <CardHeader>
                     <CardTitle className="text-lg">Products Sold</CardTitle>
-                    <CardDescription>{monthNames[month - 1]} {year}</CardDescription>
+                    <CardDescription>{displayLabel}</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {loading ? (
@@ -157,7 +222,6 @@ export default function RevenuePage() {
                                             ))}
                                         </>
                                     )}
-                                    {/* Totals */}
                                     <TableRow className="border-t-2 border-gray-300 bg-gray-50">
                                         <TableCell className="font-bold text-gray-900">TOTAL</TableCell>
                                         <TableCell />
@@ -170,12 +234,14 @@ export default function RevenuePage() {
                     )}
                 </CardContent>
             </Card>
-            {/* Monthly Revenue Chart */}
+
             {chartData.length > 0 && (
                 <Card className="border shadow-sm bg-white">
                     <CardHeader>
-                        <CardTitle className="text-base font-bold">Monthly Revenue Trend</CardTitle>
-                        <CardDescription className="text-xs">Last 6 months — Cylinders vs Accessories</CardDescription>
+                        <CardTitle className="text-base font-bold">Revenue Trend</CardTitle>
+                        <CardDescription className="text-xs">
+                            {chartDescriptionForPeriod(period)} — Cylinders vs Accessories
+                        </CardDescription>
                     </CardHeader>
                     <CardContent>
                         <div className="h-[280px] w-full">

@@ -7,6 +7,7 @@ import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity } from '@/lib/superAdminNotifier';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { requireAdmin } from '@/lib/apiAuth';
+import { resolveFinancialPeriod } from '@/lib/financial-period';
 export async function GET(request: NextRequest) {
     try {
         const auth = await requireAdmin();
@@ -15,8 +16,23 @@ export async function GET(request: NextRequest) {
         const regionId = getActiveRegionId(request);
         const regionScope = regionScopedWhere(regionId);
         const { searchParams } = new URL(request.url);
-        const month = parseInt(searchParams.get('month') || String(new Date().getMonth() + 1));
-        const year = parseInt(searchParams.get('year') || String(new Date().getFullYear()));
+        const resolved = resolveFinancialPeriod({
+            period: searchParams.get('period'),
+            date: searchParams.get('date'),
+            month: searchParams.get('month'),
+            year: searchParams.get('year'),
+        });
+        const { startDate, endDate, period, month, year, date, label } = resolved;
+
+        // Period filter for salary records:
+        // day → paidDate range; month → month+year fields; year → year field only
+        const salaryWhere =
+            period === 'day'
+                ? { paidDate: { gte: startDate, lte: endDate }, ...regionScope }
+                : period === 'year'
+                    ? { year, ...regionScope }
+                    : { month: month!, year, ...regionScope };
+
         // Fetch active users (employees) — SUPER_ADMINs are global; ADMINs are region-scoped.
         // Show employees that belong to this region OR are unassigned (super-admins).
         const users = await prisma.user.findMany({
@@ -35,9 +51,9 @@ export async function GET(request: NextRequest) {
             },
             orderBy: { name: 'asc' },
         });
-        // Fetch salary records for the selected month — scope by region.
+        // Fetch salary records for the selected period — scope by region.
         const salaryRecords = await prisma.salaryRecord.findMany({
-            where: { month, year, ...regionScope },
+            where: salaryWhere,
             include: {
                 user: {
                     select: { id: true, name: true, firstName: true, lastName: true, role: true },
@@ -67,9 +83,9 @@ export async function GET(request: NextRequest) {
                     : null,
             };
         });
-        // Salary history (last 50 records for this region)
+        // Salary history for the same period (reasonable limit)
         const history = await prisma.salaryRecord.findMany({
-            where: regionScope,
+            where: salaryWhere,
             take: 50,
             orderBy: { paidDate: 'desc' },
             include: {
@@ -101,8 +117,11 @@ export async function GET(request: NextRequest) {
                 unpaidCount: totalEmployees - paidCount,
                 totalPaid,
             },
+            period,
+            date,
             month,
             year,
+            label,
         });
     } catch (error) {
         console.error('Salaries API error:', error);

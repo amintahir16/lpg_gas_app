@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,10 +7,19 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
-    ArrowLeftIcon, UserGroupIcon, CalendarIcon, CheckCircleIcon,
+    ArrowLeftIcon, UserGroupIcon, CheckCircleIcon,
     XCircleIcon, BanknotesIcon, TrashIcon
 } from '@heroicons/react/24/outline';
 import { CustomSelect } from '@/components/ui/select-custom';
+import {
+    buildFinancialPeriodQuery,
+    resolveFinancialPeriod,
+    salaryPayTarget,
+    todayLocalDate,
+    type FinancialPeriodMode,
+} from '@/lib/financial-period';
+import { FinancialPeriodFilter } from '@/components/FinancialPeriodFilter';
+
 interface Employee {
     id: string;
     name: string;
@@ -48,24 +57,40 @@ export default function SalariesPage() {
     const [history, setHistory] = useState<SalaryHistory[]>([]);
     const [summary, setSummary] = useState({ totalEmployees: 0, paidCount: 0, unpaidCount: 0, totalPaid: 0 });
     const [loading, setLoading] = useState(true);
+    const [period, setPeriod] = useState<FinancialPeriodMode>('month');
+    const [date, setDate] = useState(todayLocalDate);
     const [month, setMonth] = useState(new Date().getMonth() + 1);
     const [year, setYear] = useState(new Date().getFullYear());
+    const [periodLabel, setPeriodLabel] = useState('');
     const [showPayModal, setShowPayModal] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
+
+    const resolved = useMemo(
+        () => resolveFinancialPeriod({ period, date, month, year }),
+        [period, date, month, year]
+    );
+    const resolvedLabel = resolved.label;
+    const payTarget = useMemo(() => salaryPayTarget(resolved), [resolved]);
+    const payTargetLabel = `${monthNames[payTarget.month - 1]} ${payTarget.year}`;
+
     useEffect(() => {
         fetchData();
-    }, [month, year]);
+    }, [period, date, month, year]);
+
     const fetchData = async () => {
         try {
             setLoading(true);
-            const res = await fetch(`/api/financial/salaries?month=${month}&year=${year}`);
+            const res = await fetch(
+                `/api/financial/salaries?${buildFinancialPeriodQuery({ period, date, month, year })}`
+            );
             if (res.ok) {
                 const data = await res.json();
                 setEmployees(data.employees || []);
                 setHistory(data.history || []);
                 setSummary(data.summary || { totalEmployees: 0, paidCount: 0, unpaidCount: 0, totalPaid: 0 });
+                setPeriodLabel(data.label || resolvedLabel);
             }
         } catch (err) {
             console.error('Error:', err);
@@ -73,6 +98,7 @@ export default function SalariesPage() {
             setLoading(false);
         }
     };
+
     const handlePaySalary = async (formData: any) => {
         try {
             setSubmitting(true);
@@ -80,7 +106,11 @@ export default function SalariesPage() {
             const res = await fetch('/api/financial/salaries', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...formData, month, year }),
+                body: JSON.stringify({
+                    ...formData,
+                    month: payTarget.month,
+                    year: payTarget.year,
+                }),
             });
             if (!res.ok) {
                 const data = await res.json();
@@ -107,7 +137,7 @@ export default function SalariesPage() {
     };
     const formatCurrency = (amount: number) =>
         new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
-    const formatDate = (date: string) => new Date(date).toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' });
+    const formatDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('en-PK', { year: 'numeric', month: 'short', day: 'numeric' });
     const getRoleBadge = (role: string) => {
         const colors: Record<string, string> = {
             SUPER_ADMIN: 'bg-red-50 text-red-700 border-red-200',
@@ -116,6 +146,8 @@ export default function SalariesPage() {
         };
         return colors[role] || colors.USER;
     };
+    const displayLabel = periodLabel || resolvedLabel;
+
     return (
         <div className="space-y-6 max-w-[1200px] mx-auto">
             {/* Header */}
@@ -131,24 +163,16 @@ export default function SalariesPage() {
                         <p className="text-sm text-gray-600">Record and manage employee salary payments</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-2 py-1 shadow-sm h-10">
-                    <CalendarIcon className="w-4 h-4 text-gray-400 ml-1" />
-                    <CustomSelect 
-                        value={month.toString()} 
-                        onChange={(val) => setMonth(parseInt(val))}
-                        options={monthNames.map((name, i) => ({ value: (i + 1).toString(), label: name }))}
-                        className="w-[120px]"
-                        buttonClassName="border-none focus:ring-0 shadow-none h-8"
-                    />
-                    <div className="w-[1px] h-4 bg-gray-200" />
-                    <CustomSelect 
-                        value={year.toString()} 
-                        onChange={(val) => setYear(parseInt(val))}
-                        options={Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => ({ value: y.toString(), label: y.toString() }))}
-                        className="w-[90px]"
-                        buttonClassName="border-none focus:ring-0 shadow-none h-8"
-                    />
-                </div>
+                <FinancialPeriodFilter
+                    period={period}
+                    date={date}
+                    month={month}
+                    year={year}
+                    onPeriodChange={setPeriod}
+                    onDateChange={setDate}
+                    onMonthChange={setMonth}
+                    onYearChange={setYear}
+                />
             </div>
             {/* Error Display */}
             {error && (
@@ -187,7 +211,7 @@ export default function SalariesPage() {
             {/* Employee Salary Status */}
             <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
                 <CardHeader>
-                    <CardTitle className="text-lg">Salary Status — {monthNames[month - 1]} {year}</CardTitle>
+                    <CardTitle className="text-lg">Salary Status — {displayLabel}</CardTitle>
                     <CardDescription>Click &quot;Pay Salary&quot; to record a payment</CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -272,7 +296,7 @@ export default function SalariesPage() {
             <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
                 <CardHeader>
                     <CardTitle className="text-lg">Salary Payment History</CardTitle>
-                    <CardDescription>Recent salary payments across all months</CardDescription>
+                    <CardDescription>Salary payments for {displayLabel}</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {history.length === 0 ? (
@@ -322,7 +346,7 @@ export default function SalariesPage() {
                             <div>
                                 <h2 className="text-lg font-bold text-gray-900">Pay Salary</h2>
                                 <p className="text-[10px] text-gray-500 font-medium">
-                                    Employee: <span className="text-blue-600 font-bold">{selectedEmployee.name}</span> — {monthNames[month - 1]} {year}
+                                    Employee: <span className="text-blue-600 font-bold">{selectedEmployee.name}</span> — {payTargetLabel}
                                 </p>
                             </div>
                             <Button variant="ghost" size="sm" onClick={() => { setShowPayModal(false); setSelectedEmployee(null); setError(null); }} className="h-8 w-8 p-0 rounded-full">

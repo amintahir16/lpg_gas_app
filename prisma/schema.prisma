@@ -774,6 +774,8 @@ enum PaymentMethod {
   CREDIT_CARD
   DEBIT_CARD
   WIRE_TRANSFER
+  EASYPAISA
+  JAZZ_CASH
 }
 
 enum PaymentStatus {

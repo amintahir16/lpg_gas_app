@@ -1,8 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { startOfMonth, subMonths, format } from 'date-fns';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { requireAdmin } from '@/lib/apiAuth';
+import {
+    emptyPaymentMethodTotals,
+    normalizePaymentMethodKey,
+    type PaymentMethodValue,
+} from '@/lib/payment-methods';
+import {
+    getFinancialChartBuckets,
+    resolveFinancialPeriod,
+} from '@/lib/financial-period';
+
+function adjustPaymentMethodAmount(
+    totals: Record<PaymentMethodValue, number>,
+    method: string | null | undefined,
+    amount: number
+) {
+    if (!amount) return;
+    const key = normalizePaymentMethodKey(method);
+    if (!key) return;
+    totals[key] += amount;
+}
+
 export async function GET(request: NextRequest) {
     try {
         const auth = await requireAdmin();
@@ -10,12 +30,15 @@ export async function GET(request: NextRequest) {
         const regionId = getActiveRegionId(request);
         const txRegionScope = regionId ? { regionId } : {};
         const { searchParams } = new URL(request.url);
-        const month = parseInt(searchParams.get('month') || String(new Date().getMonth() + 1));
-        const year = parseInt(searchParams.get('year') || String(new Date().getFullYear()));
-        const startDate = new Date(year, month - 1, 1);
-        const endDate = new Date(year, month, 0, 23, 59, 59, 999);
-        // Fetch all transaction items for the month
-        const [b2cGasItems, b2cAccessoryItems, b2bItems] = await Promise.all([
+        const resolved = resolveFinancialPeriod({
+            period: searchParams.get('period'),
+            date: searchParams.get('date'),
+            month: searchParams.get('month'),
+            year: searchParams.get('year'),
+        });
+        const { startDate, endDate, period, month, year, date, label } = resolved;
+
+        const [b2cGasItems, b2cAccessoryItems, b2bItems, b2bPaidSales, b2bPaymentTxs, b2cPayments, vendorPayments] = await Promise.all([
             prisma.b2CTransactionGasItem.findMany({
                 where: {
                     transaction: {
@@ -54,8 +77,44 @@ export async function GET(request: NextRequest) {
                     totalPrice: true,
                 },
             }),
+            prisma.b2BTransaction.findMany({
+                where: {
+                    date: { gte: startDate, lte: endDate },
+                    voided: false,
+                    transactionType: 'SALE',
+                    paidAmount: { gt: 0 },
+                    paymentMethod: { not: null },
+                    ...txRegionScope,
+                },
+                select: { paidAmount: true, paymentMethod: true },
+            }),
+            prisma.b2BTransaction.findMany({
+                where: {
+                    date: { gte: startDate, lte: endDate },
+                    voided: false,
+                    transactionType: 'PAYMENT',
+                    ...txRegionScope,
+                },
+                select: { totalAmount: true, paidAmount: true, paymentMethod: true },
+            }),
+            prisma.b2CTransaction.findMany({
+                where: {
+                    date: { gte: startDate, lte: endDate },
+                    voided: false,
+                    ...txRegionScope,
+                },
+                select: { finalAmount: true, totalAmount: true, paymentMethod: true },
+            }),
+            prisma.vendorPayment.findMany({
+                where: {
+                    paymentDate: { gte: startDate, lte: endDate },
+                    status: 'COMPLETED',
+                    ...txRegionScope,
+                },
+                select: { amount: true, method: true },
+            }),
         ]);
-        // Get dynamic cylinder types for display labels
+
         const cylinderTypes = await prisma.cylinder.findMany({
             where: regionScopedWhere(regionId),
             distinct: ['cylinderType'],
@@ -64,10 +123,10 @@ export async function GET(request: NextRequest) {
         const typeLabels = new Map(
             cylinderTypes.map((ct) => [ct.cylinderType, ct.typeName ? `${ct.typeName} (${ct.capacity}kg)` : ct.cylinderType])
         );
-        // Aggregate by product
+
         const cylinderMap = new Map<string, { qty: number; revenue: number }>();
         const accessoryMap = new Map<string, { qty: number; revenue: number }>();
-        // B2C gas items
+
         b2cGasItems.forEach((item) => {
             const key = item.cylinderType;
             const existing = cylinderMap.get(key) || { qty: 0, revenue: 0 };
@@ -75,7 +134,7 @@ export async function GET(request: NextRequest) {
             existing.revenue += Number(item.totalPrice);
             cylinderMap.set(key, existing);
         });
-        // B2B items — cylinders vs accessories
+
         b2bItems.forEach((item) => {
             const qty = Number(item.quantity);
             const revenue = Number(item.totalPrice);
@@ -93,7 +152,7 @@ export async function GET(request: NextRequest) {
                 accessoryMap.set(key, existing);
             }
         });
-        // B2C accessory items
+
         b2cAccessoryItems.forEach((item) => {
             const key = item.productName;
             const existing = accessoryMap.get(key) || { qty: 0, revenue: 0 };
@@ -101,6 +160,7 @@ export async function GET(request: NextRequest) {
             existing.revenue += Number(item.totalPrice);
             accessoryMap.set(key, existing);
         });
+
         const cylinders = Array.from(cylinderMap.entries()).map(([type, data]) => ({
             name: typeLabels.get(type) || type,
             type: 'Cylinder',
@@ -115,49 +175,66 @@ export async function GET(request: NextRequest) {
             quantity: data.qty,
             revenue: data.revenue,
         }));
-        // Monthly chart data (last 6 months)
+
+        const byPaymentMethod = emptyPaymentMethodTotals();
+        b2bPaidSales.forEach((tx) => {
+            adjustPaymentMethodAmount(byPaymentMethod, tx.paymentMethod, Number(tx.paidAmount || 0));
+        });
+        b2bPaymentTxs.forEach((tx) => {
+            const amount = Number(tx.paidAmount != null ? tx.paidAmount : tx.totalAmount) || 0;
+            adjustPaymentMethodAmount(byPaymentMethod, tx.paymentMethod, amount);
+        });
+        b2cPayments.forEach((tx) => {
+            const amount = Number(tx.finalAmount || tx.totalAmount || 0);
+            adjustPaymentMethodAmount(byPaymentMethod, tx.paymentMethod, amount);
+        });
+        vendorPayments.forEach((payment) => {
+            adjustPaymentMethodAmount(byPaymentMethod, payment.method, -Number(payment.amount || 0));
+        });
+
+        const chartBuckets = getFinancialChartBuckets(resolved);
         const chartData = [];
-        for (let i = 5; i >= 0; i--) {
-            const chartMonth = subMonths(new Date(year, month - 1, 15), i);
-            const chartStart = new Date(chartMonth.getFullYear(), chartMonth.getMonth(), 1);
-            const chartEnd = new Date(chartMonth.getFullYear(), chartMonth.getMonth() + 1, 0, 23, 59, 59, 999);
+        for (const bucket of chartBuckets) {
             const [b2cGas, b2cAcc, b2bCylinders, b2bAccessories] = await Promise.all([
                 prisma.b2CTransactionGasItem.aggregate({
-                    where: { transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false, ...txRegionScope } },
+                    where: { transaction: { date: { gte: bucket.startDate, lte: bucket.endDate }, voided: false, ...txRegionScope } },
                     _sum: { totalPrice: true },
                 }),
                 prisma.b2CTransactionAccessoryItem.aggregate({
-                    where: { transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false, ...txRegionScope } },
+                    where: { transaction: { date: { gte: bucket.startDate, lte: bucket.endDate }, voided: false, ...txRegionScope } },
                     _sum: { totalPrice: true },
                 }),
-                // B2B cylinder items (have cylinderType set)
                 prisma.b2BTransactionItem.aggregate({
                     where: {
-                        transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false, transactionType: 'SALE', ...txRegionScope },
+                        transaction: { date: { gte: bucket.startDate, lte: bucket.endDate }, voided: false, transactionType: 'SALE', ...txRegionScope },
                         cylinderType: { not: null },
                     },
                     _sum: { totalPrice: true },
                 }),
-                // B2B accessory items (no cylinderType)
                 prisma.b2BTransactionItem.aggregate({
                     where: {
-                        transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false, transactionType: 'SALE', ...txRegionScope },
+                        transaction: { date: { gte: bucket.startDate, lte: bucket.endDate }, voided: false, transactionType: 'SALE', ...txRegionScope },
                         cylinderType: null,
                     },
                     _sum: { totalPrice: true },
                 }),
             ]);
             chartData.push({
-                name: format(chartStart, 'MMM yyyy'),
+                name: bucket.name,
                 cylinders: Number(b2cGas._sum.totalPrice || 0) + Number(b2bCylinders._sum.totalPrice || 0),
                 accessories: Number(b2cAcc._sum.totalPrice || 0) + Number(b2bAccessories._sum.totalPrice || 0),
             });
         }
+
         return NextResponse.json({
             items: [...cylinders, ...accessories],
             chartData,
+            byPaymentMethod,
+            period,
+            date,
             month,
             year,
+            label,
         });
     } catch (error) {
         console.error('Revenue API error:', error);

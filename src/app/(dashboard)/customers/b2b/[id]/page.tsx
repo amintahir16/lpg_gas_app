@@ -35,6 +35,7 @@ import {
   ShareIcon
 } from '@heroicons/react/24/outline';
 import { sharePdfFromUrl, downloadPdfBlob } from '@/lib/sharePdf';
+import { PAYMENT_METHOD_OPTIONS, formatPaymentMethodLabel } from '@/lib/payment-methods';
 
 interface B2BCustomer {
   id: string;
@@ -2613,13 +2614,7 @@ export default function B2BCustomerDetailPage() {
                           value={salePaymentMethod}
                           onChange={(val) => setSalePaymentMethod(val as string)}
                           placeholder="Select method"
-                          options={[
-                            { value: 'CASH', label: 'Cash' },
-                            { value: 'BANK_TRANSFER', label: 'Bank Transfer' },
-                            { value: 'CHECK', label: 'Check' },
-                            { value: 'CREDIT_CARD', label: 'Credit Card' },
-                            { value: 'DEBIT_CARD', label: 'Debit Card' }
-                          ]}
+                          options={[...PAYMENT_METHOD_OPTIONS]}
                           className="h-9"
                         />
                       </div>
@@ -3672,7 +3667,7 @@ export default function B2BCustomerDetailPage() {
                           {selectedTransaction.paymentMethod && (
                             <div>
                               <p className="text-sm text-gray-600">Payment Method</p>
-                              <p className="font-semibold text-gray-900">{selectedTransaction.paymentMethod.replace(/_/g, ' ')}</p>
+                              <p className="font-semibold text-gray-900">{formatPaymentMethodLabel(selectedTransaction.paymentMethod)}</p>
                             </div>
                           )}
                         </>

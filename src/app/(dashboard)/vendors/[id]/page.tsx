@@ -23,6 +23,7 @@ import VendorExportModal from '@/components/VendorExportModal';
 import { generateCylinderTypeFromCapacity } from '@/lib/cylinder-utils';
 import { CustomSelect } from '@/components/ui/select-custom';
 import { buildCylinderVariantKey, parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
+import { PAYMENT_METHOD_OPTIONS, formatPaymentMethodLabel } from '@/lib/payment-methods';
 
 interface Vendor {
   id: string;
@@ -2347,14 +2348,7 @@ export default function VendorDetailPage() {
                           ...purchaseFormData,
                           paymentMethod: val
                         })}
-                        options={[
-                          { value: "CASH", label: "💵 Cash" },
-                          { value: "BANK_TRANSFER", label: "🏦 Bank Transfer" },
-                          { value: "CHECK", label: "📄 Check" },
-                          { value: "CREDIT_CARD", label: "💳 Credit Card" },
-                          { value: "DEBIT_CARD", label: "💳 Debit Card" },
-                          { value: "WIRE_TRANSFER", label: "🔗 Wire Transfer" }
-                        ]}
+                        options={[...PAYMENT_METHOD_OPTIONS]}
                         className="h-9"
                         required
                       />
@@ -2599,7 +2593,7 @@ export default function VendorDetailPage() {
                                   className="flex justify-between text-xs"
                                 >
                                   <span className="text-gray-600">
-                                    {formatDate(payment.paymentDate)} - {payment.method}
+                                    {formatDate(payment.paymentDate)} - {formatPaymentMethodLabel(payment.method)}
                                   </span>
                                   <span className="font-medium text-green-600">
                                     {formatCurrency(Math.round(Number(payment.amount)))}
@@ -2955,7 +2949,7 @@ export default function VendorDetailPage() {
 
                                   <div className="flex items-center gap-2">
                                     <span className="text-gray-500 font-medium">Method:</span>
-                                    <span className="text-gray-700 font-semibold">{payment.method}</span>
+                                    <span className="text-gray-700 font-semibold">{formatPaymentMethodLabel(payment.method)}</span>
                                   </div>
 
                                   {payment.reference && (

@@ -1,44 +1,63 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent } from '@/components/ui/card';
 import {
   CurrencyDollarIcon,
   BuildingOfficeIcon,
   ChartBarIcon,
   UserGroupIcon,
   ArrowRightIcon,
-  CalendarIcon,
 } from '@heroicons/react/24/outline';
-import { CustomSelect } from '@/components/ui/select-custom';
+import {
+  buildFinancialPeriodQuery,
+  resolveFinancialPeriod,
+  todayLocalDate,
+  type FinancialPeriodMode,
+} from '@/lib/financial-period';
+import { FinancialPeriodFilter } from '@/components/FinancialPeriodFilter';
 
 interface FinancialSummary {
   totalRevenue: number;
   totalExpenses: number;
   totalProfit: number;
   totalSalaries: number;
-  month: number;
-  year: number;
+  period?: FinancialPeriodMode;
+  date?: string | null;
+  month?: number | null;
+  year?: number;
+  label?: string;
 }
 
-const monthNames = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
-];
 export default function FinancialPage() {
   const router = useRouter();
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState<FinancialPeriodMode>('month');
+  const [date, setDate] = useState(todayLocalDate);
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
 
+  const periodLabel = useMemo(
+    () =>
+      resolveFinancialPeriod({
+        period,
+        date,
+        month,
+        year,
+      }).label,
+    [period, date, month, year]
+  );
+
   useEffect(() => {
     fetchSummary();
-  }, [month, year]);
+  }, [period, date, month, year]);
+
   const fetchSummary = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/financial/summary?month=${month}&year=${year}`);
+      const response = await fetch(
+        `/api/financial/summary?${buildFinancialPeriodQuery({ period, date, month, year })}`
+      );
       if (response.ok) {
         const data = await response.json();
         setSummary(data);
@@ -124,27 +143,17 @@ export default function FinancialPage() {
           </p>
         </div>
 
-        {/* Month/Year Selector */}
-        <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-2 py-1 shadow-sm h-10">
-          <CalendarIcon className="w-4 h-4 text-gray-400 ml-1" />
-          <CustomSelect 
-            value={month.toString()} 
-            onChange={(val) => setMonth(parseInt(val))}
-            options={monthNames.map((name, i) => ({ value: (i + 1).toString(), label: name }))}
-            className="w-[120px]"
-            buttonClassName="border-none focus:ring-0 shadow-none h-8"
-          />
-          <div className="w-[1px] h-4 bg-gray-200" />
-          <CustomSelect 
-            value={year.toString()} 
-            onChange={(val) => setYear(parseInt(val))}
-            options={Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => ({ value: y.toString(), label: y.toString() }))}
-            className="w-[90px]"
-            buttonClassName="border-none focus:ring-0 shadow-none h-8"
-          />
-        </div>
+        <FinancialPeriodFilter
+          period={period}
+          date={date}
+          month={month}
+          year={year}
+          onPeriodChange={setPeriod}
+          onDateChange={setDate}
+          onMonthChange={setMonth}
+          onYearChange={setYear}
+        />
       </div>
-
 
       {/* Financial Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -154,7 +163,6 @@ export default function FinancialPage() {
             onClick={() => router.push(card.href)}
             className={`group relative overflow-hidden rounded-2xl bg-gradient-to-br ${card.gradient} ${card.hoverGradient} shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 text-left w-full`}
           >
-            {/* Background Icon */}
             <div className="absolute top-0 right-0 p-4 opacity-15 group-hover:opacity-25 transition-opacity duration-300">
               <card.icon className="w-24 h-24 text-white" />
             </div>
@@ -167,15 +175,12 @@ export default function FinancialPage() {
                 <h3 className="text-lg font-bold text-white">{card.title}</h3>
               </div>
 
-
               <div className={`text-3xl font-extrabold ${card.valueColor} mb-1`}>
                 {loading ? (
                   <div className="h-9 w-40 bg-white/20 rounded-lg animate-pulse" />
                 ) : (
-
                   formatCurrency(card.value)
                 )}
-
               </div>
               <div className="flex items-center justify-between">
                 <p className={`text-sm font-medium ${card.subtitleColor}`}>
@@ -186,15 +191,17 @@ export default function FinancialPage() {
                   <ArrowRightIcon className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" />
                 </div>
               </div>
-
             </div>
           </button>
         ))}
       </div>
-      {/* Period Label */}
+
       <div className="text-center">
         <p className="text-sm text-gray-500 font-medium">
-          Showing data for <span className="text-gray-800 font-semibold">{monthNames[month - 1]} {year}</span>
+          Showing data for{' '}
+          <span className="text-gray-800 font-semibold">
+            {summary?.label || periodLabel}
+          </span>
         </p>
       </div>
     </div>

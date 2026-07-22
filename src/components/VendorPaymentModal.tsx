@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { XMarkIcon, BanknotesIcon, CreditCardIcon, CheckIcon } from '@heroicons/react/24/outline';
 import { CustomSelect } from '@/components/ui/select-custom';
+import { PAYMENT_METHOD_OPTIONS } from '@/lib/payment-methods';
 
 interface VendorPaymentModalProps {
   isOpen: boolean;
@@ -309,13 +310,7 @@ export default function VendorPaymentModal({
               <CustomSelect
                 value={paymentMethod}
                 onChange={setPaymentMethod}
-                options={[
-                  { value: "CASH", label: "💵 Cash" },
-                  { value: "BANK_TRANSFER", label: "🏦 Bank Transfer" },
-                  { value: "CHECK", label: "📄 Check" },
-                  { value: "CREDIT_CARD", label: "💳 Credit Card" },
-                  { value: "DEBIT_CARD", label: "💳 Debit Card" }
-                ]}
+                options={[...PAYMENT_METHOD_OPTIONS]}
                 placeholder="Select Payment Method"
               />
             </div>
