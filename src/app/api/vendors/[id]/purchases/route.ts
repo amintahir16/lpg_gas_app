@@ -203,6 +203,7 @@ export async function POST(
             method: (paymentMethod || 'CASH') as any,
             status: 'COMPLETED',
             description: `Payment for invoice ${invoiceNumber}`,
+            createdBy: session.user.id,
             ...(regionId ? { regionId } : {}),
           }
         });

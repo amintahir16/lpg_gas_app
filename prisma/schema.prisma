@@ -38,6 +38,8 @@ model User {
   notifications    Notification[]    @relation("UserNotifications")
   purchaseEntries  PurchaseEntry[]   @relation("UserPurchaseEntries")
   salaryRecords    SalaryRecord[]    @relation("SalaryRecords")
+  vendorPaymentsCreated VendorPayment[] @relation("VendorPaymentCreatedBy")
+  bankMovementsCreated  BankMovement[]  @relation("BankMovementCreatedBy")
 
   @@index([regionId])
   @@map("users")
@@ -410,13 +412,16 @@ model VendorPayment {
   status      PaymentStatus @default(PENDING)
   reference   String?
   description String?
+  createdBy   String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   regionId    String?
   region      Region?       @relation(fields: [regionId], references: [id])
   vendor      Vendor        @relation(fields: [vendorId], references: [id])
+  createdByUser User?       @relation("VendorPaymentCreatedBy", fields: [createdBy], references: [id])
 
   @@index([regionId])
+  @@index([createdBy])
   @@map("vendor_payments")
 }
 
@@ -1028,6 +1033,29 @@ model OfficeExpense {
   @@map("office_expenses")
 }
 
+/// Manual bank wallet movements: DEPOSIT (add to one bank) or TRANSFER (move between banks).
+model BankMovement {
+  id           String   @id @default(cuid())
+  type         String // "DEPOSIT" | "TRANSFER"
+  fromMethod   String? // source bank for TRANSFER; null for DEPOSIT
+  toMethod     String // destination bank (always set)
+  amount       Decimal  @db.Decimal(10, 2)
+  movementDate DateTime
+  notes        String?
+  createdBy    String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  regionId     String?
+  region       Region?  @relation(fields: [regionId], references: [id])
+  createdByUser User?   @relation("BankMovementCreatedBy", fields: [createdBy], references: [id])
+
+  @@index([regionId])
+  @@index([movementDate])
+  @@index([toMethod])
+  @@index([fromMethod])
+  @@map("bank_movements")
+}
+
 model SalaryRecord {
   id            String   @id @default(cuid())
   userId        String
@@ -1070,6 +1098,7 @@ model Region {
   cylinders              Cylinder[]
   expenses               Expense[]
   officeExpenses         OfficeExpense[]
+  bankMovements          BankMovement[]
   salaryRecords          SalaryRecord[]
   dailyPlantPrices       DailyPlantPrice[]
   products               Product[]

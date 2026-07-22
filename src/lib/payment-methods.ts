@@ -54,3 +54,61 @@ export function normalizePaymentMethodKey(
   const key = method.trim().toUpperCase().replace(/\s+/g, '_');
   return isSelectablePaymentMethod(key) ? key : null;
 }
+
+/** Add (or subtract via negative amount) into selectable payment-method buckets. */
+export function adjustPaymentMethodAmount(
+  totals: Record<PaymentMethodValue, number>,
+  method: string | null | undefined,
+  amount: number
+) {
+  if (!amount) return;
+  const key = normalizePaymentMethodKey(method);
+  if (!key) return;
+  totals[key] += amount;
+}
+
+export type PaymentMethodAmountEntry = {
+  method: string | null | undefined;
+  amount: number;
+};
+
+/**
+ * Build payment-method totals from collections (inflows) and optional deductions (outflows).
+ * Used by Revenue (gross) and Financial summary (net = collections − deductions).
+ */
+export function buildPaymentMethodTotals(params: {
+  collections: PaymentMethodAmountEntry[];
+  deductions?: PaymentMethodAmountEntry[];
+}): Record<PaymentMethodValue, number> {
+  const totals = emptyPaymentMethodTotals();
+  for (const entry of params.collections) {
+    adjustPaymentMethodAmount(totals, entry.method, entry.amount);
+  }
+  for (const entry of params.deductions || []) {
+    adjustPaymentMethodAmount(totals, entry.method, -Math.abs(entry.amount));
+  }
+  return totals;
+}
+
+/** Shared card gradient styles for Cash / Bank Transfer / Easypaisa / Jazz Cash. */
+export const PAYMENT_METHOD_CARD_STYLES: Record<
+  PaymentMethodValue,
+  { gradient: string; labelTone: string }
+> = {
+  CASH: {
+    gradient: 'from-amber-500 to-amber-600',
+    labelTone: 'text-amber-100',
+  },
+  BANK_TRANSFER: {
+    gradient: 'from-indigo-500 to-indigo-600',
+    labelTone: 'text-indigo-100',
+  },
+  EASYPAISA: {
+    gradient: 'from-lime-500 to-green-600',
+    labelTone: 'text-lime-100',
+  },
+  JAZZ_CASH: {
+    gradient: 'from-rose-500 to-rose-600',
+    labelTone: 'text-rose-100',
+  },
+};

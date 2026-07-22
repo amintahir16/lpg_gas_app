@@ -8,7 +8,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ArrowLeftIcon, CurrencyDollarIcon } from '@heroicons/react/24/outline';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import {
-    PAYMENT_METHOD_OPTIONS,
     emptyPaymentMethodTotals,
     type PaymentMethodValue,
 } from '@/lib/payment-methods';
@@ -20,6 +19,7 @@ import {
     type FinancialPeriodMode,
 } from '@/lib/financial-period';
 import { FinancialPeriodFilter } from '@/components/FinancialPeriodFilter';
+import { PaymentMethodStatCards } from '@/components/PaymentMethodStatCards';
 
 interface RevenueItem {
     name: string;
@@ -27,28 +27,6 @@ interface RevenueItem {
     quantity: number;
     revenue: number;
 }
-
-const PAYMENT_METHOD_CARD_STYLES: Record<
-    PaymentMethodValue,
-    { gradient: string; labelTone: string }
-> = {
-    CASH: {
-        gradient: 'from-amber-500 to-amber-600',
-        labelTone: 'text-amber-100',
-    },
-    BANK_TRANSFER: {
-        gradient: 'from-indigo-500 to-indigo-600',
-        labelTone: 'text-indigo-100',
-    },
-    EASYPAISA: {
-        gradient: 'from-lime-500 to-green-600',
-        labelTone: 'text-lime-100',
-    },
-    JAZZ_CASH: {
-        gradient: 'from-rose-500 to-rose-600',
-        labelTone: 'text-rose-100',
-    },
-};
 
 export default function RevenuePage() {
     const router = useRouter();
@@ -151,24 +129,11 @@ export default function RevenuePage() {
                 </Card>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {PAYMENT_METHOD_OPTIONS.map((method) => {
-                    const styles = PAYMENT_METHOD_CARD_STYLES[method.value];
-                    return (
-                        <Card
-                            key={method.value}
-                            className={`border-0 shadow-sm bg-gradient-to-br ${styles.gradient}`}
-                        >
-                            <CardContent className="p-4">
-                                <p className={`text-sm font-medium ${styles.labelTone}`}>{method.label}</p>
-                                <p className="text-2xl font-bold text-white">
-                                    {loading ? '…' : formatCurrency(byPaymentMethod[method.value] || 0)}
-                                </p>
-                            </CardContent>
-                        </Card>
-                    );
-                })}
-            </div>
+            <PaymentMethodStatCards
+                totals={byPaymentMethod}
+                loading={loading}
+                formatCurrency={formatCurrency}
+            />
 
             <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
                 <CardHeader>

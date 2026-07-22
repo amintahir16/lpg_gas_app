@@ -15,12 +15,19 @@ import {
   type FinancialPeriodMode,
 } from '@/lib/financial-period';
 import { FinancialPeriodFilter } from '@/components/FinancialPeriodFilter';
+import { PaymentMethodStatCards } from '@/components/PaymentMethodStatCards';
+import { BankMovementActions } from '@/components/BankMovementActions';
+import {
+  emptyPaymentMethodTotals,
+  type PaymentMethodValue,
+} from '@/lib/payment-methods';
 
 interface FinancialSummary {
   totalRevenue: number;
   totalExpenses: number;
   totalProfit: number;
   totalSalaries: number;
+  byPaymentMethod?: Record<PaymentMethodValue, number>;
   period?: FinancialPeriodMode;
   date?: string | null;
   month?: number | null;
@@ -76,6 +83,11 @@ export default function FinancialPage() {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
+  };
+
+  const byPaymentMethod = {
+    ...emptyPaymentMethodTotals(),
+    ...(summary?.byPaymentMethod || {}),
   };
 
   const cards = [
@@ -196,13 +208,34 @@ export default function FinancialPage() {
         ))}
       </div>
 
-      <div className="text-center">
-        <p className="text-sm text-gray-500 font-medium">
-          Showing data for{' '}
-          <span className="text-gray-800 font-semibold">
-            {summary?.label || periodLabel}
-          </span>
-        </p>
+      {/* BANKS — net by payment method + deposits/transfers */}
+      <div className="space-y-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-base font-bold text-gray-900">BANKS</h2>
+            <p className="text-xs text-gray-500">
+              Collections − vendor payments − office expenses + deposits / transfers
+            </p>
+          </div>
+          <div className="flex flex-col sm:items-end gap-2">
+            <p className="text-sm text-gray-500 font-medium">
+              Showing data for{' '}
+              <span className="text-gray-800 font-semibold">
+                {summary?.label || periodLabel}
+              </span>
+            </p>
+            <BankMovementActions onSaved={fetchSummary} />
+          </div>
+        </div>
+        <PaymentMethodStatCards
+          totals={byPaymentMethod}
+          loading={loading}
+          formatCurrency={formatCurrency}
+          onMethodClick={(method) => {
+            const q = buildFinancialPeriodQuery({ period, date, month, year });
+            router.push(`/financial/banks/${method}?${q}`);
+          }}
+        />
       </div>
     </div>
   );

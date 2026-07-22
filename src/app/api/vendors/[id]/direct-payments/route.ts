@@ -102,6 +102,7 @@ export async function POST(
           status: 'COMPLETED',
           reference: reference || null,
           description: description || (invoiceNumber ? `Payment for invoice ${invoiceNumber}` : 'Direct payment to vendor'),
+          createdBy: session.user.id,
           ...(regionId ? { regionId } : {}),
         }
       });

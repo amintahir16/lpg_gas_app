@@ -2,26 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { requireAdmin } from '@/lib/apiAuth';
-import {
-    emptyPaymentMethodTotals,
-    normalizePaymentMethodKey,
-    type PaymentMethodValue,
-} from '@/lib/payment-methods';
+import { buildPaymentMethodTotals } from '@/lib/payment-methods';
 import {
     getFinancialChartBuckets,
     resolveFinancialPeriod,
 } from '@/lib/financial-period';
-
-function adjustPaymentMethodAmount(
-    totals: Record<PaymentMethodValue, number>,
-    method: string | null | undefined,
-    amount: number
-) {
-    if (!amount) return;
-    const key = normalizePaymentMethodKey(method);
-    if (!key) return;
-    totals[key] += amount;
-}
 
 export async function GET(request: NextRequest) {
     try {
@@ -38,7 +23,7 @@ export async function GET(request: NextRequest) {
         });
         const { startDate, endDate, period, month, year, date, label } = resolved;
 
-        const [b2cGasItems, b2cAccessoryItems, b2bItems, b2bPaidSales, b2bPaymentTxs, b2cPayments, vendorPayments, officeExpenses] = await Promise.all([
+        const [b2cGasItems, b2cAccessoryItems, b2bItems, b2bPaidSales, b2bPaymentTxs, b2cPayments] = await Promise.all([
             prisma.b2CTransactionGasItem.findMany({
                 where: {
                     transaction: {
@@ -105,22 +90,6 @@ export async function GET(request: NextRequest) {
                 },
                 select: { finalAmount: true, totalAmount: true, paymentMethod: true },
             }),
-            prisma.vendorPayment.findMany({
-                where: {
-                    paymentDate: { gte: startDate, lte: endDate },
-                    status: 'COMPLETED',
-                    ...txRegionScope,
-                },
-                select: { amount: true, method: true },
-            }),
-            // Office rent / daily / vehicle expenses paid via selected method
-            prisma.officeExpense.findMany({
-                where: {
-                    expenseDate: { gte: startDate, lte: endDate },
-                    ...txRegionScope,
-                },
-                select: { amount: true, paymentMethod: true },
-            }),
         ]);
 
         const cylinderTypes = await prisma.cylinder.findMany({
@@ -184,23 +153,22 @@ export async function GET(request: NextRequest) {
             revenue: data.revenue,
         }));
 
-        const byPaymentMethod = emptyPaymentMethodTotals();
-        b2bPaidSales.forEach((tx) => {
-            adjustPaymentMethodAmount(byPaymentMethod, tx.paymentMethod, Number(tx.paidAmount || 0));
-        });
-        b2bPaymentTxs.forEach((tx) => {
-            const amount = Number(tx.paidAmount != null ? tx.paidAmount : tx.totalAmount) || 0;
-            adjustPaymentMethodAmount(byPaymentMethod, tx.paymentMethod, amount);
-        });
-        b2cPayments.forEach((tx) => {
-            const amount = Number(tx.finalAmount || tx.totalAmount || 0);
-            adjustPaymentMethodAmount(byPaymentMethod, tx.paymentMethod, amount);
-        });
-        vendorPayments.forEach((payment) => {
-            adjustPaymentMethodAmount(byPaymentMethod, payment.method, -Number(payment.amount || 0));
-        });
-        officeExpenses.forEach((expense) => {
-            adjustPaymentMethodAmount(byPaymentMethod, expense.paymentMethod, -Number(expense.amount || 0));
+        // Gross collections only — vendor payments / office expenses are netted on Financial page
+        const byPaymentMethod = buildPaymentMethodTotals({
+            collections: [
+                ...b2bPaidSales.map((tx) => ({
+                    method: tx.paymentMethod,
+                    amount: Number(tx.paidAmount || 0),
+                })),
+                ...b2bPaymentTxs.map((tx) => ({
+                    method: tx.paymentMethod,
+                    amount: Number(tx.paidAmount != null ? tx.paidAmount : tx.totalAmount) || 0,
+                })),
+                ...b2cPayments.map((tx) => ({
+                    method: tx.paymentMethod,
+                    amount: Number(tx.finalAmount || tx.totalAmount || 0),
+                })),
+            ],
         });
 
         const chartBuckets = getFinancialChartBuckets(resolved);
