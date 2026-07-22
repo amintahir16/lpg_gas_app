@@ -20,6 +20,7 @@ import { ProfessionalAccessorySelector, AccessoryItem } from '@/components/ui/Pr
 import { getCylinderWeight, getCapacityFromTypeString, getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
 import { buildCylinderVariantKey, parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { CustomSelect } from '@/components/ui/select-custom';
+import { todayLocalDate } from '@/lib/financial-period';
 
 interface B2CTransactionModalProps {
     customerId: string;
@@ -60,7 +61,7 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
     const [loading, setLoading] = useState(false);
 
     // Form data
-    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [date, setDate] = useState(todayLocalDate);
     const [time, setTime] = useState(new Date().toTimeString().slice(0, 5));
     const [deliveryCharges, setDeliveryCharges] = useState<number | ''>('');
     const [deliveryCost, setDeliveryCost] = useState<number | ''>('');

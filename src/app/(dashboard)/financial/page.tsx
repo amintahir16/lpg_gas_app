@@ -212,7 +212,7 @@ export default function FinancialPage() {
       <div className="space-y-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-base font-bold text-gray-900">BANKS</h2>
+            <h2 className="text-base font-bold text-gray-900">Bank/Wallets</h2>
             <p className="text-xs text-gray-500">
               Collections − vendor payments − office expenses + deposits / transfers
             </p>

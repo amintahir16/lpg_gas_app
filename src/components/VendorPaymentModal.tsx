@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { XMarkIcon, BanknotesIcon, CreditCardIcon, CheckIcon } from '@heroicons/react/24/outline';
 import { CustomSelect } from '@/components/ui/select-custom';
 import { PAYMENT_METHOD_OPTIONS } from '@/lib/payment-methods';
+import { todayLocalDate } from '@/lib/financial-period';
 
 interface VendorPaymentModalProps {
   isOpen: boolean;
@@ -30,12 +31,23 @@ export default function VendorPaymentModal({
   purchaseEntryTotal
 }: VendorPaymentModalProps) {
   const [amount, setAmount] = useState('');
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [paymentDate, setPaymentDate] = useState(todayLocalDate);
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [reference, setReference] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Always refresh to today's local date (and clear form) whenever the modal opens
+  useEffect(() => {
+    if (!isOpen) return;
+    setPaymentDate(todayLocalDate());
+    setAmount('');
+    setPaymentMethod('CASH');
+    setReference('');
+    setDescription('');
+    setError('');
+  }, [isOpen, invoiceNumber]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,6 +91,7 @@ export default function VendorPaymentModal({
 
       // Success - reset form and close
       setAmount('');
+      setPaymentDate(todayLocalDate());
       setReference('');
       setDescription('');
       onPaymentSuccess();
@@ -296,7 +309,7 @@ export default function VendorPaymentModal({
                 type="date"
                 value={paymentDate}
                 onChange={(e) => setPaymentDate(e.target.value)}
-                max={new Date().toISOString().split('T')[0]}
+                max={todayLocalDate()}
                 className="h-9 border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg text-sm"
                 required
               />

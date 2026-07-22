@@ -41,6 +41,25 @@ function toLocalDateString(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Format a Date/ISO string as YYYY-MM-DD in the operator's local timezone (for `<input type="date">`). */
+export function formatLocalDateInput(
+  value: Date | string | null | undefined
+): string {
+  if (value == null || value === '') return '';
+  if (typeof value === 'string') {
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim());
+    if (match) return `${match[1]}-${match[2]}-${match[3]}`;
+  }
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return toLocalDateString(d);
+}
+
+/** Today's date as YYYY-MM-DD in the operator's local timezone. */
+export function todayLocalDate(): string {
+  return toLocalDateString(new Date());
+}
+
 function parseLocalDate(isoDate: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate.trim());
   if (!match) return null;
@@ -235,8 +254,4 @@ export function salaryPayTarget(resolved: ResolvedFinancialPeriod): { month: num
     month: resolved.month || new Date().getMonth() + 1,
     year: resolved.year,
   };
-}
-
-export function todayLocalDate(): string {
-  return toLocalDateString(new Date());
 }

@@ -16,6 +16,7 @@ import {
   FileText,
   DollarSign
 } from 'lucide-react';
+import { todayLocalDate } from '@/lib/financial-period';
 
 interface Vendor {
   id: string;
@@ -131,7 +132,7 @@ export default function PurchaseEntryForm({
     quantity: 1,
     unitPrice: 0,
     totalPrice: 0,
-    purchaseDate: new Date().toISOString().split('T')[0],
+    purchaseDate: todayLocalDate(),
     invoiceNumber: '',
     notes: ''
   });

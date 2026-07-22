@@ -20,6 +20,7 @@ import {
     chartDescriptionForPeriod,
     resolveFinancialPeriod,
     todayLocalDate,
+    formatLocalDateInput,
     type FinancialPeriodMode,
 } from '@/lib/financial-period';
 import { FinancialPeriodFilter } from '@/components/FinancialPeriodFilter';
@@ -477,7 +478,7 @@ export default function ExpensesPage() {
                                 type: 'RENT',
                                 amount: fd.get('amount'),
                                 description: fd.get('description') || `Office Rent - ${monthNames[rentMonth - 1]} ${rentYear}`,
-                                expenseDate: expenseDateStr || new Date().toISOString().split('T')[0],
+                                expenseDate: expenseDateStr || todayLocalDate(),
                                 month: rentMonth,
                                 year: rentYear,
                                 paymentMethod: fd.get('paymentMethod') || 'CASH',
@@ -485,7 +486,7 @@ export default function ExpensesPage() {
                         }} className="space-y-3">
                             <div className="space-y-1">
                                 <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Expense Date</label>
-                                <Input name="date" type="date" defaultValue={new Date().toISOString().split('T')[0]} required className="h-9" />
+                                <Input name="date" type="date" defaultValue={todayLocalDate()} required className="h-9" />
                             </div>
                             
                             <div className="space-y-1">
@@ -544,7 +545,7 @@ export default function ExpensesPage() {
                         }} className="space-y-3">
                             <div className="space-y-1">
                                 <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Expense Date</label>
-                                <Input name="date" type="date" defaultValue={new Date().toISOString().split('T')[0]} required className="h-9" />
+                                <Input name="date" type="date" defaultValue={todayLocalDate()} required className="h-9" />
                             </div>
                             
                             <div className="space-y-1">
@@ -603,7 +604,7 @@ export default function ExpensesPage() {
                         }} className="space-y-3">
                             <div className="space-y-1">
                                 <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Expense Date</label>
-                                <Input name="date" type="date" defaultValue={new Date().toISOString().split('T')[0]} required className="h-9" />
+                                <Input name="date" type="date" defaultValue={todayLocalDate()} required className="h-9" />
                             </div>
                             
                             <div className="space-y-1">
@@ -661,7 +662,7 @@ export default function ExpensesPage() {
                         }} className="space-y-3">
                             <div className="space-y-1">
                                 <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Date</label>
-                                <Input name="date" type="date" defaultValue={new Date(editingExpense.expenseDate).toISOString().split('T')[0]} required className="h-9" />
+                                <Input name="date" type="date" defaultValue={formatLocalDateInput(editingExpense.expenseDate)} required className="h-9" />
                             </div>
                             
                             <div className="space-y-1">

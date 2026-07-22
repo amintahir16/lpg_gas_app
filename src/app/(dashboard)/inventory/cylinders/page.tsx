@@ -18,6 +18,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { CustomSelect } from '@/components/ui/select-custom';
 import { getCylinderTypeDisplayName, getCylinderWeight, generateCylinderTypeFromCapacity, isValidCylinderCapacity, normalizeTypeName } from '@/lib/cylinder-utils';
+import { formatLocalDateInput } from '@/lib/financial-period';
 import { getCylinderTypeOptions } from '@/lib/cylinder-types';
 
 interface Cylinder {
@@ -1115,7 +1116,7 @@ export default function CylindersInventoryPage() {
                   <Input
                     name="purchaseDate"
                     type="date"
-                    defaultValue={selectedCylinder.purchaseDate ? new Date(selectedCylinder.purchaseDate).toISOString().split('T')[0] : ''}
+                    defaultValue={selectedCylinder.purchaseDate ? formatLocalDateInput(selectedCylinder.purchaseDate) : ''}
                     className="h-9"
                   />
                 </div>
@@ -1136,7 +1137,7 @@ export default function CylindersInventoryPage() {
                   <Input
                     name="lastMaintenanceDate"
                     type="date"
-                    defaultValue={selectedCylinder.lastMaintenanceDate ? new Date(selectedCylinder.lastMaintenanceDate).toISOString().split('T')[0] : ''}
+                    defaultValue={selectedCylinder.lastMaintenanceDate ? formatLocalDateInput(selectedCylinder.lastMaintenanceDate) : ''}
                     className="h-9"
                   />
                 </div>
@@ -1145,7 +1146,7 @@ export default function CylindersInventoryPage() {
                   <Input
                     name="nextMaintenanceDate"
                     type="date"
-                    defaultValue={selectedCylinder.nextMaintenanceDate ? new Date(selectedCylinder.nextMaintenanceDate).toISOString().split('T')[0] : ''}
+                    defaultValue={selectedCylinder.nextMaintenanceDate ? formatLocalDateInput(selectedCylinder.nextMaintenanceDate) : ''}
                     className="h-9"
                   />
                 </div>

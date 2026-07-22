@@ -15,6 +15,7 @@ import {
   CheckIcon,
   ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
+import { todayLocalDate } from '@/lib/financial-period';
 
 interface Customer {
   id: string;
@@ -175,7 +176,7 @@ export default function NewSalePage() {
     const invoiceData = {
       customer: customer?.name || 'Unknown Customer',
       billSno,
-      date: new Date().toISOString().split('T')[0],
+      date: todayLocalDate(),
       time: new Date().toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' }),
       items: saleItems,
       subtotal: totals.subtotal,
@@ -229,7 +230,7 @@ export default function NewSalePage() {
         transactionType: 'SALE',
         billSno,
         customerId,
-        date: now.toISOString().split('T')[0],
+        date: todayLocalDate(),
         time: now.toISOString(),
         totalAmount: totals.total,
         notes: 'B2B Sale Transaction',

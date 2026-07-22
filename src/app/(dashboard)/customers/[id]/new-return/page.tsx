@@ -14,6 +14,7 @@ import {
   TrashIcon,
   PlusIcon
 } from '@heroicons/react/24/outline';
+import { todayLocalDate } from '@/lib/financial-period';
 
 interface Customer {
   id: string;
@@ -352,7 +353,7 @@ export default function NewReturnPage() {
           transactionType: 'BUYBACK',
           billSno,
           customerId,
-          date: now.toISOString().split('T')[0],
+          date: todayLocalDate(),
           time: now.toISOString(),
           totalAmount: totals.buybackTotal,
           notes: 'Buyback transaction for returned cylinders with remaining gas',
@@ -392,7 +393,7 @@ export default function NewReturnPage() {
         transactionType: 'RETURN_EMPTY',
         billSno: `BILL-${now.toISOString().slice(0, 10).replace(/-/g, '')}-${String(Date.now() + 1).slice(-6)}`,
         customerId,
-        date: now.toISOString().split('T')[0],
+        date: todayLocalDate(),
         time: now.toISOString(),
         totalAmount: 0,
         notes: 'Empty cylinder return transaction',
@@ -427,7 +428,7 @@ export default function NewReturnPage() {
           transactionType: 'PAYMENT',
           billSno: `BILL-${now.toISOString().slice(0, 10).replace(/-/g, '')}-${String(Date.now() + 2).slice(-6)}`,
           customerId,
-          date: now.toISOString().split('T')[0],
+          date: todayLocalDate(),
           time: now.toISOString(),
           totalAmount: totals.buybackTotal,
           paymentReference: `BUYBACK-CASH-${billSno}`,

@@ -18,6 +18,7 @@ import {
   ClockIcon
 } from '@heroicons/react/24/outline';
 import { useRouter } from 'next/navigation';
+import { todayLocalDate, formatLocalDateInput } from '@/lib/financial-period';
 
 interface ReportData {
   arSummary?: {
@@ -111,8 +112,8 @@ export default function CustomerReportsPage() {
   const [reportData, setReportData] = useState<ReportData>({});
   const [selectedReport, setSelectedReport] = useState<string>('ar-summary');
   const [dateRange, setDateRange] = useState({
-    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0],
+    startDate: formatLocalDateInput(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
+    endDate: todayLocalDate(),
   });
 
   const reportTypes = [

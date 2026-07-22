@@ -16,6 +16,7 @@ import { getCylinderTypeDisplayName, getCapacityFromTypeString } from '@/lib/cyl
 import { parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { formatB2bItemCylinderLabel } from '@/lib/b2b-transaction-item-variant';
 import { OPENING_BALANCE_NOTE, OPENING_DUES_NOTE } from '@/lib/b2b-opening-entries';
+import { todayLocalDate } from '@/lib/financial-period';
 import {
   ArrowLeftIcon,
   DocumentTextIcon,
@@ -163,7 +164,7 @@ export default function B2BCustomerDetailPage() {
   // Transaction form states
   const [showTransactionForm, setShowTransactionForm] = useState(false);
   const [transactionType, setTransactionType] = useState<'SALE' | 'PAYMENT' | 'BUYBACK' | 'RETURN_EMPTY' | 'UNIFIED'>('UNIFIED');
-  const [transactionDate, setTransactionDate] = useState(new Date().toISOString().split('T')[0]);
+  const [transactionDate, setTransactionDate] = useState(todayLocalDate);
   const [transactionTime, setTransactionTime] = useState(new Date().toTimeString().slice(0, 5));
 
   // Unified form section collapse states
@@ -1493,7 +1494,7 @@ export default function B2BCustomerDetailPage() {
       const payload = {
         transactionType: openingBalanceDirection === 'OWES' ? 'SALE' : 'CREDIT_NOTE',
         customerId,
-        date: now.toISOString().split('T')[0],
+        date: todayLocalDate(),
         time: now.toTimeString().slice(0, 5),
         totalAmount: amount,
         ...(openingBalanceDirection === 'OWES' ? { paidAmount: 0, paymentMethod: 'CASH' } : {}),
@@ -1564,7 +1565,7 @@ export default function B2BCustomerDetailPage() {
       const payload = {
         transactionType: 'SALE',
         customerId,
-        date: now.toISOString().split('T')[0],
+        date: todayLocalDate(),
         time: now.toTimeString().slice(0, 5),
         totalAmount: 0,
         notes: OPENING_DUES_NOTE,
@@ -2821,7 +2822,7 @@ export default function B2BCustomerDetailPage() {
                           value={dateFilter.startDate}
                           onChange={(e) => setDateFilter({ ...dateFilter, startDate: e.target.value })}
                           className="w-full text-sm"
-                          max={dateFilter.endDate || new Date().toISOString().split('T')[0]}
+                          max={dateFilter.endDate || todayLocalDate()}
                         />
                       </div>
 
@@ -2835,7 +2836,7 @@ export default function B2BCustomerDetailPage() {
                           onChange={(e) => setDateFilter({ ...dateFilter, endDate: e.target.value })}
                           className="w-full text-sm"
                           min={dateFilter.startDate || undefined}
-                          max={new Date().toISOString().split('T')[0]}
+                          max={todayLocalDate()}
                         />
                       </div>
 
@@ -2929,7 +2930,7 @@ export default function B2BCustomerDetailPage() {
                           value={reportDateFilter.startDate}
                           onChange={(e) => setReportDateFilter({ ...reportDateFilter, startDate: e.target.value })}
                           className="w-full text-sm"
-                          max={reportDateFilter.endDate || new Date().toISOString().split('T')[0]}
+                          max={reportDateFilter.endDate || todayLocalDate()}
                         />
                       </div>
 
@@ -2943,7 +2944,7 @@ export default function B2BCustomerDetailPage() {
                           onChange={(e) => setReportDateFilter({ ...reportDateFilter, endDate: e.target.value })}
                           className="w-full text-sm"
                           min={reportDateFilter.startDate || undefined}
-                          max={new Date().toISOString().split('T')[0]}
+                          max={todayLocalDate()}
                         />
                       </div>
 

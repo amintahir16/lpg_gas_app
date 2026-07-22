@@ -11,6 +11,7 @@ import {
   CreditCardIcon,
   CheckIcon
 } from '@heroicons/react/24/outline';
+import { todayLocalDate } from '@/lib/financial-period';
 
 interface Customer {
   id: string;
@@ -32,7 +33,7 @@ export default function NewPaymentPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [paymentData, setPaymentData] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: todayLocalDate(),
     time: new Date().toTimeString().slice(0, 5),
     amount: '',
     paymentReference: '',
