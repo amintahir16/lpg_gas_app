@@ -54,6 +54,7 @@ export async function GET(
       b2cTxs,
       vendorPayments,
       officeExpenses,
+      salaryPayments,
       bankMovements,
     ] = await Promise.all([
       prisma.b2BTransaction.findMany({
@@ -196,6 +197,27 @@ export async function GET(
         },
         orderBy: { expenseDate: 'desc' },
       }),
+      prisma.salaryRecord.findMany({
+        where: {
+          paidDate: { gte: startDate, lte: endDate },
+          ...regionScope,
+        },
+        select: {
+          id: true,
+          amount: true,
+          month: true,
+          year: true,
+          paidDate: true,
+          createdAt: true,
+          paymentMethod: true,
+          notes: true,
+          createdBy: true,
+          user: {
+            select: { name: true, firstName: true, lastName: true, email: true },
+          },
+        },
+        orderBy: { paidDate: 'desc' },
+      }),
       prisma.bankMovement.findMany({
         where: {
           movementDate: { gte: startDate, lte: endDate },
@@ -226,6 +248,9 @@ export async function GET(
     }
     for (const expense of officeExpenses) {
       if (expense.createdBy) creatorIds.add(expense.createdBy);
+    }
+    for (const salary of salaryPayments) {
+      if (salary.createdBy) creatorIds.add(salary.createdBy);
     }
 
     const users =
@@ -391,6 +416,34 @@ export async function GET(
         reference: null,
         notes: expense.description,
         typeDetail: typeLabel,
+      });
+    }
+
+    for (const salary of salaryPayments) {
+      if (!matchesMethod(salary.paymentMethod, method)) continue;
+      const amount = Number(salary.amount || 0);
+      if (!amount) continue;
+      const when = coalesceEventDate(salary.paidDate, salary.createdAt);
+      const parts = formatLedgerDateParts(when);
+      const employeeName = userDisplayName(salary.user) || 'Employee';
+      const monthLabel = new Date(salary.year, salary.month - 1, 1).toLocaleDateString('en-PK', {
+        month: 'long',
+        year: 'numeric',
+      });
+      entries.push({
+        id: `salary-${salary.id}`,
+        source: 'SALARY_PAYMENT',
+        sourceLabel: BANK_LEDGER_SOURCE_LABELS.SALARY_PAYMENT,
+        direction: 'OUT',
+        amount,
+        ...parts,
+        partyName: employeeName,
+        partyType: 'Employee',
+        recordedBy: userNameById.get(salary.createdBy) || null,
+        details: `Salary for ${monthLabel}`,
+        reference: null,
+        notes: salary.notes,
+        typeDetail: 'Employee salary',
       });
     }
 

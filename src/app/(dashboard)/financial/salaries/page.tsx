@@ -19,6 +19,10 @@ import {
     type FinancialPeriodMode,
 } from '@/lib/financial-period';
 import { FinancialPeriodFilter } from '@/components/FinancialPeriodFilter';
+import {
+    PAYMENT_METHOD_OPTIONS,
+    formatPaymentMethodLabel,
+} from '@/lib/payment-methods';
 
 interface Employee {
     id: string;
@@ -326,7 +330,7 @@ export default function SalariesPage() {
                                             <TableCell className="font-medium">{record.monthLabel}</TableCell>
                                             <TableCell className="text-right font-bold text-emerald-700">{formatCurrency(record.amount)}</TableCell>
                                             <TableCell>
-                                                <Badge variant="outline">{record.paymentMethod}</Badge>
+                                                <Badge variant="outline">{formatPaymentMethodLabel(record.paymentMethod)}</Badge>
                                             </TableCell>
                                             <TableCell className="text-gray-600" suppressHydrationWarning>{formatDate(record.paidDate)}</TableCell>
                                             <TableCell className="text-gray-500 text-sm">{record.notes || '—'}</TableCell>
@@ -370,15 +374,11 @@ export default function SalariesPage() {
                             </div>
                             
                             <div className="space-y-1">
-                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Payment Method</label>
-                                <CustomSelect 
-                                    name="paymentMethod" 
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Payment Method (Wallet / Bank)</label>
+                                <CustomSelect
+                                    name="paymentMethod"
                                     defaultValue="CASH"
-                                    options={[
-                                        { value: 'CASH', label: 'Cash' },
-                                        { value: 'BANK_TRANSFER', label: 'Bank Transfer' },
-                                        { value: 'CHECK', label: 'Check' },
-                                    ]}
+                                    options={[...PAYMENT_METHOD_OPTIONS]}
                                 />
                             </div>
                             

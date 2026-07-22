@@ -150,9 +150,16 @@ export async function GET(request: NextRequest) {
         const totalSalaries = Number(salariesSum._sum.amount || 0);
 
         // 5. Net balance by payment method:
-        // collections − vendor payments − office expenses + deposits/transfers
-        const [b2bPaidSales, b2bPaymentTxs, b2cPayments, vendorPayments, officeExpensesByMethod, bankMovements] =
-            await Promise.all([
+        // collections − vendor payments − office expenses − salaries + deposits/transfers
+        const [
+            b2bPaidSales,
+            b2bPaymentTxs,
+            b2cPayments,
+            vendorPayments,
+            officeExpensesByMethod,
+            salaryPaymentsByMethod,
+            bankMovements,
+        ] = await Promise.all([
                 prisma.b2BTransaction.findMany({
                     where: {
                         date: { gte: startDate, lte: endDate },
@@ -192,6 +199,13 @@ export async function GET(request: NextRequest) {
                 prisma.officeExpense.findMany({
                     where: {
                         expenseDate: { gte: startDate, lte: endDate },
+                        ...regionScope,
+                    },
+                    select: { amount: true, paymentMethod: true },
+                }),
+                prisma.salaryRecord.findMany({
+                    where: {
+                        paidDate: { gte: startDate, lte: endDate },
                         ...regionScope,
                     },
                     select: { amount: true, paymentMethod: true },
@@ -247,6 +261,10 @@ export async function GET(request: NextRequest) {
                 ...officeExpensesByMethod.map((expense) => ({
                     method: expense.paymentMethod,
                     amount: Number(expense.amount || 0),
+                })),
+                ...salaryPaymentsByMethod.map((salary) => ({
+                    method: salary.paymentMethod,
+                    amount: Number(salary.amount || 0),
                 })),
                 ...movementDeductions,
             ],

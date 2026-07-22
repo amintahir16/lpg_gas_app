@@ -8,6 +8,7 @@ import { notifyUserActivity } from '@/lib/superAdminNotifier';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { requireAdmin } from '@/lib/apiAuth';
 import { resolveFinancialPeriod } from '@/lib/financial-period';
+import { normalizePaymentMethodKey } from '@/lib/payment-methods';
 export async function GET(request: NextRequest) {
     try {
         const auth = await requireAdmin();
@@ -162,6 +163,7 @@ export async function POST(request: NextRequest) {
                 { status: 409 }
             );
         }
+        const methodKey = normalizePaymentMethodKey(paymentMethod) || 'CASH';
         const salaryRecord = await prisma.salaryRecord.create({
             data: {
                 userId,
@@ -169,7 +171,7 @@ export async function POST(request: NextRequest) {
                 month: parseInt(month),
                 year: parseInt(year),
                 paidDate: new Date(),
-                paymentMethod: paymentMethod || 'CASH',
+                paymentMethod: methodKey,
                 notes: notes || null,
                 createdBy: session.user.id,
                 ...(regionId ? { regionId } : {}),
