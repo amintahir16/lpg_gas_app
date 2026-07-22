@@ -163,7 +163,7 @@ export default function VendorPaymentModal({
                   <div className={`w-2 h-2 rounded-full ${outstandingBalance < 0 ? 'bg-red-400' : 'bg-black'
                     }`}></div>
                   {invoiceNumber
-                    ? `Payment for invoice ${invoiceNumber}`
+                    ? `Remaining unpaid for invoice ${invoiceNumber}`
                     : outstandingBalance < 0
                       ? 'Vendor owes you this amount'
                       : 'You owe this amount to the vendor'}

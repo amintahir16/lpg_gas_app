@@ -2444,9 +2444,24 @@ export default function VendorDetailPage() {
                           {(purchase.status === 'PENDING' || purchase.status === 'PARTIAL') && (
                             <Button
                               onClick={() => {
-                                const entryTotal = Number(purchase.totalPrice || purchase.items?.reduce((sum: number, item: any) => sum + Number(item.totalPrice), 0) || 0);
+                                const entryTotal = Number(
+                                  purchase.totalPrice ||
+                                    purchase.items?.reduce(
+                                      (sum: number, item: any) => sum + Number(item.totalPrice),
+                                      0
+                                    ) ||
+                                    0
+                                );
+                                const paidForInvoice = (vendor.payments || [])
+                                  .filter((payment) =>
+                                    purchase.invoiceNumber
+                                      ? payment.description?.includes(purchase.invoiceNumber)
+                                      : false
+                                  )
+                                  .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+                                const amountDue = Math.max(0, entryTotal - paidForInvoice);
                                 setSelectedInvoiceNumber(purchase.invoiceNumber || null);
-                                setSelectedEntryTotal(entryTotal);
+                                setSelectedEntryTotal(amountDue);
                                 setShowPaymentModal(true);
                               }}
                               className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs px-4"
