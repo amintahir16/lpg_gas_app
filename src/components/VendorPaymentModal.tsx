@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { XMarkIcon, BanknotesIcon, CreditCardIcon, CheckIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, BanknotesIcon, CheckIcon } from '@heroicons/react/24/outline';
 import { CustomSelect } from '@/components/ui/select-custom';
 import { PAYMENT_METHOD_OPTIONS } from '@/lib/payment-methods';
 import {
@@ -114,18 +114,6 @@ export default function VendorPaymentModal({
     }
   };
 
-  const handleQuickAmount = (percentage: number) => {
-    // If paying for a specific entry, use entry total; otherwise use outstanding balance
-    const baseAmount = purchaseEntryTotal ? purchaseEntryTotal : Math.abs(outstandingBalance);
-    const quickAmount = baseAmount * percentage;
-    const roundedAmount = Math.round(quickAmount);
-    // Cap at the entry total if paying for a specific entry
-    const maxAmount = invoiceNumber && purchaseEntryTotal ? Math.round(purchaseEntryTotal) : undefined;
-    const finalAmount = maxAmount !== undefined && roundedAmount > maxAmount ? maxAmount : roundedAmount;
-    setAmount(finalAmount.toString());
-    setError(''); // Clear any previous errors
-  };
-
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-PK', {
       style: 'currency',
@@ -138,95 +126,95 @@ export default function VendorPaymentModal({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0">
-        <DialogHeader className="px-8 pt-8 pb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-100">
-          <DialogTitle className="flex items-center gap-3 text-2xl font-bold text-gray-900">
-            <div className="p-3 bg-green-100 rounded-full">
-              <BanknotesIcon className="h-7 w-7 text-green-600" />
+        <DialogHeader className="px-5 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-100">
+          <DialogTitle className="flex items-center gap-2 text-base font-bold text-gray-900">
+            <div className="p-1.5 bg-green-100 rounded-full">
+              <BanknotesIcon className="h-4 w-4 text-green-600" />
             </div>
             Make Payment to Vendor
           </DialogTitle>
-          <DialogDescription className="text-gray-600 text-base mt-2">
-            Record a payment to <span className="font-semibold text-gray-900 bg-blue-100 px-2 py-1 rounded-md">{vendorName}</span>
+          <DialogDescription className="text-gray-600 text-xs mt-1">
+            Record a payment to <span className="font-semibold text-gray-900 bg-blue-100 px-1.5 py-0.5 rounded">{vendorName}</span>
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="px-8 py-6 space-y-8">
-          {/* Outstanding Balance Display */}
-          <div className={`rounded-xl p-6 shadow-sm ${outstandingBalance < 0
-            ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200'
-            : 'bg-gradient-to-r from-red-50 to-pink-50 border-2 border-red-200'
-            }`}>
-            <div className="flex justify-between items-center">
-              <div>
-                <div className={`text-sm font-semibold uppercase tracking-wide ${outstandingBalance < 0 ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                  {invoiceNumber ? `Invoice ${invoiceNumber} - Amount Due` : 'Outstanding Balance'}
-                </div>
-                <div className={`text-3xl font-bold mt-2 ${outstandingBalance < 0 ? 'text-red-700' : 'text-black'
-                  }`}>
-                  {formatCurrency(Math.round(invoiceNumber && purchaseEntryTotal ? purchaseEntryTotal : outstandingBalance))}
-                </div>
-                <div className={`text-xs mt-1 flex items-center gap-1 ${outstandingBalance < 0 ? 'text-red-500' : 'text-black'
-                  }`}>
-                  <div className={`w-2 h-2 rounded-full ${outstandingBalance < 0 ? 'bg-red-400' : 'bg-black'
-                    }`}></div>
-                  {invoiceNumber
-                    ? `Remaining unpaid for invoice ${invoiceNumber}`
-                    : outstandingBalance < 0
-                      ? 'Vendor owes you this amount'
-                      : 'You owe this amount to the vendor'}
-                </div>
-              </div>
-              <div className={`p-4 rounded-full ${outstandingBalance < 0 ? 'bg-green-100' : 'bg-red-100'
-                }`}>
-                <BanknotesIcon className={`h-8 w-8 ${outstandingBalance < 0 ? 'text-green-600' : 'text-red-600'
-                  }`} />
-              </div>
+        <form onSubmit={handleSubmit} className="px-5 py-4 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label htmlFor="paymentDate" className="block text-xs font-semibold text-gray-700 mb-1">
+                Payment Date <span className="text-red-500">*</span>
+              </label>
+              <Input
+                id="paymentDate"
+                type="date"
+                value={paymentDate}
+                onChange={(e) => setPaymentDate(e.target.value)}
+                max={todayLocalDate()}
+                className="h-9 border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-200 rounded-lg text-sm"
+                required
+              />
+            </div>
+
+            <div>
+              <label htmlFor="paymentTime" className="block text-xs font-semibold text-gray-700 mb-1">
+                Time <span className="text-red-500">*</span>
+              </label>
+              <Input
+                id="paymentTime"
+                type="time"
+                value={paymentTime}
+                onChange={(e) => setPaymentTime(e.target.value)}
+                className="h-9 border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-200 rounded-lg text-sm"
+                required
+              />
+            </div>
+
+            <div className="flex flex-col flex-1">
+              <label htmlFor="paymentMethod" className="block text-xs font-semibold text-gray-700 mb-1">
+                Payment Method <span className="text-red-500">*</span>
+              </label>
+              <CustomSelect
+                value={paymentMethod}
+                onChange={setPaymentMethod}
+                options={[...PAYMENT_METHOD_OPTIONS]}
+                placeholder="Select Payment Method"
+              />
             </div>
           </div>
 
-          {/* Quick Amount Buttons */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-3">
-              Quick Amount Selection
-            </label>
-            <div className="grid grid-cols-4 gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handleQuickAmount(0.25)}
-                className="h-9 border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50 text-blue-700 font-semibold transition-all duration-200"
-              >
-                25%
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handleQuickAmount(0.5)}
-                className="h-9 border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50 text-blue-700 font-semibold transition-all duration-200"
-              >
-                50%
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handleQuickAmount(0.75)}
-                className="h-9 border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50 text-blue-700 font-semibold transition-all duration-200"
-              >
-                75%
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handleQuickAmount(1)}
-                className="h-9 border-2 border-green-200 hover:border-green-400 hover:bg-green-50 text-green-700 font-semibold transition-all duration-200"
-              >
-                100%
-              </Button>
+          {/* Outstanding Balance Display */}
+          <div className={`rounded-lg px-3 py-2.5 ${outstandingBalance < 0
+            ? 'bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200'
+            : 'bg-gradient-to-r from-red-50 to-pink-50 border border-red-200'
+            }`}>
+            <div className="flex justify-between items-center gap-3">
+              <div className="min-w-0">
+                <div className={`text-[10px] font-semibold uppercase tracking-wide ${outstandingBalance < 0 ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                  {invoiceNumber ? `Invoice ${invoiceNumber} - Amount Due` : 'Outstanding Balance'}
+                </div>
+                <div className={`text-lg font-bold leading-tight mt-0.5 ${outstandingBalance < 0 ? 'text-red-700' : 'text-black'
+                  }`}>
+                  {formatCurrency(Math.round(invoiceNumber && purchaseEntryTotal ? purchaseEntryTotal : outstandingBalance))}
+                </div>
+                <div className={`text-[10px] mt-0.5 flex items-center gap-1 ${outstandingBalance < 0 ? 'text-red-500' : 'text-gray-600'
+                  }`}>
+                  <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${outstandingBalance < 0 ? 'bg-red-400' : 'bg-gray-400'
+                    }`}></div>
+                  <span className="truncate">
+                    {invoiceNumber
+                      ? `Remaining unpaid for invoice ${invoiceNumber}`
+                      : outstandingBalance < 0
+                        ? 'Vendor owes you this amount'
+                        : 'You owe this amount to the vendor'}
+                  </span>
+                </div>
+              </div>
+              <div className={`p-2 rounded-full shrink-0 ${outstandingBalance < 0 ? 'bg-green-100' : 'bg-red-100'
+                }`}>
+                <BanknotesIcon className={`h-4 w-4 ${outstandingBalance < 0 ? 'text-green-600' : 'text-red-600'
+                  }`} />
+              </div>
             </div>
           </div>
 
@@ -306,52 +294,6 @@ export default function VendorPaymentModal({
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            {/* Payment Date */}
-            <div>
-              <label htmlFor="paymentDate" className="block text-sm font-semibold text-gray-700 mb-2">
-                Payment Date <span className="text-red-500">*</span>
-              </label>
-              <Input
-                id="paymentDate"
-                type="date"
-                value={paymentDate}
-                onChange={(e) => setPaymentDate(e.target.value)}
-                max={todayLocalDate()}
-                className="h-9 border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg text-sm"
-                required
-              />
-            </div>
-
-            {/* Payment Time */}
-            <div>
-              <label htmlFor="paymentTime" className="block text-sm font-semibold text-gray-700 mb-2">
-                Time <span className="text-red-500">*</span>
-              </label>
-              <Input
-                id="paymentTime"
-                type="time"
-                value={paymentTime}
-                onChange={(e) => setPaymentTime(e.target.value)}
-                className="h-9 border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg text-sm"
-                required
-              />
-            </div>
-
-            {/* Payment Method */}
-            <div className="flex flex-col flex-1">
-              <label htmlFor="paymentMethod" className="block text-sm font-semibold text-gray-700 mb-2">
-                Payment Method <span className="text-red-500">*</span>
-              </label>
-              <CustomSelect
-                value={paymentMethod}
-                onChange={setPaymentMethod}
-                options={[...PAYMENT_METHOD_OPTIONS]}
-                placeholder="Select Payment Method"
-              />
-            </div>
-          </div>
-
           {/* Reference Number - Only show for general payments, not for entry-specific payments */}
           {!invoiceNumber && (
             <div>
@@ -374,13 +316,13 @@ export default function VendorPaymentModal({
             <label htmlFor="description" className="block text-sm font-semibold text-gray-700 mb-2">
               Description <span className="text-gray-400 font-normal">(Optional)</span>
             </label>
-            <textarea
+            <Input
               id="description"
+              type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Add any notes about this payment..."
-              rows={3}
-              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 resize-none"
+              className="h-9 border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg text-sm"
             />
           </div>
 
