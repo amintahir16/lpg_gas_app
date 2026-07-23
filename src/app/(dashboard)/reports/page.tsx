@@ -31,7 +31,7 @@ import {
   PAYMENT_METHOD_CARD_STYLES,
   type PaymentMethodValue,
 } from '@/lib/payment-methods';
-import { sharePdfBlob } from '@/lib/sharePdf';
+import { sharePdfBlob, downloadPdfBlob } from '@/lib/sharePdf';
 import { buildCashClosingPdf, closingPdfFileName } from '@/lib/cash-closing-pdf';
 
 type ClosingLedgerEntry = {
@@ -109,7 +109,7 @@ export default function ReportsPage() {
   const [report, setReport] = useState<ClosingReportResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState<'download' | 'share' | null>(null);
 
   const isSuperAdmin = session?.user?.role === 'SUPER_ADMIN';
 
@@ -158,19 +158,40 @@ export default function ReportsPage() {
     );
   }
 
+  const buildClosingPdfBlob = () => {
+    if (!report) throw new Error('No report loaded');
+    return buildCashClosingPdf({
+      branchName: report.branchName,
+      periodLabel: report.label || periodLabel,
+      generatedAt: report.generatedAt,
+      totals: report.totals,
+      byWallet: report.byWallet,
+      bySource: report.bySource,
+      entries: report.entries,
+    });
+  };
+
   const handleDownloadPdf = async () => {
     if (!report) return;
     try {
-      setPdfBusy(true);
-      const blob = buildCashClosingPdf({
-        branchName: report.branchName,
-        periodLabel: report.label || periodLabel,
-        generatedAt: report.generatedAt,
-        totals: report.totals,
-        byWallet: report.byWallet,
-        bySource: report.bySource,
-        entries: report.entries,
-      });
+      setPdfBusy('download');
+      const blob = buildClosingPdfBlob();
+      const fileName = closingPdfFileName(report.label || periodLabel);
+      // Routes through sharePdf: web = file download, Android APK = native Save/Share sheet
+      await downloadPdfBlob(blob, fileName);
+    } catch (err) {
+      console.error('Closing PDF download error:', err);
+      alert(err instanceof Error ? err.message : 'Failed to download PDF');
+    } finally {
+      setPdfBusy(null);
+    }
+  };
+
+  const handleSharePdf = async () => {
+    if (!report) return;
+    try {
+      setPdfBusy('share');
+      const blob = buildClosingPdfBlob();
       const fileName = closingPdfFileName(report.label || periodLabel);
       await sharePdfBlob({
         blob,
@@ -179,10 +200,10 @@ export default function ReportsPage() {
         text: `Cash closing report for ${report.label || periodLabel}`,
       });
     } catch (err) {
-      console.error('Closing PDF error:', err);
-      alert(err instanceof Error ? err.message : 'Failed to create PDF');
+      console.error('Closing PDF share error:', err);
+      alert(err instanceof Error ? err.message : 'Failed to share PDF');
     } finally {
-      setPdfBusy(false);
+      setPdfBusy(null);
     }
   };
 
@@ -222,13 +243,23 @@ export default function ReportsPage() {
           </Button>
           <Button
             type="button"
+            variant="outline"
+            size="sm"
+            className="h-9"
+            onClick={handleSharePdf}
+            disabled={!report || loading || !!pdfBusy}
+          >
+            {pdfBusy === 'share' ? 'Sharing…' : 'Share'}
+          </Button>
+          <Button
+            type="button"
             size="sm"
             className="h-9 bg-blue-600 hover:bg-blue-700 text-white"
             onClick={handleDownloadPdf}
-            disabled={!report || loading || pdfBusy}
+            disabled={!report || loading || !!pdfBusy}
           >
             <DocumentArrowDownIcon className="w-4 h-4 mr-1.5" />
-            {pdfBusy ? 'Preparing…' : 'Download PDF'}
+            {pdfBusy === 'download' ? 'Preparing…' : 'Download PDF'}
           </Button>
         </div>
       </div>
