@@ -18,6 +18,28 @@ function matchesMethod(raw: string | null | undefined, method: string): boolean 
   return normalizePaymentMethodKey(raw) === method;
 }
 
+/** Match string payment-method columns the same way `matchesMethod` does. */
+function stringPaymentMethodWhere(
+  field: 'paymentMethod' | 'toMethod' | 'fromMethod',
+  method: PaymentMethodValue
+) {
+  const spaced = method.replace(/_/g, ' ');
+  const variants =
+    spaced === method
+      ? [{ equals: method, mode: 'insensitive' as const }]
+      : [
+          { equals: method, mode: 'insensitive' as const },
+          { equals: spaced, mode: 'insensitive' as const },
+        ];
+  return {
+    OR: variants.map((value) => ({ [field]: value })),
+  };
+}
+
+function decimalSum(value: unknown): number {
+  return Number(value || 0);
+}
+
 export interface BuildBankLedgerParams {
   method: PaymentMethodValue;
   regionId: string | null | undefined;
@@ -108,6 +130,7 @@ export async function buildBankLedgerEntries(
       where: {
         date: { gte: startDate, lte: endDate },
         voided: false,
+        ...stringPaymentMethodWhere('paymentMethod', method),
         ...txRegionScope,
       },
       select: {
@@ -171,6 +194,7 @@ export async function buildBankLedgerEntries(
     prisma.officeExpense.findMany({
       where: {
         expenseDate: { gte: startDate, lte: endDate },
+        ...stringPaymentMethodWhere('paymentMethod', method),
         ...regionScope,
       },
       select: {
@@ -188,6 +212,7 @@ export async function buildBankLedgerEntries(
     prisma.salaryRecord.findMany({
       where: {
         paidDate: { gte: startDate, lte: endDate },
+        ...stringPaymentMethodWhere('paymentMethod', method),
         ...regionScope,
       },
       select: {
@@ -209,7 +234,20 @@ export async function buildBankLedgerEntries(
     prisma.bankMovement.findMany({
       where: {
         movementDate: { gte: startDate, lte: endDate },
-        OR: [{ toMethod: method }, { fromMethod: method }],
+        OR: [
+          { AND: [{ type: 'DEPOSIT' }, stringPaymentMethodWhere('toMethod', method)] },
+          {
+            AND: [
+              { type: 'TRANSFER' },
+              {
+                OR: [
+                  stringPaymentMethodWhere('fromMethod', method),
+                  stringPaymentMethodWhere('toMethod', method),
+                ],
+              },
+            ],
+          },
+        ],
         ...regionScope,
       },
       select: {
@@ -537,13 +575,143 @@ export async function getBankLedgerOpeningNet(params: {
   beforeDate: Date;
 }): Promise<number> {
   const earliest = new Date(2000, 0, 1);
-  const endBefore = new Date(params.beforeDate.getTime() - 1);
-  if (endBefore < earliest) return 0;
-  const entries = await buildBankLedgerEntries({
-    method: params.method,
-    regionId: params.regionId,
-    startDate: earliest,
-    endDate: endBefore,
-  });
-  return summarizeLedgerEntries(entries).net;
+  const { method, regionId, beforeDate } = params;
+  if (beforeDate.getTime() <= earliest.getTime()) return 0;
+
+  const regionScope = regionScopedWhere(regionId);
+  const txRegionScope = regionId ? { regionId } : {};
+  const before = { gte: earliest, lt: beforeDate } as const;
+  const methodText = stringPaymentMethodWhere('paymentMethod', method);
+
+  // Same inclusion rules as buildBankLedgerEntries, but SUM in SQL — no row hydration.
+  const [
+    b2bSalesPaid,
+    b2bPaymentsWithPaid,
+    b2bPaymentsFallback,
+    b2cIn,
+    vendorOut,
+    expenseOut,
+    salaryOut,
+    depositsIn,
+    transfersIn,
+    transfersOut,
+  ] = await Promise.all([
+    prisma.b2BTransaction.aggregate({
+      where: {
+        date: before,
+        voided: false,
+        transactionType: 'SALE',
+        paidAmount: { gt: 0 },
+        paymentMethod: method,
+        ...txRegionScope,
+      },
+      _sum: { paidAmount: true },
+    }),
+    // PAYMENT: prefer paidAmount when present (including 0)
+    prisma.b2BTransaction.aggregate({
+      where: {
+        date: before,
+        voided: false,
+        transactionType: 'PAYMENT',
+        paymentMethod: method,
+        paidAmount: { not: null },
+        ...txRegionScope,
+      },
+      _sum: { paidAmount: true },
+    }),
+    prisma.b2BTransaction.aggregate({
+      where: {
+        date: before,
+        voided: false,
+        transactionType: 'PAYMENT',
+        paymentMethod: method,
+        paidAmount: null,
+        ...txRegionScope,
+      },
+      _sum: { totalAmount: true },
+    }),
+    // B2C: Number(finalAmount || totalAmount) — same CASE as JS falsy coalesce
+    prisma.$queryRaw<Array<{ amount: unknown }>>`
+      SELECT COALESCE(SUM(
+        CASE
+          WHEN "finalAmount" IS NOT NULL AND "finalAmount" <> 0 THEN "finalAmount"
+          ELSE "totalAmount"
+        END
+      ), 0) AS amount
+      FROM b2c_transactions
+      WHERE voided = false
+        AND date >= ${earliest}
+        AND date < ${beforeDate}
+        AND UPPER(REPLACE(TRIM("paymentMethod"), ' ', '_')) = ${method}
+        AND (${regionId ?? null}::text IS NULL OR "regionId" = ${regionId ?? null})
+    `,
+    prisma.vendorPayment.aggregate({
+      where: {
+        paymentDate: before,
+        status: 'COMPLETED',
+        method,
+        ...txRegionScope,
+      },
+      _sum: { amount: true },
+    }),
+    prisma.officeExpense.aggregate({
+      where: {
+        expenseDate: before,
+        ...methodText,
+        ...regionScope,
+      },
+      _sum: { amount: true },
+    }),
+    prisma.salaryRecord.aggregate({
+      where: {
+        paidDate: before,
+        ...methodText,
+        ...regionScope,
+      },
+      _sum: { amount: true },
+    }),
+    prisma.bankMovement.aggregate({
+      where: {
+        movementDate: before,
+        type: 'DEPOSIT',
+        ...stringPaymentMethodWhere('toMethod', method),
+        ...regionScope,
+      },
+      _sum: { amount: true },
+    }),
+    prisma.bankMovement.aggregate({
+      where: {
+        movementDate: before,
+        type: 'TRANSFER',
+        ...stringPaymentMethodWhere('toMethod', method),
+        ...regionScope,
+      },
+      _sum: { amount: true },
+    }),
+    prisma.bankMovement.aggregate({
+      where: {
+        movementDate: before,
+        type: 'TRANSFER',
+        ...stringPaymentMethodWhere('fromMethod', method),
+        ...regionScope,
+      },
+      _sum: { amount: true },
+    }),
+  ]);
+
+  const totalIn =
+    decimalSum(b2bSalesPaid._sum.paidAmount) +
+    decimalSum(b2bPaymentsWithPaid._sum.paidAmount) +
+    decimalSum(b2bPaymentsFallback._sum.totalAmount) +
+    decimalSum(b2cIn[0]?.amount) +
+    decimalSum(depositsIn._sum.amount) +
+    decimalSum(transfersIn._sum.amount);
+
+  const totalOut =
+    decimalSum(vendorOut._sum.amount) +
+    decimalSum(expenseOut._sum.amount) +
+    decimalSum(salaryOut._sum.amount) +
+    decimalSum(transfersOut._sum.amount);
+
+  return totalIn - totalOut;
 }

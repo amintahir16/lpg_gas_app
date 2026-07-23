@@ -82,7 +82,8 @@ export function userDisplayName(user: UserLike): string | null {
 }
 
 export function formatLedgerDateParts(input: Date | string) {
-  const d = typeof input === 'string' ? new Date(input) : input;
+  const raw = typeof input === 'string' ? new Date(input) : input;
+  const d = Number.isNaN(raw.getTime()) ? new Date() : raw;
   return {
     occurredAt: d.toISOString(),
     dayName: d.toLocaleDateString('en-PK', { weekday: 'long' }),
@@ -104,9 +105,12 @@ export function coalesceEventDate(
   primary: Date | string | null | undefined,
   fallback?: Date | string | null | undefined
 ): Date {
-  if (primary) return new Date(primary);
-  if (fallback) return new Date(fallback);
-  return new Date();
+  const tryParse = (value: Date | string | null | undefined): Date | null => {
+    if (value == null || value === '') return null;
+    const d = value instanceof Date ? value : new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+  return tryParse(primary) || tryParse(fallback) || new Date();
 }
 
 export function summarizeLineItems(

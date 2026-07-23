@@ -125,29 +125,37 @@ export default function ReportsPage() {
     }
   }, [status, isSuperAdmin, router]);
 
-  const fetchReport = async () => {
+  const fetchReport = async (signal?: AbortSignal) => {
     try {
       setLoading(true);
       setError(null);
       const res = await fetch(
-        `/api/reports/closing?${buildFinancialPeriodQuery({ period, date, month, year })}`
+        `/api/reports/closing?${buildFinancialPeriodQuery({ period, date, month, year })}`,
+        signal ? { signal } : undefined
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to load closing report');
+        const detail =
+          typeof data.details === 'string' && data.details.trim()
+            ? `: ${data.details}`
+            : '';
+        throw new Error((data.error || 'Failed to load closing report') + detail);
       }
       setReport(data);
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       setReport(null);
       setError(err instanceof Error ? err.message : 'Failed to load closing report');
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 
   useEffect(() => {
     if (status === 'loading' || !isSuperAdmin) return;
-    fetchReport();
+    const controller = new AbortController();
+    fetchReport(controller.signal);
+    return () => controller.abort();
   }, [period, date, month, year, status, isSuperAdmin]);
 
   if (status === 'loading' || !isSuperAdmin) {
@@ -235,7 +243,7 @@ export default function ReportsPage() {
             variant="outline"
             size="sm"
             className="h-9"
-            onClick={fetchReport}
+            onClick={() => fetchReport()}
             disabled={loading}
           >
             <ArrowPathIcon className={`w-4 h-4 mr-1.5 ${loading ? 'animate-spin' : ''}`} />

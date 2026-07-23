@@ -84,27 +84,44 @@ function notificationReducer(state: NotificationState, action: NotificationActio
         ),
       };
     
-    case 'REMOVE_NOTIFICATION':
+    case 'REMOVE_NOTIFICATION': {
+      const removed = state.notifications.find((n) => n.id === action.payload);
       return {
         ...state,
-        notifications: state.notifications.filter(n => n.id !== action.payload),
+        notifications: state.notifications.filter((n) => n.id !== action.payload),
         stats: {
           ...state.stats,
           total: Math.max(0, state.stats.total - 1),
+          unread:
+            removed && !removed.isRead
+              ? Math.max(0, state.stats.unread - 1)
+              : state.stats.unread,
+          urgent:
+            removed && !removed.isRead && removed.priority === 'URGENT'
+              ? Math.max(0, state.stats.urgent - 1)
+              : state.stats.urgent,
         },
       };
+    }
     
-    case 'MARK_AS_READ':
+    case 'MARK_AS_READ': {
+      const target = state.notifications.find((n) => n.id === action.payload);
+      if (!target || target.isRead) return state;
       return {
         ...state,
-        notifications: state.notifications.map(n =>
+        notifications: state.notifications.map((n) =>
           n.id === action.payload ? { ...n, isRead: true } : n
         ),
         stats: {
           ...state.stats,
           unread: Math.max(0, state.stats.unread - 1),
+          urgent:
+            target.priority === 'URGENT'
+              ? Math.max(0, state.stats.urgent - 1)
+              : state.stats.urgent,
         },
       };
+    }
     
     case 'MARK_ALL_AS_READ':
       return {
@@ -228,17 +245,21 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     try {
       const response = await fetch('/api/notifications', {
         method: 'PUT',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ notificationIds: [id] }),
       });
 
-      if (response.ok) {
-        dispatch({ type: 'MARK_AS_READ', payload: id });
-        // Refresh stats after marking as read
-        await fetchStats();
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to mark notification as read');
       }
+
+      dispatch({ type: 'MARK_AS_READ', payload: id });
+      await fetchStats();
     } catch (error) {
       console.error('Error marking notification as read:', error);
+      throw error;
     }
   }, [fetchStats]);
 
@@ -247,17 +268,21 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     try {
       const response = await fetch('/api/notifications', {
         method: 'PUT',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ markAllAsRead: true }),
       });
 
-      if (response.ok) {
-        dispatch({ type: 'MARK_ALL_AS_READ' });
-        // Refresh stats after marking all as read
-        await fetchStats();
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to mark all notifications as read');
       }
+
+      dispatch({ type: 'MARK_ALL_AS_READ' });
+      await fetchStats();
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
+      throw error;
     }
   }, [fetchStats]);
 
@@ -266,6 +291,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     try {
       const response = await fetch('/api/notifications', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(notification),
       });
@@ -286,17 +312,21 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   // Remove a notification
   const removeNotification = useCallback(async (id: string) => {
     try {
-      const response = await fetch(`/api/notifications?id=${id}`, {
+      const response = await fetch(`/api/notifications?id=${encodeURIComponent(id)}`, {
         method: 'DELETE',
+        credentials: 'include',
       });
 
-      if (response.ok) {
-        dispatch({ type: 'REMOVE_NOTIFICATION', payload: id });
-        // Refresh stats after removal
-        await fetchStats();
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to delete notification');
       }
+
+      dispatch({ type: 'REMOVE_NOTIFICATION', payload: id });
+      await fetchStats();
     } catch (error) {
       console.error('Error removing notification:', error);
+      throw error;
     }
   }, [fetchStats]);
 

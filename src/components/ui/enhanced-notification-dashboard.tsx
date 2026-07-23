@@ -135,19 +135,35 @@ export function EnhancedNotificationDashboard({ isOpen, onClose }: EnhancedNotif
   };
 
   const handleMarkAsRead = async (id: string) => {
-    await markAsRead(id);
+    try {
+      await markAsRead(id);
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error);
+    }
   };
 
   const handleMarkAllAsRead = async () => {
-    await markAllAsRead();
+    try {
+      await markAllAsRead();
+    } catch (error) {
+      console.error('Failed to mark all as read:', error);
+    }
   };
 
   const handleRemoveNotification = async (id: string) => {
-    await removeNotification(id);
+    try {
+      await removeNotification(id);
+    } catch (error) {
+      console.error('Failed to delete notification:', error);
+    }
   };
 
   const handleRefresh = async () => {
-    await refresh();
+    try {
+      await refresh();
+    } catch (error) {
+      console.error('Failed to refresh notifications:', error);
+    }
   };
 
   if (!isOpen) return null;
@@ -362,16 +378,6 @@ export function EnhancedNotificationDashboard({ isOpen, onClose }: EnhancedNotif
                         </Badge>
                       </div>
                       
-                      {/* Metadata */}
-                      {notification.metadata && (
-                        <div className="mt-2 text-xs text-gray-500">
-                          {Object.entries(notification.metadata).map(([key, value]) => (
-                            <span key={key} className="mr-3">
-                              <span className="font-medium">{key}:</span> {String(value)}
-                            </span>
-                          ))}
-                        </div>
-                      )}
                     </div>
                     
                     {/* Action Buttons */}

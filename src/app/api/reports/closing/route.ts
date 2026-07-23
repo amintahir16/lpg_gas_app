@@ -59,26 +59,36 @@ export async function GET(request: NextRequest) {
 
     const methods = PAYMENT_METHOD_OPTIONS.map((o) => o.value);
 
-    // Period entries + opening nets for all wallets in parallel
-    const walletResults = await Promise.all(
-      methods.map(async (method) => {
-        const [entries, opening] = await Promise.all([
-          buildBankLedgerEntries({
-            method,
-            regionId,
-            startDate,
-            endDate,
-          }),
-          getBankLedgerOpeningNet({
-            method,
-            regionId,
-            beforeDate: startDate,
-          }),
-        ]);
-        const summary = summarizeLedgerEntries(entries);
-        return { method, entries, opening, summary };
-      })
-    );
+    // Period detail rows + SQL opening nets (same business rules, no full-history hydrate).
+    // Sequential per wallet keeps the connection pool stable under load.
+    const walletResults: Array<{
+      method: PaymentMethodValue;
+      entries: Awaited<ReturnType<typeof buildBankLedgerEntries>>;
+      opening: number;
+      summary: ReturnType<typeof summarizeLedgerEntries>;
+    }> = [];
+
+    for (const method of methods) {
+      const [entries, opening] = await Promise.all([
+        buildBankLedgerEntries({
+          method,
+          regionId,
+          startDate,
+          endDate,
+        }),
+        getBankLedgerOpeningNet({
+          method,
+          regionId,
+          beforeDate: startDate,
+        }),
+      ]);
+      walletResults.push({
+        method,
+        entries,
+        opening,
+        summary: summarizeLedgerEntries(entries),
+      });
+    }
 
     const byWallet: WalletClosingRow[] = walletResults.map(
       ({ method, opening, summary }) => ({
@@ -177,8 +187,10 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Closing report API error:', error);
+    const details =
+      error instanceof Error ? error.message : 'Unknown server error';
     return NextResponse.json(
-      { error: 'Failed to build cash closing report' },
+      { error: 'Failed to build cash closing report', details },
       { status: 500 }
     );
   }

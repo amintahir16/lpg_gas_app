@@ -300,7 +300,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => markAsRead(notification.id)}
+                                onClick={() => {
+                                  void markAsRead(notification.id).catch((error) => {
+                                    console.error('Failed to mark notification as read:', error);
+                                  });
+                                }}
                                 className="text-xs text-blue-600 hover:text-blue-800"
                               >
                                 Mark read

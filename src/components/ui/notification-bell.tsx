@@ -127,11 +127,19 @@ export function NotificationBell({
   };
 
   const handleMarkAsRead = async (id: string) => {
-    await markAsRead(id);
+    try {
+      await markAsRead(id);
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error);
+    }
   };
 
   const handleRemoveNotification = async (id: string) => {
-    await removeNotification(id);
+    try {
+      await removeNotification(id);
+    } catch (error) {
+      console.error('Failed to delete notification:', error);
+    }
   };
 
   // Some legacy notifications were stored with the API path

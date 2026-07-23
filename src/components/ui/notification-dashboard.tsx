@@ -220,16 +220,6 @@ export function NotificationDashboard({ isOpen, onClose }: NotificationDashboard
                         {notification.message}
                       </p>
                       
-                      {/* Metadata */}
-                      {notification.metadata && (
-                        <div className="mt-2 text-xs text-gray-500">
-                          {Object.entries(notification.metadata).map(([key, value]) => (
-                            <span key={key} className="mr-3">
-                              <span className="font-medium">{key}:</span> {String(value)}
-                            </span>
-                          ))}
-                        </div>
-                      )}
                     </div>
                     
                     {/* Mark as read button */}
@@ -237,7 +227,11 @@ export function NotificationDashboard({ isOpen, onClose }: NotificationDashboard
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => markAsRead(notification.id)}
+                        onClick={() => {
+                          void markAsRead(notification.id).catch((error) => {
+                            console.error('Failed to mark notification as read:', error);
+                          });
+                        }}
                         className="text-gray-400 hover:text-gray-600"
                         title="Mark as read"
                       >
