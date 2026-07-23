@@ -1,4 +1,4 @@
-﻿-- CreateTable
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "salary_records" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
