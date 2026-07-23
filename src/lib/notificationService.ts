@@ -40,32 +40,17 @@ export class NotificationService {
     return NotificationService.instance;
   }
 
-  // Start monitoring database changes with enhanced error handling
+  /**
+   * Background DB scanning is disabled.
+   * Notifications must be created inside action handlers (sales, stock updates,
+   * CRUD, cron jobs). Polling the DB for "what changed?" burns Free-plan ops
+   * and duplicates action-driven notifiers like `superAdminNotifier`.
+   */
   public async startMonitoring() {
-    if (this.isRunning) {
-      console.log('Notification monitoring is already running');
-      return;
-    }
-
-    try {
-      this.isRunning = true;
-      this.errorCount = 0;
-
-      if (this.checkInterval) {
-        clearInterval(this.checkInterval);
-      }
-
-      // Check for changes every 3 seconds
-      this.checkInterval = setInterval(async () => {
-        await this.checkForChanges();
-      }, 3000);
-
-      console.log('Notification monitoring started - checking every 3 seconds');
-    } catch (error) {
-      console.error('Failed to start notification monitoring:', error);
-      this.isRunning = false;
-      throw error;
-    }
+    console.warn(
+      '[NotificationService] startMonitoring() is disabled — notifications are action-driven only.'
+    );
+    this.isRunning = false;
   }
 
   // Stop monitoring

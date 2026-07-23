@@ -10,11 +10,9 @@ function NotificationToastManager() {
   const { addToast, removeToast, toasts } = useToast();
 
   // Track which notification IDs have already been toasted in this session.
-  // Without this guard the 10-second polling in `NotificationContext` keeps
-  // returning the same urgent notification for up to 10 seconds, and every
-  // poll produces a fresh `state.notifications` array reference — so the
-  // effect below would otherwise re-toast (and re-render, and re-toast…)
-  // the same item until React aborted with "Maximum update depth exceeded".
+  // Without this guard, refreshing notifications (on load / tab focus / bell open)
+  // would keep returning the same urgent item with a new array reference and
+  // re-toast it until React aborted with "Maximum update depth exceeded".
   const toastedIdsRef = React.useRef<Set<string>>(new Set());
 
   React.useEffect(() => {

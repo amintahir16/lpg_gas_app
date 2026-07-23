@@ -19,7 +19,7 @@ export function NotificationBell({
   showBadge = true, 
   variant = 'default' 
 }: NotificationBellProps) {
-  const { state, markAsRead, removeNotification } = useNotifications();
+  const { state, markAsRead, removeNotification, refresh } = useNotifications();
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -69,7 +69,12 @@ export function NotificationBell({
   }, [urgentCount, isAnimating]);
 
   const handleBellClick = () => {
-    setIsOpen(!isOpen);
+    const next = !isOpen;
+    setIsOpen(next);
+    // User action: open the panel → fetch latest (no background timer).
+    if (next) {
+      void refresh();
+    }
   };
 
   const getBadgeVariant = () => {

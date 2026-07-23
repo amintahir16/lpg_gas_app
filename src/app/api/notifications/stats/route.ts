@@ -3,134 +3,47 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
-export async function GET(request: NextRequest) {
+/**
+ * Lightweight stats for the notification bell / polling.
+ * Previously this ran 8 Prisma queries (counts by priority + groupBy + recent).
+ * The UI only needs total / unread / urgent — 3 queries — which cuts ops by ~60%
+ * on every poll cycle.
+ */
+export async function GET(_request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
-    if (!session) {
+
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Always derive scope from the authenticated session — never accept a
-    // `?userId=` from the query string. Previously this endpoint let any
-    // logged-in user read another user's notification statistics by passing
-    // an arbitrary userId in the URL (IDOR).
+    // `?userId=` from the query string (IDOR).
     const userId = session.user.id;
 
     const baseWhere = {
-      OR: [
-        { userId },
-        { userId: null } // Global notifications
-      ]
+      OR: [{ userId }, { userId: null }],
     };
 
-    // Get comprehensive notification statistics
-    const [
-      total,
-      unread,
-      urgent,
-      high,
-      medium,
-      low,
-      byType,
-      recentActivity
-    ] = await Promise.all([
-      // Total notifications
+    const [total, unread, urgent] = await Promise.all([
       prisma.notification.count({ where: baseWhere }),
-      
-      // Unread notifications
       prisma.notification.count({
-        where: {
-          ...baseWhere,
-          isRead: false
-        }
+        where: { ...baseWhere, isRead: false },
       }),
-      
-      // Urgent priority notifications
       prisma.notification.count({
         where: {
           ...baseWhere,
           priority: 'URGENT',
-          isRead: false
-        }
+          isRead: false,
+        },
       }),
-      
-      // High priority notifications
-      prisma.notification.count({
-        where: {
-          ...baseWhere,
-          priority: 'HIGH',
-          isRead: false
-        }
-      }),
-      
-      // Medium priority notifications
-      prisma.notification.count({
-        where: {
-          ...baseWhere,
-          priority: 'MEDIUM',
-          isRead: false
-        }
-      }),
-      
-      // Low priority notifications
-      prisma.notification.count({
-        where: {
-          ...baseWhere,
-          priority: 'LOW',
-          isRead: false
-        }
-      }),
-      
-      // Notifications by type
-      prisma.notification.groupBy({
-        by: ['type'],
-        where: baseWhere,
-        _count: {
-          id: true
-        }
-      }),
-      
-      // Recent activity (last 24 hours)
-      prisma.notification.count({
-        where: {
-          ...baseWhere,
-          createdAt: {
-            gte: new Date(Date.now() - 24 * 60 * 60 * 1000)
-          }
-        }
-      })
     ]);
-
-    // Format type statistics
-    const typeStats = byType.reduce((acc, item) => {
-      acc[item.type] = item._count.id;
-      return acc;
-    }, {} as Record<string, number>);
-
-    // Calculate read rate
-    const readRate = total > 0 ? ((total - unread) / total * 100).toFixed(1) : 0;
-
-    // Get priority distribution
-    const priorityDistribution = {
-      urgent: urgent,
-      high: high,
-      medium: medium,
-      low: low
-    };
 
     return NextResponse.json({
       total,
       unread,
       urgent,
-      high,
-      medium,
-      low,
-      readRate: parseFloat(readRate),
-      priorityDistribution,
-      typeStats,
-      recentActivity,
-      lastUpdated: new Date().toISOString()
+      lastUpdated: new Date().toISOString(),
     });
   } catch (error) {
     console.error('Notification stats error:', error);
@@ -139,4 +52,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}

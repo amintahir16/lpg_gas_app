@@ -143,8 +143,8 @@ function notificationReducer(state: NotificationState, action: NotificationActio
 
 interface NotificationContextType {
   state: NotificationState;
-  fetchNotifications: () => Promise<void>;
-  fetchStats: () => Promise<void>;
+  fetchNotifications: () => Promise<boolean>;
+  fetchStats: () => Promise<boolean>;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   createNotification: (notification: Omit<Notification, 'id' | 'createdAt'>) => Promise<Notification>;
@@ -171,9 +171,10 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   const { data: session } = useSession();
   const [state, dispatch] = useReducer(notificationReducer, initialState);
 
-  // Fetch notifications from API
-  const fetchNotifications = useCallback(async () => {
-    if (!session?.user) return;
+  // Fetch notifications from API. Returns false on failure so callers can decide
+  // whether to retry — never used for background polling.
+  const fetchNotifications = useCallback(async (): Promise<boolean> => {
+    if (!session?.user) return true;
 
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
@@ -187,35 +188,32 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       });
       
       if (!response.ok) {
-        // Only log error if it's not a network error
         if (response.status !== 0) {
           console.log('Failed to fetch notifications:', response.status, response.statusText);
         }
-        // Don't throw error for network issues - just silently fail
-        return;
+        return false;
       }
 
       const data = await response.json();
       dispatch({ type: 'SET_NOTIFICATIONS', payload: data.notifications || [] });
       dispatch({ type: 'SET_LAST_UPDATE', payload: new Date() });
+      return true;
     } catch (error) {
-      // Silently handle network errors (e.g., when offline or API unavailable)
-      // Only log if it's a real error, not a network failure
       if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        // Network error - silently ignore
-        return;
+        return false;
       }
       const errorMessage = error instanceof Error ? error.message : 'Failed to fetch notifications';
       dispatch({ type: 'SET_ERROR', payload: errorMessage });
       console.error('Error fetching notifications:', error);
+      return false;
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
   }, [session?.user]);
 
   // Fetch notification statistics
-  const fetchStats = useCallback(async () => {
-    if (!session?.user) return;
+  const fetchStats = useCallback(async (): Promise<boolean> => {
+    if (!session?.user) return true;
 
     try {
       const response = await fetch('/api/notifications/stats', {
@@ -227,16 +225,23 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       
       if (response.ok) {
         const data = await response.json();
-        dispatch({ type: 'SET_STATS', payload: data });
+        dispatch({
+          type: 'SET_STATS',
+          payload: {
+            total: data.total ?? 0,
+            unread: data.unread ?? 0,
+            urgent: data.urgent ?? 0,
+          },
+        });
+        return true;
       }
+      return false;
     } catch (error) {
-      // Silently handle network errors (e.g., when offline or API unavailable)
-      // Only log if it's a real error, not a network failure
       if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        // Network error - silently ignore
-        return;
+        return false;
       }
       console.error('Error fetching notification stats:', error);
+      return false;
     }
   }, [session?.user]);
 
@@ -340,22 +345,27 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     await Promise.all([fetchNotifications(), fetchStats()]);
   }, [fetchNotifications, fetchStats]);
 
-  // Set up polling for real-time updates
+  // Action-driven only: load when the user signs in, and again when they
+  // return to this tab. No background timer — notifications are created on
+  // the server when sales / stock / CRUD actions run; the UI just reads them.
   useEffect(() => {
-    if (session?.user) {
-      // Initial fetch
-      fetchNotifications();
-      fetchStats();
-
-      // Set up polling every 10 seconds
-      const interval = setInterval(() => {
-        fetchNotifications();
-        fetchStats();
-      }, 10000);
-
-      return () => clearInterval(interval);
+    if (!session?.user) {
+      dispatch({ type: 'SET_NOTIFICATIONS', payload: [] });
+      dispatch({ type: 'SET_STATS', payload: { total: 0, unread: 0, urgent: 0 } });
+      return;
     }
-  }, [session?.user, fetchNotifications, fetchStats]);
+
+    void refresh();
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void refresh();
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [session?.user, refresh]);
 
   const contextValue: NotificationContextType = {
     state,

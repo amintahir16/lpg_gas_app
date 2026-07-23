@@ -25,175 +25,14 @@ export function useRealTimeNotifications() {
   const [stats, setStats] = useState<NotificationStats>({ total: 0, unread: 0, urgent: 0 });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastNotificationId = useRef<string | null>(null);
-
-  // Fetch notifications from API
-  const fetchNotifications = useCallback(async () => {
-    if (!session?.user) return;
-
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      const response = await fetch('/api/simple-notifications?limit=50');
-      if (!response.ok) {
-        throw new Error('Failed to fetch notifications');
-      }
-
-      const data = await response.json();
-      const newNotifications = data.notifications || [];
-
-      // Check for new notifications
-      if (newNotifications.length > 0 && lastNotificationId.current) {
-        const newItems = newNotifications.filter(
-          (n: Notification) => n.id !== lastNotificationId.current
-        );
-        
-        if (newItems.length > 0) {
-          // Show toast for new notifications
-          newItems.forEach((notification: Notification) => {
-            showNotificationToast(notification);
-          });
-        }
-      }
-
-      // Update last notification ID
-      if (newNotifications.length > 0) {
-        lastNotificationId.current = newNotifications[0].id;
-      }
-
-      setNotifications(newNotifications);
-      setStats({
-        total: data.pagination?.total || 0,
-        unread: newNotifications.filter((n: Notification) => !n.isRead).length,
-        urgent: newNotifications.filter((n: Notification) => n.priority === 'URGENT' && !n.isRead).length
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch notifications');
-      console.error('Error fetching notifications:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [session?.user]);
-
-  // Fetch notification statistics
-  const fetchStats = useCallback(async () => {
-    if (!session?.user) return;
-
-    try {
-      const response = await fetch('/api/simple-notifications/stats');
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
-      }
-    } catch (err) {
-      console.error('Error fetching notification stats:', err);
-    }
-  }, [session?.user]);
-
-  // Mark notification as read
-  const markAsRead = useCallback(async (notificationId: string) => {
-    try {
-      const response = await fetch('/api/simple-notifications', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notificationIds: [notificationId] })
-      });
-
-      if (response.ok) {
-        setNotifications(prev => 
-          prev.map(n => 
-            n.id === notificationId ? { ...n, isRead: true } : n
-          )
-        );
-        
-        // Update stats
-        setStats(prev => ({
-          ...prev,
-          unread: Math.max(0, prev.unread - 1)
-        }));
-      }
-    } catch (err) {
-      console.error('Error marking notification as read:', err);
-    }
-  }, []);
-
-  // Mark all notifications as read
-  const markAllAsRead = useCallback(async () => {
-    try {
-      const response = await fetch('/api/simple-notifications', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ markAllAsRead: true })
-      });
-
-      if (response.ok) {
-        setNotifications(prev => 
-          prev.map(n => ({ ...n, isRead: true }))
-        );
-        
-        setStats(prev => ({
-          ...prev,
-          unread: 0
-        }));
-      }
-    } catch (err) {
-      console.error('Error marking all notifications as read:', err);
-    }
-  }, []);
-
-  // Create immediate notification (for CRUD operations)
-  const createImmediateNotification = useCallback(async (
-    type: string,
-    title: string,
-    message: string,
-    priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT' = 'MEDIUM',
-    metadata?: Record<string, any>
-  ) => {
-    try {
-      // For now, create a simple notification object
-      const newNotification = {
-        id: `temp_${Date.now()}`,
-        type,
-        title,
-        message,
-        isRead: false,
-        priority,
-        metadata,
-        createdAt: new Date().toISOString(),
-        userId: undefined
-      };
-      
-      // Add to local state immediately
-      setNotifications(prev => [newNotification, ...prev]);
-      
-      // Update stats
-      setStats(prev => ({
-        ...prev,
-        total: prev.total + 1,
-        unread: prev.unread + 1,
-        urgent: priority === 'URGENT' ? prev.urgent + 1 : prev.urgent
-      }));
-
-      // Show toast notification
-      showNotificationToast(newNotification);
-      
-      return newNotification;
-    } catch (err) {
-      console.error('Error creating immediate notification:', err);
-    }
-  }, []);
+  const showToastRef = useRef<(notification: Notification) => void>(() => {});
 
   // Show notification toast
   const showNotificationToast = useCallback((notification: Notification) => {
     // Build the toast purely with DOM APIs and `textContent` to ensure
     // user-controlled `notification.title` and `notification.message` are
-    // never interpreted as HTML. Previously we used `innerHTML` here, which
-    // turned every notification field into a stored-XSS sink (an attacker
-    // who could plant `<img onerror=...>` into a customer name, vendor name,
-    // expense description, etc. would execute script in every admin's
-    // browser when the toast fired).
+    // never interpreted as HTML.
     const toast = document.createElement('div');
     toast.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg max-w-sm transform transition-all duration-300 translate-x-full ${
       notification.priority === 'URGENT' ? 'bg-red-500 text-white' :
@@ -240,12 +79,10 @@ export function useRealTimeNotifications() {
 
     document.body.appendChild(toast);
 
-    // Animate in
     setTimeout(() => {
       toast.classList.remove('translate-x-full');
     }, 100);
 
-    // Auto-remove after 3 seconds
     setTimeout(() => {
       toast.classList.add('translate-x-full');
       setTimeout(() => {
@@ -256,35 +93,191 @@ export function useRealTimeNotifications() {
     }, 3000);
   }, []);
 
-  // Start real-time monitoring
-  useEffect(() => {
-    if (session?.user) {
-      // Initial fetch
-      fetchNotifications();
-      fetchStats();
+  showToastRef.current = showNotificationToast;
 
-      // Set up polling every 3 seconds
-      intervalRef.current = setInterval(() => {
-        fetchNotifications();
-        fetchStats();
-      }, 3000);
+  // Fetch notifications from API
+  const fetchNotifications = useCallback(async (): Promise<boolean> => {
+    if (!session?.user) return true;
 
-      return () => {
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const response = await fetch('/api/simple-notifications?limit=50');
+      if (!response.ok) {
+        setError('Failed to fetch notifications');
+        return false;
+      }
+
+      const data = await response.json();
+      const newNotifications = data.notifications || [];
+
+      if (newNotifications.length > 0 && lastNotificationId.current) {
+        const newItems = newNotifications.filter(
+          (n: Notification) => n.id !== lastNotificationId.current
+        );
+
+        if (newItems.length > 0) {
+          newItems.forEach((notification: Notification) => {
+            showToastRef.current(notification);
+          });
         }
-      };
-    }
-  }, [session?.user, fetchNotifications, fetchStats]);
+      }
 
-  // Cleanup on unmount
+      if (newNotifications.length > 0) {
+        lastNotificationId.current = newNotifications[0].id;
+      }
+
+      setNotifications(newNotifications);
+      setStats({
+        total: data.pagination?.total || 0,
+        unread: newNotifications.filter((n: Notification) => !n.isRead).length,
+        urgent: newNotifications.filter((n: Notification) => n.priority === 'URGENT' && !n.isRead).length
+      });
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch notifications');
+      console.error('Error fetching notifications:', err);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [session?.user]);
+
+  // Fetch notification statistics
+  const fetchStats = useCallback(async (): Promise<boolean> => {
+    if (!session?.user) return true;
+
+    try {
+      const response = await fetch('/api/simple-notifications/stats');
+      if (response.ok) {
+        const data = await response.json();
+        setStats({
+          total: data.total ?? 0,
+          unread: data.unread ?? 0,
+          urgent: data.urgent ?? 0,
+        });
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error fetching notification stats:', err);
+      return false;
+    }
+  }, [session?.user]);
+
+  // Mark notification as read
+  const markAsRead = useCallback(async (notificationId: string) => {
+    try {
+      const response = await fetch('/api/simple-notifications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationIds: [notificationId] })
+      });
+
+      if (response.ok) {
+        setNotifications(prev =>
+          prev.map(n =>
+            n.id === notificationId ? { ...n, isRead: true } : n
+          )
+        );
+
+        setStats(prev => ({
+          ...prev,
+          unread: Math.max(0, prev.unread - 1)
+        }));
+      }
+    } catch (err) {
+      console.error('Error marking notification as read:', err);
+    }
+  }, []);
+
+  // Mark all notifications as read
+  const markAllAsRead = useCallback(async () => {
+    try {
+      const response = await fetch('/api/simple-notifications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markAllAsRead: true })
+      });
+
+      if (response.ok) {
+        setNotifications(prev =>
+          prev.map(n => ({ ...n, isRead: true }))
+        );
+
+        setStats(prev => ({
+          ...prev,
+          unread: 0
+        }));
+      }
+    } catch (err) {
+      console.error('Error marking all notifications as read:', err);
+    }
+  }, []);
+
+  // Create immediate notification (for CRUD operations) — local UI only;
+  // server-side action handlers create the persisted notification rows.
+  const createImmediateNotification = useCallback(async (
+    type: string,
+    title: string,
+    message: string,
+    priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT' = 'MEDIUM',
+    metadata?: Record<string, any>
+  ) => {
+    try {
+      const newNotification = {
+        id: `temp_${Date.now()}`,
+        type,
+        title,
+        message,
+        isRead: false,
+        priority,
+        metadata,
+        createdAt: new Date().toISOString(),
+        userId: undefined
+      };
+
+      setNotifications(prev => [newNotification, ...prev]);
+
+      setStats(prev => ({
+        ...prev,
+        total: prev.total + 1,
+        unread: prev.unread + 1,
+        urgent: priority === 'URGENT' ? prev.urgent + 1 : prev.urgent
+      }));
+
+      showNotificationToast(newNotification);
+
+      return newNotification;
+    } catch (err) {
+      console.error('Error creating immediate notification:', err);
+    }
+  }, [showNotificationToast]);
+
+  const refresh = useCallback(async () => {
+    await Promise.all([fetchNotifications(), fetchStats()]);
+  }, [fetchNotifications, fetchStats]);
+
+  // Action-driven: load on sign-in / tab focus only — no background timer.
   useEffect(() => {
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+    if (!session?.user) {
+      setNotifications([]);
+      setStats({ total: 0, unread: 0, urgent: 0 });
+      return;
+    }
+
+    void refresh();
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void refresh();
       }
     };
-  }, []);
+
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [session?.user, refresh]);
 
   return {
     notifications,
@@ -294,6 +287,7 @@ export function useRealTimeNotifications() {
     markAsRead,
     markAllAsRead,
     createImmediateNotification,
-    refetch: fetchNotifications
+    refetch: fetchNotifications,
+    refresh,
   };
-} 
+}
