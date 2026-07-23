@@ -67,6 +67,17 @@ export default function PricingManagementPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [initializingB2C, setInitializingB2C] = useState(false);
   const [initializingB2B, setInitializingB2B] = useState(false);
+  const [addingCustomerType, setAddingCustomerType] = useState<'B2C' | 'B2B' | null>(null);
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [addForm, setAddForm] = useState<{
+    name: string;
+    marginPerKg: number | string;
+    description: string;
+  }>({
+    name: '',
+    marginPerKg: '',
+    description: '',
+  });
 
   useEffect(() => {
     fetchData();
@@ -119,6 +130,7 @@ export default function PricingManagementPage() {
   };
 
   const startEditingCategory = (category: MarginCategory) => {
+    setAddingCustomerType(null);
     setEditingCategoryId(category.id);
     setEditForm({
       name: category.name,
@@ -130,6 +142,73 @@ export default function PricingManagementPage() {
   const cancelEditingCategory = () => {
     setEditingCategoryId(null);
     setEditForm({ name: '', marginPerKg: 0, description: '' });
+  };
+
+  const startAddingCategory = (customerType: 'B2C' | 'B2B') => {
+    setEditingCategoryId(null);
+    setAddingCustomerType(customerType);
+    setAddForm({ name: '', marginPerKg: '', description: '' });
+  };
+
+  const cancelAddingCategory = () => {
+    setAddingCustomerType(null);
+    setAddForm({ name: '', marginPerKg: '', description: '' });
+  };
+
+  const handleCreateCategory = async (customerType: 'B2C' | 'B2B') => {
+    const name = addForm.name.trim();
+    const marginPerKg =
+      typeof addForm.marginPerKg === 'string'
+        ? parseFloat(addForm.marginPerKg)
+        : Number(addForm.marginPerKg);
+
+    if (!name) {
+      showMessage('error', 'Category name is required');
+      return;
+    }
+    if (!Number.isFinite(marginPerKg) || marginPerKg < 0) {
+      showMessage('error', 'Enter a valid margin per kg');
+      return;
+    }
+
+    const existingForType = categories.filter((c) => c.customerType === customerType);
+    const sortOrder =
+      existingForType.length > 0
+        ? Math.max(...existingForType.map((c) => c.sortOrder)) + 1
+        : 1;
+
+    try {
+      setCreatingCategory(true);
+      const response = await fetch('/api/admin/margin-categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          customerType,
+          marginPerKg,
+          description: addForm.description.trim() || null,
+          sortOrder,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to create category');
+      }
+
+      showMessage(
+        'success',
+        `${customerType} category "${name}" created — assign it on a customer to apply pricing`
+      );
+      cancelAddingCategory();
+      fetchData();
+    } catch (error) {
+      console.error('Error creating category:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create category';
+      showMessage('error', errorMessage);
+    } finally {
+      setCreatingCategory(false);
+    }
   };
 
   const handleUpdateCategory = async (categoryId: string) => {
@@ -325,29 +404,99 @@ export default function PricingManagementPage() {
               </CardTitle>
               <CardDescription>Pricing categories for residential customers</CardDescription>
             </div>
-            {b2cCategories.length === 0 && (
+            <div className="flex items-center gap-2">
               <Button
                 size="sm"
-                onClick={() => handleInitializeCategories('B2C')}
-                disabled={initializingB2C}
+                variant={addingCustomerType === 'B2C' ? 'default' : 'outline'}
+                onClick={() =>
+                  addingCustomerType === 'B2C'
+                    ? cancelAddingCategory()
+                    : startAddingCategory('B2C')
+                }
                 className="flex items-center gap-2"
               >
-                {initializingB2C ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Initializing...
-                  </>
-                ) : (
-                  <>
-                    <PlusIcon className="w-4 h-4" />
-                    Initialize Default B2C Categories
-                  </>
-                )}
+                <PlusIcon className="w-4 h-4" />
+                {addingCustomerType === 'B2C' ? 'Cancel' : 'Add Category'}
               </Button>
-            )}
+              {b2cCategories.length === 0 && (
+                <Button
+                  size="sm"
+                  onClick={() => handleInitializeCategories('B2C')}
+                  disabled={initializingB2C}
+                  className="flex items-center gap-2"
+                >
+                  {initializingB2C ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Initializing...
+                    </>
+                  ) : (
+                    <>
+                      <PlusIcon className="w-4 h-4" />
+                      Initialize Defaults
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
+          {addingCustomerType === 'B2C' && (
+            <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50/50 p-4">
+              <p className="text-sm font-semibold text-gray-900 mb-3">New B2C margin category</p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <Label className="text-xs text-gray-600">Category Name</Label>
+                  <Input
+                    value={addForm.name}
+                    onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
+                    placeholder="e.g. Premium Homes"
+                    className="h-9 mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-600">Margin (Rs/kg)</Label>
+                  <Input
+                    type="number"
+                    step="1"
+                    min="0"
+                    value={addForm.marginPerKg}
+                    onChange={(e) =>
+                      setAddForm({
+                        ...addForm,
+                        marginPerKg: e.target.value === '' ? '' : parseFloat(e.target.value),
+                      })
+                    }
+                    placeholder="e.g. 70"
+                    className="h-9 mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-600">Description (optional)</Label>
+                  <Input
+                    value={addForm.description}
+                    onChange={(e) => setAddForm({ ...addForm, description: e.target.value })}
+                    placeholder="Who this rate applies to"
+                    className="h-9 mt-1"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-3">
+                <Button type="button" size="sm" variant="outline" onClick={cancelAddingCategory}>
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={creatingCategory}
+                  onClick={() => handleCreateCategory('B2C')}
+                >
+                  {creatingCategory ? 'Saving...' : 'Create Category'}
+                </Button>
+              </div>
+            </div>
+          )}
           {b2cCategories.length === 0 ? (
             <div className="py-8 text-center">
               <div className="max-w-md mx-auto">
@@ -523,29 +672,99 @@ export default function PricingManagementPage() {
               </CardTitle>
               <CardDescription>Pricing categories for commercial customers</CardDescription>
             </div>
-            {b2bCategories.length === 0 && (
+            <div className="flex items-center gap-2">
               <Button
                 size="sm"
-                onClick={() => handleInitializeCategories('B2B')}
-                disabled={initializingB2B}
+                variant={addingCustomerType === 'B2B' ? 'default' : 'outline'}
+                onClick={() =>
+                  addingCustomerType === 'B2B'
+                    ? cancelAddingCategory()
+                    : startAddingCategory('B2B')
+                }
                 className="flex items-center gap-2"
               >
-                {initializingB2B ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Initializing...
-                  </>
-                ) : (
-                  <>
-                    <PlusIcon className="w-4 h-4" />
-                    Initialize Default B2B Categories
-                  </>
-                )}
+                <PlusIcon className="w-4 h-4" />
+                {addingCustomerType === 'B2B' ? 'Cancel' : 'Add Category'}
               </Button>
-            )}
+              {b2bCategories.length === 0 && (
+                <Button
+                  size="sm"
+                  onClick={() => handleInitializeCategories('B2B')}
+                  disabled={initializingB2B}
+                  className="flex items-center gap-2"
+                >
+                  {initializingB2B ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Initializing...
+                    </>
+                  ) : (
+                    <>
+                      <PlusIcon className="w-4 h-4" />
+                      Initialize Defaults
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
+          {addingCustomerType === 'B2B' && (
+            <div className="mb-4 rounded-lg border border-indigo-200 bg-indigo-50/50 p-4">
+              <p className="text-sm font-semibold text-gray-900 mb-3">New B2B margin category</p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <Label className="text-xs text-gray-600">Category Name</Label>
+                  <Input
+                    value={addForm.name}
+                    onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
+                    placeholder="e.g. Bulk Weekly Contract"
+                    className="h-9 mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-600">Margin (Rs/kg)</Label>
+                  <Input
+                    type="number"
+                    step="1"
+                    min="0"
+                    value={addForm.marginPerKg}
+                    onChange={(e) =>
+                      setAddForm({
+                        ...addForm,
+                        marginPerKg: e.target.value === '' ? '' : parseFloat(e.target.value),
+                      })
+                    }
+                    placeholder="e.g. 25"
+                    className="h-9 mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-600">Description (optional)</Label>
+                  <Input
+                    value={addForm.description}
+                    onChange={(e) => setAddForm({ ...addForm, description: e.target.value })}
+                    placeholder="Who this rate applies to"
+                    className="h-9 mt-1"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-3">
+                <Button type="button" size="sm" variant="outline" onClick={cancelAddingCategory}>
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={creatingCategory}
+                  onClick={() => handleCreateCategory('B2B')}
+                >
+                  {creatingCategory ? 'Saving...' : 'Create Category'}
+                </Button>
+              </div>
+            </div>
+          )}
           {b2bCategories.length === 0 ? (
             <div className="py-8 text-center">
               <div className="max-w-md mx-auto">

@@ -74,17 +74,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if category with same name and type already exists
+    // Name is globally unique on MarginCategory
     const existingCategory = await prisma.marginCategory.findFirst({
-      where: {
-        name,
-        customerType
-      }
+      where: { name },
     });
 
     if (existingCategory) {
       return NextResponse.json(
-        { error: 'Conflict', message: 'Category with this name and customer type already exists' },
+        {
+          error: 'Conflict',
+          message: `A category named "${name}" already exists (${existingCategory.customerType}). Choose a different name.`,
+        },
         { status: 409 }
       );
     }

@@ -1703,7 +1703,7 @@ export default function B2BCustomerDetailPage() {
                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Margin Strategy</p>
                 <p className="text-sm font-bold text-gray-900">
                   {customer.marginCategory ?
-                    `${customer.marginCategory.name} (Rs ${customer.marginCategory.marginPerKg}/kg)` :
+                    `${customer.marginCategory.name}` :
                     'Standard Pricing'
                   }
                 </p>
@@ -3391,7 +3391,7 @@ export default function B2BCustomerDetailPage() {
                   <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-200">
                     <p className="text-sm font-medium text-gray-900">
                       {customer?.marginCategory ?
-                        `${customer.marginCategory.name} (Rs ${customer.marginCategory.marginPerKg}/kg)` :
+                        `${customer.marginCategory.name}` :
                         'Not assigned'
                       }
                     </p>
@@ -3413,7 +3413,7 @@ export default function B2BCustomerDetailPage() {
                     placeholder="Select new margin category"
                     options={marginCategories.map((category) => ({
                       value: category.id,
-                      label: `${category.name} - Rs ${category.marginPerKg}/kg`
+                      label: category.name
                     }))}
                   />
                   <p className="text-[11px] text-gray-500 mt-1.5">

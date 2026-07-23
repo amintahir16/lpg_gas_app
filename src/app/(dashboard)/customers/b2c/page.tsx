@@ -750,7 +750,7 @@ export default function B2CCustomersPage() {
                     disabled={loadingCategories}
                     defaultValue={editingCustomer.marginCategoryId || ''}
                     placeholder={loadingCategories ? "Loading..." : "Select Category"}
-                    options={marginCategories.map(c => ({ value: c.id, label: `${c.name} - Rs ${c.marginPerKg}/kg` }))}
+                    options={marginCategories.map(c => ({ value: c.id, label: c.name }))}
                     className="h-9"
                   />
                 </div>
@@ -888,7 +888,7 @@ export default function B2CCustomersPage() {
                     required
                     disabled={loadingCategories}
                     placeholder={loadingCategories ? "Loading..." : "Select Category"}
-                    options={marginCategories.map(c => ({ value: c.id, label: `${c.name} (Rs ${c.marginPerKg}/kg)` }))}
+                    options={marginCategories.map(c => ({ value: c.id, label: c.name }))}
                     className="h-9"
                     value={undefined}
                   />
