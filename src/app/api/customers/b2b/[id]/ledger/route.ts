@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { adoptLegacyB2bCustomerIfNeeded, getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { requireAdmin, clampLimit } from '@/lib/apiAuth';
 import { parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
+import { isOpeningDuesSaleItem, isOpeningDuesTransaction } from '@/lib/b2b-opening-entries';
 
 export async function GET(
   request: NextRequest,
@@ -200,14 +201,12 @@ export async function GET(
       // Safely skip voided transactions from affecting lifetime totals
       if (transaction.voided) return;
 
-      // NOTE: Opening cylinder dues DO contribute gas margin to "Total profit".
-      // In this business, a cylinder held by the customer is an unpaid sale —
-      // the margin is earned on delivery and collected later when the cylinder
-      // is returned/refilled (accrual), consistent with how every credit sale
-      // recognizes profit here.
       const totalAmount = parseFloat(transaction.totalAmount.toString());
       switch (transaction.transactionType) {
         case 'SALE':
+          // Opening cylinder dues are holdings setup — no sold totals / margin
+          if (isOpeningDuesTransaction(transaction)) break;
+
           totalOut += totalAmount;
           // Include partial payments made at sale time in Total In
           if (transaction.paidAmount) {
@@ -218,6 +217,8 @@ export async function GET(
           // Calculate Profit for this transaction
           if (transaction.items && transaction.items.length > 0) {
             transaction.items.forEach(item => {
+              if (isOpeningDuesSaleItem(transaction, item)) return;
+
               // 1. Gas Profit Calculation
               if (item.cylinderType) {
                 // Profit = Margin Per Kg * Cylinder Capacity * Quantity

@@ -13,6 +13,7 @@ import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { requireAdmin } from '@/lib/apiAuth';
 import { parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { getCapacityFromTypeString, getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
+import { isOpeningDuesSaleItem, isOpeningDuesTransaction } from '@/lib/b2b-opening-entries';
 import { resolveFinancialPeriod } from '@/lib/financial-period';
 
 export const dynamic = 'force-dynamic';
@@ -106,8 +107,12 @@ export async function GET(request: NextRequest) {
         },
         select: {
           customerId: true,
+          notes: true,
+          paymentReference: true,
+          totalAmount: true,
+          transactionType: true,
           items: {
-            select: { quantity: true, pricePerItem: true, costPrice: true, cylinderType: true }
+            select: { quantity: true, pricePerItem: true, totalPrice: true, costPrice: true, cylinderType: true }
           }
         }
       })
@@ -148,10 +153,14 @@ export async function GET(request: NextRequest) {
     customersForMargin.forEach(c => custMarginMap.set(c.id, c.marginCategoryId));
 
     b2bTransInRange.forEach(tx => {
+      if (isOpeningDuesTransaction(tx)) return;
+
       const marginCategoryId = custMarginMap.get(tx.customerId);
       const marginPerKg = marginCategoryId ? (marginMap.get(marginCategoryId) || 0) : 0;
 
       tx.items.forEach(item => {
+        if (isOpeningDuesSaleItem(tx, item)) return;
+
         const qty = Number(item.quantity);
         const sellPrice = Number(item.pricePerItem);
         const costPrice = Number(item.costPrice || 0);

@@ -6,6 +6,7 @@ import {
     getFinancialChartBuckets,
     resolveFinancialPeriod,
 } from '@/lib/financial-period';
+import { isOpeningDuesSaleItem } from '@/lib/b2b-opening-entries';
 
 export async function GET(request: NextRequest) {
     try {
@@ -42,7 +43,14 @@ export async function GET(request: NextRequest) {
                 select: { productName: true, quantity: true, totalPrice: true, totalCost: true, profitMargin: true },
             }),
             prisma.b2BTransactionItem.findMany({
-                where: { transaction: { date: { gte: startDate, lte: endDate }, voided: false, transactionType: 'SALE', ...txRegionScope } },
+                where: {
+                    transaction: {
+                        date: { gte: startDate, lte: endDate },
+                        voided: false,
+                        transactionType: 'SALE',
+                        ...txRegionScope,
+                    },
+                },
                 select: {
                     productName: true,
                     cylinderType: true,
@@ -51,7 +59,15 @@ export async function GET(request: NextRequest) {
                     pricePerItem: true,
                     totalPrice: true,
                     costPrice: true,
-                    transaction: { select: { customerId: true } },
+                    transaction: {
+                        select: {
+                            customerId: true,
+                            notes: true,
+                            paymentReference: true,
+                            totalAmount: true,
+                            transactionType: true,
+                        },
+                    },
                 },
             }),
         ]);
@@ -92,6 +108,7 @@ export async function GET(request: NextRequest) {
         });
         // B2B items
         b2bItems.forEach((item) => {
+            if (isOpeningDuesSaleItem(item.transaction, item)) return;
             const qty = Number(item.quantity);
             const revenue = Number(item.totalPrice);
             const costPrice = Number(item.costPrice || 0);
@@ -193,18 +210,34 @@ export async function GET(request: NextRequest) {
             });
             // B2B items — compute actual profit per item
             const b2bChartItems = await prisma.b2BTransactionItem.findMany({
-                where: { transaction: { date: { gte: chartStart, lte: chartEnd }, voided: false, transactionType: 'SALE', ...txRegionScope } },
+                where: {
+                    transaction: {
+                        date: { gte: chartStart, lte: chartEnd },
+                        voided: false,
+                        transactionType: 'SALE',
+                        ...txRegionScope,
+                    },
+                },
                 select: {
                     cylinderType: true,
                     quantity: true,
                     pricePerItem: true,
                     totalPrice: true,
                     costPrice: true,
-                    transaction: { select: { customerId: true } },
+                    transaction: {
+                        select: {
+                            customerId: true,
+                            notes: true,
+                            paymentReference: true,
+                            totalAmount: true,
+                            transactionType: true,
+                        },
+                    },
                 },
             });
             let b2bProfit = 0;
             b2bChartItems.forEach((item) => {
+                if (isOpeningDuesSaleItem(item.transaction, item)) return;
                 const qty = Number(item.quantity);
                 const revenue = Number(item.totalPrice);
                 const costPrice = Number(item.costPrice || 0);

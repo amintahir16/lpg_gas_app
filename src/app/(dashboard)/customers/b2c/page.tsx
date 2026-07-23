@@ -290,15 +290,17 @@ export default function B2CCustomersPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to delete customer');
+        throw new Error(errorData.error || 'Failed to archive customer');
       }
 
       setDeleteConfirm(null);
+      setDeleteConfirmationName('');
       await fetchCustomers();
 
     } catch (err) {
-      console.error('Error deleting customer:', err);
-      setError(err instanceof Error ? err.message : 'Failed to delete customer');
+      console.error('Error archiving customer:', err);
+      setError(err instanceof Error ? err.message : 'Failed to archive customer');
+      setDeleteError(err instanceof Error ? err.message : 'Failed to archive customer');
     } finally {
       setIsLoading(false);
     }
@@ -798,10 +800,10 @@ export default function B2CCustomersPage() {
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <TrashIcon className="w-6 h-6 text-red-600" />
               </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Customer?</h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Archive Customer?</h3>
               <p className="text-gray-500 text-sm mb-6">
-                To confirm deletion, please type the customer name: <span className="font-bold text-gray-900">{customers.find(c => c.id === deleteConfirm)?.name}</span>.
-                <br /><span className="text-red-500 text-xs mt-2 block">This action cannot be undone and will remove all associated records.</span>
+                To confirm, type the customer name: <span className="font-bold text-gray-900">{customers.find(c => c.id === deleteConfirm)?.name}</span>.
+                <br /><span className="text-amber-600 text-xs mt-2 block">The customer will be hidden from the active list. Sales and profit history are kept.</span>
               </p>
 
               <Input
@@ -830,7 +832,7 @@ export default function B2CCustomersPage() {
                   onClick={() => handleDeleteCustomer(deleteConfirm)}
                   disabled={isLoading || deleteConfirmationName !== customers.find(c => c.id === deleteConfirm)?.name}
                 >
-                  {isLoading ? 'Deleting...' : 'Delete Customer'}
+                  {isLoading ? 'Archiving...' : 'Archive Customer'}
                 </Button>
               </div>
             </div>

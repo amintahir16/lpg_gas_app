@@ -4,6 +4,7 @@ import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { requireAdmin } from '@/lib/apiAuth';
 import { resolveFinancialPeriod } from '@/lib/financial-period';
 import { buildPaymentMethodTotals } from '@/lib/payment-methods';
+import { isOpeningDuesSaleItem } from '@/lib/b2b-opening-entries';
 
 export async function GET(request: NextRequest) {
     try {
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
         const { startDate, endDate, period, month, year, date, label } = resolved;
 
         // 1. Revenue — B2C: gas + accessories + delivery only (security deposits/returns are not sales revenue)
-        const [b2cGasRev, b2cAccRev, b2cDeliveryRev, b2bRevenue] = await Promise.all([
+        const [b2cGasRev, b2cAccRev, b2cDeliveryRev, b2bRevenueItems] = await Promise.all([
             prisma.b2CTransactionGasItem.aggregate({
                 where: {
                     transaction: {
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
                 },
                 _sum: { deliveryCharges: true },
             }),
-            prisma.b2BTransactionItem.aggregate({
+            prisma.b2BTransactionItem.findMany({
                 where: {
                     transaction: {
                         date: { gte: startDate, lte: endDate },
@@ -62,7 +63,19 @@ export async function GET(request: NextRequest) {
                         ...txRegionScope,
                     },
                 },
-                _sum: { totalPrice: true },
+                select: {
+                    totalPrice: true,
+                    pricePerItem: true,
+                    cylinderType: true,
+                    transaction: {
+                        select: {
+                            notes: true,
+                            paymentReference: true,
+                            totalAmount: true,
+                            transactionType: true,
+                        },
+                    },
+                },
             }),
         ]);
 
@@ -71,7 +84,12 @@ export async function GET(request: NextRequest) {
             Number(b2cAccRev._sum.totalPrice || 0) +
             Number(b2cDeliveryRev._sum.deliveryCharges || 0);
 
-        const totalRevenue = b2cSalesRevenue + Number(b2bRevenue._sum.totalPrice || 0);
+        const b2bSalesRevenue = b2bRevenueItems.reduce((sum, item) => {
+            if (isOpeningDuesSaleItem(item.transaction, item)) return sum;
+            return sum + Number(item.totalPrice || 0);
+        }, 0);
+
+        const totalRevenue = b2cSalesRevenue + b2bSalesRevenue;
 
         // 2. Expenses (office + personal) — by expenseDate within the selected period
         const [officeExpensesSum, personalExpensesSum] = await Promise.all([
@@ -118,13 +136,23 @@ export async function GET(request: NextRequest) {
                 cylinderType: true,
                 quantity: true,
                 totalPrice: true,
+                pricePerItem: true,
                 costPrice: true,
-                transaction: { select: { customer: { select: { marginCategory: true } } } },
+                transaction: {
+                    select: {
+                        notes: true,
+                        paymentReference: true,
+                        totalAmount: true,
+                        transactionType: true,
+                        customer: { select: { marginCategory: true } },
+                    },
+                },
             },
         });
 
         let b2bGrossProfit = 0;
         b2bItems.forEach(item => {
+            if (isOpeningDuesSaleItem(item.transaction, item)) return;
             if (item.cylinderType) {
                 const marginPerKg = Number(item.transaction.customer?.marginCategory?.marginPerKg || 0);
                 let capacity = 15;

@@ -7,6 +7,7 @@ import { notifyUserActivity } from '@/lib/superAdminNotifier';
 import { getActiveRegionId, regionScopedWhere, withRegionScope } from '@/lib/region';
 import { requireAdmin, clampLimit } from '@/lib/apiAuth';
 import { buildCylinderVariantKey } from '@/lib/cylinder-variant-key';
+import { isOpeningDuesSaleItem, isOpeningDuesTransaction } from '@/lib/b2b-opening-entries';
 
 export async function GET(request: NextRequest) {
   try {
@@ -94,8 +95,9 @@ export async function GET(request: NextRequest) {
     const enrichedCustomers = allMatchingCustomers.map(c => {
       const lastTxDate = c.b2bTransactions[0]?.date;
       const recentActivity = lastTxDate ? new Date(lastTxDate) >= sevenDaysAgo : false;
-      // Customer is ACTIVE if they are manually set to active OR have recent activity
-      const isEffectivelyActive = c.isActive || recentActivity;
+      // Archived (soft-deleted) customers are never "active", even with old activity.
+      // Active = still open (isActive) AND recent transaction activity.
+      const isEffectivelyActive = c.isActive && recentActivity;
       return { ...c, isEffectivelyActive };
     });
 
@@ -103,7 +105,11 @@ export async function GET(request: NextRequest) {
     if (filterStatus === 'ACTIVE') {
       filteredCustomers = enrichedCustomers.filter(c => c.isEffectivelyActive);
     } else if (filterStatus === 'INACTIVE') {
+      // Dormant open accounts + archived (soft-deleted) accounts
       filteredCustomers = enrichedCustomers.filter(c => !c.isEffectivelyActive);
+    } else {
+      // ALL — hide archived customers from the main register (like vendors)
+      filteredCustomers = enrichedCustomers.filter(c => c.isActive);
     }
 
     // 4. Calculate Summary Statistics (On Filtered Data)
@@ -193,15 +199,21 @@ export async function GET(request: NextRequest) {
       where: {
         customerId: { in: allCustomerIds },
         transactionType: 'SALE',
+        voided: false,
         ...regionScopedWhere(regionId),
       },
       select: {
         customerId: true,
+        notes: true,
+        paymentReference: true,
+        totalAmount: true,
+        transactionType: true,
         items: {
           select: {
             quantity: true,
             cylinderType: true,
             pricePerItem: true, // Selling Price
+            totalPrice: true,
             costPrice: true,
             // We need to know if it's an accessory or gas item. 
             // CylinderType exists = Gas, else Accessory
@@ -233,10 +245,15 @@ export async function GET(request: NextRequest) {
     let totalProfit = 0;
 
     profitTransactions.forEach(tx => {
+      // Opening cylinder dues are holdings setup — no margin profit
+      if (isOpeningDuesTransaction(tx)) return;
+
       const marginCategoryId = customerMarginMap.get(tx.customerId);
       const marginPerKg = marginCategoryId ? (marginMap.get(marginCategoryId) || 0) : 0;
 
       tx.items.forEach(item => {
+        if (isOpeningDuesSaleItem(tx, item)) return;
+
         const itemQty = Number(item.quantity);
 
         if (item.cylinderType) {

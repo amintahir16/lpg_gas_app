@@ -890,7 +890,10 @@ export default function B2CCustomerDetailPage() {
                   className="hover:bg-red-50 hover:text-red-600 hover:border-red-200"
                   onClick={async () => {
                     if (!confirm('Are you sure you want to VOID this transaction? This will reverse all stock and accounting entries.')) return;
-                    const reason = prompt('Reason for voiding (optional):');
+                    // prompt() returns null when Cancel is pressed — abort void.
+                    const reasonInput = window.prompt('Reason for voiding (optional):');
+                    if (reasonInput === null) return;
+                    const reason = reasonInput.trim() || undefined;
                     try {
                       setUndoingTransaction(true);
                       const res = await fetch(`/api/customers/b2c/transactions/${selectedTransaction.id}/undo`, {

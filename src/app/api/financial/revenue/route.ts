@@ -7,6 +7,7 @@ import {
     getFinancialChartBuckets,
     resolveFinancialPeriod,
 } from '@/lib/financial-period';
+import { isOpeningDuesSaleItem } from '@/lib/b2b-opening-entries';
 
 export async function GET(request: NextRequest) {
     try {
@@ -60,6 +61,14 @@ export async function GET(request: NextRequest) {
                     quantity: true,
                     pricePerItem: true,
                     totalPrice: true,
+                    transaction: {
+                        select: {
+                            notes: true,
+                            paymentReference: true,
+                            totalAmount: true,
+                            transactionType: true,
+                        },
+                    },
                 },
             }),
             prisma.b2BTransaction.findMany({
@@ -113,6 +122,9 @@ export async function GET(request: NextRequest) {
         });
 
         b2bItems.forEach((item) => {
+            // Opening cylinder dues must not inflate sold qty / revenue
+            if (isOpeningDuesSaleItem(item.transaction, item)) return;
+
             const qty = Number(item.quantity);
             const revenue = Number(item.totalPrice);
             if (item.cylinderType) {
@@ -174,7 +186,7 @@ export async function GET(request: NextRequest) {
         const chartBuckets = getFinancialChartBuckets(resolved);
         const chartData = [];
         for (const bucket of chartBuckets) {
-            const [b2cGas, b2cAcc, b2bCylinders, b2bAccessories] = await Promise.all([
+            const [b2cGas, b2cAcc, b2bBucketItems] = await Promise.all([
                 prisma.b2CTransactionGasItem.aggregate({
                     where: { transaction: { date: { gte: bucket.startDate, lte: bucket.endDate }, voided: false, ...txRegionScope } },
                     _sum: { totalPrice: true },
@@ -183,25 +195,44 @@ export async function GET(request: NextRequest) {
                     where: { transaction: { date: { gte: bucket.startDate, lte: bucket.endDate }, voided: false, ...txRegionScope } },
                     _sum: { totalPrice: true },
                 }),
-                prisma.b2BTransactionItem.aggregate({
+                prisma.b2BTransactionItem.findMany({
                     where: {
-                        transaction: { date: { gte: bucket.startDate, lte: bucket.endDate }, voided: false, transactionType: 'SALE', ...txRegionScope },
-                        cylinderType: { not: null },
+                        transaction: {
+                            date: { gte: bucket.startDate, lte: bucket.endDate },
+                            voided: false,
+                            transactionType: 'SALE',
+                            ...txRegionScope,
+                        },
                     },
-                    _sum: { totalPrice: true },
-                }),
-                prisma.b2BTransactionItem.aggregate({
-                    where: {
-                        transaction: { date: { gte: bucket.startDate, lte: bucket.endDate }, voided: false, transactionType: 'SALE', ...txRegionScope },
-                        cylinderType: null,
+                    select: {
+                        cylinderType: true,
+                        pricePerItem: true,
+                        totalPrice: true,
+                        transaction: {
+                            select: {
+                                notes: true,
+                                paymentReference: true,
+                                totalAmount: true,
+                                transactionType: true,
+                            },
+                        },
                     },
-                    _sum: { totalPrice: true },
                 }),
             ]);
+
+            let b2bCylinderRevenue = 0;
+            let b2bAccessoryRevenue = 0;
+            for (const item of b2bBucketItems) {
+                if (isOpeningDuesSaleItem(item.transaction, item)) continue;
+                const amount = Number(item.totalPrice || 0);
+                if (item.cylinderType) b2bCylinderRevenue += amount;
+                else b2bAccessoryRevenue += amount;
+            }
+
             chartData.push({
                 name: bucket.name,
-                cylinders: Number(b2cGas._sum.totalPrice || 0) + Number(b2bCylinders._sum.totalPrice || 0),
-                accessories: Number(b2cAcc._sum.totalPrice || 0) + Number(b2bAccessories._sum.totalPrice || 0),
+                cylinders: Number(b2cGas._sum.totalPrice || 0) + b2bCylinderRevenue,
+                accessories: Number(b2cAcc._sum.totalPrice || 0) + b2bAccessoryRevenue,
             });
         }
 

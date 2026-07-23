@@ -58,6 +58,9 @@ export async function GET(request: NextRequest) {
       whereClause.isActive = true;
     } else if (filterStatus === 'INACTIVE') {
       whereClause.isActive = false;
+    } else {
+      // ALL — hide archived (soft-deleted) customers from the main register
+      whereClause.isActive = true;
     }
 
     let orderByClause: any = { createdAt: 'desc' };

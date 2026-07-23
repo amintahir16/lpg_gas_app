@@ -230,18 +230,28 @@ export async function DELETE(
 
     if (holdings > 0) {
       return NextResponse.json(
-        { error: 'Cannot delete customer with active cylinder holdings' },
+        { error: 'Cannot archive customer with active cylinder holdings. Return all cylinders first.' },
         { status: 400 }
       );
     }
 
     const existing = await prisma.b2CCustomer.findUnique({
       where: { id: customerId },
-      select: { id: true, name: true }
+      select: { id: true, name: true, isActive: true }
     });
 
-    await prisma.b2CCustomer.delete({
-      where: { id: customerId }
+    if (!existing) {
+      return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+    }
+
+    // Soft delete — keep transactions so revenue / profit / wallet trails stay intact
+    if (!existing.isActive) {
+      return NextResponse.json({ message: 'Customer already archived' });
+    }
+
+    await prisma.b2CCustomer.update({
+      where: { id: customerId },
+      data: { isActive: false },
     });
 
     try {
@@ -250,38 +260,42 @@ export async function DELETE(
         action: ActivityAction.B2C_CUSTOMER_DELETED,
         entityType: 'B2C_CUSTOMER',
         entityId: customerId,
-        details: `Deleted B2C customer "${existing?.name ?? customerId}"`,
+        details: `Archived B2C customer "${existing.name}" (soft delete — history retained)`,
         link: '/customers/b2c',
         regionId,
         metadata: {
           customerId,
-          customerName: existing?.name ?? null,
+          customerName: existing.name,
+          softDelete: true,
         },
       });
       await notifyUserActivity({
         actorId: session.user.id,
         actorName: session.user.name || session.user.email || 'A user',
-        title: 'B2C customer deleted',
-        message: `${session.user.name || session.user.email} deleted B2C customer "${existing?.name ?? customerId}".`,
+        title: 'B2C customer archived',
+        message: `${session.user.name || session.user.email} archived B2C customer "${existing.name}". Transaction history retained.`,
         link: '/customers/b2c',
         priority: 'HIGH',
         regionId,
         metadata: {
           domain: 'B2C_CUSTOMER',
           customerId,
-          customerName: existing?.name ?? null,
+          customerName: existing.name,
+          softDelete: true,
         },
       });
     } catch (sideEffectError) {
-      console.error('B2C customer delete side effects failed:', sideEffectError);
+      console.error('B2C customer archive side effects failed:', sideEffectError);
     }
 
-    return NextResponse.json({ message: 'Customer deleted successfully' });
+    return NextResponse.json({
+      message: 'Customer archived successfully. Financial history was kept.',
+    });
 
   } catch (error) {
-    console.error('Error deleting B2C customer:', error);
+    console.error('Error archiving B2C customer:', error);
     return NextResponse.json(
-      { error: 'Failed to delete customer' },
+      { error: 'Failed to archive customer' },
       { status: 500 }
     );
   }

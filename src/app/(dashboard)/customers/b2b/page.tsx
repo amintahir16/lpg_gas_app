@@ -356,13 +356,13 @@ export default function B2BCustomersPage() {
       const response = await fetch(`/api/customers/b2b/${customerId}`, { method: 'DELETE' });
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || 'Failed to delete customer');
+        throw new Error(data.error || 'Failed to archive customer');
       }
       setDeleteConfirm(null);
       setDeleteConfirmationName('');
       await fetchB2BCustomers();
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : 'Failed to delete customer');
+      setDeleteError(err instanceof Error ? err.message : 'Failed to archive customer');
     } finally {
       setIsLoading(false);
     }
@@ -1007,9 +1007,9 @@ export default function B2BCustomersPage() {
                     <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
                       <ExclamationTriangleIcon className="w-6 h-6 text-amber-600" />
                     </div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">Can&apos;t delete {target?.name}</h3>
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Can&apos;t archive {target?.name}</h3>
                     <p className="text-gray-500 text-sm mb-4">
-                      This customer&apos;s account isn&apos;t settled. Deletion is only allowed when the balance is zero and no cylinders are held.
+                      This customer&apos;s account isn&apos;t settled. Archiving is only allowed when the balance is zero and no cylinders are held.
                     </p>
 
                     <div className="mb-5 p-3 rounded-md bg-amber-50 border border-amber-200 text-left space-y-2">
@@ -1028,7 +1028,7 @@ export default function B2BCustomersPage() {
                         </div>
                       )}
                       <p className="text-xs text-amber-700 pt-1 border-t border-amber-200">
-                        Settle the balance to zero and collect all cylinders, then you can delete this customer.
+                        Settle the balance to zero and collect all cylinders, then you can archive this customer.
                       </p>
                     </div>
 
@@ -1044,10 +1044,10 @@ export default function B2BCustomersPage() {
                   <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <TrashIcon className="w-6 h-6 text-red-600" />
                   </div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Customer?</h3>
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">Archive Customer?</h3>
                   <p className="text-gray-500 text-sm mb-6">
-                    To confirm deletion, please type the customer name: <span className="font-bold text-gray-900">{target?.name}</span>.
-                    <br /><span className="text-red-500 text-xs mt-2 block">This action cannot be undone.</span>
+                    To confirm, type the customer name: <span className="font-bold text-gray-900">{target?.name}</span>.
+                    <br /><span className="text-amber-600 text-xs mt-2 block">The customer will be hidden from the active list. Sales, payments, and wallet history are kept.</span>
                   </p>
 
                   <Input
@@ -1076,7 +1076,7 @@ export default function B2BCustomersPage() {
                       onClick={() => handleDeleteCustomer(deleteConfirm)}
                       disabled={isLoading || deleteConfirmationName !== target?.name}
                     >
-                      {isLoading ? 'Deleting...' : 'Delete Customer'}
+                      {isLoading ? 'Archiving...' : 'Archive Customer'}
                     </Button>
                   </div>
                 </div>

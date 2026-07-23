@@ -15,7 +15,7 @@ import { CustomSelect } from '@/components/ui/select-custom';
 import { getCylinderTypeDisplayName, getCapacityFromTypeString } from '@/lib/cylinder-utils';
 import { parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { formatB2bItemCylinderLabel } from '@/lib/b2b-transaction-item-variant';
-import { OPENING_BALANCE_NOTE, OPENING_DUES_NOTE } from '@/lib/b2b-opening-entries';
+import { OPENING_BALANCE_NOTE, OPENING_DUES_NOTE, OPENING_DUES_REF } from '@/lib/b2b-opening-entries';
 import { todayLocalDate } from '@/lib/financial-period';
 import {
   ArrowLeftIcon,
@@ -1569,6 +1569,7 @@ export default function B2BCustomerDetailPage() {
         time: now.toTimeString().slice(0, 5),
         totalAmount: 0,
         notes: OPENING_DUES_NOTE,
+        paymentReference: OPENING_DUES_REF,
         gasItems,
         accessoryItems: [],
       };
@@ -2066,38 +2067,62 @@ export default function B2BCustomerDetailPage() {
                     }));
 
                   return (
-                    <div key={index} className="flex items-end gap-2 p-3 rounded-lg border border-gray-200 bg-gray-50/60">
-                      <div className="flex-1">
-                        <label className="block text-[11px] font-medium text-gray-600 mb-1">Cylinder Type</label>
-                        <CustomSelect
-                          value={row.variantKey}
-                          onChange={(value) => {
+                    <div
+                      key={index}
+                      className={`grid gap-x-2 gap-y-1 p-3 rounded-lg border border-gray-200 bg-gray-50/60 items-center ${
+                        openingDuesRows.length > 1
+                          ? 'grid-cols-[minmax(0,1fr)_5.5rem_2.25rem]'
+                          : 'grid-cols-[minmax(0,1fr)_5.5rem]'
+                      }`}
+                    >
+                      <label className="text-[11px] font-medium text-gray-600 leading-none">Cylinder Type</label>
+                      <label className="text-[11px] font-medium text-gray-600 leading-none">Quantity</label>
+                      {openingDuesRows.length > 1 && <span aria-hidden className="block" />}
+
+                      <CustomSelect
+                        value={row.variantKey}
+                        onChange={(value) => {
+                          setOpeningDuesRows((prev) =>
+                            prev.map((r, i) => (i === index ? { ...r, variantKey: value, quantity: 0 } : r)),
+                          );
+                        }}
+                        options={options}
+                        placeholder={loadingCylinderTypes ? 'Loading...' : 'Select cylinder type'}
+                        buttonClassName="!py-0 flex items-center"
+                      />
+                      <Input
+                        type="number"
+                        min="0"
+                        max={availableFull}
+                        value={row.quantity || ''}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          if (raw === '') {
                             setOpeningDuesRows((prev) =>
-                              prev.map((r, i) => (i === index ? { ...r, variantKey: value, quantity: 0 } : r)),
+                              prev.map((r, i) => (i === index ? { ...r, quantity: 0 } : r)),
                             );
-                          }}
-                          options={options}
-                          placeholder={loadingCylinderTypes ? 'Loading...' : 'Select cylinder type'}
-                        />
-                      </div>
-                      <div className="w-24">
-                        <label className="block text-[11px] font-medium text-gray-600 mb-1">Quantity</label>
-                        <Input
-                          type="number"
-                          min="0"
-                          max={availableFull}
-                          value={row.quantity || ''}
-                          onChange={(e) => {
-                            const q = parseInt(e.target.value, 10) || 0;
-                            setOpeningDuesRows((prev) =>
-                              prev.map((r, i) => (i === index ? { ...r, quantity: Math.max(0, q) } : r)),
-                            );
-                          }}
-                          placeholder="0"
-                          disabled={!row.variantKey}
-                          className="h-9"
-                        />
-                      </div>
+                            return;
+                          }
+                          const q = parseInt(raw, 10);
+                          if (Number.isNaN(q)) return;
+                          const capped = Math.min(availableFull, Math.max(0, q));
+                          setOpeningDuesRows((prev) =>
+                            prev.map((r, i) => (i === index ? { ...r, quantity: capped } : r)),
+                          );
+                        }}
+                        onBlur={() => {
+                          setOpeningDuesRows((prev) =>
+                            prev.map((r, i) => {
+                              if (i !== index) return r;
+                              const max = availableCylinderTypes.find((s) => s.variantKey === r.variantKey)?.full ?? 0;
+                              return { ...r, quantity: Math.min(max, Math.max(0, r.quantity || 0)) };
+                            }),
+                          );
+                        }}
+                        placeholder="0"
+                        disabled={!row.variantKey || availableFull <= 0}
+                        className="h-9 w-full"
+                      />
                       {openingDuesRows.length > 1 && (
                         <button
                           type="button"
@@ -3514,7 +3539,13 @@ export default function B2BCustomerDetailPage() {
 
                       if (!confirmed) return;
 
-                      const reason = prompt('Please provide a reason for undoing this transaction (optional):') || undefined;
+                      // prompt() returns null when Cancel is pressed — abort undo.
+                      // Empty string means OK with no reason (reason is optional).
+                      const reasonInput = window.prompt(
+                        'Please provide a reason for undoing this transaction (optional):'
+                      );
+                      if (reasonInput === null) return;
+                      const reason = reasonInput.trim() || undefined;
 
                       try {
                         setUndoingTransaction(true);

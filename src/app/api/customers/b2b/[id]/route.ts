@@ -216,12 +216,12 @@ export async function DELETE(
     }
 
     // ----------------------------------------------------------------------
-    // PRE-DELETE GUARDS — run BEFORE touching any data.
-    // A B2B customer may only be deleted when their account is fully closed:
+    // PRE-ARCHIVE GUARDS — run BEFORE touching any data.
+    // A B2B customer may only be archived when their account is fully closed:
     //   1) Net balance is settled (ledgerBalance == 0), and
     //   2) No cylinders are still physically held by the customer.
-    // If either fails we return WITHOUT deleting anything, so transactions,
-    // ledger, balances and profit history are never lost.
+    // Soft-delete keeps all transactions so wallet trails / profit / revenue
+    // history stay correct.
     // ----------------------------------------------------------------------
     const ledgerBalance = Number(customerRecord.ledgerBalance);
     // Settled = rounds to Rs 0. Sub-rupee residue (e.g. from buyback percentage
@@ -259,7 +259,7 @@ export async function DELETE(
       }
       return NextResponse.json(
         {
-          error: `Cannot delete "${customerRecord.name}" — customer has ${reasons.join(' and ')}. Settle the balance to zero and collect all cylinders before deleting.`,
+          error: `Cannot archive "${customerRecord.name}" — customer has ${reasons.join(' and ')}. Settle the balance to zero and collect all cylinders before archiving.`,
           code: 'CUSTOMER_NOT_SETTLED',
           hasOutstandingBalance,
           hasCylinderHoldings,
@@ -270,27 +270,21 @@ export async function DELETE(
       );
     }
 
-    // ----------------------------------------------------------------------
-    // All guards passed — delete atomically so a partial failure never leaves
-    // orphaned/half-deleted data behind.
-    // ----------------------------------------------------------------------
-    const customer = await prisma.$transaction(async (tx) => {
-      const transactions = await tx.b2BTransaction.findMany({
-        where: { customerId },
-        select: { id: true },
+    // Soft delete — hide from active lists; keep ledger, sales, and payments.
+    if (!customerRecord.isActive) {
+      return NextResponse.json({
+        message: 'Customer already archived',
+        customer: {
+          id: customerRecord.id,
+          name: customerRecord.name,
+          isActive: false,
+        },
       });
-      const transactionIds = transactions.map(t => t.id);
+    }
 
-      if (transactionIds.length > 0) {
-        await tx.b2BTransactionItem.deleteMany({ where: { transactionId: { in: transactionIds } } });
-        await tx.b2BTransaction.deleteMany({ where: { customerId } });
-      }
-
-      await tx.customerLedger.deleteMany({ where: { customerId } });
-      await tx.supportRequest.deleteMany({ where: { customerId } });
-      await tx.cylinderRental.deleteMany({ where: { customerId } });
-
-      return tx.customer.delete({ where: { id: customerId } });
+    const customer = await prisma.customer.update({
+      where: { id: customerId },
+      data: { isActive: false, updatedBy: session.user.id },
     });
 
     try {
@@ -299,19 +293,20 @@ export async function DELETE(
         action: ActivityAction.B2B_CUSTOMER_DELETED,
         entityType: 'B2B_CUSTOMER',
         entityId: customer.id,
-        details: `Deleted B2B customer "${customer.name}"`,
+        details: `Archived B2B customer "${customer.name}" (soft delete — history retained)`,
         link: '/customers/b2b',
         regionId,
         metadata: {
           customerId: customer.id,
           customerName: customer.name,
+          softDelete: true,
         },
       });
       await notifyUserActivity({
         actorId: session.user.id,
         actorName: session.user.name || session.user.email || 'A user',
-        title: 'B2B customer deleted',
-        message: `${session.user.name || session.user.email} deleted B2B customer "${customer.name}".`,
+        title: 'B2B customer archived',
+        message: `${session.user.name || session.user.email} archived B2B customer "${customer.name}". Transaction history retained.`,
         link: '/customers/b2b',
         priority: 'HIGH',
         regionId,
@@ -319,14 +314,15 @@ export async function DELETE(
           domain: 'B2B_CUSTOMER',
           customerId: customer.id,
           customerName: customer.name,
+          softDelete: true,
         },
       });
     } catch (sideEffectError) {
-      console.error('B2B customer delete side effects failed:', sideEffectError);
+      console.error('B2B customer archive side effects failed:', sideEffectError);
     }
 
     return NextResponse.json({
-      message: 'Customer deleted successfully',
+      message: 'Customer archived successfully. Financial history and wallet trails were kept.',
       customer: {
         id: customer.id,
         name: customer.name,
@@ -335,9 +331,9 @@ export async function DELETE(
     });
 
   } catch (error) {
-    console.error('Error deleting B2B customer:', error);
+    console.error('Error archiving B2B customer:', error);
     return NextResponse.json(
-      { error: 'Failed to delete customer' },
+      { error: 'Failed to archive customer' },
       { status: 500 }
     );
   }
