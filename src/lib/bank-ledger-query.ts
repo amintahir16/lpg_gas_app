@@ -18,6 +18,27 @@ function matchesMethod(raw: string | null | undefined, method: string): boolean 
   return normalizePaymentMethodKey(raw) === method;
 }
 
+function isMissingRelationError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const code = 'code' in error ? String((error as { code?: unknown }).code || '') : '';
+  if (code === 'P2021' || code === 'P2010') return true;
+  const message = error instanceof Error ? error.message : String(error);
+  return /does not exist in the current database/i.test(message);
+}
+
+/** Run a ledger query; if the underlying table is not migrated yet, treat as empty. */
+async function safeLedgerQuery<T>(label: string, query: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await query();
+  } catch (error) {
+    if (isMissingRelationError(error)) {
+      console.warn(`[bank-ledger] ${label} skipped — table missing in database. Run prisma migrate deploy.`);
+      return fallback;
+    }
+    throw error;
+  }
+}
+
 /** Match string payment-method columns the same way `matchesMethod` does. */
 function stringPaymentMethodWhere(
   field: 'paymentMethod' | 'toMethod' | 'fromMethod',
@@ -209,63 +230,73 @@ export async function buildBankLedgerEntries(
       },
       orderBy: { expenseDate: 'desc' },
     }),
-    prisma.salaryRecord.findMany({
-      where: {
-        paidDate: { gte: startDate, lte: endDate },
-        ...stringPaymentMethodWhere('paymentMethod', method),
-        ...regionScope,
-      },
-      select: {
-        id: true,
-        amount: true,
-        month: true,
-        year: true,
-        paidDate: true,
-        createdAt: true,
-        paymentMethod: true,
-        notes: true,
-        createdBy: true,
-        user: {
-          select: { name: true, firstName: true, lastName: true, email: true },
-        },
-      },
-      orderBy: { paidDate: 'desc' },
-    }),
-    prisma.bankMovement.findMany({
-      where: {
-        movementDate: { gte: startDate, lte: endDate },
-        OR: [
-          { AND: [{ type: 'DEPOSIT' }, stringPaymentMethodWhere('toMethod', method)] },
-          {
-            AND: [
-              { type: 'TRANSFER' },
+    safeLedgerQuery(
+      'salary_records',
+      () =>
+        prisma.salaryRecord.findMany({
+          where: {
+            paidDate: { gte: startDate, lte: endDate },
+            ...stringPaymentMethodWhere('paymentMethod', method),
+            ...regionScope,
+          },
+          select: {
+            id: true,
+            amount: true,
+            month: true,
+            year: true,
+            paidDate: true,
+            createdAt: true,
+            paymentMethod: true,
+            notes: true,
+            createdBy: true,
+            user: {
+              select: { name: true, firstName: true, lastName: true, email: true },
+            },
+          },
+          orderBy: { paidDate: 'desc' },
+        }),
+      []
+    ),
+    safeLedgerQuery(
+      'bank_movements',
+      () =>
+        prisma.bankMovement.findMany({
+          where: {
+            movementDate: { gte: startDate, lte: endDate },
+            OR: [
+              { AND: [{ type: 'DEPOSIT' }, stringPaymentMethodWhere('toMethod', method)] },
               {
-                OR: [
-                  stringPaymentMethodWhere('fromMethod', method),
-                  stringPaymentMethodWhere('toMethod', method),
+                AND: [
+                  { type: 'TRANSFER' },
+                  {
+                    OR: [
+                      stringPaymentMethodWhere('fromMethod', method),
+                      stringPaymentMethodWhere('toMethod', method),
+                    ],
+                  },
                 ],
               },
             ],
+            ...regionScope,
           },
-        ],
-        ...regionScope,
-      },
-      select: {
-        id: true,
-        type: true,
-        fromMethod: true,
-        toMethod: true,
-        amount: true,
-        movementDate: true,
-        createdAt: true,
-        notes: true,
-        createdBy: true,
-        createdByUser: {
-          select: { name: true, firstName: true, lastName: true, email: true },
-        },
-      },
-      orderBy: { movementDate: 'desc' },
-    }),
+          select: {
+            id: true,
+            type: true,
+            fromMethod: true,
+            toMethod: true,
+            amount: true,
+            movementDate: true,
+            createdAt: true,
+            notes: true,
+            createdBy: true,
+            createdByUser: {
+              select: { name: true, firstName: true, lastName: true, email: true },
+            },
+          },
+          orderBy: { movementDate: 'desc' },
+        }),
+      []
+    ),
   ]);
 
   const creatorIds = new Set<string>();
@@ -662,41 +693,61 @@ export async function getBankLedgerOpeningNet(params: {
       },
       _sum: { amount: true },
     }),
-    prisma.salaryRecord.aggregate({
-      where: {
-        paidDate: before,
-        ...methodText,
-        ...regionScope,
-      },
-      _sum: { amount: true },
-    }),
-    prisma.bankMovement.aggregate({
-      where: {
-        movementDate: before,
-        type: 'DEPOSIT',
-        ...stringPaymentMethodWhere('toMethod', method),
-        ...regionScope,
-      },
-      _sum: { amount: true },
-    }),
-    prisma.bankMovement.aggregate({
-      where: {
-        movementDate: before,
-        type: 'TRANSFER',
-        ...stringPaymentMethodWhere('toMethod', method),
-        ...regionScope,
-      },
-      _sum: { amount: true },
-    }),
-    prisma.bankMovement.aggregate({
-      where: {
-        movementDate: before,
-        type: 'TRANSFER',
-        ...stringPaymentMethodWhere('fromMethod', method),
-        ...regionScope,
-      },
-      _sum: { amount: true },
-    }),
+    safeLedgerQuery(
+      'salary_records.aggregate',
+      () =>
+        prisma.salaryRecord.aggregate({
+          where: {
+            paidDate: before,
+            ...methodText,
+            ...regionScope,
+          },
+          _sum: { amount: true },
+        }),
+      { _sum: { amount: null } }
+    ),
+    safeLedgerQuery(
+      'bank_movements.deposit',
+      () =>
+        prisma.bankMovement.aggregate({
+          where: {
+            movementDate: before,
+            type: 'DEPOSIT',
+            ...stringPaymentMethodWhere('toMethod', method),
+            ...regionScope,
+          },
+          _sum: { amount: true },
+        }),
+      { _sum: { amount: null } }
+    ),
+    safeLedgerQuery(
+      'bank_movements.transfer_in',
+      () =>
+        prisma.bankMovement.aggregate({
+          where: {
+            movementDate: before,
+            type: 'TRANSFER',
+            ...stringPaymentMethodWhere('toMethod', method),
+            ...regionScope,
+          },
+          _sum: { amount: true },
+        }),
+      { _sum: { amount: null } }
+    ),
+    safeLedgerQuery(
+      'bank_movements.transfer_out',
+      () =>
+        prisma.bankMovement.aggregate({
+          where: {
+            movementDate: before,
+            type: 'TRANSFER',
+            ...stringPaymentMethodWhere('fromMethod', method),
+            ...regionScope,
+          },
+          _sum: { amount: true },
+        }),
+      { _sum: { amount: null } }
+    ),
   ]);
 
   const totalIn =
