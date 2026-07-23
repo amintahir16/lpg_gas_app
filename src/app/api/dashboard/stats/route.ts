@@ -358,17 +358,24 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 5. Recent Activities — same selected period
+    // 5. Recent Activities — sales & payments in the selected period
     const [recentB2B, recentB2C] = await Promise.all([
       prisma.b2BTransaction.findMany({
         where: {
           date: { gte: startDate, lte: endDate },
           voided: false,
+          transactionType: { in: ['SALE', 'PAYMENT'] },
           ...txRegionScope,
         },
-        take: 8,
+        take: 40,
         orderBy: { createdAt: 'desc' },
-        include: { customer: true, items: true }
+        include: {
+          customer: { select: { id: true, name: true } },
+          items: true,
+          users: {
+            select: { id: true, name: true, firstName: true, lastName: true, email: true },
+          },
+        },
       }),
       prisma.b2CTransaction.findMany({
         where: {
@@ -376,16 +383,37 @@ export async function GET(request: NextRequest) {
           voided: false,
           ...txRegionScope,
         },
-        take: 8,
+        take: 40,
         orderBy: { createdAt: 'desc' },
         include: {
-          customer: true,
+          customer: { select: { id: true, name: true } },
           gasItems: true,
           securityItems: true,
           accessoryItems: true,
-        }
-      })
+        },
+      }),
     ]);
+
+    const b2cCreatorIds = Array.from(
+      new Set(recentB2C.map((t) => t.createdBy).filter(Boolean))
+    );
+    const b2cCreators =
+      b2cCreatorIds.length > 0
+        ? await prisma.user.findMany({
+            where: { id: { in: b2cCreatorIds } },
+            select: { id: true, name: true, firstName: true, lastName: true, email: true },
+          })
+        : [];
+    const b2cCreatorNameById = new Map(
+      b2cCreators.map((u) => {
+        const name =
+          u.name?.trim() ||
+          `${u.firstName || ''} ${u.lastName || ''}`.trim() ||
+          u.email?.trim() ||
+          'Staff';
+        return [u.id, name] as const;
+      })
+    );
 
     // ---- Helpers to build human-friendly titles & descriptions ----
     /**
@@ -635,34 +663,95 @@ export async function GET(request: NextRequest) {
       return { title, description };
     };
 
+    const userDisplay = (user: {
+      name?: string | null;
+      firstName?: string | null;
+      lastName?: string | null;
+      email?: string | null;
+    } | null | undefined) => {
+      if (!user) return null;
+      return (
+        user.name?.trim() ||
+        `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
+        user.email?.trim() ||
+        null
+      );
+    };
+
     const activities = [
       ...recentB2B.map((t) => {
         const { title, description } = buildB2BTitleAndDescription(t);
+        const totalAmount = Number(t.totalAmount || 0);
+        const isPayment = t.transactionType === 'PAYMENT';
+        const paidAmount = isPayment
+          ? totalAmount
+          : Number(t.paidAmount != null ? t.paidAmount : 0);
+        const unpaidAmount = isPayment
+          ? 0
+          : Number(
+              t.unpaidAmount != null
+                ? t.unpaidAmount
+                : Math.max(0, totalAmount - paidAmount)
+            );
+        const paymentStatus = isPayment
+          ? 'RECEIVED'
+          : t.paymentStatus ||
+            (unpaidAmount <= 0 && totalAmount > 0
+              ? 'FULLY_PAID'
+              : paidAmount > 0
+                ? 'PARTIAL'
+                : 'UNPAID');
+
         return {
           id: `b2b-${t.id}`,
-          type: 'b2b_sale',
+          transactionId: t.id,
+          channel: 'b2b' as const,
+          transactionType: t.transactionType,
+          type: isPayment ? 'b2b_payment' : 'b2b_sale',
           title,
           description,
           time: t.createdAt.toISOString(),
-          amount: Number(t.totalAmount),
+          amount: totalAmount,
+          totalAmount,
+          paidAmount,
+          unpaidAmount,
+          paymentStatus,
+          customerId: t.customerId,
+          customerName: t.customer?.name || 'Unknown',
+          billSno: t.billSno,
+          recordedBy: userDisplay(t.users),
+          recordedById: t.createdBy,
           status: t.voided ? 'error' : 'success',
         };
       }),
       ...recentB2C.map((t) => {
         const { title, description } = buildB2CTitleAndDescription(t);
+        const totalAmount = Number(t.finalAmount || t.totalAmount || 0);
         return {
           id: `b2c-${t.id}`,
+          transactionId: t.id,
+          channel: 'b2c' as const,
+          transactionType: 'SALE',
           type: 'b2c_sale',
           title,
           description,
           time: t.createdAt.toISOString(),
-          amount: Number(t.totalAmount),
+          amount: totalAmount,
+          totalAmount,
+          paidAmount: totalAmount,
+          unpaidAmount: 0,
+          paymentStatus: 'FULLY_PAID',
+          customerId: t.customerId,
+          customerName: t.customer?.name || 'Unknown',
+          billSno: t.billSno,
+          recordedBy: b2cCreatorNameById.get(t.createdBy) || null,
+          recordedById: t.createdBy,
           status: t.voided ? 'error' : 'success',
         };
       }),
     ]
       .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
-      .slice(0, 8);
+      .slice(0, 25);
 
     // 6. Accessories Inventory — slices per item type, grouped by category with gradient shades
     const accessoryColors = ['#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#84cc16', '#14b8a6', '#a855f7', '#f43f5e'];

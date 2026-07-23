@@ -116,7 +116,7 @@ export function summarizeLineItems(
   return items
     .map((item) => {
       const qty = Number(item.quantity);
-      const qtyLabel = Number.isFinite(qty) ? qty : item.quantity;
+      const qtyLabel = Number.isFinite(qty) ? qty : String(item.quantity);
       return `${item.name} × ${qtyLabel}`;
     })
     .join(', ');

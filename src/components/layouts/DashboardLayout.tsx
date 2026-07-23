@@ -60,7 +60,6 @@ const adminNavigation: NavigationItem[] = [
   { name: 'Customers', href: '/customers', icon: UsersIcon, roles: ['ADMIN'] },
   { name: 'Inventory', href: '/inventory', icon: CubeIcon, roles: ['ADMIN'] },
   { name: 'Vendors', href: '/vendors', icon: BuildingOfficeIcon, roles: ['ADMIN'] },
-  { name: 'Reports', href: '/reports', icon: ChartBarIcon, roles: ['ADMIN'] },
 ];
 
 const customerNavigation: NavigationItem[] = [

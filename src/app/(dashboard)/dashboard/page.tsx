@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import {
   UsersIcon,
   CubeIcon,
@@ -21,6 +21,8 @@ import {
   BuildingStorefrontIcon,
   BanknotesIcon,
   CreditCardIcon,
+  DocumentArrowDownIcon,
+  ShareIcon,
 } from '@heroicons/react/24/outline';
 import {
   BarChart,
@@ -45,6 +47,11 @@ import {
   type FinancialPeriodMode,
 } from '@/lib/financial-period';
 import { FinancialPeriodFilter } from '@/components/FinancialPeriodFilter';
+import { sharePdfBlob, downloadPdfBlob } from '@/lib/sharePdf';
+import {
+  buildSalesActivitiesPdf,
+  salesActivitiesPdfFileName,
+} from '@/lib/sales-activities-pdf';
 
 interface RecentActivity {
   id: string;
@@ -54,6 +61,17 @@ interface RecentActivity {
   time: string;
   amount: number;
   status: 'success' | 'warning' | 'error';
+  transactionId?: string;
+  channel?: 'b2b' | 'b2c';
+  transactionType?: string;
+  totalAmount?: number;
+  paidAmount?: number;
+  unpaidAmount?: number;
+  paymentStatus?: string;
+  customerId?: string;
+  customerName?: string;
+  billSno?: string;
+  recordedBy?: string | null;
 }
 
 interface DashboardStats {
@@ -88,11 +106,25 @@ export default function DashboardPage() {
   const [date, setDate] = useState(todayLocalDate);
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
+  const [pdfBusy, setPdfBusy] = useState<'download' | 'share' | null>(null);
 
   const periodLabel = useMemo(
     () => resolveFinancialPeriod({ period, date, month, year }).label,
     [period, date, month, year]
   );
+
+  const activityColumnTotals = useMemo(() => {
+    const rows = stats?.recentActivities || [];
+    return rows.reduce(
+      (acc, a) => {
+        acc.total += a.totalAmount ?? a.amount ?? 0;
+        acc.paid += a.paidAmount ?? 0;
+        acc.unpaid += a.unpaidAmount ?? 0;
+        return acc;
+      },
+      { total: 0, paid: 0, unpaid: 0 }
+    );
+  }, [stats?.recentActivities]);
 
   useEffect(() => {
     fetchDashboardStats();
@@ -153,6 +185,81 @@ export default function DashboardPage() {
       currency: 'PKR',
       maximumFractionDigits: 0
     }).format(amount);
+  };
+
+  const paymentStatusMeta = (status?: string) => {
+    switch (status) {
+      case 'FULLY_PAID':
+        return { label: 'Paid', className: 'bg-emerald-100 text-emerald-800' };
+      case 'PARTIAL':
+        return { label: 'Partial', className: 'bg-amber-100 text-amber-800' };
+      case 'UNPAID':
+        return { label: 'Unpaid', className: 'bg-rose-100 text-rose-800' };
+      case 'RECEIVED':
+        return { label: 'Received', className: 'bg-blue-100 text-blue-800' };
+      default:
+        return { label: status?.replace(/_/g, ' ') || '—', className: 'bg-gray-100 text-gray-700' };
+    }
+  };
+
+  const typeBadgeClass = (type: string) => {
+    if (type === 'b2b_payment') return 'text-indigo-700 border-indigo-200 bg-indigo-50';
+    if (type === 'b2b_sale') return 'text-blue-700 border-blue-200 bg-blue-50';
+    return 'text-green-700 border-green-200 bg-green-50';
+  };
+
+  const buildActivitiesPdfBlob = () => {
+    if (!stats) throw new Error('No dashboard data');
+    return buildSalesActivitiesPdf({
+      periodLabel: stats.label || periodLabel,
+      activities: stats.recentActivities.map((a) => ({
+        title: a.title,
+        customerName: a.customerName || 'Unknown',
+        billSno: a.billSno,
+        totalAmount: a.totalAmount ?? a.amount,
+        paidAmount: a.paidAmount ?? 0,
+        unpaidAmount: a.unpaidAmount ?? 0,
+        paymentStatus: a.paymentStatus || 'UNPAID',
+        recordedBy: a.recordedBy || null,
+        time: a.time,
+        description: a.description,
+      })),
+    });
+  };
+
+  const handleDownloadActivities = async () => {
+    if (!stats?.recentActivities.length) return;
+    try {
+      setPdfBusy('download');
+      const blob = buildActivitiesPdfBlob();
+      const fileName = salesActivitiesPdfFileName(stats.label || periodLabel);
+      await downloadPdfBlob(blob, fileName);
+    } catch (err) {
+      console.error(err);
+      alert(err instanceof Error ? err.message : 'Failed to download PDF');
+    } finally {
+      setPdfBusy(null);
+    }
+  };
+
+  const handleShareActivities = async () => {
+    if (!stats?.recentActivities.length) return;
+    try {
+      setPdfBusy('share');
+      const blob = buildActivitiesPdfBlob();
+      const fileName = salesActivitiesPdfFileName(stats.label || periodLabel);
+      await sharePdfBlob({
+        blob,
+        fileName,
+        title: 'Sales Activities Report',
+        text: `Sales activities for ${stats.label || periodLabel}`,
+      });
+    } catch (err) {
+      console.error(err);
+      alert(err instanceof Error ? err.message : 'Failed to share PDF');
+    } finally {
+      setPdfBusy(null);
+    }
   };
 
   // Custom Tooltip for Pie Chart
@@ -549,60 +656,154 @@ export default function DashboardPage() {
       {/* Recent Activities */}
       <Card className="border shadow-sm bg-white">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base font-bold text-gray-900 flex items-center">
-            <ClockIcon className="w-4 h-4 mr-1.5 text-gray-500" />
-            Recent Sales Activities
-          </CardTitle>
-          <CardDescription className="text-xs">
-            Sales in {stats.label || periodLabel}
-          </CardDescription>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle className="text-base font-bold text-gray-900 flex items-center">
+                <ClockIcon className="w-4 h-4 mr-1.5 text-gray-500" />
+                Recent Sales Activities
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Sales &amp; payments in {stats.label || periodLabel}
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                onClick={handleShareActivities}
+                disabled={!stats.recentActivities.length || !!pdfBusy}
+              >
+                <ShareIcon className="w-3.5 h-3.5 mr-1" />
+                {pdfBusy === 'share' ? 'Sharing…' : 'Share'}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={handleDownloadActivities}
+                disabled={!stats.recentActivities.length || !!pdfBusy}
+              >
+                <DocumentArrowDownIcon className="w-3.5 h-3.5 mr-1" />
+                {pdfBusy === 'download' ? 'Preparing…' : 'Download'}
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="min-w-[920px]">
               <TableHeader className="bg-gray-50/50">
                 <TableRow>
                   <TableHead className="font-semibold text-gray-700">Type</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Description</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Amount</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Time</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Customer</TableHead>
+                  <TableHead className="font-semibold text-gray-700 text-right">Total</TableHead>
+                  <TableHead className="font-semibold text-gray-700 text-right">Paid</TableHead>
+                  <TableHead className="font-semibold text-gray-700 text-right">Unpaid</TableHead>
                   <TableHead className="font-semibold text-gray-700">Status</TableHead>
+                  <TableHead className="font-semibold text-gray-700">By</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Time</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Details</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {stats.recentActivities.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-gray-500">
-                      No recent sales found.
+                    <TableCell colSpan={9} className="text-center py-8 text-gray-500">
+                      No sales or payments found for this period.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  stats.recentActivities.map((activity) => (
-                    <TableRow key={activity.id} className="hover:bg-gray-50/50">
-                      <TableCell>
-                        <Badge variant="outline" className={`font-semibold whitespace-nowrap ${activity.type === 'b2b_sale' ? 'text-blue-700 border-blue-200 bg-blue-50' : 'text-green-700 border-green-200 bg-green-50'}`}>
-                          {activity.title}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-gray-700 font-medium">{activity.description}</TableCell>
-                      <TableCell className="font-bold text-gray-900">{formatCurrency(activity.amount)}</TableCell>
-                      <TableCell className="text-gray-500 text-sm">
-                        {formatTime(activity.time)}
-                      </TableCell>
-                      <TableCell>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${activity.status === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                          }`}>
-                          {activity.status === 'success' ? (
-                            <><CheckCircleIcon className="w-3 h-3 mr-1" /> Success</>
-                          ) : (
-                            <><ExclamationTriangleIcon className="w-3 h-3 mr-1" /> Voided</>
-                          )}
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  stats.recentActivities.map((activity) => {
+                    const pay = paymentStatusMeta(activity.paymentStatus);
+                    const total = activity.totalAmount ?? activity.amount;
+                    const paid = activity.paidAmount ?? 0;
+                    const unpaid = activity.unpaidAmount ?? 0;
+                    return (
+                      <TableRow key={activity.id} className="hover:bg-gray-50/50">
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={`font-semibold whitespace-nowrap ${typeBadgeClass(activity.type)}`}
+                          >
+                            {activity.title}
+                          </Badge>
+                          {activity.billSno ? (
+                            <div className="text-[10px] text-gray-400 mt-0.5">Bill {activity.billSno}</div>
+                          ) : null}
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-medium text-gray-900">
+                            {activity.customerName || 'Unknown'}
+                          </div>
+                          <div className="text-[10px] text-gray-500">
+                            {activity.channel === 'b2c' ? 'B2C' : 'B2B'} customer
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-gray-900">
+                          {formatCurrency(total)}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold text-emerald-700">
+                          {formatCurrency(paid)}
+                        </TableCell>
+                        <TableCell
+                          className={`text-right font-semibold ${
+                            unpaid > 0 ? 'text-rose-700' : 'text-gray-400'
+                          }`}
+                        >
+                          {formatCurrency(unpaid)}
+                        </TableCell>
+                        <TableCell>
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${pay.className}`}
+                          >
+                            {activity.paymentStatus === 'FULLY_PAID' ||
+                            activity.paymentStatus === 'RECEIVED' ? (
+                              <CheckCircleIcon className="w-3 h-3 mr-1" />
+                            ) : activity.paymentStatus === 'UNPAID' ? (
+                              <ExclamationTriangleIcon className="w-3 h-3 mr-1" />
+                            ) : null}
+                            {pay.label}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-700">
+                          {activity.recordedBy || '—'}
+                        </TableCell>
+                        <TableCell className="text-gray-500 text-sm whitespace-nowrap">
+                          {formatTime(activity.time)}
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-600 max-w-[220px]">
+                          <span className="line-clamp-2">{activity.description}</span>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
+              {stats.recentActivities.length > 0 && (
+                <TableFooter>
+                  <TableRow className="bg-slate-50 border-t-2 border-slate-200">
+                    <TableCell colSpan={2} className="font-bold text-gray-900">
+                      Total
+                    </TableCell>
+                    <TableCell className="text-right font-bold text-gray-900">
+                      {formatCurrency(activityColumnTotals.total)}
+                    </TableCell>
+                    <TableCell className="text-right font-bold text-emerald-700">
+                      {formatCurrency(activityColumnTotals.paid)}
+                    </TableCell>
+                    <TableCell
+                      className={`text-right font-bold ${
+                        activityColumnTotals.unpaid > 0 ? 'text-rose-700' : 'text-gray-500'
+                      }`}
+                    >
+                      {formatCurrency(activityColumnTotals.unpaid)}
+                    </TableCell>
+                    <TableCell colSpan={4} />
+                  </TableRow>
+                </TableFooter>
+              )}
             </Table>
           </div>
         </CardContent>
