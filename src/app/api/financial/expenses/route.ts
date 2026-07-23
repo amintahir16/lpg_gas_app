@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
         };
         if (type) where.type = type;
 
-        const [expenses, total, periodAgg, dailyCount, rentAgg, vehicleAgg] = await Promise.all([
+        const [expenses, total, periodAgg, dailyCount, rentAgg, vehicleAgg, personalAgg] = await Promise.all([
             prisma.officeExpense.findMany({
                 where,
                 skip,
@@ -64,7 +64,24 @@ export async function GET(request: NextRequest) {
                 where: { ...where, type: 'VEHICLE' },
                 _sum: { amount: true },
             }),
+            prisma.personalExpense.aggregate({
+                where: {
+                    expenseDate: { gte: startDate, lte: endDate },
+                    ...regionScope,
+                },
+                _sum: { amount: true },
+                _count: true,
+            }),
         ]);
+
+        const personalExpenses = await prisma.personalExpense.findMany({
+            where: {
+                expenseDate: { gte: startDate, lte: endDate },
+                ...regionScope,
+            },
+            orderBy: { expenseDate: 'desc' },
+            take: limit,
+        });
 
         const rentInPeriod = await prisma.officeExpense.findFirst({
             where: { ...where, type: 'RENT' },
@@ -85,7 +102,7 @@ export async function GET(request: NextRequest) {
         const chartBuckets = getFinancialChartBuckets(resolved);
         const chartData = [];
         for (const bucket of chartBuckets) {
-            const [dailyTotal, rentTotal, vehicleTotal] = await Promise.all([
+            const [dailyTotal, rentTotal, vehicleTotal, personalTotal] = await Promise.all([
                 prisma.officeExpense.aggregate({
                     where: {
                         type: 'DAILY',
@@ -110,22 +127,37 @@ export async function GET(request: NextRequest) {
                     },
                     _sum: { amount: true },
                 }),
+                prisma.personalExpense.aggregate({
+                    where: {
+                        expenseDate: { gte: bucket.startDate, lte: bucket.endDate },
+                        ...regionScope,
+                    },
+                    _sum: { amount: true },
+                }),
             ]);
             chartData.push({
                 name: bucket.name,
                 daily: Number(dailyTotal._sum.amount || 0),
                 rent: Number(rentTotal._sum.amount || 0),
                 vehicle: Number(vehicleTotal._sum.amount || 0),
+                personal: Number(personalTotal._sum.amount || 0),
             });
         }
 
+        const officeTotal = Number(periodAgg._sum.amount || 0);
+        const personalTotal = Number(personalAgg._sum.amount || 0);
+
         return NextResponse.json({
             expenses,
+            personalExpenses,
             currentMonthRent,
             rentInPeriod,
             chartData,
             summary: {
-                totalExpenses: Number(periodAgg._sum.amount || 0),
+                totalExpenses: officeTotal + personalTotal,
+                officeTotal,
+                personalTotal,
+                personalCount: personalAgg._count || 0,
                 dailyCount,
                 vehicleTotal: Number(vehicleAgg._sum.amount || 0),
                 rentAmount: Number(rentAgg._sum.amount || 0),

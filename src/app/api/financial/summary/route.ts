@@ -73,16 +73,27 @@ export async function GET(request: NextRequest) {
 
         const totalRevenue = b2cSalesRevenue + Number(b2bRevenue._sum.totalPrice || 0);
 
-        // 2. Expenses (Office Rent + Daily) — by expenseDate within the selected period
-        const expensesSum = await prisma.officeExpense.aggregate({
-            where: {
-                expenseDate: { gte: startDate, lte: endDate },
-                ...regionScope,
-            },
-            _sum: { amount: true },
-        });
+        // 2. Expenses (office + personal) — by expenseDate within the selected period
+        const [officeExpensesSum, personalExpensesSum] = await Promise.all([
+            prisma.officeExpense.aggregate({
+                where: {
+                    expenseDate: { gte: startDate, lte: endDate },
+                    ...regionScope,
+                },
+                _sum: { amount: true },
+            }),
+            prisma.personalExpense.aggregate({
+                where: {
+                    expenseDate: { gte: startDate, lte: endDate },
+                    ...regionScope,
+                },
+                _sum: { amount: true },
+            }),
+        ]);
 
-        const totalExpenses = Number(expensesSum._sum.amount || 0);
+        const totalExpenses =
+            Number(officeExpensesSum._sum.amount || 0) +
+            Number(personalExpensesSum._sum.amount || 0);
 
         // 3. Profit (Gross Profit)
         const b2cProfit = await prisma.b2CTransaction.aggregate({
@@ -157,6 +168,7 @@ export async function GET(request: NextRequest) {
             b2cPayments,
             vendorPayments,
             officeExpensesByMethod,
+            personalExpensesByMethod,
             salaryPaymentsByMethod,
             bankMovements,
         ] = await Promise.all([
@@ -197,6 +209,13 @@ export async function GET(request: NextRequest) {
                     select: { amount: true, method: true },
                 }),
                 prisma.officeExpense.findMany({
+                    where: {
+                        expenseDate: { gte: startDate, lte: endDate },
+                        ...regionScope,
+                    },
+                    select: { amount: true, paymentMethod: true },
+                }),
+                prisma.personalExpense.findMany({
                     where: {
                         expenseDate: { gte: startDate, lte: endDate },
                         ...regionScope,
@@ -259,6 +278,10 @@ export async function GET(request: NextRequest) {
                     amount: Number(payment.amount || 0),
                 })),
                 ...officeExpensesByMethod.map((expense) => ({
+                    method: expense.paymentMethod,
+                    amount: Number(expense.amount || 0),
+                })),
+                ...personalExpensesByMethod.map((expense) => ({
                     method: expense.paymentMethod,
                     amount: Number(expense.amount || 0),
                 })),

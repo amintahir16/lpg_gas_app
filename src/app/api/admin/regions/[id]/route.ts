@@ -170,6 +170,7 @@ export async function DELETE(_request: NextRequest, ctx: Ctx) {
             b2cTransactions: true,
             expenses: true,
             officeExpenses: true,
+            personalExpenses: true,
             salaryRecords: true,
             dailyPlantPrices: true,
             products: true,

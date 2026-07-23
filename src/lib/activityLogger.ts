@@ -38,6 +38,7 @@ export const ActivityAction = {
 
   // Financial
   OFFICE_EXPENSE_CREATED: 'OFFICE_EXPENSE_CREATED',
+  PERSONAL_EXPENSE_CREATED: 'PERSONAL_EXPENSE_CREATED',
   SALARY_PAID: 'SALARY_PAID',
 
   // Vendors
@@ -64,6 +65,7 @@ export type EntityType =
   | 'CYLINDER'
   | 'CUSTOM_ITEM'
   | 'OFFICE_EXPENSE'
+  | 'PERSONAL_EXPENSE'
   | 'SALARY_RECORD'
   | 'VENDOR'
   | 'VENDOR_PURCHASE'

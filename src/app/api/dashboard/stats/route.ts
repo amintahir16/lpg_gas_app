@@ -191,7 +191,7 @@ export async function GET(request: NextRequest) {
     }
     const rentMonthConditions = monthsCovered.map(m => ({ type: 'RENT' as const, month: m.month, year: m.year }));
 
-    const [expensesSum, purchasesSum, paymentsSum] = await Promise.all([
+    const [expensesSum, personalExpensesSum, purchasesSum, paymentsSum] = await Promise.all([
       prisma.officeExpense.aggregate({
         where: {
           ...regionScope,
@@ -201,6 +201,13 @@ export async function GET(request: NextRequest) {
           ],
         },
         _sum: { amount: true }
+      }),
+      prisma.personalExpense.aggregate({
+        where: {
+          ...regionScope,
+          expenseDate: { gte: startDate, lte: endDate },
+        },
+        _sum: { amount: true },
       }),
       prisma.purchaseEntry.aggregate({
         where: {
@@ -220,7 +227,8 @@ export async function GET(request: NextRequest) {
       })
     ]);
 
-    const rangeExpenses = Number(expensesSum._sum.amount || 0);
+    const rangeExpenses =
+      Number(expensesSum._sum.amount || 0) + Number(personalExpensesSum._sum.amount || 0);
     const rangePurchases = Number(purchasesSum._sum.totalPrice || 0);
     const rangePayments = Number(paymentsSum._sum.amount || 0);
     const vendorBalance = rangePurchases - rangePayments;
@@ -270,7 +278,7 @@ export async function GET(request: NextRequest) {
       isDaily = false;
     }
 
-    const [b2cTransChart, b2bTransChart, expensesChart] = await Promise.all([
+    const [b2cTransChart, b2bTransChart, expensesChart, personalExpensesChart] = await Promise.all([
       prisma.b2CTransaction.findMany({
         where: { date: { gte: chartStartDate, lte: endDate }, voided: false, ...txRegionScope },
         select: {
@@ -290,7 +298,14 @@ export async function GET(request: NextRequest) {
           type: { in: ['DAILY', 'VEHICLE'] },
         },
         select: { expenseDate: true, amount: true, type: true }
-      })
+      }),
+      prisma.personalExpense.findMany({
+        where: {
+          ...regionScope,
+          expenseDate: { gte: chartStartDate, lte: endDate },
+        },
+        select: { expenseDate: true, amount: true }
+      }),
     ]);
 
     let revenueChartData: any[] = [];
@@ -326,7 +341,10 @@ export async function GET(request: NextRequest) {
         const vehicleExpenses = dayRows
           .filter(e => e.type === 'VEHICLE')
           .reduce((s, e) => s + Number(e.amount || 0), 0);
-        return { name: dateStr, officeExpenses, vehicleExpenses };
+        const personalExpenses = personalExpensesChart
+          .filter(e => format(new Date(e.expenseDate), 'yyyy-MM-dd') === dayKey)
+          .reduce((s, e) => s + Number(e.amount || 0), 0);
+        return { name: dateStr, officeExpenses, vehicleExpenses, personalExpenses };
       });
     } else {
       const months = eachMonthOfInterval({ start: chartStartDate, end: endDate });
@@ -354,7 +372,10 @@ export async function GET(request: NextRequest) {
         const vehicleExpenses = monthRows
           .filter(e => e.type === 'VEHICLE')
           .reduce((s, e) => s + Number(e.amount || 0), 0);
-        return { name: monthStr, officeExpenses, vehicleExpenses };
+        const personalExpenses = personalExpensesChart
+          .filter(e => format(new Date(e.expenseDate), 'MMM yyyy') === monthStr)
+          .reduce((s, e) => s + Number(e.amount || 0), 0);
+        return { name: monthStr, officeExpenses, vehicleExpenses, personalExpenses };
       });
     }
 

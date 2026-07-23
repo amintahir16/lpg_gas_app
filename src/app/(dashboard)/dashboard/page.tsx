@@ -514,7 +514,7 @@ export default function DashboardPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-bold text-gray-900">Expenses Trend</CardTitle>
             <CardDescription className="text-xs">
-              Office (blue) vs vehicle (amber) — {chartDescriptionForPeriod(period).toLowerCase()}
+              Office (blue) vs vehicle (amber) vs personal (violet) — {chartDescriptionForPeriod(period).toLowerCase()}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -558,6 +558,15 @@ export default function DashboardPage() {
                     strokeWidth={2.5}
                     dot={{ fill: '#d97706', strokeWidth: 2, r: 4 }}
                     activeDot={{ r: 6, fill: '#d97706', stroke: '#fff', strokeWidth: 2 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="personalExpenses"
+                    name="Personal"
+                    stroke="#7c3aed"
+                    strokeWidth={2.5}
+                    dot={{ fill: '#7c3aed', strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6, fill: '#7c3aed', stroke: '#fff', strokeWidth: 2 }}
                   />
                 </LineChart>
               </ResponsiveContainer>

@@ -85,6 +85,7 @@ export async function buildBankLedgerEntries(
     b2cTxs,
     vendorPayments,
     officeExpenses,
+    personalExpenses,
     salaryPayments,
     bankMovements,
   ] = await Promise.all([
@@ -230,6 +231,23 @@ export async function buildBankLedgerEntries(
       },
       orderBy: { expenseDate: 'desc' },
     }),
+    prisma.personalExpense.findMany({
+      where: {
+        expenseDate: { gte: startDate, lte: endDate },
+        ...stringPaymentMethodWhere('paymentMethod', method),
+        ...regionScope,
+      },
+      select: {
+        id: true,
+        amount: true,
+        description: true,
+        expenseDate: true,
+        createdAt: true,
+        paymentMethod: true,
+        createdBy: true,
+      },
+      orderBy: { expenseDate: 'desc' },
+    }),
     safeLedgerQuery(
       'salary_records',
       () =>
@@ -304,6 +322,9 @@ export async function buildBankLedgerEntries(
     if (tx.createdBy) creatorIds.add(tx.createdBy);
   }
   for (const expense of officeExpenses) {
+    if (expense.createdBy) creatorIds.add(expense.createdBy);
+  }
+  for (const expense of personalExpenses) {
     if (expense.createdBy) creatorIds.add(expense.createdBy);
   }
   for (const salary of salaryPayments) {
@@ -476,6 +497,29 @@ export async function buildBankLedgerEntries(
     });
   }
 
+  for (const expense of personalExpenses) {
+    if (!matchesMethod(expense.paymentMethod, method)) continue;
+    const amount = Number(expense.amount || 0);
+    if (!amount) continue;
+    const when = coalesceEventDate(expense.expenseDate, expense.createdAt);
+    const parts = formatLedgerDateParts(when);
+    entries.push({
+      id: `personal-expense-${expense.id}`,
+      source: 'PERSONAL_EXPENSE',
+      sourceLabel: BANK_LEDGER_SOURCE_LABELS.PERSONAL_EXPENSE,
+      direction: 'OUT',
+      amount,
+      ...parts,
+      partyName: 'Personal',
+      partyType: 'Personal',
+      recordedBy: userNameById.get(expense.createdBy) || null,
+      details: expense.description || 'Personal Expense',
+      reference: null,
+      notes: expense.description,
+      typeDetail: 'Personal Expense',
+    });
+  }
+
   for (const salary of salaryPayments) {
     if (!matchesMethod(salary.paymentMethod, method)) continue;
     const amount = Number(salary.amount || 0);
@@ -622,6 +666,7 @@ export async function getBankLedgerOpeningNet(params: {
     b2cIn,
     vendorOut,
     expenseOut,
+    personalExpenseOut,
     salaryOut,
     depositsIn,
     transfersIn,
@@ -686,6 +731,14 @@ export async function getBankLedgerOpeningNet(params: {
       _sum: { amount: true },
     }),
     prisma.officeExpense.aggregate({
+      where: {
+        expenseDate: before,
+        ...methodText,
+        ...regionScope,
+      },
+      _sum: { amount: true },
+    }),
+    prisma.personalExpense.aggregate({
       where: {
         expenseDate: before,
         ...methodText,
@@ -761,6 +814,7 @@ export async function getBankLedgerOpeningNet(params: {
   const totalOut =
     decimalSum(vendorOut._sum.amount) +
     decimalSum(expenseOut._sum.amount) +
+    decimalSum(personalExpenseOut._sum.amount) +
     decimalSum(salaryOut._sum.amount) +
     decimalSum(transfersOut._sum.amount);
 

@@ -1033,6 +1033,24 @@ model OfficeExpense {
   @@map("office_expenses")
 }
 
+/// Owner/admin personal spend (not office operations). Debits the selected wallet.
+model PersonalExpense {
+  id            String   @id @default(cuid())
+  amount        Decimal  @db.Decimal(10, 2)
+  description   String
+  expenseDate   DateTime
+  paymentMethod String   @default("CASH")
+  createdBy     String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  regionId      String?
+  region        Region?  @relation(fields: [regionId], references: [id])
+
+  @@index([regionId])
+  @@index([expenseDate])
+  @@map("personal_expenses")
+}
+
 /// Manual bank wallet movements: DEPOSIT (add to one bank) or TRANSFER (move between banks).
 model BankMovement {
   id           String   @id @default(cuid())
@@ -1098,6 +1116,7 @@ model Region {
   cylinders              Cylinder[]
   expenses               Expense[]
   officeExpenses         OfficeExpense[]
+  personalExpenses       PersonalExpense[]
   bankMovements          BankMovement[]
   salaryRecords          SalaryRecord[]
   dailyPlantPrices       DailyPlantPrice[]

@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
     ArrowLeftIcon, BuildingOfficeIcon, PlusIcon,
-    PencilIcon, TrashIcon, CheckCircleIcon, XCircleIcon, TruckIcon
+    PencilIcon, TrashIcon, CheckCircleIcon, XCircleIcon, TruckIcon, UserIcon
 } from '@heroicons/react/24/outline';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { CustomSelect } from '@/components/ui/select-custom';
@@ -18,9 +18,12 @@ import {
 import {
     buildFinancialPeriodQuery,
     chartDescriptionForPeriod,
+    combineLocalDateAndTime,
     resolveFinancialPeriod,
     todayLocalDate,
+    nowLocalTime,
     formatLocalDateInput,
+    formatLocalTimeInput,
     type FinancialPeriodMode,
 } from '@/lib/financial-period';
 import { FinancialPeriodFilter } from '@/components/FinancialPeriodFilter';
@@ -37,6 +40,15 @@ interface OfficeExpense {
     createdAt: string;
 }
 
+interface PersonalExpense {
+    id: string;
+    amount: number;
+    description: string;
+    expenseDate: string;
+    paymentMethod?: string;
+    createdAt: string;
+}
+
 const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
@@ -45,20 +57,26 @@ const monthNames = [
 export default function ExpensesPage() {
     const router = useRouter();
     const [expenses, setExpenses] = useState<OfficeExpense[]>([]);
+    const [personalExpenses, setPersonalExpenses] = useState<PersonalExpense[]>([]);
     const [chartData, setChartData] = useState<any[]>([]);
     const [currentMonthRent, setCurrentMonthRent] = useState<OfficeExpense | null>(null);
     const [summary, setSummary] = useState({
         totalExpenses: 0,
+        officeTotal: 0,
+        personalTotal: 0,
+        personalCount: 0,
         dailyCount: 0,
         vehicleTotal: 0,
         rentAmount: 0,
     });
     const [loading, setLoading] = useState(true);
     const [showRentModal, setShowRentModal] = useState(false);
+    const [showPersonalModal, setShowPersonalModal] = useState(false);
     const [showDailyModal, setShowDailyModal] = useState(false);
     const [showVehicleModal, setShowVehicleModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
-    const [editingExpense, setEditingExpense] = useState<OfficeExpense | null>(null);
+    const [editingExpense, setEditingExpense] = useState<(OfficeExpense | PersonalExpense) | null>(null);
+    const [editingKind, setEditingKind] = useState<'office' | 'personal'>('office');
     const [error, setError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [pagination, setPagination] = useState({ page: 1, limit: 100, total: 0, pages: 0 });
@@ -91,10 +109,14 @@ export default function ExpensesPage() {
             if (res.ok) {
                 const data = await res.json();
                 setExpenses(data.expenses || []);
+                setPersonalExpenses(data.personalExpenses || []);
                 setCurrentMonthRent(data.currentMonthRent);
                 setChartData(data.chartData || []);
                 setSummary(data.summary || {
                     totalExpenses: 0,
+                    officeTotal: 0,
+                    personalTotal: 0,
+                    personalCount: 0,
                     dailyCount: 0,
                     vehicleTotal: 0,
                     rentAmount: 0,
@@ -112,16 +134,30 @@ export default function ExpensesPage() {
         try {
             setSubmitting(true);
             setError(null);
-            const res = await fetch('/api/financial/expenses', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData),
-            });
+            const isPersonal = formData.type === 'PERSONAL';
+            const res = await fetch(
+                isPersonal ? '/api/financial/personal-expenses' : '/api/financial/expenses',
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(
+                        isPersonal
+                            ? {
+                                amount: formData.amount,
+                                description: formData.description,
+                                expenseDate: formData.expenseDate,
+                                paymentMethod: formData.paymentMethod,
+                            }
+                            : formData
+                    ),
+                }
+            );
             if (!res.ok) {
                 const data = await res.json();
                 throw new Error(data.error || 'Failed to create expense');
             }
             setShowRentModal(false);
+            setShowPersonalModal(false);
             setShowDailyModal(false);
             setShowVehicleModal(false);
             fetchData();
@@ -135,7 +171,11 @@ export default function ExpensesPage() {
         try {
             setSubmitting(true);
             setError(null);
-            const res = await fetch(`/api/financial/expenses/${id}`, {
+            const endpoint =
+                editingKind === 'personal'
+                    ? `/api/financial/personal-expenses/${id}`
+                    : `/api/financial/expenses/${id}`;
+            const res = await fetch(endpoint, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formData),
@@ -146,6 +186,7 @@ export default function ExpensesPage() {
             }
             setShowEditModal(false);
             setEditingExpense(null);
+            setEditingKind('office');
             fetchData();
         } catch (err: any) {
             setError(err.message);
@@ -153,10 +194,14 @@ export default function ExpensesPage() {
             setSubmitting(false);
         }
     };
-    const handleDeleteExpense = async (id: string) => {
+    const handleDeleteExpense = async (id: string, kind: 'office' | 'personal' = 'office') => {
         if (!confirm('Are you sure you want to delete this expense?')) return;
         try {
-            const res = await fetch(`/api/financial/expenses/${id}`, { method: 'DELETE' });
+            const endpoint =
+                kind === 'personal'
+                    ? `/api/financial/personal-expenses/${id}`
+                    : `/api/financial/expenses/${id}`;
+            const res = await fetch(endpoint, { method: 'DELETE' });
             if (!res.ok) throw new Error('Failed to delete');
             fetchData();
         } catch (err: any) {
@@ -181,7 +226,7 @@ export default function ExpensesPage() {
                     </Button>
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900 flex items-center">
-                            <BuildingOfficeIcon className="w-7 h-7 mr-2 text-rose-600" /> Office Expenses
+                            <BuildingOfficeIcon className="w-7 h-7 mr-2 text-rose-600" /> Expenses
                         </h1>
                         <p className="text-sm text-gray-600">Manage office rent and daily expenses</p>
                     </div>
@@ -207,7 +252,7 @@ export default function ExpensesPage() {
                 </div>
             )}
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                 <Card className="border-0 shadow-sm bg-gradient-to-br from-rose-500 to-orange-500">
                     <CardContent className="p-4">
                         <p className="text-sm font-medium text-rose-100">Total Expenses</p>
@@ -239,6 +284,17 @@ export default function ExpensesPage() {
                         </p>
                     </CardContent>
                 </Card>
+                <Card className="border-0 shadow-sm bg-gradient-to-br from-violet-500 to-violet-600">
+                    <CardContent className="p-4">
+                        <p className="text-sm font-medium text-violet-100">Personal Expenses</p>
+                        <p className="text-2xl font-bold text-white">
+                            {loading ? '…' : formatCurrency(summary.personalTotal || 0)}
+                        </p>
+                        <p className="text-[10px] text-violet-200 mt-1 truncate">
+                            {summary.personalCount || 0} record{(summary.personalCount || 0) === 1 ? '' : 's'}
+                        </p>
+                    </CardContent>
+                </Card>
                 <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-500 to-blue-600">
                     <CardContent className="p-4">
                         <p className="text-sm font-medium text-blue-100">Daily Expenses Count</p>
@@ -257,12 +313,15 @@ export default function ExpensesPage() {
                 </Card>
             </div>
             {/* Quick Action Buttons */}
-            <div className="flex gap-2 sm:justify-end">
+            <div className="flex flex-wrap gap-2 sm:justify-end">
                 <Button onClick={() => setShowRentModal(true)} className="bg-amber-600 hover:bg-amber-700 text-white shadow-sm whitespace-nowrap" size="sm">
                     <PlusIcon className="w-4 h-4 mr-1.5" /> Rent
                 </Button>
+                <Button onClick={() => setShowPersonalModal(true)} className="bg-violet-600 hover:bg-violet-700 text-white shadow-sm whitespace-nowrap" size="sm">
+                    <PlusIcon className="w-4 h-4 mr-1.5" /> Personal
+                </Button>
                 <Button onClick={() => setShowDailyModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm whitespace-nowrap" size="sm">
-                    <PlusIcon className="w-4 h-4 mr-1.5" /> Expense
+                    <PlusIcon className="w-4 h-4 mr-1.5" /> Office
                 </Button>
                 <Button onClick={() => setShowVehicleModal(true)} className="bg-teal-600 hover:bg-teal-700 text-white shadow-sm whitespace-nowrap" size="sm">
                     <PlusIcon className="w-4 h-4 mr-1.5" /> Vehicle
@@ -302,10 +361,63 @@ export default function ExpensesPage() {
                                             <TableCell className="text-gray-600" suppressHydrationWarning>{formatDate(exp.expenseDate)}</TableCell>
                                             <TableCell className="text-center">
                                                 <div className="flex items-center justify-center gap-1">
-                                                    <Button variant="ghost" size="sm" onClick={() => { setEditingExpense(exp); setShowEditModal(true); }}>
+                                                    <Button variant="ghost" size="sm" onClick={() => { setEditingKind('office'); setEditingExpense(exp); setShowEditModal(true); }}>
                                                         <PencilIcon className="w-4 h-4" />
                                                     </Button>
-                                                    <Button variant="ghost" size="sm" onClick={() => handleDeleteExpense(exp.id)} className="text-red-600 hover:text-red-800">
+                                                    <Button variant="ghost" size="sm" onClick={() => handleDeleteExpense(exp.id, 'office')} className="text-red-600 hover:text-red-800">
+                                                        <TrashIcon className="w-4 h-4" />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+            {/* Personal Expenses Section */}
+            <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
+                <CardHeader>
+                    <CardTitle className="text-lg flex items-center">
+                        <UserIcon className="w-5 h-5 mr-2 text-violet-600" />
+                        Personal Expenses
+                    </CardTitle>
+                    <CardDescription>
+                        Your own spend (not office operations) — recorded to the selected wallet — {displayLabel}
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {loading ? (
+                        <div className="py-8 text-center text-gray-500">Loading...</div>
+                    ) : personalExpenses.length === 0 ? (
+                        <div className="py-6 text-center text-gray-500">No personal expenses recorded</div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <Table className="min-w-[500px]">
+                                <TableHeader>
+                                    <TableRow className="bg-gray-50/50">
+                                        <TableHead className="font-semibold">Date</TableHead>
+                                        <TableHead className="font-semibold">Description</TableHead>
+                                        <TableHead className="font-semibold">Method</TableHead>
+                                        <TableHead className="font-semibold text-right">Amount</TableHead>
+                                        <TableHead className="font-semibold text-center">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {personalExpenses.map((exp) => (
+                                        <TableRow key={exp.id}>
+                                            <TableCell className="font-medium" suppressHydrationWarning>{formatDate(exp.expenseDate)}</TableCell>
+                                            <TableCell className="text-gray-700">{exp.description}</TableCell>
+                                            <TableCell className="text-gray-700">{formatPaymentMethodLabel(exp.paymentMethod)}</TableCell>
+                                            <TableCell className="text-right font-bold text-violet-700">{formatCurrency(Number(exp.amount))}</TableCell>
+                                            <TableCell className="text-center">
+                                                <div className="flex items-center justify-center gap-1">
+                                                    <Button variant="ghost" size="sm" onClick={() => { setEditingKind('personal'); setEditingExpense(exp); setShowEditModal(true); }}>
+                                                        <PencilIcon className="w-4 h-4" />
+                                                    </Button>
+                                                    <Button variant="ghost" size="sm" onClick={() => handleDeleteExpense(exp.id, 'personal')} className="text-red-600 hover:text-red-800">
                                                         <TrashIcon className="w-4 h-4" />
                                                     </Button>
                                                 </div>
@@ -350,10 +462,10 @@ export default function ExpensesPage() {
                                             <TableCell className="text-right font-bold text-blue-700">{formatCurrency(Number(exp.amount))}</TableCell>
                                             <TableCell className="text-center">
                                                 <div className="flex items-center justify-center gap-1">
-                                                    <Button variant="ghost" size="sm" onClick={() => { setEditingExpense(exp); setShowEditModal(true); }}>
+                                                    <Button variant="ghost" size="sm" onClick={() => { setEditingKind('office'); setEditingExpense(exp); setShowEditModal(true); }}>
                                                         <PencilIcon className="w-4 h-4" />
                                                     </Button>
-                                                    <Button variant="ghost" size="sm" onClick={() => handleDeleteExpense(exp.id)} className="text-red-600 hover:text-red-800">
+                                                    <Button variant="ghost" size="sm" onClick={() => handleDeleteExpense(exp.id, 'office')} className="text-red-600 hover:text-red-800">
                                                         <TrashIcon className="w-4 h-4" />
                                                     </Button>
                                                 </div>
@@ -398,10 +510,10 @@ export default function ExpensesPage() {
                                             <TableCell className="text-right font-bold text-teal-700">{formatCurrency(Number(exp.amount))}</TableCell>
                                             <TableCell className="text-center">
                                                 <div className="flex items-center justify-center gap-1">
-                                                    <Button variant="ghost" size="sm" onClick={() => { setEditingExpense(exp); setShowEditModal(true); }}>
+                                                    <Button variant="ghost" size="sm" onClick={() => { setEditingKind('office'); setEditingExpense(exp); setShowEditModal(true); }}>
                                                         <PencilIcon className="w-4 h-4" />
                                                     </Button>
-                                                    <Button variant="ghost" size="sm" onClick={() => handleDeleteExpense(exp.id)} className="text-red-600 hover:text-red-800">
+                                                    <Button variant="ghost" size="sm" onClick={() => handleDeleteExpense(exp.id, 'office')} className="text-red-600 hover:text-red-800">
                                                         <TrashIcon className="w-4 h-4" />
                                                     </Button>
                                                 </div>
@@ -432,7 +544,7 @@ export default function ExpensesPage() {
                     <CardHeader>
                         <CardTitle className="text-base font-bold">Expenses Trend</CardTitle>
                         <CardDescription className="text-xs">
-                            {chartDescriptionForPeriod(period)} — Daily vs Rent vs Vehicle
+                            {chartDescriptionForPeriod(period)} — Daily vs Personal vs Rent vs Vehicle
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -445,6 +557,7 @@ export default function ExpensesPage() {
                                     <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} formatter={(value: number) => formatCurrency(value)} />
                                     <Legend iconType="circle" />
                                     <Bar dataKey="daily" name="Daily Expenses" stackId="a" fill="#3b82f6" radius={[0, 0, 4, 4]} />
+                                    <Bar dataKey="personal" name="Personal Expenses" stackId="a" fill="#7c3aed" radius={[0, 0, 0, 0]} />
                                     <Bar dataKey="vehicle" name="Vehicle Expenses" stackId="a" fill="#14b8a6" radius={[0, 0, 0, 0]} />
                                     <Bar dataKey="rent" name="Office Rent" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                                 </BarChart>
@@ -470,7 +583,8 @@ export default function ExpensesPage() {
                         <form onSubmit={(e) => {
                             e.preventDefault();
                             const fd = new FormData(e.target as HTMLFormElement);
-                            const expenseDateStr = String(fd.get('date') || '');
+                            const expenseDateStr = String(fd.get('date') || todayLocalDate());
+                            const expenseTimeStr = String(fd.get('time') || nowLocalTime());
                             const [yStr, mStr] = expenseDateStr.split('-');
                             const rentYear = parseInt(yStr, 10) || new Date().getFullYear();
                             const rentMonth = parseInt(mStr, 10) || (new Date().getMonth() + 1);
@@ -478,15 +592,21 @@ export default function ExpensesPage() {
                                 type: 'RENT',
                                 amount: fd.get('amount'),
                                 description: fd.get('description') || `Office Rent - ${monthNames[rentMonth - 1]} ${rentYear}`,
-                                expenseDate: expenseDateStr || todayLocalDate(),
+                                expenseDate: combineLocalDateAndTime(expenseDateStr, expenseTimeStr).toISOString(),
                                 month: rentMonth,
                                 year: rentYear,
                                 paymentMethod: fd.get('paymentMethod') || 'CASH',
                             });
                         }} className="space-y-3">
-                            <div className="space-y-1">
-                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Expense Date</label>
-                                <Input name="date" type="date" defaultValue={todayLocalDate()} required className="h-9" />
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Expense Date</label>
+                                    <Input name="date" type="date" defaultValue={todayLocalDate()} required className="h-9" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Time</label>
+                                    <Input name="time" type="time" defaultValue={nowLocalTime()} required className="h-9" />
+                                </div>
                             </div>
                             
                             <div className="space-y-1">
@@ -518,6 +638,74 @@ export default function ExpensesPage() {
                     </div>
                 </div>
             )}
+            {/* Add Personal Expense Modal */}
+            {showPersonalModal && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl p-5 w-full max-w-md shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <h2 className="text-lg font-bold text-gray-900">Add Personal Expense</h2>
+                                <p className="text-[10px] text-gray-500 font-medium">Your own spend — deducted from the selected wallet</p>
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => { setShowPersonalModal(false); setError(null); }} className="h-8 w-8 p-0 rounded-full">
+                                <span className="text-xl">×</span>
+                            </Button>
+                        </div>
+
+                        <form onSubmit={(e) => {
+                            e.preventDefault();
+                            const fd = new FormData(e.target as HTMLFormElement);
+                            handleCreateExpense({
+                                type: 'PERSONAL',
+                                amount: fd.get('amount'),
+                                description: fd.get('description'),
+                                expenseDate: combineLocalDateAndTime(
+                                    String(fd.get('date') || todayLocalDate()),
+                                    String(fd.get('time') || nowLocalTime())
+                                ).toISOString(),
+                                paymentMethod: fd.get('paymentMethod') || 'CASH',
+                            });
+                        }} className="space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Expense Date</label>
+                                    <Input name="date" type="date" defaultValue={todayLocalDate()} required className="h-9" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Time</label>
+                                    <Input name="time" type="time" defaultValue={nowLocalTime()} required className="h-9" />
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Amount (PKR)</label>
+                                <Input name="amount" type="number" placeholder="Enter amount" step="1" required className="h-9 font-bold text-violet-700" />
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Payment Method / Wallet</label>
+                                <CustomSelect
+                                    name="paymentMethod"
+                                    defaultValue="CASH"
+                                    options={[...PAYMENT_METHOD_OPTIONS]}
+                                />
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Description</label>
+                                <Input name="description" type="text" placeholder="e.g. Fuel for personal car" required className="h-9" />
+                            </div>
+
+                            <div className="flex justify-end gap-2 pt-2">
+                                <Button type="button" variant="ghost" onClick={() => { setShowPersonalModal(false); setError(null); }} className="h-9 text-xs font-semibold">Cancel</Button>
+                                <Button type="submit" disabled={submitting} className="bg-violet-600 hover:bg-violet-700 text-white h-9 px-6 text-xs font-bold shadow-md shadow-violet-200">
+                                    {submitting ? 'Saving...' : 'Record Personal'}
+                                </Button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
             {/* Add Daily Expense Modal */}
             {showDailyModal && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -539,13 +727,22 @@ export default function ExpensesPage() {
                                 type: 'DAILY',
                                 amount: fd.get('amount'),
                                 description: fd.get('description'),
-                                expenseDate: fd.get('date'),
+                                expenseDate: combineLocalDateAndTime(
+                                    String(fd.get('date') || todayLocalDate()),
+                                    String(fd.get('time') || nowLocalTime())
+                                ).toISOString(),
                                 paymentMethod: fd.get('paymentMethod') || 'CASH',
                             });
                         }} className="space-y-3">
-                            <div className="space-y-1">
-                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Expense Date</label>
-                                <Input name="date" type="date" defaultValue={todayLocalDate()} required className="h-9" />
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Expense Date</label>
+                                    <Input name="date" type="date" defaultValue={todayLocalDate()} required className="h-9" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Time</label>
+                                    <Input name="time" type="time" defaultValue={nowLocalTime()} required className="h-9" />
+                                </div>
                             </div>
                             
                             <div className="space-y-1">
@@ -598,13 +795,22 @@ export default function ExpensesPage() {
                                 type: 'VEHICLE',
                                 amount: fd.get('amount'),
                                 description: fd.get('description'),
-                                expenseDate: fd.get('date'),
+                                expenseDate: combineLocalDateAndTime(
+                                    String(fd.get('date') || todayLocalDate()),
+                                    String(fd.get('time') || nowLocalTime())
+                                ).toISOString(),
                                 paymentMethod: fd.get('paymentMethod') || 'CASH',
                             });
                         }} className="space-y-3">
-                            <div className="space-y-1">
-                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Expense Date</label>
-                                <Input name="date" type="date" defaultValue={todayLocalDate()} required className="h-9" />
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Expense Date</label>
+                                    <Input name="date" type="date" defaultValue={todayLocalDate()} required className="h-9" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Time</label>
+                                    <Input name="time" type="time" defaultValue={nowLocalTime()} required className="h-9" />
+                                </div>
                             </div>
                             
                             <div className="space-y-1">
@@ -642,8 +848,14 @@ export default function ExpensesPage() {
                     <div className="bg-white rounded-xl p-5 w-full max-w-md shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200">
                         <div className="flex items-center justify-between mb-4">
                             <div>
-                                <h2 className="text-lg font-bold text-gray-900">Edit Expense</h2>
-                                <p className="text-[10px] text-gray-500 font-medium">Update previously recorded expense</p>
+                                <h2 className="text-lg font-bold text-gray-900">
+                                    {editingKind === 'personal' ? 'Edit Personal Expense' : 'Edit Expense'}
+                                </h2>
+                                <p className="text-[10px] text-gray-500 font-medium">
+                                    {editingKind === 'personal'
+                                        ? 'Update personal spend (wallet debit)'
+                                        : 'Update previously recorded expense'}
+                                </p>
                             </div>
                             <Button variant="ghost" size="sm" onClick={() => { setShowEditModal(false); setEditingExpense(null); setError(null); }} className="h-8 w-8 p-0 rounded-full">
                                 <span className="text-xl">×</span>
@@ -656,13 +868,22 @@ export default function ExpensesPage() {
                             handleUpdateExpense(editingExpense.id, {
                                 amount: fd.get('amount'),
                                 description: fd.get('description'),
-                                expenseDate: fd.get('date'),
+                                expenseDate: combineLocalDateAndTime(
+                                    String(fd.get('date') || formatLocalDateInput(editingExpense.expenseDate)),
+                                    String(fd.get('time') || formatLocalTimeInput(editingExpense.expenseDate))
+                                ).toISOString(),
                                 paymentMethod: fd.get('paymentMethod') || editingExpense.paymentMethod || 'CASH',
                             });
                         }} className="space-y-3">
-                            <div className="space-y-1">
-                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Date</label>
-                                <Input name="date" type="date" defaultValue={formatLocalDateInput(editingExpense.expenseDate)} required className="h-9" />
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Date</label>
+                                    <Input name="date" type="date" defaultValue={formatLocalDateInput(editingExpense.expenseDate)} required className="h-9" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Time</label>
+                                    <Input name="time" type="time" defaultValue={formatLocalTimeInput(editingExpense.expenseDate)} required className="h-9" />
+                                </div>
                             </div>
                             
                             <div className="space-y-1">

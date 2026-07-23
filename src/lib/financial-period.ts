@@ -66,6 +66,16 @@ export function nowLocalTime(): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+/** Local HH:MM from a Date/ISO string for `<input type="time">`. */
+export function formatLocalTimeInput(
+  value: Date | string | null | undefined
+): string {
+  if (value == null || value === '') return nowLocalTime();
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return nowLocalTime();
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 /**
  * Combine a local YYYY-MM-DD date and HH:MM time into a Date in the
  * operator's timezone (avoids UTC midnight shifts from `new Date('YYYY-MM-DD')`).
