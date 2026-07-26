@@ -12,6 +12,10 @@ import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { buildPrismaCylinderVariantWhere } from '@/lib/cylinder-variant-key';
 import { getB2bCustomerCylinderDueAggregatesFromPhysicalStock } from '@/lib/b2b-customer-cylinder-dues-from-stock';
 import { buildCylinderVariantSummary } from '@/lib/cylinder-variant-summary';
+import {
+  canUndoTransaction,
+  TRANSACTION_UNDO_WINDOW_MESSAGE,
+} from '@/lib/transaction-undo-window';
 
 export async function POST(
   request: NextRequest,
@@ -44,6 +48,10 @@ export async function POST(
 
     if (transaction.voided) {
       return NextResponse.json({ error: 'Transaction is already voided' }, { status: 400 });
+    }
+
+    if (!canUndoTransaction(transaction.createdAt)) {
+      return NextResponse.json({ error: TRANSACTION_UNDO_WINDOW_MESSAGE }, { status: 403 });
     }
 
     /** Prefer the transaction's branch so inventory reversals never leak across regions when session has no region. */

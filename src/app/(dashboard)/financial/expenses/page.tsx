@@ -1,13 +1,15 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
     ArrowLeftIcon, BuildingOfficeIcon, PlusIcon,
-    PencilIcon, TrashIcon, CheckCircleIcon, XCircleIcon, TruckIcon, UserIcon
+    PencilIcon, TrashIcon, CheckCircleIcon, XCircleIcon, TruckIcon, UserIcon,
+    LockClosedIcon
 } from '@heroicons/react/24/outline';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { CustomSelect } from '@/components/ui/select-custom';
@@ -27,6 +29,12 @@ import {
     type FinancialPeriodMode,
 } from '@/lib/financial-period';
 import { FinancialPeriodFilter } from '@/components/FinancialPeriodFilter';
+import {
+    canModifyExpense,
+    expenseEditWindowRemainingMs,
+    formatExpenseEditWindowRemaining,
+    EXPENSE_EDIT_WINDOW_MESSAGE,
+} from '@/lib/expense-edit-window';
 
 interface OfficeExpense {
     id: string;
@@ -54,8 +62,59 @@ const monthNames = [
     'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
+interface ExpenseRowActionsProps {
+    createdAt: string;
+    role?: string | null;
+    now: number;
+    onEdit: () => void;
+    onDelete: () => void;
+}
+
+/**
+ * Edit/delete controls for one expense row. An ADMIN loses these once the
+ * edit window closes (see `@/lib/expense-edit-window`); SUPER_ADMIN is never
+ * time-limited. The API enforces the same rule — this only keeps the UI honest.
+ */
+function ExpenseRowActions({ createdAt, role, now, onEdit, onDelete }: ExpenseRowActionsProps) {
+    const locked = !canModifyExpense(role, createdAt, now);
+
+    if (locked) {
+        return (
+            <span
+                title={EXPENSE_EDIT_WINDOW_MESSAGE}
+                className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400"
+            >
+                <LockClosedIcon className="w-3.5 h-3.5" />
+                Locked
+            </span>
+        );
+    }
+
+    const countdown =
+        role === 'SUPER_ADMIN'
+            ? ''
+            : formatExpenseEditWindowRemaining(expenseEditWindowRemainingMs(createdAt, now));
+
+    return (
+        <div className="flex items-center justify-center gap-1" title={countdown || undefined}>
+            <Button variant="ghost" size="sm" onClick={onEdit}>
+                <PencilIcon className="w-4 h-4" />
+            </Button>
+            <Button variant="ghost" size="sm" onClick={onDelete} className="text-red-600 hover:text-red-800">
+                <TrashIcon className="w-4 h-4" />
+            </Button>
+        </div>
+    );
+}
+
 export default function ExpensesPage() {
     const router = useRouter();
+    const { data: session } = useSession();
+    const userRole = session?.user?.role;
+    // ADMIN can only access this page within Financial; the hub is SUPER_ADMIN-only.
+    const backHref = userRole === 'SUPER_ADMIN' ? '/financial' : '/dashboard';
+    // Ticks so a row's edit window closes on screen without needing a reload.
+    const [now, setNow] = useState(() => Date.now());
     const [expenses, setExpenses] = useState<OfficeExpense[]>([]);
     const [personalExpenses, setPersonalExpenses] = useState<PersonalExpense[]>([]);
     const [chartData, setChartData] = useState<any[]>([]);
@@ -90,6 +149,11 @@ export default function ExpensesPage() {
         () => resolveFinancialPeriod({ period, date, month, year }).label,
         [period, date, month, year]
     );
+
+    useEffect(() => {
+        const timer = setInterval(() => setNow(Date.now()), 60_000);
+        return () => clearInterval(timer);
+    }, []);
 
     useEffect(() => {
         setPagination((p) => ({ ...p, page: 1 }));
@@ -202,7 +266,10 @@ export default function ExpensesPage() {
                     ? `/api/financial/personal-expenses/${id}`
                     : `/api/financial/expenses/${id}`;
             const res = await fetch(endpoint, { method: 'DELETE' });
-            if (!res.ok) throw new Error('Failed to delete');
+            if (!res.ok) {
+                const data = await res.json().catch(() => null);
+                throw new Error(data?.error || 'Failed to delete');
+            }
             fetchData();
         } catch (err: any) {
             setError(err.message);
@@ -221,7 +288,7 @@ export default function ExpensesPage() {
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex items-center gap-4">
-                    <Button variant="outline" size="sm" onClick={() => router.push('/financial')} className="flex items-center justify-center h-9 w-9 p-0 shrink-0" aria-label="Back">
+                    <Button variant="outline" size="sm" onClick={() => router.push(backHref)} className="flex items-center justify-center h-9 w-9 p-0 shrink-0" aria-label="Back">
                         <ArrowLeftIcon className="w-4 h-4" />
                     </Button>
                     <div>
@@ -360,14 +427,13 @@ export default function ExpensesPage() {
                                             <TableCell className="text-gray-600">{exp.description}</TableCell>
                                             <TableCell className="text-gray-600" suppressHydrationWarning>{formatDate(exp.expenseDate)}</TableCell>
                                             <TableCell className="text-center">
-                                                <div className="flex items-center justify-center gap-1">
-                                                    <Button variant="ghost" size="sm" onClick={() => { setEditingKind('office'); setEditingExpense(exp); setShowEditModal(true); }}>
-                                                        <PencilIcon className="w-4 h-4" />
-                                                    </Button>
-                                                    <Button variant="ghost" size="sm" onClick={() => handleDeleteExpense(exp.id, 'office')} className="text-red-600 hover:text-red-800">
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </Button>
-                                                </div>
+                                                <ExpenseRowActions
+                                                    createdAt={exp.createdAt}
+                                                    role={userRole}
+                                                    now={now}
+                                                    onEdit={() => { setEditingKind('office'); setEditingExpense(exp); setShowEditModal(true); }}
+                                                    onDelete={() => handleDeleteExpense(exp.id, 'office')}
+                                                />
                                             </TableCell>
                                         </TableRow>
                                     ))}
@@ -413,14 +479,13 @@ export default function ExpensesPage() {
                                             <TableCell className="text-gray-700">{formatPaymentMethodLabel(exp.paymentMethod)}</TableCell>
                                             <TableCell className="text-right font-bold text-violet-700">{formatCurrency(Number(exp.amount))}</TableCell>
                                             <TableCell className="text-center">
-                                                <div className="flex items-center justify-center gap-1">
-                                                    <Button variant="ghost" size="sm" onClick={() => { setEditingKind('personal'); setEditingExpense(exp); setShowEditModal(true); }}>
-                                                        <PencilIcon className="w-4 h-4" />
-                                                    </Button>
-                                                    <Button variant="ghost" size="sm" onClick={() => handleDeleteExpense(exp.id, 'personal')} className="text-red-600 hover:text-red-800">
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </Button>
-                                                </div>
+                                                <ExpenseRowActions
+                                                    createdAt={exp.createdAt}
+                                                    role={userRole}
+                                                    now={now}
+                                                    onEdit={() => { setEditingKind('personal'); setEditingExpense(exp); setShowEditModal(true); }}
+                                                    onDelete={() => handleDeleteExpense(exp.id, 'personal')}
+                                                />
                                             </TableCell>
                                         </TableRow>
                                     ))}
@@ -461,14 +526,13 @@ export default function ExpensesPage() {
                                             <TableCell className="text-gray-700">{formatPaymentMethodLabel(exp.paymentMethod)}</TableCell>
                                             <TableCell className="text-right font-bold text-blue-700">{formatCurrency(Number(exp.amount))}</TableCell>
                                             <TableCell className="text-center">
-                                                <div className="flex items-center justify-center gap-1">
-                                                    <Button variant="ghost" size="sm" onClick={() => { setEditingKind('office'); setEditingExpense(exp); setShowEditModal(true); }}>
-                                                        <PencilIcon className="w-4 h-4" />
-                                                    </Button>
-                                                    <Button variant="ghost" size="sm" onClick={() => handleDeleteExpense(exp.id, 'office')} className="text-red-600 hover:text-red-800">
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </Button>
-                                                </div>
+                                                <ExpenseRowActions
+                                                    createdAt={exp.createdAt}
+                                                    role={userRole}
+                                                    now={now}
+                                                    onEdit={() => { setEditingKind('office'); setEditingExpense(exp); setShowEditModal(true); }}
+                                                    onDelete={() => handleDeleteExpense(exp.id, 'office')}
+                                                />
                                             </TableCell>
                                         </TableRow>
                                     ))}
@@ -509,14 +573,13 @@ export default function ExpensesPage() {
                                             <TableCell className="text-gray-700">{formatPaymentMethodLabel(exp.paymentMethod)}</TableCell>
                                             <TableCell className="text-right font-bold text-teal-700">{formatCurrency(Number(exp.amount))}</TableCell>
                                             <TableCell className="text-center">
-                                                <div className="flex items-center justify-center gap-1">
-                                                    <Button variant="ghost" size="sm" onClick={() => { setEditingKind('office'); setEditingExpense(exp); setShowEditModal(true); }}>
-                                                        <PencilIcon className="w-4 h-4" />
-                                                    </Button>
-                                                    <Button variant="ghost" size="sm" onClick={() => handleDeleteExpense(exp.id, 'office')} className="text-red-600 hover:text-red-800">
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </Button>
-                                                </div>
+                                                <ExpenseRowActions
+                                                    createdAt={exp.createdAt}
+                                                    role={userRole}
+                                                    now={now}
+                                                    onEdit={() => { setEditingKind('office'); setEditingExpense(exp); setShowEditModal(true); }}
+                                                    onDelete={() => handleDeleteExpense(exp.id, 'office')}
+                                                />
                                             </TableCell>
                                         </TableRow>
                                     ))}

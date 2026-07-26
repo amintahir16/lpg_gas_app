@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkAndNotifyStagnantAR } from '@/lib/arNotifier';
+import { markExpiredNotificationsAsRead } from '@/lib/notification-auto-read';
 
 /**
  * POST /api/admin/cron/check-stagnant-ar
- * 
- * Triggered by an external cron job.
- * Requires CRON_SECRET header for security.
+ *
+ * Triggered by the existing external cron job (CRON_SECRET).
+ * Also persists the 24-hour notification auto-read rule in the same run
+ * so no second scheduled job is needed. The UI already applies that rule
+ * at read time for free; this write just keeps the DB in sync.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -16,18 +19,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Run the check asynchronously (or wait, depending on cron timeout)
     await checkAndNotifyStagnantAR();
 
-    return NextResponse.json({ 
-      success: true, 
-      message: 'Stagnant AR check completed successfully' 
+    let autoReadMarked = 0;
+    try {
+      autoReadMarked = await markExpiredNotificationsAsRead();
+    } catch (autoReadError) {
+      // Never let housekeeping fail the primary AR check.
+      console.error('[AR-Cron] Auto-read notifications failed:', autoReadError);
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Stagnant AR check completed successfully',
+      autoReadMarked,
     });
   } catch (error) {
     console.error('[AR-Cron] Error:', error);
-    return NextResponse.json({ 
-      error: 'Internal Server Error', 
-      message: error instanceof Error ? error.message : 'Unknown error' 
+    return NextResponse.json({
+      error: 'Internal Server Error',
+      message: error instanceof Error ? error.message : 'Unknown error',
     }, { status: 500 });
   }
 }

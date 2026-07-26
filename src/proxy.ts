@@ -27,17 +27,40 @@ const routePermissions = {
     // The `/api/` catch-all is intentional: only ADMIN/SUPER_ADMIN can sign in
     // (enforced in `src/lib/auth.ts`), and individual API routes do their own
     // role/permission checks on top of this gate.
+    // NOTE: `/vendors` is intentionally NOT here — it lives in
+    // `superAdminOnly` below. `/financial` stays here so the ADMIN
+    // carve-outs (see `superAdminOnlyExceptions`) can pass through.
     admin: [
         '/dashboard',
         '/customers',
         '/inventory',
-        '/vendors',
         '/reports',
         '/admin',
         '/financial',
         '/settings',
         '/team',
         '/api/'
+    ],
+
+    // Routes reserved for SUPER_ADMIN. These are checked BEFORE the `admin`
+    // list, so they win even though they overlap with the `/financial` and
+    // `/api/` admin prefixes. SUPER_ADMIN itself never hits this check (it
+    // short-circuits to "allow" at the top of `checkRouteAccess`).
+    superAdminOnly: [
+        '/vendors',
+        '/api/vendors',
+        '/api/vendor-categories',
+        '/financial',
+        '/api/financial'
+    ],
+
+    // Carve-outs from `superAdminOnly` that ADMIN may still access:
+    // expense recording is delegated to ADMIN, everything else in the
+    // Financial section stays SUPER_ADMIN-only.
+    superAdminOnlyExceptions: [
+        '/financial/expenses',
+        '/api/financial/expenses',
+        '/api/financial/personal-expenses'
     ],
 
     // Routes any authenticated user (regardless of role) may hit.
@@ -228,11 +251,26 @@ export async function proxy(request: NextRequest) {
     return response;
 }
 
+// Exact match or a match on a path segment boundary ('/vendors' matches
+// '/vendors' and '/vendors/credits', but never '/vendors-report').
+function matchesPrefix(pathname: string, route: string): boolean {
+    return pathname === route || pathname.startsWith(route + '/');
+}
+
 function checkRouteAccess(pathname: string, userRole: string): boolean {
     if (userRole === 'SUPER_ADMIN') return true;
 
     if (routePermissions.notifications.some(route => pathname.startsWith(route))) {
         return true;
+    }
+
+    // SUPER_ADMIN-only areas (minus explicit ADMIN carve-outs) are denied for
+    // every other role before the broader `admin` prefix list is consulted.
+    if (
+        routePermissions.superAdminOnly.some(route => matchesPrefix(pathname, route)) &&
+        !routePermissions.superAdminOnlyExceptions.some(route => matchesPrefix(pathname, route))
+    ) {
+        return false;
     }
 
     if (pathname.startsWith('/select-region') || pathname.startsWith('/api/select-region')) {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { notificationAutoReadCutoff } from '@/lib/notification-auto-read';
 
 /**
  * Lightweight stats for the notification bell / polling.
@@ -25,16 +26,22 @@ export async function GET(_request: NextRequest) {
       OR: [{ userId }, { userId: null }],
     };
 
+    // Auto-read rule, computed for free in the existing counts: anything
+    // issued more than 24h ago is no longer "unread". The hourly cron
+    // persists this; no writes happen here.
+    const autoReadBefore = notificationAutoReadCutoff();
+
     const [total, unread, urgent] = await Promise.all([
       prisma.notification.count({ where: baseWhere }),
       prisma.notification.count({
-        where: { ...baseWhere, isRead: false },
+        where: { ...baseWhere, isRead: false, createdAt: { gte: autoReadBefore } },
       }),
       prisma.notification.count({
         where: {
           ...baseWhere,
           priority: 'URGENT',
           isRead: false,
+          createdAt: { gte: autoReadBefore },
         },
       }),
     ]);

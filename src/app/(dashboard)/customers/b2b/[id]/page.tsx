@@ -33,10 +33,17 @@ import {
   FunnelIcon,
   XMarkIcon,
   PlusIcon,
-  ShareIcon
+  ShareIcon,
+  LockClosedIcon
 } from '@heroicons/react/24/outline';
 import { sharePdfFromUrl, downloadPdfBlob } from '@/lib/sharePdf';
 import { PAYMENT_METHOD_OPTIONS, formatPaymentMethodLabel } from '@/lib/payment-methods';
+import {
+  canUndoTransaction,
+  transactionUndoWindowRemainingMs,
+  formatTransactionUndoWindowRemaining,
+  TRANSACTION_UNDO_WINDOW_MESSAGE,
+} from '@/lib/transaction-undo-window';
 
 interface B2BCustomer {
   id: string;
@@ -183,6 +190,8 @@ export default function B2BCustomerDetailPage() {
   const [showTransactionDetail, setShowTransactionDetail] = useState(false);
   const [loadingTransaction, setLoadingTransaction] = useState(false);
   const [undoingTransaction, setUndoingTransaction] = useState(false);
+  // Ticks so the undo button locks on screen when the 24h window closes.
+  const [now, setNow] = useState(() => Date.now());
 
   // Payment form states (for separate PAYMENT transactions)
   const [paymentAgainst, setPaymentAgainst] = useState('');
@@ -276,6 +285,11 @@ export default function B2BCustomerDetailPage() {
     sellingPrice: number; // Selling Price - for selling vaporizer (deducted from inventory)
     markup: number; // Markup percentage for regular accessories (0-100)
   }>>([]);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (customerId) {
@@ -1450,14 +1464,23 @@ export default function B2BCustomerDetailPage() {
   // excluded from the "operational" check so that adding one type doesn't hide
   // the other button, and each prevents its own duplicate. Voided opening
   // entries are ignored so they can be redone.
+  // SUPER_ADMIN always sees both buttons (even after operational transactions);
+  // ADMIN keeps the new-customer-only gate.
+  const isSuperAdmin = session?.user?.role === 'SUPER_ADMIN';
   const isOpeningBalanceTxn = (t: B2BTransaction) => !t.voided && t.notes === OPENING_BALANCE_NOTE;
   const isOpeningDuesTxn = (t: B2BTransaction) => !t.voided && t.notes === OPENING_DUES_NOTE;
   const hasOperationalTransactions = transactions.some(
     (t) => t.notes !== OPENING_BALANCE_NOTE && t.notes !== OPENING_DUES_NOTE,
   );
   const canSetupOpening = !loading && !!customer && !hasOperationalTransactions;
-  const showAddBalanceButton = canSetupOpening && !transactions.some(isOpeningBalanceTxn);
-  const showAddDuesButton = canSetupOpening && !transactions.some(isOpeningDuesTxn);
+  const showAddBalanceButton =
+    !loading &&
+    !!customer &&
+    (isSuperAdmin || (canSetupOpening && !transactions.some(isOpeningBalanceTxn)));
+  const showAddDuesButton =
+    !loading &&
+    !!customer &&
+    (isSuperAdmin || (canSetupOpening && !transactions.some(isOpeningDuesTxn)));
 
   const refreshAfterOpeningEntry = async () => {
     await fetchCustomerLedger();
@@ -3117,9 +3140,9 @@ export default function B2BCustomerDetailPage() {
                             {(transaction.transactionType === 'BUYBACK' || hasBuyback) && hasBuyback && (
                               <Badge variant="warning">BUYBACK</Badge>
                             )}
-                            {/* Show RETURN badge if there are empty return items */}
+                            {/* Show RETURN badge if there are empty return items — gray so it is not confused with PAYMENT blue */}
                             {(transaction.transactionType === 'RETURN_EMPTY' || hasEmptyReturns) && hasEmptyReturns && (
-                              <Badge variant="secondary">RETURN</Badge>
+                              <Badge variant="default">RETURN</Badge>
                             )}
                             {/* Fallback for other transaction types */}
                             {!hasSales && !hasBuyback && !hasEmptyReturns && transaction.transactionType !== 'PAYMENT' && (
@@ -3521,6 +3544,24 @@ export default function B2BCustomerDetailPage() {
                       <ShareIcon className="w-4 h-4" />
                     )}
                   </Button>
+                  {!selectedTransaction.voided && (() => {
+                    const createdAt = selectedTransaction.createdAt || selectedTransaction.date;
+                    const undoAllowed = canUndoTransaction(createdAt, now);
+                    if (!undoAllowed) {
+                      return (
+                        <span
+                          title={TRANSACTION_UNDO_WINDOW_MESSAGE}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400 border border-gray-200 rounded-lg bg-gray-50"
+                        >
+                          <LockClosedIcon className="w-3.5 h-3.5" />
+                          Undo Locked
+                        </span>
+                      );
+                    }
+                    const countdown = formatTransactionUndoWindowRemaining(
+                      transactionUndoWindowRemainingMs(createdAt, now)
+                    );
+                    return (
                   <Button
                     variant="outline"
                     size="sm"
@@ -3574,13 +3615,20 @@ export default function B2BCustomerDetailPage() {
                         setUndoingTransaction(false);
                       }
                     }}
-                    disabled={selectedTransaction.voided || undoingTransaction}
-                    className={`flex items-center gap-2 ${selectedTransaction.voided ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-50 hover:border-red-300 hover:text-red-600'
-                      }`}
+                    disabled={undoingTransaction}
+                    title={countdown || undefined}
+                    className="flex items-center gap-2 hover:bg-red-50 hover:border-red-300 hover:text-red-600"
                   >
                     <ArrowPathIcon className="w-4 h-4" />
                     {undoingTransaction ? 'Undoing...' : 'Undo Transaction'}
                   </Button>
+                    );
+                  })()}
+                  {selectedTransaction.voided && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-red-400 border border-red-100 rounded-lg bg-red-50">
+                      Already Voided
+                    </span>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -3636,7 +3684,7 @@ export default function B2BCustomerDetailPage() {
                                 <Badge variant="warning">BUYBACK</Badge>
                               )}
                               {(selectedTransaction.transactionType === 'RETURN_EMPTY' || hasEmptyReturns) && hasEmptyReturns && (
-                                <Badge variant="secondary">RETURN</Badge>
+                                <Badge variant="default">RETURN</Badge>
                               )}
                               {!hasSales && !hasBuyback && !hasEmptyReturns && selectedTransaction.transactionType !== 'PAYMENT' && (
                                 <Badge variant="secondary">{selectedTransaction.transactionType}</Badge>

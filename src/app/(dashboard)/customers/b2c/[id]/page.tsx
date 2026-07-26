@@ -24,9 +24,16 @@ import {
   DocumentArrowDownIcon,
   CurrencyDollarIcon,
   ArrowPathIcon,
-  ShareIcon
+  ShareIcon,
+  LockClosedIcon
 } from '@heroicons/react/24/outline';
 import { sharePdfFromUrl, downloadPdfBlob } from '@/lib/sharePdf';
+import {
+  canUndoTransaction,
+  transactionUndoWindowRemainingMs,
+  formatTransactionUndoWindowRemaining,
+  TRANSACTION_UNDO_WINDOW_MESSAGE,
+} from '@/lib/transaction-undo-window';
 
 function b2cDetailHoldingKey(h: { cylinderType: string; cylinderVariantKey?: string | null }) {
   if (h.cylinderVariantKey?.trim()) return h.cylinderVariantKey.trim();
@@ -105,6 +112,7 @@ interface B2CTransaction {
   }[];
   voided: boolean;
   voidReason?: string;
+  createdAt?: string;
 }
 
 interface CustomerLedgerResponse {
@@ -171,9 +179,16 @@ export default function B2CCustomerDetailPage() {
   const [showTransactionDetail, setShowTransactionDetail] = useState(false);
   const [loadingTransaction, setLoadingTransaction] = useState(false);
   const [undoingTransaction, setUndoingTransaction] = useState(false);
+  // Ticks so the undo button locks on screen when the 24h window closes.
+  const [now, setNow] = useState(() => Date.now());
 
   // Dynamic cylinder types (cache)
   const [inventoryCylinderTypes, setInventoryCylinderTypes] = useState<any[]>([]);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (customerId) {
@@ -883,10 +898,29 @@ export default function B2CCustomerDetailPage() {
                   )}
                 </Button>
 
+                {!selectedTransaction.voided && (() => {
+                  const createdAt = selectedTransaction.createdAt || selectedTransaction.date;
+                  const undoAllowed = canUndoTransaction(createdAt, now);
+                  if (!undoAllowed) {
+                    return (
+                      <span
+                        title={TRANSACTION_UNDO_WINDOW_MESSAGE}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400 border border-gray-200 rounded-lg bg-gray-50"
+                      >
+                        <LockClosedIcon className="w-3.5 h-3.5" />
+                        Undo Locked
+                      </span>
+                    );
+                  }
+                  const countdown = formatTransactionUndoWindowRemaining(
+                    transactionUndoWindowRemainingMs(createdAt, now)
+                  );
+                  return (
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={selectedTransaction.voided || undoingTransaction}
+                  disabled={undoingTransaction}
+                  title={countdown || undefined}
                   className="hover:bg-red-50 hover:text-red-600 hover:border-red-200"
                   onClick={async () => {
                     if (!confirm('Are you sure you want to VOID this transaction? This will reverse all stock and accounting entries.')) return;
@@ -915,6 +949,13 @@ export default function B2CCustomerDetailPage() {
                 >
                   <ArrowPathIcon className="w-4 h-4 mr-1" /> {undoingTransaction ? 'Voiding...' : 'Inverse/Void'}
                 </Button>
+                  );
+                })()}
+                {selectedTransaction.voided && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-red-400 border border-red-100 rounded-lg bg-red-50">
+                    Already Voided
+                  </span>
+                )}
 
                 <Button variant="ghost" size="sm" onClick={() => setShowTransactionDetail(false)}>
                   <XMarkIcon className="w-5 h-5" />

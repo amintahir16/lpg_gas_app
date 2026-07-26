@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useNotifications } from '@/contexts/NotificationContext';
-import { BellIcon, CogIcon, TrashIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+import { BellIcon, CogIcon, TrashIcon, ArrowPathIcon, ArrowLeftIcon } from '@heroicons/react/24/outline';
 
 interface NotificationPreferences {
   email: boolean;
@@ -263,9 +263,27 @@ export default function NotificationSettingsPage() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Notification Settings</h1>
-          <p className="text-gray-600">Configure how and when you receive notifications</p>
+        <div className="flex items-center gap-3 min-w-0">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (typeof window !== 'undefined' && window.history.length > 1) {
+                router.back();
+              } else {
+                router.push('/dashboard');
+              }
+            }}
+            className="flex items-center justify-center h-9 w-9 p-0 shrink-0"
+            aria-label="Back"
+          >
+            <ArrowLeftIcon className="w-4 h-4" />
+          </Button>
+          <div className="min-w-0">
+            <h1 className="text-3xl font-bold text-gray-900">Notification Settings</h1>
+            <p className="text-gray-600">Configure how and when you receive notifications</p>
+          </div>
         </div>
         <div className="flex items-center space-x-2">
           <Badge variant="secondary">{stats.unread} unread</Badge>

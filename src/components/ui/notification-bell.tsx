@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { cn } from '@/lib/utils';
+import { getNotificationPriorityBadgeProps } from '@/lib/notification-priority';
 
 interface NotificationBellProps {
   className?: string;
@@ -262,8 +263,11 @@ export function NotificationBell({
                               {notification.title}
                             </h4>
                             <Badge 
-                              variant={notification.priority === 'URGENT' ? 'destructive' : 'secondary'}
-                              className="text-xs ml-2"
+                              {...getNotificationPriorityBadgeProps(notification.priority)}
+                              className={cn(
+                                getNotificationPriorityBadgeProps(notification.priority).className,
+                                'ml-2'
+                              )}
                             >
                               {notification.priority}
                             </Badge>
@@ -444,8 +448,11 @@ export function NotificationBell({
                             {notification.title}
                           </h4>
                           <Badge 
-                            variant={notification.priority === 'URGENT' ? 'destructive' : 'secondary'}
-                            className="text-xs ml-2"
+                            {...getNotificationPriorityBadgeProps(notification.priority)}
+                            className={cn(
+                              getNotificationPriorityBadgeProps(notification.priority).className,
+                              'ml-2'
+                            )}
                           >
                             {notification.priority}
                           </Badge>

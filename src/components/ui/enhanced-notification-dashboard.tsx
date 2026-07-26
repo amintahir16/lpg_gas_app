@@ -16,6 +16,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { cn } from '@/lib/utils';
+import { getNotificationPriorityBadgeProps } from '@/lib/notification-priority';
 
 interface EnhancedNotificationDashboardProps {
   isOpen: boolean;
@@ -354,8 +355,8 @@ export function EnhancedNotificationDashboard({ isOpen, onClose }: EnhancedNotif
                         </h4>
                         <div className="flex items-center space-x-2">
                           <Badge 
-                            variant={notification.priority === 'URGENT' ? 'destructive' : 'secondary'}
-                            className="text-xs"
+                            {...getNotificationPriorityBadgeProps(notification.priority)}
+                            className={getNotificationPriorityBadgeProps(notification.priority).className}
                           >
                             {notification.priority}
                           </Badge>

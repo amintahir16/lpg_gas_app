@@ -10,6 +10,8 @@ import {
   CheckCircleIcon
 } from '@heroicons/react/24/outline';
 import { useRealTimeNotifications } from '@/hooks/useRealTimeNotifications';
+import { getNotificationPriorityBadgeProps } from '@/lib/notification-priority';
+import { cn } from '@/lib/utils';
 
 interface NotificationDashboardProps {
   isOpen: boolean;
@@ -204,8 +206,8 @@ export function NotificationDashboard({ isOpen, onClose }: NotificationDashboard
                         </h4>
                                                  <div className="flex items-center space-x-2">
                            <Badge 
-                             variant={notification.priority === 'URGENT' ? 'destructive' : 'secondary'}
-                             className="text-xs"
+                             {...getNotificationPriorityBadgeProps(notification.priority || 'MEDIUM')}
+                             className={getNotificationPriorityBadgeProps(notification.priority || 'MEDIUM').className}
                            >
                              {notification.priority || 'MEDIUM'}
                            </Badge>

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { requireAdmin, clampLimit } from '@/lib/apiAuth';
+import { notificationAutoReadCutoff } from '@/lib/notification-auto-read';
 
 const MAX_TITLE_LEN = 200;
 const MAX_MESSAGE_LEN = 2000;
@@ -33,12 +34,17 @@ export async function GET(request: NextRequest) {
 
     const skip = (page - 1) * limit;
 
+    // Auto-read rule, computed for free: anything issued more than 24h ago
+    // counts as read. The hourly cron persists this; here we only reflect it
+    // so no extra DB writes happen on user requests.
+    const autoReadBefore = notificationAutoReadCutoff();
+
     const where = {
       OR: [
         { userId: session.user.id },
         { userId: null }
       ],
-      ...(unreadOnly && { isRead: false })
+      ...(unreadOnly && { isRead: false, createdAt: { gte: autoReadBefore } })
     };
 
     const [notifications, total] = await Promise.all([
@@ -59,8 +65,13 @@ export async function GET(request: NextRequest) {
       prisma.notification.count({ where })
     ]);
 
+    // Overlay the auto-read rule on rows the cron hasn't persisted yet.
+    const effectiveNotifications = notifications.map((n) =>
+      n.isRead || n.createdAt >= autoReadBefore ? n : { ...n, isRead: true }
+    );
+
     return NextResponse.json({
-      notifications,
+      notifications: effectiveNotifications,
       pagination: { page, limit, total, pages: Math.ceil(total / limit) }
     });
   } catch (error) {
