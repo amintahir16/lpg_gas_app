@@ -17,6 +17,7 @@ import {
 } from '@/lib/superAdminNotifier';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { buildCylinderVariantSummary } from '@/lib/cylinder-variant-summary';
+import { normalizePaymentMethodKey } from '@/lib/payment-methods';
 
 // Define types for transaction items
 interface TransactionGasItem {
@@ -114,6 +115,9 @@ export async function POST(request: NextRequest) {
       accessoryItems = [] as TransactionAccessoryItem[]
     } = body;
 
+    // Same wallet keys as B2B / expenses (Cash, Bank Transfer, Easypaisa, Jazz Cash)
+    const methodKey = normalizePaymentMethodKey(paymentMethod) || 'CASH';
+
     // Validate required fields
     if (!customerId || (!gasItems.length && !securityItems.length && !accessoryItems.length)) {
       return NextResponse.json(
@@ -208,7 +212,7 @@ export async function POST(request: NextRequest) {
           totalCost,
           deliveryCost: Number(deliveryCost || 0),
           actualProfit,
-          paymentMethod,
+          paymentMethod: methodKey,
           notes: notes || null,
           createdBy: session.user.id,
           ...(regionId ? { regionId } : {}),
@@ -555,7 +559,7 @@ export async function POST(request: NextRequest) {
         `Bill #: ${billSno}`,
         `Total: Rs ${Number(finalAmount).toLocaleString()}`,
       ];
-      if (paymentMethod) detailsParts.push(`Method: ${paymentMethod}`);
+      if (methodKey) detailsParts.push(`Method: ${methodKey}`);
       if (gasItems.length) detailsParts.push(`Gas items: ${gasItems.length}`);
       if (securityItems.length) detailsParts.push(`Security items: ${securityItems.length}`);
       if (accessoryItems.length) detailsParts.push(`Accessories: ${accessoryItems.length}`);
@@ -587,7 +591,7 @@ export async function POST(request: NextRequest) {
           billSno,
           totalAmount: Number(totalAmount),
           finalAmount: Number(finalAmount),
-          paymentMethod,
+          paymentMethod: methodKey,
         },
       });
 

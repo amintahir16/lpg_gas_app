@@ -1,5 +1,6 @@
 /**
- * Canonical payment method options for B2B transactions and vendor payments.
+ * Canonical payment method options for B2B/B2C sales, vendor payments, and expenses.
+ * These values are the wallet keys used by Financial / Banks ledgers.
  * Legacy Prisma enum values (CHECK, CREDIT_CARD, etc.) remain in the DB for
  * existing rows but are no longer offered in new-entry dropdowns.
  */

@@ -21,6 +21,7 @@ import { getCylinderWeight, getCapacityFromTypeString, getCylinderTypeDisplayNam
 import { buildCylinderVariantKey, parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { CustomSelect } from '@/components/ui/select-custom';
 import { todayLocalDate } from '@/lib/financial-period';
+import { PAYMENT_METHOD_OPTIONS } from '@/lib/payment-methods';
 
 interface B2CTransactionModalProps {
     customerId: string;
@@ -717,11 +718,7 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                 <CustomSelect
                                     value={paymentMethod}
                                     onChange={(val) => setPaymentMethod(val)}
-                                    options={[
-                                        { value: 'CASH', label: 'Cash' },
-                                        { value: 'BANK_TRANSFER', label: 'Bank Transfer' },
-                                        { value: 'CARD', label: 'Card' }
-                                    ]}
+                                    options={[...PAYMENT_METHOD_OPTIONS]}
                                     className="h-9 text-sm"
                                 />
                             </div>
