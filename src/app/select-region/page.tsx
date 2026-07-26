@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState, Suspense } from 'react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import {
@@ -172,15 +171,17 @@ function SelectRegionInner() {
               {isSuperAdmin && (
                 <>
                   <p className="text-sm text-gray-600">
-                    Open Regions to add your first branch. You&apos;ll come back here to activate it once it exists.
+                    Open Regions to add your first branch. You&apos;ll come back here to select it once it exists.
                   </p>
-                  <Link
-                    href="/admin/regions"
-                    prefetch
-                    className="inline-flex items-center justify-center rounded-lg text-sm font-medium shadow-sm transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 h-11 px-6 py-3 bg-blue-600 text-white hover:bg-blue-700"
+                  {/* Use <button>, not <Link>: globals.css sets `a { color: var(--primary) }`
+                      which made the label invisible on this blue background. */}
+                  <Button
+                    type="button"
+                    onClick={() => router.push('/admin/regions')}
+                    className="w-full sm:w-auto"
                   >
                     Manage Regions
-                  </Link>
+                  </Button>
                 </>
               )}
             </CardContent>
