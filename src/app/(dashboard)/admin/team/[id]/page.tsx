@@ -24,6 +24,8 @@ import {
     CurrencyDollarIcon,
     ArrowTopRightOnSquareIcon,
     PencilSquareIcon,
+    ArrowsPointingOutIcon,
+    ArrowsPointingInIcon,
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import { Button } from '@/components/ui/button';
@@ -200,14 +202,13 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
     });
     const [deleteConfirmationName, setDeleteConfirmationName] = useState('');
     const [regionOptions, setRegionOptions] = useState<RegionOption[]>([]);
-
+    const [activityLogExpanded, setActivityLogExpanded] = useState(false);
     const profileCardRef = useRef<HTMLDivElement | null>(null);
     const [profileCardHeight, setProfileCardHeight] = useState<number | null>(null);
 
     useEffect(() => {
         const node = profileCardRef.current;
-        if (!node) return;
-        if (typeof window === 'undefined' || typeof ResizeObserver === 'undefined') return;
+        if (!node || typeof ResizeObserver === 'undefined') return;
 
         const updateHeight = () => {
             const next = Math.round(node.getBoundingClientRect().height);
@@ -659,29 +660,56 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
                     </CardContent>
                 </Card >
 
-                {/* Activity Log — fixed height (matches profile card on md+); list scrolls inside */}
+                {/* Activity Log — collapsed height matches profile card; Expand grows the viewport */}
                 <Card
-                    className="md:col-span-2 shadow-sm flex flex-col overflow-hidden min-h-0 max-h-[70vh] md:max-h-none"
+                    className="md:col-span-2 shadow-sm flex flex-col overflow-hidden"
                     style={
-                        profileCardHeight
-                            ? { height: `${profileCardHeight}px`, maxHeight: `${profileCardHeight}px` }
-                            : undefined
+                        activityLogExpanded
+                            ? { height: 'min(80vh, 720px)' }
+                            : profileCardHeight
+                                ? { height: `${profileCardHeight}px` }
+                                : { height: '360px' }
                     }
                 >
-                    <CardHeader className="flex-shrink-0">
-                        <div className="flex items-center justify-between">
-                            <div>
+                    <CardHeader className="flex-shrink-0 pb-3">
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
                                 <CardTitle>Activity Log</CardTitle>
                                 <CardDescription>
                                     Actions {member.name?.split(' ')[0] || 'this admin'} took in the branch selected in
                                     the header (switch branch to see activity in other regions)
                                 </CardDescription>
                             </div>
-                            {activityLogs.length > 0 && (
-                                <Badge variant="secondary" className="h-6">
-                                    {activityLogs.length} entr{activityLogs.length === 1 ? 'y' : 'ies'}
-                                </Badge>
-                            )}
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                                {activityLogs.length > 0 && (
+                                    <Badge variant="secondary" className="h-6">
+                                        {activityLogs.length} entr{activityLogs.length === 1 ? 'y' : 'ies'}
+                                    </Badge>
+                                )}
+                                {activityLogs.length > 0 && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 gap-1.5 text-xs"
+                                        onClick={() => setActivityLogExpanded((prev) => !prev)}
+                                        aria-expanded={activityLogExpanded}
+                                        aria-label={activityLogExpanded ? 'Collapse activity log' : 'Expand activity log'}
+                                    >
+                                        {activityLogExpanded ? (
+                                            <>
+                                                <ArrowsPointingInIcon className="h-3.5 w-3.5" />
+                                                Collapse
+                                            </>
+                                        ) : (
+                                            <>
+                                                <ArrowsPointingOutIcon className="h-3.5 w-3.5" />
+                                                Expand
+                                            </>
+                                        )}
+                                    </Button>
+                                )}
+                            </div>
                         </div>
                     </CardHeader>
                     <CardContent className="flex-1 min-h-0 flex flex-col overflow-hidden pt-0">
