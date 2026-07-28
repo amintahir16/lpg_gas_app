@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, use, type CSSProperties } from 'react';
+import { useState, useEffect, useRef, use } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import {
@@ -659,15 +659,12 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
                     </CardContent>
                 </Card >
 
-                {/* Activity Log — desktop matches profile card height; mobile uses viewport-capped scroll */}
+                {/* Activity Log — fixed height (matches profile card on md+); list scrolls inside */}
                 <Card
-                    className="md:col-span-2 shadow-sm flex flex-col overflow-hidden min-h-0 h-[70vh] md:h-[var(--activity-log-h,auto)] md:max-h-[var(--activity-log-h,none)]"
+                    className="md:col-span-2 shadow-sm flex flex-col overflow-hidden min-h-0 max-h-[70vh] md:max-h-none"
                     style={
                         profileCardHeight
-                            ? ({
-                                  // Only consumed from md+ via Tailwind; mobile keeps fixed 70vh
-                                  '--activity-log-h': `${profileCardHeight}px`,
-                              } as CSSProperties)
+                            ? { height: `${profileCardHeight}px`, maxHeight: `${profileCardHeight}px` }
                             : undefined
                     }
                 >
