@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
         const auth = await requireAdmin();
         if (!auth.ok) return auth.response;
         const regionId = getActiveRegionId(request);
+        const regionScope = regionScopedWhere(regionId);
         const txRegionScope = regionId ? { regionId } : {};
         const { searchParams } = new URL(request.url);
         const resolved = resolveFinancialPeriod({
@@ -157,6 +158,37 @@ export async function GET(request: NextRequest) {
             quantity: data.qty,
             revenue: data.revenue,
         }));
+
+        // B2C security retention (25% kept on return) — same row pattern as profit page,
+        // counted as revenue so Total Revenue / Gas Cylinders cards include it.
+        const retentionGroups = await prisma.b2CCylinderHolding.groupBy({
+            by: ['cylinderType', 'cylinderVariantKey'],
+            where: {
+                isReturned: true,
+                returnDate: { gte: startDate, lte: endDate },
+                returnDeduction: { gt: 0 },
+                customer: regionScope,
+            },
+            _sum: {
+                returnDeduction: true,
+                quantity: true,
+            },
+        });
+
+        for (const g of retentionGroups) {
+            const retentionAmount = Number(g._sum.returnDeduction || 0);
+            if (retentionAmount <= 0) continue;
+
+            const typeLabel = typeLabels.get(g.cylinderType) || g.cylinderType;
+            cylinders.push({
+                name: `${typeLabel} — security return (25% retained)`,
+                type: 'Cylinder',
+                rawType: g.cylinderType,
+                quantity: Number(g._sum.quantity || 0),
+                revenue: retentionAmount,
+            });
+        }
+
         const accessories = Array.from(accessoryMap.entries()).map(([name, data]) => ({
             name,
             type: 'Accessory',
@@ -229,9 +261,22 @@ export async function GET(request: NextRequest) {
                 else b2bAccessoryRevenue += amount;
             }
 
+            const b2cRetentionBucket = await prisma.b2CCylinderHolding.aggregate({
+                where: {
+                    isReturned: true,
+                    returnDate: { gte: bucket.startDate, lte: bucket.endDate },
+                    returnDeduction: { gt: 0 },
+                    customer: regionScope,
+                },
+                _sum: { returnDeduction: true },
+            });
+
             chartData.push({
                 name: bucket.name,
-                cylinders: Number(b2cGas._sum.totalPrice || 0) + b2bCylinderRevenue,
+                cylinders:
+                    Number(b2cGas._sum.totalPrice || 0) +
+                    b2bCylinderRevenue +
+                    Number(b2cRetentionBucket._sum.returnDeduction || 0),
                 accessories: Number(b2cAcc._sum.totalPrice || 0) + b2bAccessoryRevenue,
             });
         }

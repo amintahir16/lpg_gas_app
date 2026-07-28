@@ -24,8 +24,8 @@ export async function GET(request: NextRequest) {
         });
         const { startDate, endDate, period, month, year, date, label } = resolved;
 
-        // 1. Revenue — B2C: gas + accessories + delivery only (security deposits/returns are not sales revenue)
-        const [b2cGasRev, b2cAccRev, b2cDeliveryRev, b2bRevenueItems] = await Promise.all([
+        // 1. Revenue — B2C gas + accessories + delivery + B2B sales + B2C security retention (25% kept on return)
+        const [b2cGasRev, b2cAccRev, b2cDeliveryRev, b2bRevenueItems, b2cSecurityRetentionSum] = await Promise.all([
             prisma.b2CTransactionGasItem.aggregate({
                 where: {
                     transaction: {
@@ -77,6 +77,15 @@ export async function GET(request: NextRequest) {
                     },
                 },
             }),
+            prisma.b2CCylinderHolding.aggregate({
+                where: {
+                    isReturned: true,
+                    returnDate: { gte: startDate, lte: endDate },
+                    returnDeduction: { gt: 0 },
+                    customer: regionScope,
+                },
+                _sum: { returnDeduction: true },
+            }),
         ]);
 
         const b2cSalesRevenue =
@@ -89,7 +98,8 @@ export async function GET(request: NextRequest) {
             return sum + Number(item.totalPrice || 0);
         }, 0);
 
-        const totalRevenue = b2cSalesRevenue + b2bSalesRevenue;
+        const b2cSecurityRetention = Number(b2cSecurityRetentionSum._sum.returnDeduction || 0);
+        const totalRevenue = b2cSalesRevenue + b2bSalesRevenue + b2cSecurityRetention;
 
         // 2. Expenses (office + personal) — by expenseDate within the selected period
         const [officeExpensesSum, personalExpensesSum] = await Promise.all([

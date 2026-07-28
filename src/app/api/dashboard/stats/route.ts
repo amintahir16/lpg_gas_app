@@ -18,6 +18,25 @@ import { resolveFinancialPeriod } from '@/lib/financial-period';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * Detect cylinder-purchase vendor categories (asset CAPEX), matching the
+ * same slug/name patterns used elsewhere in the vendors module.
+ * These payments must NOT reduce Actual Profit on the dashboard.
+ */
+function isCylinderPurchaseCategory(slug?: string | null, name?: string | null): boolean {
+  const normalizedSlug = (slug ?? '').toLowerCase().replace(/[_-]/g, '');
+  const normalizedName = (name ?? '').toLowerCase().replace(/[_-]/g, '');
+  const patterns = [
+    'cylinderpurchase',
+    'cylinderspurchase',
+    'cylinderpurchases',
+    'cylinderspurchases',
+  ];
+  return patterns.some(
+    (pattern) => normalizedSlug.includes(pattern) || normalizedName.includes(pattern)
+  );
+}
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireAdmin();
@@ -132,7 +151,7 @@ export async function GET(request: NextRequest) {
       const b2cRevenue = Number(t.totalAmount || 0) - securityLines + Number(t.deliveryCharges || 0);
 
       rangeRevenue += b2cRevenue;
-      // Security return retention (25% of original deposit) is included in actualProfit at transaction creation
+      // Security return retention is also folded into Period Revenue / Actual Profit below (via returnDeduction)
       rangeProfit += Number(t.actualProfit || 0);
     });
 
@@ -200,7 +219,8 @@ export async function GET(request: NextRequest) {
     }
     const rentMonthConditions = monthsCovered.map(m => ({ type: 'RENT' as const, month: m.month, year: m.year }));
 
-    const [expensesSum, personalExpensesSum, purchasesSum, paymentsSum] = await Promise.all([
+    const [expensesSum, personalExpensesSum, purchasesSum, paymentsSum, vendorCategories] =
+      await Promise.all([
       prisma.officeExpense.aggregate({
         where: {
           ...regionScope,
@@ -233,7 +253,11 @@ export async function GET(request: NextRequest) {
           ...regionScope,
         },
         _sum: { amount: true }
-      })
+      }),
+      prisma.vendorCategoryConfig.findMany({
+        where: regionScope,
+        select: { id: true, slug: true, name: true },
+      }),
     ]);
 
     const rangeExpenses =
@@ -242,9 +266,30 @@ export async function GET(request: NextRequest) {
     const rangePayments = Number(paymentsSum._sum.amount || 0);
     const vendorBalance = rangePurchases - rangePayments;
 
+    // Cylinder-purchase vendor payments are asset CAPEX — exclude from Actual Profit only.
+    // Vendor Payments KPI and Vendor Balance continue to use full rangePayments (unchanged).
+    const cylinderPurchaseCategoryIds = vendorCategories
+      .filter((c) => isCylinderPurchaseCategory(c.slug, c.name))
+      .map((c) => c.id);
+
     // 3.6. Salaries (within date range, by paidDate)
-    // B2C security return retention (25% of original deposit): real profit but not part of sales revenue
-    const [salariesSum, b2cSecurityRetentionSum] = await Promise.all([
+    // B2C security return retention (25% of original deposit) is included in Period Revenue below
+    const [deductiblePaymentsSum, salariesSum, b2cSecurityRetentionSum] = await Promise.all([
+      cylinderPurchaseCategoryIds.length === 0
+        ? Promise.resolve(paymentsSum)
+        : prisma.vendorPayment.aggregate({
+            where: {
+              paymentDate: { gte: startDate, lte: endDate },
+              status: 'COMPLETED',
+              ...regionScope,
+              vendor: {
+                NOT: {
+                  categoryId: { in: cylinderPurchaseCategoryIds },
+                },
+              },
+            },
+            _sum: { amount: true },
+          }),
       prisma.salaryRecord.aggregate({
         where: {
           paidDate: { gte: startDate, lte: endDate },
@@ -262,12 +307,17 @@ export async function GET(request: NextRequest) {
         _sum: { returnDeduction: true },
       }),
     ]);
+    const deductibleVendorPayments = Number(deductiblePaymentsSum._sum.amount || 0);
     const rangeSalaries = Number(salariesSum._sum.amount || 0);
     const b2cSecurityRetention = Number(b2cSecurityRetentionSum._sum.returnDeduction || 0);
 
-    // 3.7. Actual Profit = Revenue - Expenses - Salaries - Vendor payments + B2C security retention
+    // Include B2C security retention (25% kept on cylinder return) in Period Revenue.
+    // Actual Profit formula stays equivalent: retention is now inside rangeRevenue (not added twice).
+    rangeRevenue += b2cSecurityRetention;
+
+    // 3.7. Actual Profit = Revenue (incl. security retention) - Expenses - Salaries - Vendor payments (excl. cylinder purchase)
     const actualProfit =
-      rangeRevenue - rangeExpenses - rangeSalaries - rangePayments + b2cSecurityRetention;
+      rangeRevenue - rangeExpenses - rangeSalaries - deductibleVendorPayments;
 
     // 4. Chart Data — aligned to selected period
     // Day: last 7 days ending on selected day (KPI still that day)
