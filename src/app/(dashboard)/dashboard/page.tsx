@@ -373,97 +373,98 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats Cards — Period Revenue & Est. Profit: SUPER_ADMIN only */}
+      {/* Desktop: fewer columns until 2xl so large currency values (e.g. Rs 4,625,000) are not clipped */}
       <div
-        className={`grid grid-cols-2 gap-3 ${isSuperAdmin ? 'md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8' : 'md:grid-cols-2 lg:grid-cols-4'}`}
+        className={`grid grid-cols-2 gap-3 ${isSuperAdmin ? 'md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8' : 'md:grid-cols-2 lg:grid-cols-4'}`}
       >
-        <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-500 to-blue-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
-          <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-500 to-blue-600 relative overflow-hidden md:overflow-visible group hover:shadow-lg transition-shadow">
+          <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity pointer-events-none">
             <UsersIcon className="w-10 h-10 text-white" />
           </div>
-          <CardContent className="p-3 relative z-10">
+          <CardContent className="p-3 relative z-10 min-w-0">
             <p className="text-xs font-medium text-blue-100 mb-1 truncate">Active Customers</p>
-            <h3 className="text-xl font-bold text-white truncate">{stats.kpis.totalCustomers.toLocaleString()}</h3>
+            <h3 className="text-xl font-bold text-white truncate md:overflow-visible md:whitespace-normal md:text-clip 2xl:text-sm leading-tight">{stats.kpis.totalCustomers.toLocaleString()}</h3>
             <p className="text-[10px] text-blue-200 mt-1 truncate">B2B & B2C</p>
           </CardContent>
         </Card>
 
         {isSuperAdmin && (
           <>
-            <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-500 to-emerald-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
-              <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-500 to-emerald-600 relative overflow-hidden md:overflow-visible group hover:shadow-lg transition-shadow">
+              <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity pointer-events-none">
                 <CurrencyDollarIcon className="w-10 h-10 text-white" />
               </div>
-              <CardContent className="p-3 relative z-10">
+              <CardContent className="p-3 relative z-10 min-w-0">
                 <p className="text-xs font-medium text-emerald-100 mb-1 truncate">Period Revenue</p>
-                <h3 className="text-xl font-bold text-white truncate">{formatCurrency(stats.kpis.rangeRevenue)}</h3>
+                <h3 className="text-xl font-bold text-white truncate md:overflow-visible md:whitespace-normal md:text-clip 2xl:text-sm leading-tight tabular-nums">{formatCurrency(stats.kpis.rangeRevenue)}</h3>
                 <p className="text-[10px] text-emerald-200 mt-1 truncate">{stats.label || periodLabel}</p>
               </CardContent>
             </Card>
 
-            <Card className="border-0 shadow-sm bg-gradient-to-br from-violet-500 to-violet-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
-              <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-violet-500 to-violet-600 relative overflow-hidden md:overflow-visible group hover:shadow-lg transition-shadow">
+              <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity pointer-events-none">
                 <ChartBarIcon className="w-10 h-10 text-white" />
               </div>
-              <CardContent className="p-3 relative z-10">
+              <CardContent className="p-3 relative z-10 min-w-0">
                 <p className="text-xs font-medium text-violet-100 mb-1 truncate">Est. Profit</p>
-                <h3 className="text-xl font-bold text-white truncate">{formatCurrency(stats.kpis.rangeProfit)}</h3>
+                <h3 className="text-xl font-bold text-white truncate md:overflow-visible md:whitespace-normal md:text-clip 2xl:text-sm leading-tight tabular-nums">{formatCurrency(stats.kpis.rangeProfit)}</h3>
                 <p className="text-[10px] text-violet-200 mt-1 truncate">Gross margins</p>
               </CardContent>
             </Card>
 
-            <Card className="border-0 shadow-sm bg-gradient-to-br from-teal-500 to-emerald-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
-              <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-teal-500 to-emerald-600 relative overflow-hidden md:overflow-visible group hover:shadow-lg transition-shadow">
+              <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity pointer-events-none">
                 <BanknotesIcon className="w-10 h-10 text-white" />
               </div>
-              <CardContent className="p-3 relative z-10">
+              <CardContent className="p-3 relative z-10 min-w-0">
                 <p className="text-xs font-medium text-teal-100 mb-1 truncate">Actual Profit</p>
-                <h3 className={`text-xl font-bold truncate ${stats.kpis.actualProfit >= 0 ? 'text-white' : 'text-red-200'}`}>{formatCurrency(stats.kpis.actualProfit)}</h3>
+                <h3 className={`text-xl font-bold truncate md:overflow-visible md:whitespace-normal md:text-clip 2xl:text-sm leading-tight tabular-nums ${stats.kpis.actualProfit >= 0 ? 'text-white' : 'text-red-200'}`}>{formatCurrency(stats.kpis.actualProfit)}</h3>
                 <p className="text-[10px] text-teal-200 mt-1 truncate">After all deductions</p>
               </CardContent>
             </Card>
           </>
         )}
 
-        <Card className="border-0 shadow-sm bg-gradient-to-br from-fuchsia-500 to-pink-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
-          <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-fuchsia-500 to-pink-600 relative overflow-hidden md:overflow-visible group hover:shadow-lg transition-shadow">
+          <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity pointer-events-none">
             <CreditCardIcon className="w-10 h-10 text-white" />
           </div>
-          <CardContent className="p-3 relative z-10">
+          <CardContent className="p-3 relative z-10 min-w-0">
             <p className="text-xs font-medium text-fuchsia-100 mb-1 truncate">Vendor Payments</p>
-            <h3 className="text-xl font-bold text-white truncate">{formatCurrency(stats.kpis.rangePayments || 0)}</h3>
+            <h3 className="text-xl font-bold text-white truncate md:overflow-visible md:whitespace-normal md:text-clip 2xl:text-sm leading-tight tabular-nums">{formatCurrency(stats.kpis.rangePayments || 0)}</h3>
             <p className="text-[10px] text-fuchsia-200 mt-1 truncate">Paid to all vendors</p>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-sm bg-gradient-to-br from-rose-500 to-orange-500 relative overflow-hidden group hover:shadow-lg transition-shadow">
-          <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-rose-500 to-orange-500 relative overflow-hidden md:overflow-visible group hover:shadow-lg transition-shadow">
+          <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity pointer-events-none">
             <BuildingOfficeIcon className="w-10 h-10 text-white" />
           </div>
-          <CardContent className="p-3 relative z-10">
+          <CardContent className="p-3 relative z-10 min-w-0">
             <p className="text-xs font-medium text-rose-100 mb-1 truncate">Period Expenses</p>
-            <h3 className="text-xl font-bold text-white truncate">{formatCurrency(stats.kpis.rangeExpenses)}</h3>
+            <h3 className="text-xl font-bold text-white truncate md:overflow-visible md:whitespace-normal md:text-clip 2xl:text-sm leading-tight tabular-nums">{formatCurrency(stats.kpis.rangeExpenses)}</h3>
             <p className="text-[10px] text-rose-200 mt-1 truncate">Office & daily</p>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-sm bg-gradient-to-br from-cyan-500 to-cyan-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
-          <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-cyan-500 to-cyan-600 relative overflow-hidden md:overflow-visible group hover:shadow-lg transition-shadow">
+          <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity pointer-events-none">
             <BuildingStorefrontIcon className="w-10 h-10 text-white" />
           </div>
-          <CardContent className="p-3 relative z-10">
+          <CardContent className="p-3 relative z-10 min-w-0">
             <p className="text-xs font-medium text-cyan-100 mb-1 truncate">Vendor Balance</p>
-            <h3 className="text-xl font-bold text-white truncate">{formatCurrency(stats.kpis.vendorBalance)}</h3>
+            <h3 className="text-xl font-bold text-white truncate md:overflow-visible md:whitespace-normal md:text-clip 2xl:text-sm leading-tight tabular-nums">{formatCurrency(stats.kpis.vendorBalance)}</h3>
             <p className="text-[10px] text-cyan-200 mt-1 truncate">Owed in period</p>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-500 to-amber-600 relative overflow-hidden group hover:shadow-lg transition-shadow">
-          <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity">
+        <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-500 to-amber-600 relative overflow-hidden md:overflow-visible group hover:shadow-lg transition-shadow">
+          <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-30 transition-opacity pointer-events-none">
             <CubeIcon className="w-10 h-10 text-white" />
           </div>
-          <CardContent className="p-3 relative z-10">
+          <CardContent className="p-3 relative z-10 min-w-0">
             <p className="text-xs font-medium text-amber-100 mb-1 truncate">Cylinders Out</p>
-            <h3 className="text-xl font-bold text-white truncate">{stats.kpis.activeCylinders.toLocaleString()}</h3>
+            <h3 className="text-xl font-bold text-white truncate md:overflow-visible md:whitespace-normal md:text-clip 2xl:text-sm leading-tight">{stats.kpis.activeCylinders.toLocaleString()}</h3>
             <p className="text-[10px] text-amber-200 mt-1 truncate">With customers</p>
           </CardContent>
         </Card>
