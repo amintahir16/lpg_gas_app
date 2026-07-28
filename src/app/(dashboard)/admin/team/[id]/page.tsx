@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, use } from 'react';
+import { useState, useEffect, useRef, use, type CSSProperties } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import {
@@ -208,14 +208,15 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
         const node = profileCardRef.current;
         if (!node) return;
         if (typeof window === 'undefined' || typeof ResizeObserver === 'undefined') return;
-        const observer = new ResizeObserver((entries) => {
-            for (const entry of entries) {
-                const next = Math.round(entry.contentRect.height);
-                if (next > 0) setProfileCardHeight(next);
-            }
-        });
+
+        const updateHeight = () => {
+            const next = Math.round(node.getBoundingClientRect().height);
+            if (next > 0) setProfileCardHeight(next);
+        };
+
+        const observer = new ResizeObserver(() => updateHeight());
         observer.observe(node);
-        setProfileCardHeight(node.getBoundingClientRect().height);
+        updateHeight();
         return () => observer.disconnect();
     }, [member]);
 
@@ -658,10 +659,17 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
                     </CardContent>
                 </Card >
 
-                {/* Activity Log */}
-                < Card
-                    className="md:col-span-2 shadow-sm flex flex-col"
-                    style={profileCardHeight ? { height: `${profileCardHeight}px` } : undefined}
+                {/* Activity Log — desktop matches profile card height; mobile uses viewport-capped scroll */}
+                <Card
+                    className="md:col-span-2 shadow-sm flex flex-col overflow-hidden min-h-0 h-[70vh] md:h-[var(--activity-log-h,auto)] md:max-h-[var(--activity-log-h,none)]"
+                    style={
+                        profileCardHeight
+                            ? ({
+                                  // Only consumed from md+ via Tailwind; mobile keeps fixed 70vh
+                                  '--activity-log-h': `${profileCardHeight}px`,
+                              } as CSSProperties)
+                            : undefined
+                    }
                 >
                     <CardHeader className="flex-shrink-0">
                         <div className="flex items-center justify-between">
@@ -679,7 +687,7 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
                             )}
                         </div>
                     </CardHeader>
-                    <CardContent className="flex-1 min-h-0 overflow-hidden">
+                    <CardContent className="flex-1 min-h-0 flex flex-col overflow-hidden pt-0">
                         {activityLogs.length === 0 ? (
                             <div className="text-center py-12 text-gray-500">
                                 <ClockIcon className="w-10 h-10 mx-auto text-gray-300 mb-2" />
@@ -689,8 +697,8 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
                                 </p>
                             </div>
                         ) : (
-                            <div className="relative h-full overflow-y-auto pr-1">
-                                <div className="absolute left-[15px] top-2 bottom-2 w-px bg-gray-100" />
+                            <div className="relative flex-1 min-h-0 overflow-y-auto overscroll-contain pr-1">
+                                <div className="pointer-events-none absolute left-[15px] top-2 bottom-2 w-px bg-gray-100" />
                                 <ul className="space-y-4">
                                     {activityLogs.map((log) => {
                                         const Icon = ACTIVITY_ICON_MAP[log.action] || ClockIcon;
@@ -759,8 +767,8 @@ export default function AdminProfilePage({ params }: { params: Promise<{ id: str
                             </div>
                         )}
                     </CardContent>
-                </Card >
-            </div >
+                </Card>
+            </div>
 
             {/* Salary Payment History */}
             {salaryRecords.length > 0 && (
