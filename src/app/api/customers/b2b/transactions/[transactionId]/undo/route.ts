@@ -83,7 +83,7 @@ export async function POST(
 
       // Reverse balance based on transaction type
       switch (transaction.transactionType) {
-        case 'SALE':
+        case 'SALE': {
           // Calculate buyback credit included in this transaction
           let totalBuybackCredit = 0;
           transaction.items.forEach((item: any) => {
@@ -92,20 +92,27 @@ export async function POST(
             }
           });
 
-          let impactToReverse = 0;
-          if (transaction.paymentStatus === 'FULLY_PAID') {
-            impactToReverse = 0 - totalBuybackCredit; // fully paid sale, but buybacks gave credit
-          } else if (transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined) {
-            // unpaidAmount is gross, so we must subtract buybackCredit to find net impact
-            impactToReverse = parseFloat(transaction.unpaidAmount.toString()) - totalBuybackCredit;
+          const saleAmount = parseFloat(transaction.totalAmount.toString());
+          const paid = transaction.paidAmount != null
+            ? parseFloat(transaction.paidAmount.toString())
+            : 0;
+          const netSaleAmount = saleAmount - totalBuybackCredit;
+
+          // Mirror ledger impact from transactions/route.ts on creation:
+          // unified sales use netAmount - payment (negative when overpaid);
+          // legacy sales use max(0, netSaleAmount - paid).
+          let originalImpact: number;
+          if (transaction.paidAmount !== null && transaction.paidAmount !== undefined) {
+            const unifiedBalanceImpact = Math.round(netSaleAmount) - paid;
+            const legacyImpact = Math.max(0, netSaleAmount - paid);
+            originalImpact = unifiedBalanceImpact < 0 ? unifiedBalanceImpact : legacyImpact;
           } else {
-            // legacy format fallback
-            impactToReverse = parseFloat(transaction.totalAmount.toString()) - totalBuybackCredit;
+            originalImpact = netSaleAmount;
           }
 
-          newLedgerBalance -= impactToReverse;
-
+          newLedgerBalance -= originalImpact;
           break;
+        }
         case 'PAYMENT':
         case 'ADJUSTMENT':
         case 'CREDIT_NOTE':
