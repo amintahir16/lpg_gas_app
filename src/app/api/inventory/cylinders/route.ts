@@ -175,6 +175,20 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { code, typeName, cylinderType, capacity, currentStatus, location, storeId, vehicleId, purchaseDate, purchasePrice } = body;
 
+    if (purchasePrice === undefined || purchasePrice === null || purchasePrice === '') {
+      return NextResponse.json(
+        { success: false, error: 'Purchase price is required.' },
+        { status: 400 }
+      );
+    }
+    const parsedPurchasePrice = parseFloat(purchasePrice);
+    if (!Number.isFinite(parsedPurchasePrice) || parsedPurchasePrice < 0) {
+      return NextResponse.json(
+        { success: false, error: 'Purchase price must be a valid number (0 or greater).' },
+        { status: 400 }
+      );
+    }
+
     // IMPORTANT: Normalize typeName to consistent case format before storing
     // This ensures "special", "Special", "SPECIAL" all become "Special"
     // This prevents duplicate cards in inventory dashboard
@@ -214,7 +228,7 @@ export async function POST(request: NextRequest) {
         storeId: storeId || null,
         vehicleId: vehicleId || null,
         purchaseDate: purchaseDate ? new Date(purchaseDate) : null,
-        purchasePrice: purchasePrice ? parseFloat(purchasePrice) : null,
+        purchasePrice: parsedPurchasePrice,
         ...(regionId ? { regionId } : {}),
       }
     });

@@ -14,7 +14,8 @@ import {
   ArrowLeftIcon,
   ChartBarIcon,
   CubeIcon,
-  TrashIcon
+  TrashIcon,
+  CurrencyDollarIcon,
 } from '@heroicons/react/24/outline';
 import { CustomSelect } from '@/components/ui/select-custom';
 import { getCylinderTypeDisplayName, getCylinderWeight, generateCylinderTypeFromCapacity, isValidCylinderCapacity, normalizeTypeName } from '@/lib/cylinder-utils';
@@ -47,12 +48,21 @@ interface Cylinder {
 interface CylinderTypeStats {
   type: string;
   typeEnum?: string;
+  variantKey?: string;
   full: number;
   empty: number;
   maintenance: number;
   withCustomer: number;
   retired: number;
   total: number;
+}
+
+interface CylinderTypePurchaseValue {
+  type: string;
+  typeEnum?: string;
+  variantKey?: string;
+  purchaseValue: number;
+  count: number;
 }
 
 export default function CylindersInventoryPage() {
@@ -64,6 +74,10 @@ export default function CylindersInventoryPage() {
   const initialTypeFilter = searchParams?.get('type') || 'ALL';
   const [cylinders, setCylinders] = useState<Cylinder[]>([]);
   const [cylinderTypeStats, setCylinderTypeStats] = useState<CylinderTypeStats[]>([]);
+  const [typePurchaseValues, setTypePurchaseValues] = useState<CylinderTypePurchaseValue[]>([]);
+  const [totalPurchaseValue, setTotalPurchaseValue] = useState(0);
+  const [totalCylinderCount, setTotalCylinderCount] = useState(0);
+  const [activeBranchName, setActiveBranchName] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [typeFilter, setTypeFilter] = useState(initialTypeFilter);
@@ -72,6 +86,11 @@ export default function CylindersInventoryPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkDeleteVariantKey, setBulkDeleteVariantKey] = useState('');
+  const [bulkDeleteStatus, setBulkDeleteStatus] = useState('');
+  const [bulkDeleteQuantity, setBulkDeleteQuantity] = useState<number | ''>('');
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [selectedCylinder, setSelectedCylinder] = useState<Cylinder | null>(null);
   const [isAddingCylinder, setIsAddingCylinder] = useState(false);
   const [cylinderTypeAndCapacity, setCylinderTypeAndCapacity] = useState('');
@@ -139,7 +158,7 @@ export default function CylindersInventoryPage() {
         // Deduplicate stats on frontend as well to prevent duplicates
         const statsMap = new Map<string, typeof data.stats[0]>();
         (data.stats || []).forEach((stat: typeof data.stats[0]) => {
-          const key = `${stat.type}-${stat.typeEnum || 'unknown'}`;
+          const key = stat.variantKey || `${stat.type}-${stat.typeEnum || 'unknown'}`;
           if (!statsMap.has(key)) {
             statsMap.set(key, stat);
           } else {
@@ -151,6 +170,7 @@ export default function CylindersInventoryPage() {
             existing.retired += stat.retired;
             existing.maintenance += stat.maintenance;
             existing.total = existing.full + existing.empty + existing.retired + existing.maintenance;
+            if (!existing.variantKey && stat.variantKey) existing.variantKey = stat.variantKey;
           }
         });
         // Sort stats to maintain consistent card positions
@@ -180,6 +200,10 @@ export default function CylindersInventoryPage() {
         });
 
         setCylinderTypeStats(sortedStats);
+        setTypePurchaseValues(Array.isArray(data.typePurchaseValues) ? data.typePurchaseValues : []);
+        setTotalPurchaseValue(Number(data.totalPurchaseValue || 0));
+        setTotalCylinderCount(Number(data.totalCylinderCount || 0));
+        setActiveBranchName(data.regionName || null);
       } else {
         console.error('Failed to fetch stats, status:', response.status);
         const errorData = await response.json().catch(() => ({}));
@@ -323,43 +347,87 @@ export default function CylindersInventoryPage() {
     setShowViewModal(true);
   };
 
-  const handleDeleteCylinder = async (cylinder: Cylinder) => {
-    // Only allow deletion of empty cylinders
-    if (cylinder.currentStatus !== 'EMPTY') {
-      alert('Only empty cylinders can be deleted. Please change the status to Empty first.');
+  const getSelectedBulkDeleteType = () =>
+    cylinderTypeStats.find(
+      (stat) => (stat.variantKey || stat.type) === bulkDeleteVariantKey
+    ) || null;
+
+  const getBulkDeleteAvailableCount = () => {
+    if (!bulkDeleteVariantKey || !bulkDeleteStatus) return 0;
+    const match = getSelectedBulkDeleteType();
+    if (!match) return 0;
+    if (bulkDeleteStatus === 'FULL') return match.full;
+    if (bulkDeleteStatus === 'EMPTY') return match.empty;
+    return 0;
+  };
+
+  const openBulkDeleteModal = () => {
+    setBulkDeleteVariantKey('');
+    setBulkDeleteStatus('');
+    setBulkDeleteQuantity('');
+    setShowBulkDeleteModal(true);
+  };
+
+  const handleBulkDeleteCylinders = async () => {
+    if (session?.user?.role !== 'SUPER_ADMIN') {
+      alert('Only Super Admin can remove cylinders.');
+      return;
+    }
+    const selectedType = getSelectedBulkDeleteType();
+    if (!bulkDeleteVariantKey || !selectedType) {
+      alert('Please select a cylinder type.');
+      return;
+    }
+    if (bulkDeleteStatus !== 'FULL' && bulkDeleteStatus !== 'EMPTY') {
+      alert('Please select status Full or Empty.');
+      return;
+    }
+    const qty = typeof bulkDeleteQuantity === 'number' ? bulkDeleteQuantity : 0;
+    const available = getBulkDeleteAvailableCount();
+    if (qty < 1) {
+      alert('Please enter a quantity of at least 1.');
+      return;
+    }
+    if (qty > available) {
+      alert(`Only ${available} ${bulkDeleteStatus.toLowerCase()} cylinder(s) available for this type.`);
       return;
     }
 
-    // Confirm deletion
     const confirmed = window.confirm(
-      `Are you sure you want to delete cylinder ${cylinder.code}? This action cannot be undone.`
+      `Remove ${qty} ${bulkDeleteStatus.toLowerCase()} ${selectedType.type} cylinder(s) from inventory?\n\nThis cannot be undone.`
     );
+    if (!confirmed) return;
 
-    if (!confirmed) {
-      return;
-    }
-
+    setIsBulkDeleting(true);
     try {
-      const response = await fetch(`/api/inventory/cylinders/${cylinder.id}`, {
-        method: 'DELETE',
+      const response = await fetch('/api/inventory/cylinders/bulk-delete', {
+        method: 'POST',
         credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          variantKey: selectedType.variantKey || undefined,
+          type: selectedType.type,
+          typeEnum: selectedType.typeEnum,
+          status: bulkDeleteStatus,
+          quantity: qty,
+        }),
       });
-
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to delete cylinder');
+        throw new Error(data.error || 'Failed to remove cylinders');
       }
 
-      // Refresh both cylinders list and statistics
-      await Promise.all([
-        fetchCylinders(),
-        fetchCylinderTypeStats()
-      ]);
-
-      alert('Cylinder deleted successfully!');
+      setShowBulkDeleteModal(false);
+      setBulkDeleteVariantKey('');
+      setBulkDeleteStatus('');
+      setBulkDeleteQuantity('');
+      await Promise.all([fetchCylinders(), fetchCylinderTypeStats()]);
+      alert(`Successfully removed ${data.deletedCount || qty} cylinder(s).`);
     } catch (error) {
-      console.error('Failed to delete cylinder:', error);
-      alert(`Error: ${error instanceof Error ? error.message : 'Failed to delete cylinder'}`);
+      console.error('Failed to bulk delete cylinders:', error);
+      alert(`Error: ${error instanceof Error ? error.message : 'Failed to remove cylinders'}`);
+    } finally {
+      setIsBulkDeleting(false);
     }
   };
 
@@ -487,6 +555,20 @@ export default function CylindersInventoryPage() {
       // No hardcoded type mappings - works for any capacity
       const finalCylinderType = generateCylinderTypeFromCapacity(capacityValue);
 
+      if (
+        formData.purchasePrice === undefined ||
+        formData.purchasePrice === null ||
+        String(formData.purchasePrice).trim() === ''
+      ) {
+        alert('Please enter a purchase price.');
+        return;
+      }
+      const parsedPurchasePrice = parseFloat(String(formData.purchasePrice));
+      if (!Number.isFinite(parsedPurchasePrice) || parsedPurchasePrice < 0) {
+        alert('Please enter a valid purchase price (0 or greater).');
+        return;
+      }
+
       const updateData = {
         typeName: typeName,
         cylinderType: finalCylinderType,
@@ -494,7 +576,7 @@ export default function CylindersInventoryPage() {
         currentStatus: formData.currentStatus,
         location: formData.location,
         purchaseDate: formData.purchaseDate || null,
-        purchasePrice: formData.purchasePrice ? parseFloat(formData.purchasePrice) : null,
+        purchasePrice: parsedPurchasePrice,
         lastMaintenanceDate: formData.lastMaintenanceDate || null,
         nextMaintenanceDate: formData.nextMaintenanceDate || null
       };
@@ -515,6 +597,9 @@ export default function CylindersInventoryPage() {
       // Refresh both cylinders list and statistics
       // Clear stats first to prevent showing stale data
       setCylinderTypeStats([]);
+      setTypePurchaseValues([]);
+      setTotalPurchaseValue(0);
+      setTotalCylinderCount(0);
       await Promise.all([
         fetchCylinders(),
         fetchCylinderTypeStats()
@@ -561,6 +646,67 @@ export default function CylindersInventoryPage() {
             Add Cylinder
           </Button>
         </div>
+      </div>
+
+      {/* Value summary: per-type cards (dynamic) then Total Cylinders Value / Total Cylinders */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        {typePurchaseValues.map((row) => (
+          <Card
+            key={row.variantKey || `${row.type}-${row.typeEnum || 'unknown'}`}
+            className="border-0 shadow-sm bg-white/80 backdrop-blur-sm"
+          >
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-3">
+              <CardTitle className="text-xs font-semibold text-gray-600 truncate pr-1" title={row.type}>
+                {row.type} Value
+              </CardTitle>
+              <CurrencyDollarIcon className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+            </CardHeader>
+            <CardContent className="px-3 pb-3">
+              <div className="text-lg font-bold text-gray-900 mb-1 tabular-nums">
+                PKR {Number(row.purchaseValue || 0).toLocaleString()}
+              </div>
+              <p className="text-[11px] text-gray-500">
+                {row.count} cylinder{row.count === 1 ? '' : 's'}
+              </p>
+            </CardContent>
+          </Card>
+        ))}
+
+        <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-3">
+            <CardTitle className="text-xs font-semibold text-gray-600 truncate pr-1">
+              Total Cylinders Value
+            </CardTitle>
+            <CurrencyDollarIcon className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+          </CardHeader>
+          <CardContent className="px-3 pb-3">
+            <div className="text-lg font-bold text-gray-900 mb-1 tabular-nums">
+              PKR {totalPurchaseValue.toLocaleString()}
+            </div>
+            <p className="text-[11px] text-gray-500 truncate" title={activeBranchName || undefined}>
+              {activeBranchName
+                ? `All cylinders in this ${activeBranchName}`
+                : 'All cylinders in this branch'}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-3">
+            <CardTitle className="text-xs font-semibold text-gray-600 truncate pr-1">
+              Total Cylinders
+            </CardTitle>
+            <CubeIcon className="w-4 h-4 text-blue-500 flex-shrink-0" />
+          </CardHeader>
+          <CardContent className="px-3 pb-3">
+            <div className="text-lg font-bold text-gray-900 mb-1 tabular-nums">
+              {totalCylinderCount.toLocaleString()}
+            </div>
+            <p className="text-[11px] text-gray-500">
+              Entire fleet in this branch
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Type Statistics */}
@@ -667,10 +813,22 @@ export default function CylindersInventoryPage() {
 
       {/* Cylinders Table */}
       <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
           <CardTitle className="text-lg font-semibold text-gray-900">
             Cylinders Inventory ({pagination.total} total)
           </CardTitle>
+          {session?.user?.role === 'SUPER_ADMIN' && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={openBulkDeleteModal}
+              className="h-9 text-xs border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800 shrink-0"
+            >
+              <TrashIcon className="w-4 h-4 mr-1.5" />
+              Remove Cylinders
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -756,17 +914,6 @@ export default function CylindersInventoryPage() {
                           >
                             View
                           </Button>
-                          {cylinder.currentStatus === 'EMPTY' && session?.user?.role === 'SUPER_ADMIN' && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteCylinder(cylinder)}
-                              className="h-7 text-xs px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <TrashIcon className="w-3 h-3 mr-1" />
-                              Delete
-                            </Button>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -823,6 +970,124 @@ export default function CylindersInventoryPage() {
         </CardContent>
       </Card>
 
+      {/* Bulk Remove Cylinders Modal — SUPER_ADMIN only */}
+      {showBulkDeleteModal && session?.user?.role === 'SUPER_ADMIN' && (
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+          <div className="relative mx-auto p-0 border w-full max-w-md shadow-2xl rounded-xl bg-white animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center rounded-t-xl">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Remove Cylinders</h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Remove inventory cylinders by type, status, and quantity (not with customers)
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => !isBulkDeleting && setShowBulkDeleteModal(false)}
+                disabled={isBulkDeleting}
+                className="h-8 w-8 p-0 rounded-full"
+              >
+                <span className="sr-only">Close</span>
+                <span className="text-xl">×</span>
+              </Button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
+                  Cylinder Type <span className="text-red-500">*</span>
+                </label>
+                <CustomSelect
+                  value={bulkDeleteVariantKey}
+                  onChange={(val) => {
+                    setBulkDeleteVariantKey(val);
+                    setBulkDeleteQuantity('');
+                  }}
+                  options={cylinderTypeStats
+                    .filter((stat) => !!(stat.variantKey || stat.type))
+                    .map((stat) => ({
+                      value: stat.variantKey || stat.type,
+                      label: stat.type,
+                    }))}
+                  placeholder="Select type"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
+                  Status <span className="text-red-500">*</span>
+                </label>
+                <CustomSelect
+                  value={bulkDeleteStatus}
+                  onChange={(val) => {
+                    setBulkDeleteStatus(val);
+                    setBulkDeleteQuantity('');
+                  }}
+                  options={[
+                    { value: 'FULL', label: 'Full' },
+                    { value: 'EMPTY', label: 'Empty' },
+                  ]}
+                  placeholder="Select status"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
+                  Quantity <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={Math.max(1, getBulkDeleteAvailableCount())}
+                  value={bulkDeleteQuantity}
+                  onChange={(e) => {
+                    if (e.target.value === '') {
+                      setBulkDeleteQuantity('');
+                      return;
+                    }
+                    const value = parseInt(e.target.value, 10);
+                    if (!isNaN(value)) {
+                      const max = getBulkDeleteAvailableCount();
+                      setBulkDeleteQuantity(max > 0 ? Math.min(max, Math.max(1, value)) : value);
+                    }
+                  }}
+                  placeholder="0"
+                  className="h-9"
+                  disabled={!bulkDeleteVariantKey || !bulkDeleteStatus}
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  {bulkDeleteVariantKey && bulkDeleteStatus
+                    ? `Available in inventory: ${getBulkDeleteAvailableCount()}`
+                    : 'Select type and status to see available quantity'}
+                </p>
+              </div>
+              <div className="flex justify-end space-x-3 pt-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setShowBulkDeleteModal(false)}
+                  disabled={isBulkDeleting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleBulkDeleteCylinders}
+                  disabled={
+                    isBulkDeleting ||
+                    !bulkDeleteVariantKey ||
+                    !bulkDeleteStatus ||
+                    !bulkDeleteQuantity ||
+                    getBulkDeleteAvailableCount() < 1
+                  }
+                  className="min-w-[140px] bg-red-600 hover:bg-red-700 text-white"
+                >
+                  {isBulkDeleting ? 'Removing...' : 'Remove Cylinders'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add Cylinder Modal */}
       {showAddForm && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
@@ -869,6 +1134,17 @@ export default function CylindersInventoryPage() {
 
                   if (!location) {
                     alert('Please enter a location');
+                    return;
+                  }
+
+                  // Purchase price is mandatory when adding cylinders to inventory
+                  if (purchasePrice === undefined || purchasePrice === null || String(purchasePrice).trim() === '') {
+                    alert('Please enter a purchase price.');
+                    return;
+                  }
+                  const parsedPurchasePrice = parseFloat(String(purchasePrice));
+                  if (!Number.isFinite(parsedPurchasePrice) || parsedPurchasePrice < 0) {
+                    alert('Please enter a valid purchase price (0 or greater).');
                     return;
                   }
 
@@ -932,7 +1208,7 @@ export default function CylindersInventoryPage() {
                     currentStatus,
                     location,
                     purchaseDate: purchaseDate || null,
-                    purchasePrice: purchasePrice ? parseFloat(purchasePrice) : null
+                    purchasePrice: parsedPurchasePrice
                   };
 
                   console.log('Form data to submit:', formData, 'Quantity:', qty);
@@ -1007,8 +1283,18 @@ export default function CylindersInventoryPage() {
                   <Input name="purchaseDate" type="date" className="h-9" />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Purchase Price</label>
-                  <Input name="purchasePrice" type="number" placeholder="0" step="1" min="0" className="h-9" />
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
+                    Purchase Price <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    name="purchasePrice"
+                    type="number"
+                    placeholder="0"
+                    step="1"
+                    min="0"
+                    required
+                    className="h-9"
+                  />
                 </div>
                 <div className="flex justify-end space-x-3 pt-2">
                   <Button
@@ -1121,14 +1407,17 @@ export default function CylindersInventoryPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Purchase Price</label>
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
+                    Purchase Price <span className="text-red-500">*</span>
+                  </label>
                   <Input
                     name="purchasePrice"
                     type="number"
                     placeholder="0"
                     step="1"
                     min="0"
-                    defaultValue={selectedCylinder.purchasePrice || ''}
+                    required
+                    defaultValue={selectedCylinder.purchasePrice ?? ''}
                     className="h-9"
                   />
                 </div>

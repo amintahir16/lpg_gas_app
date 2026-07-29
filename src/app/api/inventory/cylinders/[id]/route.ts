@@ -17,6 +17,20 @@ export async function PUT(
     const body = await request.json();
     const { typeName, cylinderType, capacity, currentStatus, location, storeId, vehicleId, purchaseDate, purchasePrice, lastMaintenanceDate, nextMaintenanceDate } = body;
 
+    if (purchasePrice === undefined || purchasePrice === null || purchasePrice === '') {
+      return NextResponse.json(
+        { success: false, error: 'Purchase price is required.' },
+        { status: 400 }
+      );
+    }
+    const parsedPurchasePrice = parseFloat(purchasePrice);
+    if (!Number.isFinite(parsedPurchasePrice) || parsedPurchasePrice < 0) {
+      return NextResponse.json(
+        { success: false, error: 'Purchase price must be a valid number (0 or greater).' },
+        { status: 400 }
+      );
+    }
+
     // IMPORTANT: Normalize typeName to consistent case format before storing
     const normalizedTypeName = normalizeTypeName(typeName) || null;
 
@@ -45,7 +59,7 @@ export async function PUT(
         storeId: storeId || null,
         vehicleId: vehicleId || null,
         purchaseDate: purchaseDate ? new Date(purchaseDate) : null,
-        purchasePrice: purchasePrice ? parseFloat(purchasePrice) : null,
+        purchasePrice: parsedPurchasePrice,
         lastMaintenanceDate: lastMaintenanceDate ? new Date(lastMaintenanceDate) : null,
         nextMaintenanceDate: nextMaintenanceDate ? new Date(nextMaintenanceDate) : null
       }

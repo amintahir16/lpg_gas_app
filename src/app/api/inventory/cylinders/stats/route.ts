@@ -150,9 +150,92 @@ export async function GET(request: NextRequest) {
       return a.type.localeCompare(b.type);
     });
 
+    // Fleet + per-type purchase values — all statuses (full, empty, with customers, etc.)
+    const [cylindersForValue, activeRegion] = await Promise.all([
+      prisma.cylinder.findMany({
+        where: regionScopedWhere(regionId),
+        select: {
+          purchasePrice: true,
+          cylinderType: true,
+          typeName: true,
+          capacity: true,
+        },
+      }),
+      regionId
+        ? prisma.region.findUnique({
+            where: { id: regionId },
+            select: { name: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    const typeValueMap = new Map<
+      string,
+      { type: string; typeEnum: string; variantKey: string; purchaseValue: number; count: number }
+    >();
+
+    for (const cylinder of cylindersForValue) {
+      const capacity = cylinder.capacity != null ? Number(cylinder.capacity) : null;
+      const normalizedTypeNameLowercase = cylinder.typeName
+        ? cylinder.typeName.toLowerCase().trim()
+        : null;
+      const normalizedTypeName = normalizeTypeName(normalizedTypeNameLowercase);
+      const trimmedTypeName = normalizedTypeName ? String(normalizedTypeName).trim() : '';
+
+      let displayType: string;
+      if (trimmedTypeName && trimmedTypeName !== '' && trimmedTypeName !== 'Cylinder') {
+        displayType = `${trimmedTypeName} (${capacity !== null ? capacity : 'N/A'}kg)`;
+      } else if (capacity !== null) {
+        displayType = `Cylinder (${capacity}kg)`;
+      } else {
+        displayType = getCylinderTypeDisplayName(cylinder.cylinderType);
+      }
+
+      const variantKey = buildCylinderVariantKey({
+        cylinderType: cylinder.cylinderType,
+        typeName: normalizedTypeNameLowercase,
+        capacity,
+      });
+
+      const existing = typeValueMap.get(variantKey);
+      const price = Number(cylinder.purchasePrice || 0);
+      if (existing) {
+        existing.purchaseValue += price;
+        existing.count += 1;
+      } else {
+        typeValueMap.set(variantKey, {
+          type: displayType,
+          typeEnum: cylinder.cylinderType,
+          variantKey,
+          purchaseValue: price,
+          count: 1,
+        });
+      }
+    }
+
+    const typePurchaseValues = Array.from(typeValueMap.values()).sort((a, b) => {
+      const aMatch = a.type.match(/^([^(]+)\s*\((\d+\.?\d*)kg\)/);
+      const bMatch = b.type.match(/^([^(]+)\s*\((\d+\.?\d*)kg\)/);
+
+      if (aMatch && bMatch) {
+        const aCapacity = parseFloat(aMatch[2]);
+        const bCapacity = parseFloat(bMatch[2]);
+        if (aCapacity !== bCapacity) return aCapacity - bCapacity;
+        return aMatch[1].trim().toLowerCase().localeCompare(bMatch[1].trim().toLowerCase());
+      }
+      return a.type.localeCompare(b.type);
+    });
+
+    const totalPurchaseValue = typePurchaseValues.reduce((sum, row) => sum + row.purchaseValue, 0);
+    const totalCylinderCount = cylindersForValue.length;
+
     return NextResponse.json({
       success: true,
-      stats: finalStats
+      stats: finalStats,
+      typePurchaseValues,
+      totalPurchaseValue,
+      totalCylinderCount,
+      regionName: activeRegion?.name || null,
     });
   } catch (error) {
     console.error('Error fetching cylinder type stats:', error);
