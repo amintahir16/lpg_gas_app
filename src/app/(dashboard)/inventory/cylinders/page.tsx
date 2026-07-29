@@ -15,6 +15,7 @@ import {
   ChartBarIcon,
   CubeIcon,
   TrashIcon,
+  PencilSquareIcon,
   CurrencyDollarIcon,
 } from '@heroicons/react/24/outline';
 import { CustomSelect } from '@/components/ui/select-custom';
@@ -91,6 +92,15 @@ export default function CylindersInventoryPage() {
   const [bulkDeleteStatus, setBulkDeleteStatus] = useState('');
   const [bulkDeleteQuantity, setBulkDeleteQuantity] = useState<number | ''>('');
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+  const [bulkEditVariantKey, setBulkEditVariantKey] = useState('');
+  const [bulkEditStatus, setBulkEditStatus] = useState('');
+  const [bulkEditQuantity, setBulkEditQuantity] = useState<number | ''>('');
+  const [bulkEditPurchasePrice, setBulkEditPurchasePrice] = useState('');
+  const [bulkEditLocation, setBulkEditLocation] = useState('');
+  const [bulkEditPurchaseDate, setBulkEditPurchaseDate] = useState('');
+  const [bulkEditNewStatus, setBulkEditNewStatus] = useState('');
+  const [isBulkEditing, setIsBulkEditing] = useState(false);
   const [selectedCylinder, setSelectedCylinder] = useState<Cylinder | null>(null);
   const [isAddingCylinder, setIsAddingCylinder] = useState(false);
   const [cylinderTypeAndCapacity, setCylinderTypeAndCapacity] = useState('');
@@ -316,6 +326,7 @@ export default function CylindersInventoryPage() {
   };
 
   const handleEditCylinder = (cylinder: Cylinder) => {
+    if (session?.user?.role !== 'SUPER_ADMIN') return;
     setSelectedCylinder(cylinder);
     // Pre-populate the edit form with current typeName and capacity
     const capacity = cylinder.capacity || 0;
@@ -361,11 +372,166 @@ export default function CylindersInventoryPage() {
     return 0;
   };
 
+  const getSelectedBulkEditType = () =>
+    cylinderTypeStats.find(
+      (stat) => (stat.variantKey || stat.type) === bulkEditVariantKey
+    ) || null;
+
+  const getBulkEditAvailableCount = () => {
+    if (!bulkEditVariantKey || !bulkEditStatus) return 0;
+    const match = getSelectedBulkEditType();
+    if (!match) return 0;
+    if (bulkEditStatus === 'FULL') return match.full;
+    if (bulkEditStatus === 'EMPTY') return match.empty;
+    if (bulkEditStatus === 'WITH_CUSTOMER') return match.withCustomer;
+    return 0;
+  };
+
   const openBulkDeleteModal = () => {
     setBulkDeleteVariantKey('');
     setBulkDeleteStatus('');
     setBulkDeleteQuantity('');
     setShowBulkDeleteModal(true);
+  };
+
+  const openBulkEditModal = () => {
+    setBulkEditVariantKey('');
+    setBulkEditStatus('');
+    setBulkEditQuantity('');
+    setBulkEditPurchasePrice('');
+    setBulkEditLocation('');
+    setBulkEditPurchaseDate('');
+    setBulkEditNewStatus('');
+    setShowBulkEditModal(true);
+  };
+
+  const handleBulkEditCylinders = async () => {
+    if (session?.user?.role !== 'SUPER_ADMIN') {
+      alert('Only Super Admin can bulk edit cylinders.');
+      return;
+    }
+    const selectedType = getSelectedBulkEditType();
+    if (!bulkEditVariantKey || !selectedType) {
+      alert('Please select a cylinder type.');
+      return;
+    }
+    if (
+      bulkEditStatus !== 'FULL' &&
+      bulkEditStatus !== 'EMPTY' &&
+      bulkEditStatus !== 'WITH_CUSTOMER'
+    ) {
+      alert('Please select a current status.');
+      return;
+    }
+    const qty = typeof bulkEditQuantity === 'number' ? bulkEditQuantity : 0;
+    const available = getBulkEditAvailableCount();
+    if (qty < 1) {
+      alert('Please enter a quantity of at least 1.');
+      return;
+    }
+    if (available < 1) {
+      alert('No cylinders available for this type and status.');
+      return;
+    }
+    if (qty > available) {
+      alert(`Only ${available} cylinder(s) available for this type and status.`);
+      return;
+    }
+
+    const hasNewStatus =
+      bulkEditStatus !== 'WITH_CUSTOMER' &&
+      (bulkEditNewStatus === 'FULL' || bulkEditNewStatus === 'EMPTY');
+    const hasPurchasePrice = bulkEditPurchasePrice.trim() !== '';
+    const hasLocation =
+      bulkEditStatus !== 'WITH_CUSTOMER' && bulkEditLocation.trim() !== '';
+    const hasPurchaseDate = bulkEditPurchaseDate.trim() !== '';
+    if (!hasNewStatus && !hasPurchasePrice && !hasLocation && !hasPurchaseDate) {
+      alert(
+        bulkEditStatus === 'WITH_CUSTOMER'
+          ? 'Enter at least one field to update: purchase price or purchase date.'
+          : 'Enter at least one field to update: new status, purchase price, location, or purchase date.'
+      );
+      return;
+    }
+    if (bulkEditStatus === 'WITH_CUSTOMER' && (bulkEditNewStatus === 'FULL' || bulkEditNewStatus === 'EMPTY')) {
+      alert(
+        'With-customer cylinder status can’t be changed here. Return the cylinder through a transaction to change its status.'
+      );
+      return;
+    }
+    if (bulkEditStatus === 'WITH_CUSTOMER' && bulkEditLocation.trim() !== '') {
+      alert(
+        'Location of with-customer cylinders can’t be changed here. Return the cylinder through a transaction first.'
+      );
+      return;
+    }
+    if (hasPurchasePrice) {
+      const parsed = parseFloat(bulkEditPurchasePrice);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        alert('Please enter a valid purchase price (0 or greater).');
+        return;
+      }
+    }
+
+    const statusLabel = bulkEditStatus.replace('_', ' ').toLowerCase();
+    const changeParts = [
+      hasNewStatus ? `status → ${bulkEditNewStatus}` : null,
+      hasPurchasePrice ? 'purchase price' : null,
+      hasLocation ? 'location' : null,
+      hasPurchaseDate ? 'purchase date' : null,
+    ].filter(Boolean);
+    if (
+      !confirm(
+        `Update ${qty} ${statusLabel} ${selectedType.type} cylinder(s)?\n\nChanging: ${changeParts.join(', ')}\nBlank fields will be left unchanged.`
+      )
+    ) {
+      return;
+    }
+
+    setIsBulkEditing(true);
+    try {
+      const payload: Record<string, unknown> = {
+        variantKey: selectedType.variantKey || bulkEditVariantKey,
+        type: selectedType.type,
+        status: bulkEditStatus,
+        quantity: qty,
+      };
+      if (hasNewStatus) payload.newStatus = bulkEditNewStatus;
+      if (hasPurchasePrice) payload.purchasePrice = parseFloat(bulkEditPurchasePrice);
+      if (hasLocation) payload.location = bulkEditLocation.trim();
+      if (hasPurchaseDate) payload.purchaseDate = bulkEditPurchaseDate;
+
+      const response = await fetch('/api/inventory/cylinders/bulk-edit', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to update cylinders');
+      }
+
+      setShowBulkEditModal(false);
+      setBulkEditVariantKey('');
+      setBulkEditStatus('');
+      setBulkEditQuantity('');
+      setBulkEditPurchasePrice('');
+      setBulkEditLocation('');
+      setBulkEditPurchaseDate('');
+      setBulkEditNewStatus('');
+      setCylinderTypeStats([]);
+      setTypePurchaseValues([]);
+      setTotalPurchaseValue(0);
+      setTotalCylinderCount(0);
+      await Promise.all([fetchCylinders(), fetchCylinderTypeStats()]);
+      alert(`Successfully updated ${data.updatedCount || qty} cylinder(s).`);
+    } catch (error) {
+      console.error('Bulk edit failed:', error);
+      alert(`Error: ${error instanceof Error ? error.message : 'Failed to update cylinders'}`);
+    } finally {
+      setIsBulkEditing(false);
+    }
   };
 
   const handleBulkDeleteCylinders = async () => {
@@ -827,16 +993,30 @@ export default function CylindersInventoryPage() {
             Cylinders Inventory ({pagination.total} total)
           </CardTitle>
           {session?.user?.role === 'SUPER_ADMIN' && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={openBulkDeleteModal}
-              className="h-9 text-xs border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800 shrink-0"
-            >
-              <TrashIcon className="w-4 h-4 mr-1.5" />
-              Remove Cylinders
-            </Button>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={openBulkEditModal}
+                title="Bulk Edit"
+                aria-label="Bulk Edit"
+                className="h-9 w-9 p-0 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+              >
+                <PencilSquareIcon className="w-4 h-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={openBulkDeleteModal}
+                title="Remove Cylinders"
+                aria-label="Remove Cylinders"
+                className="h-9 w-9 p-0 border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+              >
+                <TrashIcon className="w-4 h-4" />
+              </Button>
+            </div>
           )}
         </CardHeader>
         <CardContent className="p-0">
@@ -907,14 +1087,16 @@ export default function CylindersInventoryPage() {
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEditCylinder(cylinder)}
-                            className="h-7 text-xs px-2"
-                          >
-                            Edit
-                          </Button>
+                          {session?.user?.role === 'SUPER_ADMIN' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEditCylinder(cylinder)}
+                              className="h-7 text-xs px-2"
+                            >
+                              Edit
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
@@ -978,6 +1160,210 @@ export default function CylindersInventoryPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Bulk Edit Cylinders Modal — SUPER_ADMIN only */}
+      {showBulkEditModal && session?.user?.role === 'SUPER_ADMIN' && (
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+          <div className="relative mx-auto p-0 border w-full max-w-md shadow-2xl rounded-xl bg-white animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center rounded-t-xl">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Bulk Edit Cylinders</h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Change status, purchase price, location, or purchase date by type
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => !isBulkEditing && setShowBulkEditModal(false)}
+                disabled={isBulkEditing}
+                className="h-8 w-8 p-0 rounded-full"
+              >
+                <span className="sr-only">Close</span>
+                <span className="text-xl">×</span>
+              </Button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
+                  Cylinder Type <span className="text-red-500">*</span>
+                </label>
+                <CustomSelect
+                  value={bulkEditVariantKey}
+                  onChange={(val) => {
+                    setBulkEditVariantKey(val);
+                    setBulkEditQuantity('');
+                  }}
+                  options={cylinderTypeStats
+                    .filter((stat) => !!(stat.variantKey || stat.type))
+                    .map((stat) => ({
+                      value: stat.variantKey || stat.type,
+                      label: stat.type,
+                    }))}
+                  placeholder="Select type"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
+                  Current Status <span className="text-red-500">*</span>
+                </label>
+                <CustomSelect
+                  value={bulkEditStatus}
+                  onChange={(val) => {
+                    setBulkEditStatus(val);
+                    setBulkEditQuantity('');
+                    // With-customer: status and location cannot be changed via bulk edit
+                    setBulkEditNewStatus('');
+                    if (val === 'WITH_CUSTOMER') setBulkEditLocation('');
+                  }}
+                  options={[
+                    { value: 'FULL', label: 'Full' },
+                    { value: 'EMPTY', label: 'Empty' },
+                    { value: 'WITH_CUSTOMER', label: 'With Customer' },
+                  ]}
+                  placeholder="Select current status"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
+                  Quantity <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={Math.max(1, getBulkEditAvailableCount())}
+                  value={bulkEditQuantity}
+                  onChange={(e) => {
+                    if (e.target.value === '') {
+                      setBulkEditQuantity('');
+                      return;
+                    }
+                    const value = parseInt(e.target.value, 10);
+                    if (!isNaN(value)) {
+                      const max = getBulkEditAvailableCount();
+                      setBulkEditQuantity(max > 0 ? Math.min(max, Math.max(1, value)) : value);
+                    }
+                  }}
+                  placeholder="0"
+                  className="h-9"
+                  disabled={!bulkEditVariantKey || !bulkEditStatus}
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  {bulkEditVariantKey && bulkEditStatus
+                    ? `Available: ${getBulkEditAvailableCount()}`
+                    : 'Select type and status to see available quantity'}
+                </p>
+              </div>
+              <div className="border-t border-gray-100 pt-4 space-y-4">
+                <p className="text-xs text-gray-500">
+                  Leave a field blank to keep its current value. At least one field is required.
+                </p>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
+                    Change Status To
+                  </label>
+                  {bulkEditStatus === 'WITH_CUSTOMER' ? (
+                    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      With-customer cylinder status can’t be changed here. Return the cylinder
+                      through a transaction to change its status.
+                    </div>
+                  ) : (
+                    <CustomSelect
+                      value={bulkEditNewStatus}
+                      onChange={setBulkEditNewStatus}
+                      options={[
+                        { value: '', label: 'Keep current status' },
+                        ...(bulkEditStatus !== 'FULL'
+                          ? [{ value: 'FULL', label: 'Full' }]
+                          : []),
+                        ...(bulkEditStatus !== 'EMPTY'
+                          ? [{ value: 'EMPTY', label: 'Empty' }]
+                          : []),
+                      ]}
+                      placeholder="Keep current status"
+                      disabled={!bulkEditStatus}
+                    />
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
+                    Purchase Price (PKR)
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={bulkEditPurchasePrice}
+                    onChange={(e) => setBulkEditPurchasePrice(e.target.value)}
+                    placeholder="Leave blank to keep"
+                    className="h-9"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
+                    Location
+                  </label>
+                  {bulkEditStatus === 'WITH_CUSTOMER' ? (
+                    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      Location of with-customer cylinders can’t be changed here. Return the
+                      cylinder through a transaction first.
+                    </div>
+                  ) : (
+                    <Input
+                      type="text"
+                      value={bulkEditLocation}
+                      onChange={(e) => setBulkEditLocation(e.target.value)}
+                      placeholder="Leave blank to keep"
+                      className="h-9"
+                    />
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
+                    Purchase Date
+                  </label>
+                  <Input
+                    type="date"
+                    value={bulkEditPurchaseDate}
+                    onChange={(e) => setBulkEditPurchaseDate(e.target.value)}
+                    className="h-9"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end space-x-3 pt-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setShowBulkEditModal(false)}
+                  disabled={isBulkEditing}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleBulkEditCylinders}
+                  disabled={
+                    isBulkEditing ||
+                    !bulkEditVariantKey ||
+                    !bulkEditStatus ||
+                    !bulkEditQuantity ||
+                    getBulkEditAvailableCount() < 1 ||
+                    (bulkEditNewStatus !== 'FULL' &&
+                      bulkEditNewStatus !== 'EMPTY' &&
+                      bulkEditPurchasePrice.trim() === '' &&
+                      (bulkEditStatus === 'WITH_CUSTOMER' ||
+                        bulkEditLocation.trim() === '') &&
+                      bulkEditPurchaseDate.trim() === '')
+                  }
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  {isBulkEditing ? 'Updating...' : 'Update Cylinders'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bulk Remove Cylinders Modal — SUPER_ADMIN only */}
       {showBulkDeleteModal && session?.user?.role === 'SUPER_ADMIN' && (
@@ -1343,7 +1729,7 @@ export default function CylindersInventoryPage() {
       )}
 
       {/* Edit Cylinder Modal */}
-      {showEditForm && selectedCylinder && (
+      {showEditForm && selectedCylinder && session?.user?.role === 'SUPER_ADMIN' && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
           <div className="relative mx-auto p-0 border w-full max-w-md shadow-2xl rounded-xl bg-white animate-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center rounded-t-xl">
