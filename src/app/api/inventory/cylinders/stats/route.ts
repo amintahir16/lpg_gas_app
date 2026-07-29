@@ -7,12 +7,11 @@ import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 export async function GET(request: NextRequest) {
   try {
     const regionId = getActiveRegionId(request);
+    // Include all statuses (including WITH_CUSTOMER) so types that only exist
+    // with customers still appear as inventory cards with Full/Empty = 0.
     const cylinderTypeStats = await prisma.cylinder.groupBy({
       by: ['cylinderType', 'currentStatus', 'typeName', 'capacity'],
       where: {
-        currentStatus: {
-          not: 'WITH_CUSTOMER'
-        },
         ...regionScopedWhere(regionId),
       },
       _count: {
@@ -24,7 +23,7 @@ export async function GET(request: NextRequest) {
     // This ensures consistent case normalization across the entire application
 
     // Process cylinder type stats dynamically (handles any cylinder type)
-    // Note: Exclude WITH_CUSTOMER from inventory totals as they are tracked separately
+    // Note: WITH_CUSTOMER is counted separately; inventory total excludes it
     // Create unique combinations of typeName + capacity + cylinderType
     // IMPORTANT: Normalize typeName to lowercase for case-insensitive grouping
     // This ensures "special" and "Special" are treated as the same type

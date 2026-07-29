@@ -746,6 +746,15 @@ export default function CylindersInventoryPage() {
                       </div>
                       <span className="font-semibold text-gray-700">{stat.empty}</span>
                     </div>
+                    {stat.withCustomer > 0 && (
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center space-x-1.5">
+                          <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                          <span className="text-blue-600 font-medium">With Customer</span>
+                        </div>
+                        <span className="font-semibold text-gray-700">{stat.withCustomer}</span>
+                      </div>
+                    )}
                     {stat.retired > 0 && (
                       <div className="flex justify-between items-center">
                         <div className="flex items-center space-x-1.5">

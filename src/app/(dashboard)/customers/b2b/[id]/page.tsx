@@ -2445,17 +2445,14 @@ export default function B2BCustomerDetailPage() {
                                   value={item.cylinderVariantKey || ''}
                                   onChange={(val) => updateReturnItem(index, 'cylinderVariantKey', val)}
                                   placeholder="Select type..."
-                                  options={availableCylinderTypes
-                                    .filter(stat =>
-                                      cylinderDues.some(due => {
-                                        if (due.count <= 0) return false;
-                                        if (due.variantKey) return due.variantKey === stat.variantKey;
-                                        return due.cylinderType === stat.typeEnum;
-                                      })
-                                    )
-                                    .map((stat) => ({
-                                      value: stat.variantKey,
-                                      label: stat.type
+                                  options={cylinderDues
+                                    .filter((due) => due.count > 0)
+                                    .map((due) => ({
+                                      // Use dues (WITH_CUSTOMER), not inventory stock — types
+                                      // still owed by the customer must stay selectable even when
+                                      // FULL/EMPTY inventory for that type was removed.
+                                      value: due.variantKey || due.cylinderType,
+                                      label: due.displayName,
                                     }))}
                                   className="h-9 text-sm"
                                 />
