@@ -17,6 +17,7 @@ import {
 import { CustomSelect } from '@/components/ui/select-custom';
 import { getCylinderTypeDisplayName, getCapacityFromTypeString } from '@/lib/cylinder-utils';
 import { getCylinderTypeOptions } from '@/lib/cylinder-types';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 
 interface CustomerCylinder {
   id: string;
@@ -52,6 +53,7 @@ interface CustomerCylinderStats {
 }
 
 export default function CustomerCylindersPage() {
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const [customerCylinders, setCustomerCylinders] = useState<CustomerCylinder[]>([]);
   const [stats, setStats] = useState<CustomerCylinderStats[]>([]);
   const [loading, setLoading] = useState(true);
@@ -178,7 +180,7 @@ Status: ${item.rental.status}
     alert(details);
   };
 
-  const handleContactCustomer = (customer: any) => {
+  const handleContactCustomer = async (customer: any) => {
     // Open contact options (phone, email, etc.)
     const contactInfo = `
 Customer: ${customer.name}
@@ -188,7 +190,14 @@ ${customer.email ? `Email: ${customer.email}` : ''}
 Address: ${customer.address || 'N/A'}
     `;
 
-    if (confirm(`${contactInfo}\n\nWould you like to call ${customer.phone}?`)) {
+    const ok = await confirm({
+      title: 'Contact customer',
+      description: `${contactInfo.trim()}\n\nWould you like to call ${customer.phone}?`,
+      confirmLabel: 'OK',
+      cancelLabel: 'Cancel',
+      variant: 'default',
+    });
+    if (ok) {
       window.open(`tel:${customer.phone}`);
     }
   };
@@ -432,6 +441,7 @@ Address: ${customer.address || 'N/A'}
           </div>
         </CardContent>
       </Card>
+      {confirmDialog}
     </div>
   );
 }

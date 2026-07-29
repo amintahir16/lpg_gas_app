@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { XMarkIcon, BanknotesIcon, CheckIcon } from '@heroicons/react/24/outline';
 import { CustomSelect } from '@/components/ui/select-custom';
 import { PAYMENT_METHOD_OPTIONS } from '@/lib/payment-methods';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import {
   combineLocalDateAndTime,
   nowLocalTime,
@@ -34,6 +35,7 @@ export default function VendorPaymentModal({
   invoiceNumber,
   purchaseEntryTotal
 }: VendorPaymentModalProps) {
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const [amount, setAmount] = useState('');
   const [paymentDate, setPaymentDate] = useState(todayLocalDate);
   const [paymentTime, setPaymentTime] = useState(nowLocalTime);
@@ -68,9 +70,14 @@ export default function VendorPaymentModal({
 
     const maxAmount = invoiceNumber && purchaseEntryTotal ? purchaseEntryTotal : Math.abs(outstandingBalance);
     if (paymentAmount > maxAmount) {
-      const confirmOverpay = confirm(
-        `The payment amount (Rs ${paymentAmount.toLocaleString()}) exceeds the ${invoiceNumber ? 'invoice amount' : 'outstanding balance'} (Rs ${maxAmount.toLocaleString()}).\n\nThis will create a credit balance in your favor. Do you want to proceed?`
-      );
+      const confirmOverpay = await confirm({
+        title: 'Payment exceeds balance',
+        description:
+          `The payment amount (Rs ${paymentAmount.toLocaleString()}) exceeds the ${invoiceNumber ? 'invoice amount' : 'outstanding balance'} (Rs ${maxAmount.toLocaleString()}).\n\nThis will create a credit balance in your favor. Do you want to proceed?`,
+        confirmLabel: 'OK',
+        cancelLabel: 'Cancel',
+        variant: 'default',
+      });
       if (!confirmOverpay) return;
     }
 
@@ -124,6 +131,7 @@ export default function VendorPaymentModal({
   };
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0">
         <DialogHeader className="px-5 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-100">
@@ -369,6 +377,8 @@ export default function VendorPaymentModal({
         </form>
       </DialogContent>
     </Dialog>
+    {confirmDialog}
+    </>
   );
 }
 

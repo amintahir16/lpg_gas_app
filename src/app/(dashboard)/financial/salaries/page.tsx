@@ -11,6 +11,7 @@ import {
     XCircleIcon, BanknotesIcon, TrashIcon
 } from '@heroicons/react/24/outline';
 import { CustomSelect } from '@/components/ui/select-custom';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import {
     buildFinancialPeriodQuery,
     resolveFinancialPeriod,
@@ -20,8 +21,8 @@ import {
 } from '@/lib/financial-period';
 import { FinancialPeriodFilter } from '@/components/FinancialPeriodFilter';
 import {
-    PAYMENT_METHOD_OPTIONS,
-    formatPaymentMethodLabel,
+  PAYMENT_METHOD_OPTIONS,
+  formatPaymentMethodLabel,
 } from '@/lib/payment-methods';
 
 interface Employee {
@@ -56,6 +57,7 @@ const monthNames = [
     'July', 'August', 'September', 'October', 'November', 'December'
 ];
 export default function SalariesPage() {
+    const { confirm, dialog: confirmDialog } = useConfirmDialog();
     const router = useRouter();
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [history, setHistory] = useState<SalaryHistory[]>([]);
@@ -130,7 +132,14 @@ export default function SalariesPage() {
         }
     };
     const handleDeleteSalary = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this salary record?')) return;
+        const ok = await confirm({
+            title: 'Delete salary record',
+            description: 'Are you sure you want to delete this salary record?',
+            confirmLabel: 'OK',
+            cancelLabel: 'Cancel',
+            variant: 'destructive',
+        });
+        if (!ok) return;
         try {
             const res = await fetch(`/api/financial/salaries/${id}`, { method: 'DELETE' });
             if (!res.ok) throw new Error('Failed to delete');
@@ -397,6 +406,7 @@ export default function SalariesPage() {
                     </div>
                 </div>
             )}
+            {confirmDialog}
         </div>
     );
 }

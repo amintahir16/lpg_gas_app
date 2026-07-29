@@ -18,14 +18,7 @@ import {
   CalculatorIcon,
   ArrowLeftIcon
 } from '@heroicons/react/24/outline';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 
 interface MarginCategory {
   id: string;
@@ -86,11 +79,7 @@ export default function PricingManagementPage() {
     marginPerKg: '',
     description: '',
   });
-  const [deactivateConfirm, setDeactivateConfirm] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
-  const [togglingCategory, setTogglingCategory] = useState(false);
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
 
   useEffect(() => {
     fetchData();
@@ -249,48 +238,39 @@ export default function PricingManagementPage() {
     }
   };
 
-  const applyCategoryActiveToggle = async (
+  const handleToggleCategoryActive = async (
     categoryId: string,
-    nextActive: boolean
+    currentStatus: boolean,
+    categoryName: string
   ) => {
+    if (currentStatus) {
+      const ok = await confirm({
+        title: 'Deactivate margin category',
+        description: `Are you sure you want to deactivate the "${categoryName}" margin category?`,
+        confirmLabel: 'OK',
+        cancelLabel: 'Cancel',
+        variant: 'destructive',
+      });
+      if (!ok) return;
+    }
+
     try {
-      setTogglingCategory(true);
       const response = await fetch(`/api/admin/margin-categories/${categoryId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isActive: nextActive }),
+        body: JSON.stringify({ isActive: !currentStatus }),
       });
 
       if (!response.ok) {
         throw new Error('Failed to toggle category status');
       }
 
-      showMessage('success', `Category ${nextActive ? 'activated' : 'deactivated'}`);
-      setDeactivateConfirm(null);
+      showMessage('success', `Category ${!currentStatus ? 'activated' : 'deactivated'}`);
       fetchData();
     } catch (error) {
       console.error('Error toggling category:', error);
       showMessage('error', 'Failed to update category status');
-    } finally {
-      setTogglingCategory(false);
     }
-  };
-
-  const handleToggleCategoryActive = (
-    categoryId: string,
-    currentStatus: boolean,
-    categoryName: string
-  ) => {
-    if (currentStatus) {
-      setDeactivateConfirm({ id: categoryId, name: categoryName });
-      return;
-    }
-    applyCategoryActiveToggle(categoryId, true);
-  };
-
-  const handleConfirmDeactivate = () => {
-    if (!deactivateConfirm) return;
-    applyCategoryActiveToggle(deactivateConfirm.id, false);
   };
 
   const handleSetPlantPrice = async (e: React.FormEvent) => {
@@ -1053,45 +1033,8 @@ export default function PricingManagementPage() {
         </CardContent>
       </Card>
 
-      {/* Deactivate confirmation popup */}
-      <Dialog
-        open={!!deactivateConfirm}
-        onOpenChange={(open) => {
-          if (!open && !togglingCategory) setDeactivateConfirm(null);
-        }}
-      >
-        <DialogContent className="max-w-md p-6">
-          <DialogHeader>
-            <DialogTitle>Deactivate margin category</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to deactivate the &quot;{deactivateConfirm?.name}&quot; margin
-              category?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-6">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs px-3"
-              onClick={() => setDeactivateConfirm(null)}
-              disabled={togglingCategory}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              className="h-8 text-xs px-3"
-              onClick={handleConfirmDeactivate}
-              disabled={togglingCategory}
-            >
-              {togglingCategory ? 'Deactivating...' : 'OK'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* App-standard confirm dialog */}
+      {confirmDialog}
     </div>
   );
 }

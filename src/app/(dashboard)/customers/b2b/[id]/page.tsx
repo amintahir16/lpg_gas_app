@@ -38,6 +38,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { sharePdfFromUrl, downloadPdfBlob } from '@/lib/sharePdf';
 import { PAYMENT_METHOD_OPTIONS, formatPaymentMethodLabel } from '@/lib/payment-methods';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import {
   canUndoTransaction,
   transactionUndoWindowRemainingMs,
@@ -129,6 +130,7 @@ interface CustomerLedgerResponse {
 }
 
 export default function B2BCustomerDetailPage() {
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const router = useRouter();
   const params = useParams();
   const customerId = params.id as string;
@@ -1187,11 +1189,31 @@ export default function B2BCustomerDetailPage() {
     };
   };
 
+  // Positive ledger = customer owes us. Credit is only created via buyback, not overpayment.
+  const getCustomerOutstandingOwed = () => {
+    if (customer) return Math.max(0, Math.round(Number(customer.ledgerBalance) || 0));
+    if (summary) return Math.max(0, Math.round(-(summary.netBalance) || 0));
+    return 0;
+  };
+
+  const getMaxAllowedPayment = (txnSummary = getUnifiedTransactionSummary()) => {
+    const hasSaleCharges = txnSummary.hasDelivery || txnSummary.hasAccessories;
+    if (hasSaleCharges) {
+      return Math.max(0, Math.round(txnSummary.netAmount));
+    }
+    // Returns/buyback-only: credit comes from buyback, not cash overpayment
+    if (txnSummary.hasReturns) {
+      return 0;
+    }
+    // Payment-only against outstanding balance
+    return getCustomerOutstandingOwed();
+  };
+
   // Auto-sync payment amount when transaction details change (if enabled)
   useEffect(() => {
     if (isAutoPayment) {
-      const summary = getUnifiedTransactionSummary();
-      setSalePaymentAmount(summary.netAmount);
+      const txnSummary = getUnifiedTransactionSummary();
+      setSalePaymentAmount(Math.max(0, Math.round(txnSummary.netAmount)));
     }
   }, [gasItems, returnItems, accessoryItems, isAutoPayment]);
 
@@ -1237,6 +1259,21 @@ export default function B2BCustomerDetailPage() {
 
       if (!hasAnyData) {
         setError('Please add at least one item or action before creating a transaction.');
+        return;
+      }
+
+      // Block overpayment — credit is only allowed via buyback
+      const maxAllowedPayment = getMaxAllowedPayment(summary);
+      if (salePaymentAmount > maxAllowedPayment) {
+        setPaymentExpanded(true);
+        const hasSaleCharges = summary.hasDelivery || summary.hasAccessories;
+        setError(
+          hasSaleCharges
+            ? `Payment cannot exceed this transaction's net amount (${formatCurrency(maxAllowedPayment)}). Credit is only given via buyback.`
+            : maxAllowedPayment > 0
+              ? `Payment cannot exceed what the customer owes (${formatCurrency(maxAllowedPayment)}).`
+              : 'Customer has no outstanding balance to collect. Credit is only given via buyback.'
+        );
         return;
       }
 
@@ -2636,12 +2673,22 @@ export default function B2BCustomerDetailPage() {
 
                 {paymentExpanded && (
                   <div className="p-4 border-t border-blue-200">
+                    {(() => {
+                      const txnSummary = getUnifiedTransactionSummary();
+                      const maxAllowedPayment = getMaxAllowedPayment(txnSummary);
+                      const paymentExceedsMax = salePaymentAmount > maxAllowedPayment;
+                      const hasSaleCharges = txnSummary.hasDelivery || txnSummary.hasAccessories;
+                      const isPaymentOnly = !hasSaleCharges && !txnSummary.hasReturns;
+
+                      return (
+                        <>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Amount (PKR)</label>
                         <Input
                           type="number"
                           min="0"
+                          max={maxAllowedPayment}
                           step="1"
                           value={salePaymentAmount || ''}
                           onChange={(e) => {
@@ -2649,9 +2696,35 @@ export default function B2BCustomerDetailPage() {
                             setSalePaymentAmount(Math.round(parseFloat(e.target.value) || 0));
                           }}
                           placeholder="0"
-                          className={`w-full px-3 py-1 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield] ${isAutoPayment ? 'border-blue-400 bg-blue-50 ring-2 ring-blue-100' : 'border-gray-300 bg-white'} h-9`}
+                          aria-invalid={paymentExceedsMax}
+                          className={`w-full px-3 py-1 text-sm border rounded-md focus:outline-none focus:ring-2 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield] h-9 ${
+                            paymentExceedsMax
+                              ? 'border-red-500 bg-red-50 focus:ring-red-500 focus:border-red-500'
+                              : isAutoPayment
+                                ? 'border-blue-400 bg-blue-50 ring-2 ring-blue-100 focus:ring-blue-500 focus:border-blue-500'
+                                : 'border-gray-300 bg-white focus:ring-blue-500 focus:border-blue-500'
+                          }`}
                           onWheel={(e) => e.currentTarget.blur()}
                         />
+                        {paymentExceedsMax ? (
+                          <p className="mt-1.5 text-xs font-medium text-red-600">
+                            {hasSaleCharges
+                              ? `Amount exceeds this transaction's net amount (${formatCurrency(maxAllowedPayment)}). Credit is only given via buyback.`
+                              : maxAllowedPayment > 0
+                                ? `Amount exceeds what the customer owes (${formatCurrency(maxAllowedPayment)}).`
+                                : 'Customer has no outstanding balance. Credit is only given via buyback.'}
+                          </p>
+                        ) : (
+                          <p className="mt-1.5 text-xs text-gray-500">
+                            {hasSaleCharges
+                              ? `Max for this transaction: ${formatCurrency(maxAllowedPayment)}`
+                              : isPaymentOnly
+                                ? maxAllowedPayment > 0
+                                  ? `Outstanding owed: ${formatCurrency(maxAllowedPayment)}`
+                                  : 'No outstanding balance to collect'
+                                : 'Payment not applicable for returns-only (credit via buyback)'}
+                          </p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Method</label>
@@ -2676,22 +2749,25 @@ export default function B2BCustomerDetailPage() {
                     </div>
 
                     {/* Quick Pay Button */}
-                    {/* Quick Pay Button */}
-                    {(() => {
-                      const summary = getUnifiedTransactionSummary();
-                      return summary.netAmount > 0 && (
+                    {maxAllowedPayment > 0 && (
                         <Button
                           type="button"
                           onClick={() => {
-                            setIsAutoPayment(true); // Enable auto-sync
-                            setSalePaymentAmount(Math.round(summary.netAmount));
+                            setIsAutoPayment(!isPaymentOnly);
+                            setSalePaymentAmount(maxAllowedPayment);
                           }}
                           variant={isAutoPayment ? "default" : "outline"}
                           size="sm"
                           className={`mt-3 text-blue-700 border-blue-300 hover:bg-blue-50 ${isAutoPayment ? 'bg-blue-100 ring-2 ring-blue-400' : ''}`}
                         >
-                          {isAutoPayment ? '✓ Auto-Syncing' : `Pay Full Amount (${formatCurrency(summary.netAmount)})`}
+                          {isAutoPayment
+                            ? '✓ Auto-Syncing'
+                            : isPaymentOnly
+                              ? `Pay Full Outstanding (${formatCurrency(maxAllowedPayment)})`
+                              : `Pay Full Amount (${formatCurrency(maxAllowedPayment)})`}
                         </Button>
+                    )}
+                        </>
                       );
                     })()}
                   </div>
@@ -2803,7 +2879,8 @@ export default function B2BCustomerDetailPage() {
                 </Button>
                 <Button
                   type="submit"
-                  className="px-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 h-9 text-sm"
+                  disabled={salePaymentAmount > getMaxAllowedPayment()}
+                  className="px-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 h-9 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Create Transaction
                 </Button>
@@ -3563,17 +3640,22 @@ export default function B2BCustomerDetailPage() {
                     variant="outline"
                     size="sm"
                     onClick={async () => {
-                      const confirmed = window.confirm(
-                        `Are you sure you want to undo this transaction?\n\n` +
-                        `This will:\n` +
-                        `- Reverse all balance changes\n` +
-                        `- Return inventory items\n` +
-                        `- Update cylinder counts\n\n` +
-                        `Transaction: ${selectedTransaction.billSno}\n` +
-                        `Type: ${selectedTransaction.transactionType}\n` +
-                        `Amount: ${formatCurrency(selectedTransaction.totalAmount)}\n\n` +
-                        `This action cannot be undone.`
-                      );
+                      const confirmed = await confirm({
+                        title: 'Undo transaction',
+                        description:
+                          `Are you sure you want to undo this transaction?\n\n` +
+                          `This will:\n` +
+                          `- Reverse all balance changes\n` +
+                          `- Return inventory items\n` +
+                          `- Update cylinder counts\n\n` +
+                          `Transaction: ${selectedTransaction.billSno}\n` +
+                          `Type: ${selectedTransaction.transactionType}\n` +
+                          `Amount: ${formatCurrency(selectedTransaction.totalAmount)}\n\n` +
+                          `This action cannot be undone.`,
+                        confirmLabel: 'OK',
+                        cancelLabel: 'Cancel',
+                        variant: 'destructive',
+                      });
 
                       if (!confirmed) return;
 
@@ -3952,6 +4034,7 @@ export default function B2BCustomerDetailPage() {
           </div>
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }

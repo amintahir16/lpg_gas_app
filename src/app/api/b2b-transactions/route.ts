@@ -134,6 +134,27 @@ export async function POST(request: NextRequest) {
 
     const regionId = getActiveRegionId(request);
 
+    // Prevent overpayment credit on simple payments (credit only via buyback)
+    if (transactionType === 'PAYMENT') {
+      const amountCheck = parseFloat(totalAmount) || 0;
+      const customerForPay = await prisma.customer.findFirst({
+        where: { id: customerId, ...regionScopedWhere(regionId) },
+        select: { ledgerBalance: true },
+      });
+      if (!customerForPay) {
+        return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+      }
+      const outstandingOwed = Math.max(0, Math.round(parseFloat(customerForPay.ledgerBalance.toString()) || 0));
+      if (amountCheck > outstandingOwed + 0.01) {
+        return NextResponse.json(
+          { error: outstandingOwed > 0
+            ? `Payment cannot exceed what the customer owes (Rs ${outstandingOwed.toLocaleString()}).`
+            : 'Customer has no outstanding balance to collect. Credit is only given via buyback.' },
+          { status: 400 }
+        );
+      }
+    }
+
     // Start a transaction to ensure data consistency
     const result = await prisma.$transaction(async (tx) => {
       // Create the transaction

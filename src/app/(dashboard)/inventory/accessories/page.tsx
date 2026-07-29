@@ -14,6 +14,8 @@ import {
   WrenchScrewdriverIcon
 } from '@heroicons/react/24/outline';
 
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
+
 interface CustomItem {
   id: string;
   name: string;
@@ -32,6 +34,7 @@ interface EquipmentStats {
 }
 
 export default function AccessoriesInventoryPage() {
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const { data: session } = useSession();
   const searchParams = useSearchParams();
   // Notifications link to e.g. `/inventory/accessories?category=Stoves&item=…`.
@@ -213,7 +216,14 @@ export default function AccessoriesInventoryPage() {
   };
 
   const handleDeleteCustomItem = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this item?')) {
+    const ok = await confirm({
+      title: 'Delete item',
+      description: 'Are you sure you want to delete this item?',
+      confirmLabel: 'OK',
+      cancelLabel: 'Cancel',
+      variant: 'destructive',
+    });
+    if (!ok) {
       return;
     }
 
@@ -372,7 +382,15 @@ export default function AccessoriesInventoryPage() {
       return;
     }
 
-    if (!confirm(`Are you sure you want to delete the entire "${activeTab}" category and all its items? This action cannot be undone.`)) {
+    if (
+      !(await confirm({
+        title: 'Delete category',
+        description: `Are you sure you want to delete the entire "${activeTab}" category and all its items? This action cannot be undone.`,
+        confirmLabel: 'OK',
+        cancelLabel: 'Cancel',
+        variant: 'destructive',
+      }))
+    ) {
       return;
     }
 
@@ -445,6 +463,7 @@ export default function AccessoriesInventoryPage() {
   };
 
   return (
+    <>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
@@ -1028,5 +1047,7 @@ export default function AccessoriesInventoryPage() {
         </div>
       )}
     </div>
+    {confirmDialog}
+    </>
   );
 }

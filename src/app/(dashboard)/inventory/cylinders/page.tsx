@@ -22,6 +22,7 @@ import { CustomSelect } from '@/components/ui/select-custom';
 import { getCylinderTypeDisplayName, getCylinderWeight, generateCylinderTypeFromCapacity, isValidCylinderCapacity, normalizeTypeName } from '@/lib/cylinder-utils';
 import { formatLocalDateInput } from '@/lib/financial-period';
 import { getCylinderTypeOptions } from '@/lib/cylinder-types';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 
 interface Cylinder {
   id: string;
@@ -67,6 +68,7 @@ interface CylinderTypePurchaseValue {
 }
 
 export default function CylindersInventoryPage() {
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const { data: session } = useSession();
   const searchParams = useSearchParams();
   // Notifications link to e.g. `/inventory/cylinders?type=…`. Honour the
@@ -481,9 +483,13 @@ export default function CylindersInventoryPage() {
       hasPurchaseDate ? 'purchase date' : null,
     ].filter(Boolean);
     if (
-      !confirm(
-        `Update ${qty} ${statusLabel} ${selectedType.type} cylinder(s)?\n\nChanging: ${changeParts.join(', ')}\nBlank fields will be left unchanged.`
-      )
+      !(await confirm({
+        title: 'Bulk edit cylinders',
+        description: `Update ${qty} ${statusLabel} ${selectedType.type} cylinder(s)?\n\nChanging: ${changeParts.join(', ')}\nBlank fields will be left unchanged.`,
+        confirmLabel: 'OK',
+        cancelLabel: 'Cancel',
+        variant: 'default',
+      }))
     ) {
       return;
     }
@@ -559,9 +565,13 @@ export default function CylindersInventoryPage() {
       return;
     }
 
-    const confirmed = window.confirm(
-      `Remove ${qty} ${bulkDeleteStatus.toLowerCase()} ${selectedType.type} cylinder(s) from inventory?\n\nThis cannot be undone.`
-    );
+    const confirmed = await confirm({
+      title: 'Remove cylinders',
+      description: `Remove ${qty} ${bulkDeleteStatus.toLowerCase()} ${selectedType.type} cylinder(s) from inventory?\n\nThis cannot be undone.`,
+      confirmLabel: 'OK',
+      cancelLabel: 'Cancel',
+      variant: 'destructive',
+    });
     if (!confirmed) return;
 
     setIsBulkDeleting(true);
@@ -1944,6 +1954,7 @@ export default function CylindersInventoryPage() {
           </div>
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }

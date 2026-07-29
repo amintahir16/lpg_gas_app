@@ -24,6 +24,7 @@ import { generateCylinderTypeFromCapacity } from '@/lib/cylinder-utils';
 import { CustomSelect } from '@/components/ui/select-custom';
 import { buildCylinderVariantKey, parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { PAYMENT_METHOD_OPTIONS, formatPaymentMethodLabel } from '@/lib/payment-methods';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import {
   combineLocalDateAndTime,
   nowLocalTime,
@@ -128,6 +129,7 @@ const normalizeCategoryName = (category: string): string => {
 };
 
 export default function VendorDetailPage() {
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const params = useParams();
   const router = useRouter();
   const { data: session } = useSession();
@@ -740,7 +742,14 @@ export default function VendorDetailPage() {
   };
 
   const handleDeleteItem = async (itemId: string) => {
-    if (!confirm('Are you sure you want to delete this item?')) {
+    const ok = await confirm({
+      title: 'Delete item',
+      description: 'Are you sure you want to delete this item?',
+      confirmLabel: 'OK',
+      cancelLabel: 'Cancel',
+      variant: 'destructive',
+    });
+    if (!ok) {
       return;
     }
 
@@ -3235,6 +3244,7 @@ export default function VendorDetailPage() {
           </div>
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }

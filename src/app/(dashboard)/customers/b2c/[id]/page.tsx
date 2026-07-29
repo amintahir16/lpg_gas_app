@@ -34,6 +34,7 @@ import {
   formatTransactionUndoWindowRemaining,
   TRANSACTION_UNDO_WINDOW_MESSAGE,
 } from '@/lib/transaction-undo-window';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 
 function b2cDetailHoldingKey(h: { cylinderType: string; cylinderVariantKey?: string | null }) {
   if (h.cylinderVariantKey?.trim()) return h.cylinderVariantKey.trim();
@@ -136,6 +137,7 @@ interface CustomerLedgerResponse {
 }
 
 export default function B2CCustomerDetailPage() {
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const router = useRouter();
   const params = useParams();
   const customerId = params.id as string;
@@ -923,7 +925,13 @@ export default function B2CCustomerDetailPage() {
                   title={countdown || undefined}
                   className="hover:bg-red-50 hover:text-red-600 hover:border-red-200"
                   onClick={async () => {
-                    if (!confirm('Are you sure you want to VOID this transaction? This will reverse all stock and accounting entries.')) return;
+                    if (!(await confirm({
+                      title: 'Void transaction',
+                      description: 'Are you sure you want to VOID this transaction? This will reverse all stock and accounting entries.',
+                      confirmLabel: 'OK',
+                      cancelLabel: 'Cancel',
+                      variant: 'destructive',
+                    }))) return;
                     // prompt() returns null when Cancel is pressed — abort void.
                     const reasonInput = window.prompt('Reason for voiding (optional):');
                     if (reasonInput === null) return;
@@ -1163,6 +1171,7 @@ export default function B2CCustomerDetailPage() {
           </div>
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }

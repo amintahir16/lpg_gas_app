@@ -68,20 +68,41 @@ export default function NewPaymentPage() {
     setError(null);
 
     try {
+      const amount = parseFloat(paymentData.amount);
+      const outstandingOwed = Math.max(0, Math.round(Number(customer?.ledgerBalance) || 0));
+
+      if (!Number.isFinite(amount) || amount <= 0) {
+        setError('Enter a valid payment amount.');
+        setSaving(false);
+        return;
+      }
+
+      if (outstandingOwed <= 0) {
+        setError('Customer has no outstanding balance to collect. Credit is only given via buyback.');
+        setSaving(false);
+        return;
+      }
+
+      if (amount > outstandingOwed) {
+        setError(`Payment cannot exceed what the customer owes (${formatCurrency(outstandingOwed)}).`);
+        setSaving(false);
+        return;
+      }
+
       const transactionData = {
         transactionType: 'PAYMENT',
         customerId,
         date: paymentData.date,
         time: paymentData.time,
-        totalAmount: parseFloat(paymentData.amount),
+        totalAmount: amount,
         paymentReference: paymentData.paymentReference,
         notes: paymentData.notes || 'Payment received',
         items: [{
           productId: null,
           productName: 'Payment',
           quantity: 1,
-          pricePerItem: parseFloat(paymentData.amount),
-          totalPrice: parseFloat(paymentData.amount),
+          pricePerItem: amount,
+          totalPrice: amount,
         }],
       };
 
@@ -94,7 +115,8 @@ export default function NewPaymentPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to record payment');
+        const errBody = await response.json().catch(() => null);
+        throw new Error(errBody?.error || 'Failed to record payment');
       }
 
       // Show success message
@@ -286,16 +308,38 @@ export default function NewPaymentPage() {
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Payment Amount (PKR)
               </label>
+              {(() => {
+                const outstandingOwed = Math.max(0, Math.round(Number(customer.ledgerBalance) || 0));
+                const amountNum = parseFloat(paymentData.amount) || 0;
+                const exceedsOwed = amountNum > outstandingOwed;
+                return (
+                  <>
               <Input
                 type="number"
                 value={paymentData.amount}
                 onChange={(e) => setPaymentData(prev => ({ ...prev, amount: e.target.value }))}
                 placeholder="Enter payment amount"
-                step="0.01"
+                step="1"
                 min="0.01"
+                max={outstandingOwed}
                 required
-                className="text-lg"
+                aria-invalid={exceedsOwed}
+                className={`text-lg ${exceedsOwed ? 'border-red-500 bg-red-50 focus-visible:ring-red-500' : ''}`}
               />
+              {exceedsOwed ? (
+                <p className="mt-2 text-sm font-medium text-red-600">
+                  Amount exceeds what the customer owes ({formatCurrency(outstandingOwed)}). Credit is only given via buyback.
+                </p>
+              ) : (
+                <p className="mt-2 text-sm text-gray-500">
+                  {outstandingOwed > 0
+                    ? `Outstanding owed: ${formatCurrency(outstandingOwed)}`
+                    : 'No outstanding balance to collect'}
+                </p>
+              )}
+                  </>
+                );
+              })()}
             </div>
 
             {/* Payment Amount Display */}
@@ -317,7 +361,13 @@ export default function NewPaymentPage() {
               </Button>
               <Button
                 type="submit"
-                disabled={saving || !paymentData.amount || parseFloat(paymentData.amount) <= 0}
+                disabled={
+                  saving ||
+                  !paymentData.amount ||
+                  parseFloat(paymentData.amount) <= 0 ||
+                  parseFloat(paymentData.amount) > Math.max(0, Math.round(Number(customer.ledgerBalance) || 0)) ||
+                  Math.max(0, Math.round(Number(customer.ledgerBalance) || 0)) <= 0
+                }
                 className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4"
               >
                 {saving ? 'Creating Transaction...' : 'Create Transaction'}

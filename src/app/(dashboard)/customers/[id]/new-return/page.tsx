@@ -15,6 +15,7 @@ import {
   PlusIcon
 } from '@heroicons/react/24/outline';
 import { todayLocalDate } from '@/lib/financial-period';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 
 interface Customer {
   id: string;
@@ -41,6 +42,7 @@ interface ReturnItem {
 }
 
 export default function NewReturnPage() {
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const router = useRouter();
   const params = useParams();
   const customerId = params.id as string;
@@ -315,21 +317,33 @@ export default function NewReturnPage() {
       // Validate over-return scenarios
       for (const item of returnItems) {
         if (item.cylinderType === 'Domestic (11.8kg)' && item.quantity > customer!.domestic118kgDue) {
-          const confirmed = window.confirm(
-            `Warning — returned more cylinders than recorded as due. Returning ${item.quantity} but only ${customer!.domestic118kgDue} are due. Continue?`
-          );
+          const confirmed = await confirm({
+            title: 'Over-return warning',
+            description: `Warning — returned more cylinders than recorded as due. Returning ${item.quantity} but only ${customer!.domestic118kgDue} are due. Continue?`,
+            confirmLabel: 'OK',
+            cancelLabel: 'Cancel',
+            variant: 'default',
+          });
           if (!confirmed) return;
         }
         if (item.cylinderType === 'Standard (15kg)' && item.quantity > customer!.standard15kgDue) {
-          const confirmed = window.confirm(
-            `Warning — returned more cylinders than recorded as due. Returning ${item.quantity} but only ${customer!.standard15kgDue} are due. Continue?`
-          );
+          const confirmed = await confirm({
+            title: 'Over-return warning',
+            description: `Warning — returned more cylinders than recorded as due. Returning ${item.quantity} but only ${customer!.standard15kgDue} are due. Continue?`,
+            confirmLabel: 'OK',
+            cancelLabel: 'Cancel',
+            variant: 'default',
+          });
           if (!confirmed) return;
         }
         if (item.cylinderType === 'Commercial (45.4kg)' && item.quantity > customer!.commercial454kgDue) {
-          const confirmed = window.confirm(
-            `Warning — returned more cylinders than recorded as due. Returning ${item.quantity} but only ${customer!.commercial454kgDue} are due. Continue?`
-          );
+          const confirmed = await confirm({
+            title: 'Over-return warning',
+            description: `Warning — returned more cylinders than recorded as due. Returning ${item.quantity} but only ${customer!.commercial454kgDue} are due. Continue?`,
+            confirmLabel: 'OK',
+            cancelLabel: 'Cancel',
+            variant: 'default',
+          });
           if (!confirmed) return;
         }
       }
@@ -861,6 +875,7 @@ export default function NewReturnPage() {
           </form>
         </CardContent>
       </Card>
+      {confirmDialog}
     </div>
   );
 }

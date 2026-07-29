@@ -114,6 +114,43 @@ export async function POST(request: NextRequest) {
 
     await adoptLegacyB2bCustomerIfNeeded(customerId, regionId);
 
+    // Prevent overpayment credit (credit is only allowed via buyback)
+    const paidCheck = paidAmount !== undefined && paidAmount !== null ? parseFloat(paidAmount) || 0 : 0;
+    const amountCheck = parseFloat(totalAmount) || 0;
+    const isUnifiedTransaction = body.isUnifiedTransaction === true;
+    const unifiedSummary = body.unifiedSummary;
+
+    if (transactionType === 'SALE' && paidCheck > 0) {
+      const maxPaid = isUnifiedTransaction && unifiedSummary?.netAmount != null
+        ? Math.max(0, Math.round(Number(unifiedSummary.netAmount)))
+        : Math.max(0, Math.round(amountCheck));
+      if (paidCheck > maxPaid + 0.01) {
+        return NextResponse.json(
+          { error: `Payment cannot exceed this transaction's net amount (Rs ${maxPaid.toLocaleString()}). Credit is only given via buyback.` },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (transactionType === 'PAYMENT') {
+      const customerForPay = await prisma.customer.findFirst({
+        where: { id: customerId, ...regionScopedWhere(regionId) },
+        select: { ledgerBalance: true },
+      });
+      if (!customerForPay) {
+        return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+      }
+      const outstandingOwed = Math.max(0, Math.round(parseFloat(customerForPay.ledgerBalance.toString()) || 0));
+      if (amountCheck > outstandingOwed + 0.01) {
+        return NextResponse.json(
+          { error: outstandingOwed > 0
+            ? `Payment cannot exceed what the customer owes (Rs ${outstandingOwed.toLocaleString()}).`
+            : 'Customer has no outstanding balance to collect. Credit is only given via buyback.' },
+          { status: 400 }
+        );
+      }
+    }
+
     // Start a transaction to ensure data consistency
     const result = await prisma.$transaction(async (tx) => {
       // Generate per-customer bill sequence number (1, 2, 3... for each customer)

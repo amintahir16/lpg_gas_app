@@ -13,6 +13,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { CustomSelect } from '@/components/ui/select-custom';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import {
     PAYMENT_METHOD_OPTIONS,
     formatPaymentMethodLabel,
@@ -108,6 +109,7 @@ function ExpenseRowActions({ createdAt, role, now, onEdit, onDelete }: ExpenseRo
 }
 
 export default function ExpensesPage() {
+    const { confirm, dialog: confirmDialog } = useConfirmDialog();
     const router = useRouter();
     const { data: session } = useSession();
     const userRole = session?.user?.role;
@@ -259,7 +261,14 @@ export default function ExpensesPage() {
         }
     };
     const handleDeleteExpense = async (id: string, kind: 'office' | 'personal' = 'office') => {
-        if (!confirm('Are you sure you want to delete this expense?')) return;
+        const ok = await confirm({
+            title: 'Delete expense',
+            description: 'Are you sure you want to delete this expense?',
+            confirmLabel: 'OK',
+            cancelLabel: 'Cancel',
+            variant: 'destructive',
+        });
+        if (!ok) return;
         try {
             const endpoint =
                 kind === 'personal'
@@ -978,6 +987,7 @@ export default function ExpensesPage() {
                     </div>
                 </div>
             )}
+            {confirmDialog}
         </div>
     );
 }
