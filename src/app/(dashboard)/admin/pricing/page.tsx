@@ -18,6 +18,14 @@ import {
   CalculatorIcon,
   ArrowLeftIcon
 } from '@heroicons/react/24/outline';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface MarginCategory {
   id: string;
@@ -78,6 +86,11 @@ export default function PricingManagementPage() {
     marginPerKg: '',
     description: '',
   });
+  const [deactivateConfirm, setDeactivateConfirm] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [togglingCategory, setTogglingCategory] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -87,7 +100,9 @@ export default function PricingManagementPage() {
     try {
       setLoading(true);
       const [categoriesRes, pricesRes] = await Promise.all([
-        fetch('/api/admin/margin-categories?activeOnly=true'),
+        // Admin pricing page shows active + deactivated categories.
+        // Customer assignment UIs still use activeOnly=true (unchanged).
+        fetch('/api/admin/margin-categories'),
         fetch('/api/admin/plant-prices?limit=10')
       ]);
 
@@ -234,24 +249,48 @@ export default function PricingManagementPage() {
     }
   };
 
-  const handleToggleCategoryActive = async (categoryId: string, currentStatus: boolean) => {
+  const applyCategoryActiveToggle = async (
+    categoryId: string,
+    nextActive: boolean
+  ) => {
     try {
+      setTogglingCategory(true);
       const response = await fetch(`/api/admin/margin-categories/${categoryId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isActive: !currentStatus })
+        body: JSON.stringify({ isActive: nextActive }),
       });
 
       if (!response.ok) {
         throw new Error('Failed to toggle category status');
       }
 
-      showMessage('success', `Category ${!currentStatus ? 'activated' : 'deactivated'}`);
+      showMessage('success', `Category ${nextActive ? 'activated' : 'deactivated'}`);
+      setDeactivateConfirm(null);
       fetchData();
     } catch (error) {
       console.error('Error toggling category:', error);
       showMessage('error', 'Failed to update category status');
+    } finally {
+      setTogglingCategory(false);
     }
+  };
+
+  const handleToggleCategoryActive = (
+    categoryId: string,
+    currentStatus: boolean,
+    categoryName: string
+  ) => {
+    if (currentStatus) {
+      setDeactivateConfirm({ id: categoryId, name: categoryName });
+      return;
+    }
+    applyCategoryActiveToggle(categoryId, true);
+  };
+
+  const handleConfirmDeactivate = () => {
+    if (!deactivateConfirm) return;
+    applyCategoryActiveToggle(deactivateConfirm.id, false);
   };
 
   const handleSetPlantPrice = async (e: React.FormEvent) => {
@@ -311,8 +350,12 @@ export default function PricingManagementPage() {
     }
   };
 
-  const b2cCategories = categories.filter(c => c.customerType === 'B2C' && c.isActive);
-  const b2bCategories = categories.filter(c => c.customerType === 'B2B' && c.isActive);
+  const b2cCategories = categories
+    .filter((c) => c.customerType === 'B2C')
+    .sort((a, b) => Number(b.isActive) - Number(a.isActive) || a.sortOrder - b.sortOrder);
+  const b2bCategories = categories
+    .filter((c) => c.customerType === 'B2B')
+    .sort((a, b) => Number(b.isActive) - Number(a.isActive) || a.sortOrder - b.sortOrder);
 
   if (loading) {
     return (
@@ -552,7 +595,10 @@ export default function PricingManagementPage() {
                 </thead>
                 <tbody>
                   {b2cCategories.map(category => (
-                    <tr key={category.id} className="border-b hover:bg-gray-50">
+                    <tr
+                      key={category.id}
+                      className={`border-b hover:bg-gray-50 ${!category.isActive ? 'bg-gray-50/70 text-gray-500' : ''}`}
+                    >
                       {editingCategoryId === category.id ? (
                         <>
                           <td className="py-2 px-3">
@@ -644,7 +690,13 @@ export default function PricingManagementPage() {
                                 size="sm"
                                 variant={category.isActive ? "destructive" : "default"}
                                 className="h-7 text-xs px-2"
-                                onClick={() => handleToggleCategoryActive(category.id, category.isActive)}
+                                onClick={() =>
+                                  handleToggleCategoryActive(
+                                    category.id,
+                                    category.isActive,
+                                    category.name
+                                  )
+                                }
                               >
                                 {category.isActive ? 'Deactivate' : 'Activate'}
                               </Button>
@@ -824,7 +876,10 @@ export default function PricingManagementPage() {
                 </thead>
                 <tbody>
                   {b2bCategories.map(category => (
-                    <tr key={category.id} className="border-b hover:bg-gray-50">
+                    <tr
+                      key={category.id}
+                      className={`border-b hover:bg-gray-50 ${!category.isActive ? 'bg-gray-50/70 text-gray-500' : ''}`}
+                    >
                       {editingCategoryId === category.id ? (
                         <>
                           <td className="py-2 px-3">
@@ -916,7 +971,13 @@ export default function PricingManagementPage() {
                                 size="sm"
                                 variant={category.isActive ? "destructive" : "default"}
                                 className="h-7 text-xs px-2"
-                                onClick={() => handleToggleCategoryActive(category.id, category.isActive)}
+                                onClick={() =>
+                                  handleToggleCategoryActive(
+                                    category.id,
+                                    category.isActive,
+                                    category.name
+                                  )
+                                }
                               >
                                 {category.isActive ? 'Deactivate' : 'Activate'}
                               </Button>
@@ -991,6 +1052,46 @@ export default function PricingManagementPage() {
           </p>
         </CardContent>
       </Card>
+
+      {/* Deactivate confirmation popup */}
+      <Dialog
+        open={!!deactivateConfirm}
+        onOpenChange={(open) => {
+          if (!open && !togglingCategory) setDeactivateConfirm(null);
+        }}
+      >
+        <DialogContent className="max-w-md p-6">
+          <DialogHeader>
+            <DialogTitle>Deactivate margin category</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to deactivate the &quot;{deactivateConfirm?.name}&quot; margin
+              category?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-6">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs px-3"
+              onClick={() => setDeactivateConfirm(null)}
+              disabled={togglingCategory}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              className="h-8 text-xs px-3"
+              onClick={handleConfirmDeactivate}
+              disabled={togglingCategory}
+            >
+              {togglingCategory ? 'Deactivating...' : 'OK'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
