@@ -19,6 +19,21 @@ interface RegionOption {
   isDefault?: boolean;
 }
 
+type RegionCachePayload = {
+  regions: RegionOption[];
+  activeRegionId: string | null;
+  assignedRegionId?: string | null;
+  fetchedAt: number;
+};
+
+/** Short-lived client cache — same UI data, fewer /api/select-region hits on remount. */
+let regionSelectCache: RegionCachePayload | null = null;
+const REGION_CACHE_TTL_MS = 2 * 60 * 1000;
+
+function clearRegionSelectCache() {
+  regionSelectCache = null;
+}
+
 /**
  * Compact region indicator + switcher used in the dashboard top bar.
  *
@@ -44,21 +59,44 @@ export function RegionSwitcher() {
     if (!session?.user) return;
     if (!isSuperAdmin && !isAdmin) return;
     let cancelled = false;
+
+    const applyData = (data: {
+      regions?: RegionOption[];
+      activeRegionId?: string | null;
+      assignedRegionId?: string | null;
+    }) => {
+      const list = data.regions || [];
+      setRegions(list);
+      if (data.activeRegionId && list.some((r) => r.id === data.activeRegionId)) {
+        setActiveRegionId(data.activeRegionId);
+      } else if (data.assignedRegionId) {
+        setActiveRegionId(data.assignedRegionId);
+      } else if (list.length > 0) {
+        setActiveRegionId(list[0].id);
+      }
+    };
+
     (async () => {
       try {
+        const cached = regionSelectCache;
+        if (cached && Date.now() - cached.fetchedAt < REGION_CACHE_TTL_MS) {
+          applyData(cached);
+          setLoading(false);
+          return;
+        }
+
         setLoading(true);
         const res = await fetch('/api/select-region', { cache: 'no-store' });
         if (!res.ok) return;
         const data = await res.json();
         if (cancelled) return;
-        setRegions(data.regions || []);
-        if (data.activeRegionId && (data.regions || []).some((r: RegionOption) => r.id === data.activeRegionId)) {
-          setActiveRegionId(data.activeRegionId);
-        } else if (data.assignedRegionId) {
-          setActiveRegionId(data.assignedRegionId);
-        } else if ((data.regions || []).length > 0) {
-          setActiveRegionId(data.regions[0].id);
-        }
+        regionSelectCache = {
+          regions: data.regions || [],
+          activeRegionId: data.activeRegionId ?? null,
+          assignedRegionId: data.assignedRegionId ?? null,
+          fetchedAt: Date.now(),
+        };
+        applyData(data);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -124,6 +162,7 @@ export function RegionSwitcher() {
         body: JSON.stringify({ regionId }),
       });
       if (res.ok) {
+        clearRegionSelectCache();
         setActiveRegionId(regionId);
         // A full reload is intentional here — dashboards, lists, and detail
         // pages fetch their data client-side via useEffect, which won't re-run

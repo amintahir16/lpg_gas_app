@@ -37,24 +37,8 @@ export async function GET(
       );
     }
 
-    // Build date filter
-    const dateWhere: any = { customerId };
-
-    if (startDate || endDate) {
-      dateWhere.date = {};
-      if (startDate) {
-        dateWhere.date.gte = new Date(startDate);
-      }
-      if (endDate) {
-        // Include the entire end date (up to 23:59:59.999)
-        const endDateObj = new Date(endDate);
-        endDateObj.setHours(23, 59, 59, 999);
-        dateWhere.date.lte = endDateObj;
-      }
-    }
-
-    // Get ALL transactions first to calculate running balance correctly
-    // If date filter is applied, get all transactions for balance calculation but filtered ones for display
+    // Get ALL transactions once — running balance needs the full timeline;
+    // date filter is applied in memory (same results as a second findMany).
     const allTransactions = await prisma.b2BTransaction.findMany({
       where: { customerId },
       include: {
@@ -63,15 +47,22 @@ export async function GET(
       orderBy: { createdAt: 'asc' }, // Order by creation time ascending for proper running balance calculation
     });
 
-    // Get filtered transactions if date filter is applied
-    const filteredTransactions = (startDate || endDate)
-      ? await prisma.b2BTransaction.findMany({
-        where: dateWhere,
-        include: {
-          items: true,
-        },
-        orderBy: { createdAt: 'asc' },
-      })
+    const filterStart = startDate ? new Date(startDate) : null;
+    const filterEnd = endDate
+      ? (() => {
+          const d = new Date(endDate);
+          d.setHours(23, 59, 59, 999);
+          return d;
+        })()
+      : null;
+
+    const filteredTransactions = (filterStart || filterEnd)
+      ? allTransactions.filter((t) => {
+          const d = new Date(t.date);
+          if (filterStart && d < filterStart) return false;
+          if (filterEnd && d > filterEnd) return false;
+          return true;
+        })
       : allTransactions;
 
     // Calculate running balance for each transaction (chronological order)

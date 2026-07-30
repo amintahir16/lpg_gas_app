@@ -51,6 +51,11 @@ export async function GET(request: NextRequest) {
       };
     }
 
+    // ALL/ACTIVE never need archived rows — push isActive into SQL (same as prior in-memory ALL filter)
+    if (filterStatus === 'ALL' || filterStatus === 'ACTIVE') {
+      whereClause.isActive = true;
+    }
+
     // 2. Fetch ALL matching customers first (needed for Active/Inactive filter which relies on relation)
     // We have to fetch ID and some fields to determine status if filtering by status.
     // Optimization: If NOT filtering by status, we can just paginate directly. 
@@ -291,6 +296,11 @@ export async function GET(request: NextRequest) {
     });
 
 
+    // One holdings scan for sort (if needed), page rows, and summary cards
+    const allHoldingsData = await getHoldings(
+      filteredCustomers.map((c) => ({ id: c.id, name: c.name }))
+    );
+
     // 5. Apply Manual Sorting
     if (sortBy === 'RECEIVABLES') {
       filteredCustomers.sort((a, b) => {
@@ -299,10 +309,6 @@ export async function GET(request: NextRequest) {
         return sortOrder === 'asc' ? valA - valB : valB - valA;
       });
     } else if (sortBy === 'CYLINDERS') {
-      // Fetch physical holdings for ALL filtered customers to sort correctly
-      // (Legacy due fields are obsolete, so we must count real cylinders)
-      const allHoldingsData = await getHoldings(filteredCustomers.map(c => ({ id: c.id, name: c.name })));
-
       filteredCustomers.sort((a, b) => {
         const holdingsA = allHoldingsData.map[a.id] || {};
         const holdingsB = allHoldingsData.map[b.id] || {};
@@ -329,40 +335,19 @@ export async function GET(request: NextRequest) {
     const pages = Math.ceil(totalCustomers / limit);
     const paginatedCustomers = filteredCustomers.slice(skip, skip + limit);
 
-    // 7. Fetch Dynamic Holdings for Paginated Customers AND Global Summary
-    // We need two things:
-    // A) Holdings for the current page (Table display)
-    // B) Total Cylinder Dues Summary (Top Cards) - This should be for ALL filtered customers, not just page.
-    // However, fetching holdings for ALL customers might be heavy. 
-    // The requirement says "Total Cylinders With Customers".
-    // For now, let's rely on the `due` columns for specific types if possible, BUT user stressed dynamic.
-    // We will do a separate aggregation for the Summary Card to be 100% accurate on dynamic types.
+    // 7. Reuse holdings for page + summary; type defs via groupBy (same keys as distinct findMany)
+    const pageHoldings = {
+      map: Object.fromEntries(
+        paginatedCustomers.map((c) => [c.id, allHoldingsData.map[c.id] || {}])
+      ),
+      types: allHoldingsData.types,
+    };
 
-    // 7. Fetch Dynamic Holdings for Paginated Customers AND Global Summary
-    const pageCustomerIds = paginatedCustomers.map(c => c.id);
-    const allFilteredCustomerIds = filteredCustomers.map(c => c.id);
-
-    // Parallel fetch: Page Holdings (Details), Total Summary Holdings (Aggregated), and Type Definitions
-    const [pageHoldings, summaryCylindersHeld, cylinderDefinitions] = await Promise.all([
-      getHoldings(paginatedCustomers.map(c => ({ id: c.id, name: c.name }))),
-      prisma.cylinder.findMany({
-        where: {
-          currentStatus: 'WITH_CUSTOMER',
-          ...regionScopedWhere(regionId),
-          OR: [
-            { cylinderRentals: { some: { customerId: { in: allFilteredCustomerIds }, status: 'ACTIVE' } } },
-            ...allFilteredCustomerIds.map(id => ({ location: { contains: id } })),
-            ...filteredCustomers.map(c => ({ location: { contains: c.name, mode: 'insensitive' as const } }))
-          ]
-        },
-        select: { cylinderType: true, typeName: true, capacity: true }
-      }),
-      prisma.cylinder.findMany({
-        where: { ...regionScopedWhere(regionId) },
-        distinct: ['cylinderType', 'typeName', 'capacity'],
-        select: { cylinderType: true, typeName: true, capacity: true }
-      })
-    ]);
+    const cylinderDefinitions = await prisma.cylinder.groupBy({
+      by: ['cylinderType', 'typeName', 'capacity'],
+      where: { ...regionScopedWhere(regionId) },
+      _count: { id: true },
+    });
 
     // Create Type Definitions Map for Frontend — one entry per (enum + typeName + capacity)
     const typeDefinitions: Record<string, { name: string; capacity: number }> = {};
@@ -390,24 +375,14 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // Calculate Global Cylinder Summary (Count by Type)
+    // Global cylinder summary from the same holdings map (equivalent type counts)
     const totalCylindersSummary: Record<string, number> = {};
-    const physicalSummary: Record<string, number> = {};
-
-    // Use raw cylinderType as key - NO formatting here
-    summaryCylindersHeld.forEach(cyl => {
-      const key = buildCylinderVariantKey({
-        cylinderType: cyl.cylinderType,
-        typeName: cyl.typeName,
-        capacity: cyl.capacity != null ? Number(cyl.capacity) : null,
-      });
-      physicalSummary[key] = (physicalSummary[key] || 0) + 1;
-    });
-
-    // Merge logic
-    Object.entries(physicalSummary).forEach(([type, count]) => {
-      totalCylindersSummary[type] = (totalCylindersSummary[type] || 0) + count;
-    });
+    for (const customer of filteredCustomers) {
+      const holdings = allHoldingsData.map[customer.id] || {};
+      for (const [key, count] of Object.entries(holdings)) {
+        totalCylindersSummary[key] = (totalCylindersSummary[key] || 0) + count;
+      }
+    }
 
     let totalCylindersCount = Object.values(totalCylindersSummary).reduce((a, b) => a + b, 0);
 

@@ -82,19 +82,79 @@ export async function GET(request: NextRequest) {
 
     const rangeDays = differenceInDays(endDate, startDate);
 
-    // 1. Total Customers (point in time)
-    const [totalB2b, totalB2c] = await Promise.all([
-      prisma.customer.count({ where: { isActive: true, ...regionScope } }),
-      prisma.b2CCustomer.count({ where: { isActive: true, ...regionScope } })
-    ]);
+    // Chart window (same rules as before) — computed early so KPI+chart share one fetch
+    let chartStartDate: Date;
+    let isDaily: boolean;
+    if (period === 'day') {
+      chartStartDate = startOfDay(new Date(endDate));
+      chartStartDate.setDate(chartStartDate.getDate() - 6);
+      isDaily = true;
+    } else if (period === 'month' || rangeDays <= 35) {
+      chartStartDate = startOfDay(startDate);
+      isDaily = true;
+    } else {
+      chartStartDate = startOfMonth(startDate);
+      isDaily = false;
+    }
+
+    // 1–3. Counts + cylinder statuses + transactions (chart-wide; KPI filtered in memory)
+    const [totalB2b, totalB2c, cylinderStatusGroups, b2cTransChartFull, b2bTransChartFull] =
+      await Promise.all([
+        prisma.customer.count({ where: { isActive: true, ...regionScope } }),
+        prisma.b2CCustomer.count({ where: { isActive: true, ...regionScope } }),
+        prisma.cylinder.groupBy({
+          by: ['currentStatus'],
+          where: { ...regionScope },
+          _count: { id: true },
+        }),
+        prisma.b2CTransaction.findMany({
+          where: {
+            date: { gte: chartStartDate, lte: endDate },
+            voided: false,
+            ...txRegionScope,
+          },
+          select: {
+            date: true,
+            totalAmount: true,
+            deliveryCharges: true,
+            actualProfit: true,
+            securityItems: { select: { totalPrice: true } },
+          },
+        }),
+        prisma.b2BTransaction.findMany({
+          where: {
+            date: { gte: chartStartDate, lte: endDate },
+            voided: false,
+            transactionType: 'SALE',
+            ...txRegionScope,
+          },
+          select: {
+            date: true,
+            customerId: true,
+            notes: true,
+            paymentReference: true,
+            totalAmount: true,
+            transactionType: true,
+            items: {
+              select: {
+                quantity: true,
+                pricePerItem: true,
+                totalPrice: true,
+                costPrice: true,
+                cylinderType: true,
+              },
+            },
+          },
+        }),
+      ]);
+
     const totalCustomers = totalB2b + totalB2c;
 
-    // 2. Active Cylinders (point in time)
-    const [activeCylinders, emptyCylinders, fullCylinders] = await Promise.all([
-      prisma.cylinder.count({ where: { currentStatus: 'WITH_CUSTOMER', ...regionScope } }),
-      prisma.cylinder.count({ where: { currentStatus: 'EMPTY', ...regionScope } }),
-      prisma.cylinder.count({ where: { currentStatus: 'FULL', ...regionScope } })
-    ]);
+    const statusCount = (status: string) =>
+      cylinderStatusGroups.find((g) => g.currentStatus === status)?._count.id || 0;
+    const activeCylinders = statusCount('WITH_CUSTOMER');
+    const emptyCylinders = statusCount('EMPTY');
+    const fullCylinders = statusCount('FULL');
 
     const cylinderStatusData = [
       { name: 'With Customers', value: activeCylinders, fill: '#3b82f6' },
@@ -102,40 +162,18 @@ export async function GET(request: NextRequest) {
       { name: 'Empty (In Stock)', value: emptyCylinders, fill: '#f59e0b' },
     ];
 
-    // 3. Transactions for KPIs (within date range)
-    const [b2cTransInRange, b2bTransInRange] = await Promise.all([
-      prisma.b2CTransaction.findMany({
-        where: {
-          date: { gte: startDate, lte: endDate },
-          voided: false,
-          ...txRegionScope,
-        },
-        select: {
-          totalAmount: true,
-          deliveryCharges: true,
-          actualProfit: true,
-          securityItems: { select: { totalPrice: true } }
-        }
-      }),
-      prisma.b2BTransaction.findMany({
-        where: {
-          date: { gte: startDate, lte: endDate },
-          voided: false,
-          transactionType: 'SALE',
-          ...txRegionScope,
-        },
-        select: {
-          customerId: true,
-          notes: true,
-          paymentReference: true,
-          totalAmount: true,
-          transactionType: true,
-          items: {
-            select: { quantity: true, pricePerItem: true, totalPrice: true, costPrice: true, cylinderType: true }
-          }
-        }
-      })
-    ]);
+    const kpiStartMs = startDate.getTime();
+    const kpiEndMs = endDate.getTime();
+    const b2cTransInRange = b2cTransChartFull.filter((t) => {
+      const ms = new Date(t.date).getTime();
+      return ms >= kpiStartMs && ms <= kpiEndMs;
+    });
+    const b2bTransInRange = b2bTransChartFull.filter((t) => {
+      const ms = new Date(t.date).getTime();
+      return ms >= kpiStartMs && ms <= kpiEndMs;
+    });
+    const b2cTransChart = b2cTransChartFull;
+    const b2bTransChart = b2bTransChartFull;
 
     let rangeRevenue = 0;
     let rangeProfit = 0;
@@ -319,37 +357,8 @@ export async function GET(request: NextRequest) {
     const actualProfit =
       rangeRevenue - rangeExpenses - rangeSalaries - deductibleVendorPayments;
 
-    // 4. Chart Data — aligned to selected period
-    // Day: last 7 days ending on selected day (KPI still that day)
-    // Month: daily bars within the month
-    // Year: monthly bars for all 12 months
-    let chartStartDate: Date;
-    let isDaily: boolean;
-    if (period === 'day') {
-      chartStartDate = startOfDay(new Date(endDate));
-      chartStartDate.setDate(chartStartDate.getDate() - 6);
-      isDaily = true;
-    } else if (period === 'month' || rangeDays <= 35) {
-      chartStartDate = startOfDay(startDate);
-      isDaily = true;
-    } else {
-      chartStartDate = startOfMonth(startDate);
-      isDaily = false;
-    }
-
-    const [b2cTransChart, b2bTransChart, expensesChart, personalExpensesChart] = await Promise.all([
-      prisma.b2CTransaction.findMany({
-        where: { date: { gte: chartStartDate, lte: endDate }, voided: false, ...txRegionScope },
-        select: {
-          date: true,
-          totalAmount: true,
-          securityItems: { select: { totalPrice: true } }
-        }
-      }),
-      prisma.b2BTransaction.findMany({
-        where: { date: { gte: chartStartDate, lte: endDate }, voided: false, transactionType: 'SALE', ...txRegionScope },
-        select: { date: true, totalAmount: true }
-      }),
+    // 4. Chart expense rows (B2C/B2B chart txs already loaded above)
+    const [expensesChart, personalExpensesChart] = await Promise.all([
       prisma.officeExpense.findMany({
         where: {
           ...regionScope,

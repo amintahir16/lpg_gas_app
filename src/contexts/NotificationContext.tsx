@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 
 export interface Notification {
@@ -170,6 +170,8 @@ interface NotificationProviderProps {
 export function NotificationProvider({ children }: NotificationProviderProps) {
   const { data: session } = useSession();
   const [state, dispatch] = useReducer(notificationReducer, initialState);
+  const lastUpdateRef = useRef<Date | null>(null);
+  lastUpdateRef.current = state.lastUpdate;
 
   // Fetch notifications from API. Returns false on failure so callers can decide
   // whether to retry — never used for background polling.
@@ -346,8 +348,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   }, [fetchNotifications, fetchStats]);
 
   // Action-driven only: load when the user signs in, and again when they
-  // return to this tab. No background timer — notifications are created on
-  // the server when sales / stock / CRUD actions run; the UI just reads them.
+  // return to this tab (if data is older than 45s). No background timer.
   useEffect(() => {
     if (!session?.user) {
       dispatch({ type: 'SET_NOTIFICATIONS', payload: [] });
@@ -357,14 +358,24 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 
     void refresh();
 
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const STALE_MS = 45_000;
+
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState !== 'visible') return;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        const last = lastUpdateRef.current;
+        if (last && Date.now() - last.getTime() < STALE_MS) return;
         void refresh();
-      }
+      }, 400);
     };
 
     document.addEventListener('visibilitychange', onVisibility);
-    return () => document.removeEventListener('visibilitychange', onVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      if (debounceTimer) clearTimeout(debounceTimer);
+    };
   }, [session?.user, refresh]);
 
   const contextValue: NotificationContextType = {

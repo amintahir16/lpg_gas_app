@@ -149,16 +149,13 @@ export async function GET(request: NextRequest) {
       return a.type.localeCompare(b.type);
     });
 
-    // Fleet + per-type purchase values — all statuses (full, empty, with customers, etc.)
-    const [cylindersForValue, activeRegion] = await Promise.all([
-      prisma.cylinder.findMany({
+    // Fleet + per-type purchase values via SQL groupBy (same math as loading every row)
+    const [purchaseGroups, activeRegion] = await Promise.all([
+      prisma.cylinder.groupBy({
+        by: ['cylinderType', 'typeName', 'capacity'],
         where: regionScopedWhere(regionId),
-        select: {
-          purchasePrice: true,
-          cylinderType: true,
-          typeName: true,
-          capacity: true,
-        },
+        _sum: { purchasePrice: true },
+        _count: { id: true },
       }),
       regionId
         ? prisma.region.findUnique({
@@ -173,10 +170,10 @@ export async function GET(request: NextRequest) {
       { type: string; typeEnum: string; variantKey: string; purchaseValue: number; count: number }
     >();
 
-    for (const cylinder of cylindersForValue) {
-      const capacity = cylinder.capacity != null ? Number(cylinder.capacity) : null;
-      const normalizedTypeNameLowercase = cylinder.typeName
-        ? cylinder.typeName.toLowerCase().trim()
+    for (const group of purchaseGroups) {
+      const capacity = group.capacity != null ? Number(group.capacity) : null;
+      const normalizedTypeNameLowercase = group.typeName
+        ? group.typeName.toLowerCase().trim()
         : null;
       const normalizedTypeName = normalizeTypeName(normalizedTypeNameLowercase);
       const trimmedTypeName = normalizedTypeName ? String(normalizedTypeName).trim() : '';
@@ -187,27 +184,29 @@ export async function GET(request: NextRequest) {
       } else if (capacity !== null) {
         displayType = `Cylinder (${capacity}kg)`;
       } else {
-        displayType = getCylinderTypeDisplayName(cylinder.cylinderType);
+        displayType = getCylinderTypeDisplayName(group.cylinderType);
       }
 
       const variantKey = buildCylinderVariantKey({
-        cylinderType: cylinder.cylinderType,
+        cylinderType: group.cylinderType,
         typeName: normalizedTypeNameLowercase,
         capacity,
       });
 
+      const price = Number(group._sum.purchasePrice || 0);
+      const count = group._count.id || 0;
       const existing = typeValueMap.get(variantKey);
-      const price = Number(cylinder.purchasePrice || 0);
       if (existing) {
+        // Merge case variants of typeName (same as prior per-row path after normalize)
         existing.purchaseValue += price;
-        existing.count += 1;
+        existing.count += count;
       } else {
         typeValueMap.set(variantKey, {
           type: displayType,
-          typeEnum: cylinder.cylinderType,
+          typeEnum: group.cylinderType,
           variantKey,
           purchaseValue: price,
-          count: 1,
+          count,
         });
       }
     }
@@ -226,7 +225,7 @@ export async function GET(request: NextRequest) {
     });
 
     const totalPurchaseValue = typePurchaseValues.reduce((sum, row) => sum + row.purchaseValue, 0);
-    const totalCylinderCount = cylindersForValue.length;
+    const totalCylinderCount = typePurchaseValues.reduce((sum, row) => sum + row.count, 0);
 
     return NextResponse.json({
       success: true,

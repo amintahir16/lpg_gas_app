@@ -7,6 +7,8 @@ import { requireAdmin, clampLimit } from '@/lib/apiAuth';
 import { normalizePaymentMethodKey } from '@/lib/payment-methods';
 import {
   getFinancialChartBuckets,
+  getFinancialChartRange,
+  findChartBucketIndex,
   resolveFinancialPeriod,
 } from '@/lib/financial-period';
 
@@ -48,20 +50,24 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
+    // One chart-range fetch + in-memory buckets (same totals as per-bucket aggregates)
     const chartBuckets = getFinancialChartBuckets(resolved);
-    const chartData = [];
-    for (const bucket of chartBuckets) {
-      const bucketTotal = await prisma.personalExpense.aggregate({
-        where: {
-          expenseDate: { gte: bucket.startDate, lte: bucket.endDate },
-          ...regionScope,
-        },
-        _sum: { amount: true },
-      });
-      chartData.push({
-        name: bucket.name,
-        personal: Number(bucketTotal._sum.amount || 0),
-      });
+    const chartRange = getFinancialChartRange(chartBuckets);
+    const chartPersonalRows = await prisma.personalExpense.findMany({
+      where: {
+        expenseDate: { gte: chartRange.startDate, lte: chartRange.endDate },
+        ...regionScope,
+      },
+      select: { amount: true, expenseDate: true },
+    });
+
+    const chartData = chartBuckets.map((bucket) => ({
+      name: bucket.name,
+      personal: 0,
+    }));
+    for (const row of chartPersonalRows) {
+      const idx = findChartBucketIndex(chartBuckets, row.expenseDate);
+      if (idx >= 0) chartData[idx].personal += Number(row.amount || 0);
     }
 
     return NextResponse.json({

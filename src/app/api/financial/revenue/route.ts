@@ -5,6 +5,8 @@ import { requireAdmin } from '@/lib/apiAuth';
 import { buildPaymentMethodTotals } from '@/lib/payment-methods';
 import {
     getFinancialChartBuckets,
+    getFinancialChartRange,
+    findChartBucketIndex,
     resolveFinancialPeriod,
 } from '@/lib/financial-period';
 import { isOpeningDuesSaleItem } from '@/lib/b2b-opening-entries';
@@ -215,70 +217,95 @@ export async function GET(request: NextRequest) {
             ],
         });
 
+        // One chart-range fetch + in-memory buckets (same totals as per-bucket queries)
         const chartBuckets = getFinancialChartBuckets(resolved);
-        const chartData = [];
-        for (const bucket of chartBuckets) {
-            const [b2cGas, b2cAcc, b2bBucketItems] = await Promise.all([
-                prisma.b2CTransactionGasItem.aggregate({
-                    where: { transaction: { date: { gte: bucket.startDate, lte: bucket.endDate }, voided: false, ...txRegionScope } },
-                    _sum: { totalPrice: true },
-                }),
-                prisma.b2CTransactionAccessoryItem.aggregate({
-                    where: { transaction: { date: { gte: bucket.startDate, lte: bucket.endDate }, voided: false, ...txRegionScope } },
-                    _sum: { totalPrice: true },
-                }),
-                prisma.b2BTransactionItem.findMany({
-                    where: {
-                        transaction: {
-                            date: { gte: bucket.startDate, lte: bucket.endDate },
-                            voided: false,
-                            transactionType: 'SALE',
-                            ...txRegionScope,
+        const chartRange = getFinancialChartRange(chartBuckets);
+        const [chartB2cGas, chartB2cAcc, chartB2bItems, chartRetentions] = await Promise.all([
+            prisma.b2CTransactionGasItem.findMany({
+                where: {
+                    transaction: {
+                        date: { gte: chartRange.startDate, lte: chartRange.endDate },
+                        voided: false,
+                        ...txRegionScope,
+                    },
+                },
+                select: {
+                    totalPrice: true,
+                    transaction: { select: { date: true } },
+                },
+            }),
+            prisma.b2CTransactionAccessoryItem.findMany({
+                where: {
+                    transaction: {
+                        date: { gte: chartRange.startDate, lte: chartRange.endDate },
+                        voided: false,
+                        ...txRegionScope,
+                    },
+                },
+                select: {
+                    totalPrice: true,
+                    transaction: { select: { date: true } },
+                },
+            }),
+            prisma.b2BTransactionItem.findMany({
+                where: {
+                    transaction: {
+                        date: { gte: chartRange.startDate, lte: chartRange.endDate },
+                        voided: false,
+                        transactionType: 'SALE',
+                        ...txRegionScope,
+                    },
+                },
+                select: {
+                    cylinderType: true,
+                    totalPrice: true,
+                    transaction: {
+                        select: {
+                            date: true,
+                            notes: true,
+                            paymentReference: true,
+                            totalAmount: true,
+                            transactionType: true,
                         },
                     },
-                    select: {
-                        cylinderType: true,
-                        pricePerItem: true,
-                        totalPrice: true,
-                        transaction: {
-                            select: {
-                                notes: true,
-                                paymentReference: true,
-                                totalAmount: true,
-                                transactionType: true,
-                            },
-                        },
-                    },
-                }),
-            ]);
-
-            let b2bCylinderRevenue = 0;
-            let b2bAccessoryRevenue = 0;
-            for (const item of b2bBucketItems) {
-                if (isOpeningDuesSaleItem(item.transaction, item)) continue;
-                const amount = Number(item.totalPrice || 0);
-                if (item.cylinderType) b2bCylinderRevenue += amount;
-                else b2bAccessoryRevenue += amount;
-            }
-
-            const b2cRetentionBucket = await prisma.b2CCylinderHolding.aggregate({
+                },
+            }),
+            prisma.b2CCylinderHolding.findMany({
                 where: {
                     isReturned: true,
-                    returnDate: { gte: bucket.startDate, lte: bucket.endDate },
+                    returnDate: { gte: chartRange.startDate, lte: chartRange.endDate },
                     returnDeduction: { gt: 0 },
                     customer: regionScope,
                 },
-                _sum: { returnDeduction: true },
-            });
+                select: { returnDeduction: true, returnDate: true },
+            }),
+        ]);
 
-            chartData.push({
-                name: bucket.name,
-                cylinders:
-                    Number(b2cGas._sum.totalPrice || 0) +
-                    b2bCylinderRevenue +
-                    Number(b2cRetentionBucket._sum.returnDeduction || 0),
-                accessories: Number(b2cAcc._sum.totalPrice || 0) + b2bAccessoryRevenue,
-            });
+        const chartData = chartBuckets.map((bucket) => ({
+            name: bucket.name,
+            cylinders: 0,
+            accessories: 0,
+        }));
+
+        for (const item of chartB2cGas) {
+            const idx = findChartBucketIndex(chartBuckets, item.transaction.date);
+            if (idx >= 0) chartData[idx].cylinders += Number(item.totalPrice || 0);
+        }
+        for (const item of chartB2cAcc) {
+            const idx = findChartBucketIndex(chartBuckets, item.transaction.date);
+            if (idx >= 0) chartData[idx].accessories += Number(item.totalPrice || 0);
+        }
+        for (const item of chartB2bItems) {
+            if (isOpeningDuesSaleItem(item.transaction, item)) continue;
+            const idx = findChartBucketIndex(chartBuckets, item.transaction.date);
+            if (idx < 0) continue;
+            const amount = Number(item.totalPrice || 0);
+            if (item.cylinderType) chartData[idx].cylinders += amount;
+            else chartData[idx].accessories += amount;
+        }
+        for (const holding of chartRetentions) {
+            const idx = findChartBucketIndex(chartBuckets, holding.returnDate);
+            if (idx >= 0) chartData[idx].cylinders += Number(holding.returnDeduction || 0);
         }
 
         return NextResponse.json({

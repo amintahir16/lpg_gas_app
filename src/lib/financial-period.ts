@@ -253,6 +253,37 @@ export function getFinancialChartBuckets(
   return buckets;
 }
 
+/** Inclusive date range covering all chart buckets (for one-shot fetches). */
+export function getFinancialChartRange(buckets: FinancialChartBucket[]): {
+  startDate: Date;
+  endDate: Date;
+} {
+  if (buckets.length === 0) {
+    const now = new Date();
+    return { startDate: now, endDate: now };
+  }
+  return {
+    startDate: buckets[0].startDate,
+    endDate: buckets[buckets.length - 1].endDate,
+  };
+}
+
+/** Find which chart bucket a timestamp falls into, or -1 if outside. */
+export function findChartBucketIndex(
+  buckets: FinancialChartBucket[],
+  date: Date | string | null | undefined
+): number {
+  if (!date) return -1;
+  const t = new Date(date).getTime();
+  if (Number.isNaN(t)) return -1;
+  for (let i = 0; i < buckets.length; i++) {
+    if (t >= buckets[i].startDate.getTime() && t <= buckets[i].endDate.getTime()) {
+      return i;
+    }
+  }
+  return -1;
+}
+
 export function chartDescriptionForPeriod(period: FinancialPeriodMode): string {
   if (period === 'day') return 'Last 7 days ending on selected day';
   if (period === 'year') return 'All months in the selected year';
