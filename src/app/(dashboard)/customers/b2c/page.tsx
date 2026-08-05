@@ -142,8 +142,6 @@ export default function B2CCustomersPage() {
   const [deleteConfirmationName, setDeleteConfirmationName] = useState('');
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [marginCategories, setMarginCategories] = useState<any[]>([]);
-  const [loadingCategories, setLoadingCategories] = useState(true);
 
   // Filters State
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
@@ -167,25 +165,6 @@ export default function B2CCustomersPage() {
   useEffect(() => {
     fetchCustomers();
   }, [debouncedSearchTerm, pagination.page, filterStatus, sortBy, sortOrder]);
-
-  // Fetch margin categories
-  useEffect(() => {
-    const fetchMarginCategories = async () => {
-      try {
-        const response = await fetch('/api/admin/margin-categories?customerType=B2C&activeOnly=true');
-        if (response.ok) {
-          const data = await response.json();
-          setMarginCategories(data);
-        }
-      } catch (error) {
-        console.error('Error fetching margin categories:', error);
-      } finally {
-        setLoadingCategories(false);
-      }
-    };
-
-    fetchMarginCategories();
-  }, []);
 
   const fetchCustomers = async () => {
     try {
@@ -723,7 +702,6 @@ export default function B2CCustomersPage() {
                   phone: formData.get('phone'),
                   email: formData.get('email'),
                   address: formData.get('address'),
-                  marginCategoryId: formData.get('marginCategoryId'),
                   isActive: formData.get('isActive') === 'true',
                   city: 'Hayatabad'
                 });
@@ -744,17 +722,12 @@ export default function B2CCustomersPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
-                    Margin Category *
+                    Margin Category
                   </label>
-                  <CustomSelect
-                    name="marginCategoryId"
-                    required
-                    disabled={loadingCategories}
-                    defaultValue={editingCustomer.marginCategoryId || ''}
-                    placeholder={loadingCategories ? "Loading..." : "Select Category"}
-                    options={marginCategories.map(c => ({ value: c.id, label: c.name }))}
-                    className="h-9"
-                  />
+                  <p className="h-9 flex items-center px-3 rounded-md border border-gray-200 bg-gray-50 text-sm font-medium text-gray-800">
+                    All Homes
+                    <span className="ml-2 text-xs font-normal text-gray-500">(auto-assigned)</span>
+                  </p>
                 </div>
                 <div>
                   <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Full Address</label>
@@ -863,7 +836,6 @@ export default function B2CCustomersPage() {
                   phone: formData.get('phone'),
                   email: formData.get('email'),
                   address: formData.get('address'),
-                  marginCategoryId: formData.get('marginCategoryId'),
                   city: 'Hayatabad' // Default value
                 });
               }}>
@@ -883,17 +855,12 @@ export default function B2CCustomersPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
-                    Margin Category *
+                    Margin Category
                   </label>
-                  <CustomSelect
-                    name="marginCategoryId"
-                    required
-                    disabled={loadingCategories}
-                    placeholder={loadingCategories ? "Loading..." : "Select Category"}
-                    options={marginCategories.map(c => ({ value: c.id, label: c.name }))}
-                    className="h-9"
-                    value={undefined}
-                  />
+                  <p className="h-9 flex items-center px-3 rounded-md border border-gray-200 bg-gray-50 text-sm font-medium text-gray-800">
+                    All Homes
+                    <span className="ml-2 text-xs font-normal text-gray-500">(auto-assigned)</span>
+                  </p>
                 </div>
                 <div>
                   <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Full Address</label>

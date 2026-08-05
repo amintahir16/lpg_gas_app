@@ -74,6 +74,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // B2C has a single system category (All Homes). Extra B2C categories are not allowed.
+    if (customerType === 'B2C') {
+      return NextResponse.json(
+        {
+          error: 'Validation Error',
+          message:
+            'B2C uses a single margin category (All Homes). Only B2B categories can be added.',
+        },
+        { status: 400 }
+      );
+    }
+
     // Name is globally unique on MarginCategory
     const existingCategory = await prisma.marginCategory.findFirst({
       where: { name },

@@ -425,22 +425,9 @@ export default function PricingManagementPage() {
                 <CurrencyDollarIcon className="w-6 h-6" />
                 B2C (Home Customers) Pricing
               </CardTitle>
-              <CardDescription>Pricing categories for residential customers</CardDescription>
+              <CardDescription>Single margin for all residential customers</CardDescription>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant={addingCustomerType === 'B2C' ? 'default' : 'outline'}
-                onClick={() =>
-                  addingCustomerType === 'B2C'
-                    ? cancelAddingCategory()
-                    : startAddingCategory('B2C')
-                }
-                className="flex items-center gap-2"
-              >
-                <PlusIcon className="w-4 h-4" />
-                {addingCustomerType === 'B2C' ? 'Cancel' : 'Add Category'}
-              </Button>
               {b2cCategories.length === 0 && (
                 <Button
                   size="sm"
@@ -463,63 +450,11 @@ export default function PricingManagementPage() {
               )}
             </div>
           </div>
+          <p className="text-xs text-gray-500 mt-2">
+            B2C uses a single system category (All Homes), assigned automatically to every home customer.
+          </p>
         </CardHeader>
         <CardContent>
-          {addingCustomerType === 'B2C' && (
-            <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50/50 p-4">
-              <p className="text-sm font-semibold text-gray-900 mb-3">New B2C margin category</p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <Label className="text-xs text-gray-600">Category Name</Label>
-                  <Input
-                    value={addForm.name}
-                    onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
-                    placeholder="e.g. Premium Homes"
-                    className="h-9 mt-1"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs text-gray-600">Margin (Rs/kg)</Label>
-                  <Input
-                    type="number"
-                    step="1"
-                    min="0"
-                    value={addForm.marginPerKg}
-                    onChange={(e) =>
-                      setAddForm({
-                        ...addForm,
-                        marginPerKg: e.target.value === '' ? '' : parseFloat(e.target.value),
-                      })
-                    }
-                    placeholder="e.g. 70"
-                    className="h-9 mt-1"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs text-gray-600">Description (optional)</Label>
-                  <Input
-                    value={addForm.description}
-                    onChange={(e) => setAddForm({ ...addForm, description: e.target.value })}
-                    placeholder="Who this rate applies to"
-                    className="h-9 mt-1"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 mt-3">
-                <Button type="button" size="sm" variant="outline" onClick={cancelAddingCategory}>
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={creatingCategory}
-                  onClick={() => handleCreateCategory('B2C')}
-                >
-                  {creatingCategory ? 'Saving...' : 'Create Category'}
-                </Button>
-              </div>
-            </div>
-          )}
           {b2cCategories.length === 0 ? (
             <div className="py-8 text-center">
               <div className="max-w-md mx-auto">
@@ -663,22 +598,9 @@ export default function PricingManagementPage() {
                                 variant="outline"
                                 className="h-7 w-7 p-0"
                                 onClick={() => startEditingCategory(category)}
+                                title="Edit margin"
                               >
                                 <PencilIcon className="w-3.5 h-3.5" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant={category.isActive ? "destructive" : "default"}
-                                className="h-7 text-xs px-2"
-                                onClick={() =>
-                                  handleToggleCategoryActive(
-                                    category.id,
-                                    category.isActive,
-                                    category.name
-                                  )
-                                }
-                              >
-                                {category.isActive ? 'Deactivate' : 'Activate'}
                               </Button>
                             </div>
                           </td>

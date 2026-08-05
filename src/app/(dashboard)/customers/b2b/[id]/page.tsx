@@ -2386,9 +2386,11 @@ export default function B2BCustomerDetailPage() {
                                   min="0"
                                   step="0.01"
                                   value={item.pricePerItem || ''}
-                                  onChange={(e) => updateGasItem(index, 'pricePerItem', parseFloat(e.target.value) || 0)}
-                                  disabled={!item.cylinderType}
-                                  className={`w-full px-3 py-1 text-sm border border-gray-300 rounded-md bg-white ${!item.cylinderType ? 'bg-gray-100' : ''} focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 h-9`}
+                                  readOnly
+                                  disabled
+                                  tabIndex={-1}
+                                  title="Price is set from margin pricing and cannot be edited"
+                                  className="w-full px-3 py-1 text-sm border border-gray-300 rounded-md bg-gray-50 text-gray-700 cursor-not-allowed h-9"
                                   placeholder="0.00"
                                 />
                               </td>

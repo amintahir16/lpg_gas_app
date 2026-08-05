@@ -8,7 +8,11 @@ import {
   formatB2bVariantKeyForReport,
 } from '@/lib/b2b-transaction-item-variant';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
-import { isOpeningBalanceTransaction, isOpeningDuesTransaction } from '@/lib/b2b-opening-entries';
+import {
+  isOpeningBalanceTransaction,
+  isOpeningDuesSaleItem,
+  isOpeningDuesTransaction,
+} from '@/lib/b2b-opening-entries';
 
 // Helper function to format currency
 function formatCurrency(amount: number): string {
@@ -32,7 +36,12 @@ function formatDate(dateString: string | Date): string {
 }
 
 // Categorize items into Sale, Buyback, and Return
-function categorizeItems(items: any[], transactionType: string, isOpeningDues: boolean = false): {
+function categorizeItems(
+  items: any[],
+  transactionType: string,
+  isOpeningDues: boolean = false,
+  transaction?: any,
+): {
   saleItems: any[];
   buybackItems: any[];
   returnItems: any[];
@@ -48,22 +57,32 @@ function categorizeItems(items: any[], transactionType: string, isOpeningDues: b
   }
 
   items.forEach(item => {
+    // Untagged zero-value SALE fallback (opening dues without notes marker)
+    if (isOpeningDuesSaleItem(transaction, item)) {
+      saleItems.push(item);
+      return;
+    }
+
     const hasRegularPrice = item.pricePerItem && Number(item.pricePerItem) > 0;
     const hasBuybackData = item.remainingKg && Number(item.remainingKg) > 0;
     // Key check: buybackRate being SET (even if 0) indicates this is a buyback item
     const hasBuybackRateSet = item.buybackRate !== null && item.buybackRate !== undefined;
+    const isExplicitEmptyReturn = item.returnedCondition === 'EMPTY';
 
     // BUYBACK items: have buybackRate set (including 0%) - this is the definitive indicator
     // A buyback with 0% rate still has buybackRate = 0, while sales have buybackRate = null
-    if (hasBuybackRateSet) {
+    if (hasBuybackRateSet && !isExplicitEmptyReturn) {
       buybackItems.push(item);
     }
     // SALE items: have a regular sale price AND no buyback rate set
     else if (hasRegularPrice && !hasBuybackRateSet) {
       saleItems.push(item);
     }
-    // Empty returns: cylinder with no sale price and no buyback rate
-    else if (item.cylinderType && !hasRegularPrice && !hasBuybackRateSet && !hasBuybackData) {
+    // Empty returns: explicitly marked EMPTY, or cylinder with no sale price and no buyback
+    else if (
+      item.cylinderType &&
+      (isExplicitEmptyReturn || (!hasRegularPrice && !hasBuybackRateSet && !hasBuybackData))
+    ) {
       returnItems.push(item);
     }
     // Professional Accessories (Vaporizers, etc.) - Catch all non-cylinder items
@@ -200,7 +219,12 @@ async function generatePDF(
 
   // Categorize items
   const openingDues = isOpeningDuesTransaction(transaction);
-  const { saleItems, buybackItems, returnItems } = categorizeItems(transaction.items || [], transaction.transactionType, openingDues);
+  const { saleItems, buybackItems, returnItems } = categorizeItems(
+    transaction.items || [],
+    transaction.transactionType,
+    openingDues,
+    transaction,
+  );
   const badges = openingDues
     ? ['OPENING DUES']
     : isOpeningBalanceTransaction(transaction)
@@ -716,7 +740,12 @@ export async function GET(
 
     allTransactions.forEach(t => {
       const items = t.items || [];
-      const { saleItems, buybackItems, returnItems } = categorizeItems(items, t.transactionType, isOpeningDuesTransaction(t));
+      const { saleItems, buybackItems, returnItems } = categorizeItems(
+        items,
+        t.transactionType,
+        isOpeningDuesTransaction(t),
+        t,
+      );
 
       saleItems.forEach((item: any) => {
         const vk = b2bItemVariantKey(item);

@@ -8,6 +8,7 @@ import { getActiveRegionId, regionScopedWhere, withRegionScope } from '@/lib/reg
 import { clampLimit } from '@/lib/apiAuth';
 import { buildCylinderVariantKey, parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { getCylinderTypeDisplayName, getCapacityFromTypeString } from '@/lib/cylinder-utils';
+import { getOrCreateB2cAllHomesCategory } from '@/lib/margin-categories';
 
 function b2cHoldingVariantKey(h: {
   cylinderType: string;
@@ -205,7 +206,6 @@ export async function POST(request: NextRequest) {
       phase,
       area,
       city = 'Hayatabad',
-      marginCategoryId
     } = body;
 
     // Validate required fields
@@ -228,6 +228,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // B2C always uses the single All Homes category (auto-assigned).
+    const allHomes = await getOrCreateB2cAllHomesCategory();
+
     const customer = await prisma.b2CCustomer.create({
       data: withRegionScope({
         name,
@@ -240,7 +243,7 @@ export async function POST(request: NextRequest) {
         phase: phase || null,
         area: area || null,
         city,
-        marginCategoryId: marginCategoryId || null,
+        marginCategoryId: allHomes.id,
         totalProfit: 0
       }, regionId)
     });

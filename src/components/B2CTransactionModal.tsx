@@ -170,9 +170,20 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
             if (response.ok) {
                 const pricingData = await response.json();
                 setPricingInfo(pricingData);
+                return;
             }
+
+            const errorData = await response.json().catch(() => ({}));
+            const message =
+                errorData.message ||
+                errorData.error ||
+                'Failed to load cylinder prices. Check plant price and All Homes margin in Pricing.';
+            setError(message);
+            setPricingInfo(null);
         } catch (error) {
             console.error('Error fetching calculated prices:', error);
+            setError('Failed to load cylinder prices. Please try again.');
+            setPricingInfo(null);
         }
     };
 
@@ -824,9 +835,12 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                                                 type="number"
                                                                 min="0"
                                                                 value={item.pricePerItem}
-                                                                onChange={(e) => updateGasItem(index, 'pricePerItem', e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value)))}
-                                                                className="h-9 text-sm"
+                                                                readOnly
+                                                                disabled
+                                                                tabIndex={-1}
+                                                                className="h-9 text-sm bg-gray-50 text-gray-700 cursor-not-allowed"
                                                                 placeholder="0"
+                                                                title="Price is set from margin pricing and cannot be edited"
                                                             />
                                                             {item.costPrice > 0 && (
                                                                 <div className="text-[10px] text-gray-400 mt-0.5">Cost: {item.costPrice}</div>

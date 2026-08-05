@@ -8,8 +8,11 @@ import {
   formatB2bVariantKeyForReport,
 } from '@/lib/b2b-transaction-item-variant';
 import { adoptLegacyB2bCustomerIfNeeded, getActiveRegionId, regionScopedWhere } from '@/lib/region';
-import { isOpeningBalanceTransaction, isOpeningDuesTransaction } from '@/lib/b2b-opening-entries';
-
+import {
+  isOpeningBalanceTransaction,
+  isOpeningDuesSaleItem,
+  isOpeningDuesTransaction,
+} from '@/lib/b2b-opening-entries';
 // Helper function to format currency
 function formatCurrency(amount: number): string {
   return `PKR ${amount.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -31,8 +34,28 @@ function formatDate(dateString: string | Date): string {
   });
 }
 
-// Categorize items into Sale, Buyback, and Return
-function categorizeItems(items: any[]): {
+type CylinderStat = {
+  delivered: number;
+  returned: number;
+  buyback: number;
+  held: number;
+  buybackWeight: number;
+  buybackCredit: number;
+};
+
+function emptyCylinderStat(): CylinderStat {
+  return { delivered: 0, returned: 0, buyback: 0, held: 0, buybackWeight: 0, buybackCredit: 0 };
+}
+
+/**
+ * Categorize line items into Sale / Buyback / Return.
+ * Opening cylinder dues are zero-priced deliveries (customer already holds them).
+ * They must never be treated as empty returns — that was flipping Holding Qty negative.
+ */
+function categorizeItems(
+  items: any[],
+  transaction?: any,
+): {
   saleItems: any[];
   buybackItems: any[];
   returnItems: any[];
@@ -41,23 +64,38 @@ function categorizeItems(items: any[]): {
   const buybackItems: any[] = [];
   const returnItems: any[] = [];
 
+  // Tagged opening-dues transaction: every cylinder line is a delivery/holding.
+  if (isOpeningDuesTransaction(transaction)) {
+    return { saleItems: [...items], buybackItems, returnItems };
+  }
+
   items.forEach(item => {
+    // Untagged zero-value SALE fallback (same helper used by profit/revenue/ledger).
+    if (isOpeningDuesSaleItem(transaction, item)) {
+      saleItems.push(item);
+      return;
+    }
+
     const hasRegularPrice = item.pricePerItem && Number(item.pricePerItem) > 0;
     const hasBuybackData = item.remainingKg && Number(item.remainingKg) > 0;
     // Key check: buybackRate being SET (even if 0) indicates this is a buyback item
     const hasBuybackRateSet = item.buybackRate !== null && item.buybackRate !== undefined;
+    const isExplicitEmptyReturn = item.returnedCondition === 'EMPTY';
 
     // BUYBACK items: have buybackRate set (including 0%) - this is the definitive indicator
     // A buyback with 0% rate still has buybackRate = 0, while sales have buybackRate = null
-    if (hasBuybackRateSet) {
+    if (hasBuybackRateSet && !isExplicitEmptyReturn) {
       buybackItems.push(item);
     }
     // SALE items: have a regular sale price AND no buyback rate set
     else if (hasRegularPrice && !hasBuybackRateSet) {
       saleItems.push(item);
     }
-    // Empty returns: cylinder with no sale price and no buyback rate
-    else if (item.cylinderType && !hasRegularPrice && !hasBuybackRateSet && !hasBuybackData) {
+    // Empty returns: explicitly marked EMPTY, or cylinder with no sale price and no buyback
+    else if (
+      item.cylinderType &&
+      (isExplicitEmptyReturn || (!hasRegularPrice && !hasBuybackRateSet && !hasBuybackData))
+    ) {
       returnItems.push(item);
     }
     // Professional Accessories (Vaporizers, etc.) - Catch all non-cylinder items
@@ -81,7 +119,7 @@ function getTransactionTypeText(transaction: any, cylinderTypeMap?: Map<string, 
   if (isOpeningDuesTransaction(transaction)) return 'Opening Dues';
   if (isOpeningBalanceTransaction(transaction)) return 'Opening Balance';
 
-  const { saleItems, buybackItems, returnItems } = categorizeItems(transaction.items || []);
+  const { saleItems, buybackItems, returnItems } = categorizeItems(transaction.items || [], transaction);
 
   const types: string[] = [];
 
@@ -130,7 +168,7 @@ function buildItemsDescription(transaction: any, cylinderTypeMap?: Map<string, {
     return 'Opening Balance';
   }
 
-  const { saleItems, buybackItems, returnItems } = categorizeItems(transaction.items || []);
+  const { saleItems, buybackItems, returnItems } = categorizeItems(transaction.items || [], transaction);
 
   const parts: string[] = [];
 
@@ -362,7 +400,7 @@ async function generatePDF(
     const totalAmount = Number(transaction.totalAmount);
 
     // Categorize items for proper debit/credit calculation
-    const { saleItems, buybackItems } = categorizeItems(transaction.items || []);
+    const { saleItems, buybackItems } = categorizeItems(transaction.items || [], transaction);
 
     // Calculate debit (Out) and credit (In)
     let debit = '';
@@ -422,7 +460,7 @@ async function generatePDF(
   const totalOut = sortedTransactions.reduce((sum, t) => {
     if (t.transactionType === 'SALE') {
       // Calculate Net Transaction Amount = Sale Total - Buyback Credit
-      const { saleItems, buybackItems } = categorizeItems(t.items || []);
+      const { saleItems, buybackItems } = categorizeItems(t.items || [], t);
       const saleTotal = saleItems.reduce((sSum: number, item: any) => sSum + (Number(item.totalPrice) || 0), 0);
       const buybackCredit = buybackItems.reduce((bSum: number, item: any) => bSum + (Number(item.totalPrice) || 0), 0);
       const netTransactionAmount = saleTotal - buybackCredit;
@@ -915,7 +953,7 @@ export async function GET(
 
     // Calculate Dynamic Cylinder Statistics
     // Iterate through all transactions UP TO the end date (or all if no end date)
-    const cylinderStats = new Map<string, { delivered: number, returned: number, buyback: number, held: number, buybackWeight: number, buybackCredit: number }>();
+    const cylinderStats = new Map<string, CylinderStat>();
 
     const holdingCalculationTransactions = endDate
       ? allTransactions.filter(t => new Date(t.date).getTime() <= new Date(endDate).setHours(23, 59, 59, 999))
@@ -923,41 +961,25 @@ export async function GET(
 
     holdingCalculationTransactions.forEach(transaction => {
       const items = transaction.items || [];
+      // categorizeItems treats opening cylinder dues as deliveries (not returns)
+      const { saleItems, buybackItems, returnItems } = categorizeItems(items, transaction);
 
-      // Opening cylinder dues = cylinders already with the customer. Count them
-      // as deliveries (delivered + held), never as returns.
-      if (isOpeningDuesTransaction(transaction)) {
-        items.forEach((item: any) => {
-          if (!item.cylinderType) return;
-          const vk = b2bItemVariantKey(item);
-          if (!vk) return;
-          const current = cylinderStats.get(vk) || { delivered: 0, returned: 0, buyback: 0, held: 0, buybackWeight: 0, buybackCredit: 0 };
-          const qty = item.quantity ? Number(item.quantity) : 0;
-          current.delivered += qty;
-          current.held += qty;
-          cylinderStats.set(vk, current);
-        });
-        return;
-      }
-
-      const { saleItems, buybackItems, returnItems } = categorizeItems(items);
-
-      // Sale Items (Deliveries) -> ADD to delivered and held
+      // Sale / opening-dues deliveries -> ADD to delivered and held
       saleItems.forEach((item: any) => {
         const vk = b2bItemVariantKey(item);
         if (!vk) return;
-        const current = cylinderStats.get(vk) || { delivered: 0, returned: 0, buyback: 0, held: 0, buybackWeight: 0, buybackCredit: 0 };
+        const current = cylinderStats.get(vk) || emptyCylinderStat();
         const qty = item.quantity ? Number(item.quantity) : 0;
         current.delivered += qty;
         current.held += qty;
         cylinderStats.set(vk, current);
       });
 
-      // Buyback Items (Returns with value) -> ADD to returned (as empty), ADD weight/credit, SUBTRACT from held
+      // Buyback Items (Returns with value) -> ADD to returned, ADD weight/credit, SUBTRACT from held
       buybackItems.forEach((item: any) => {
         const vk = b2bItemVariantKey(item);
         if (!vk) return;
-        const current = cylinderStats.get(vk) || { delivered: 0, returned: 0, buyback: 0, held: 0, buybackWeight: 0, buybackCredit: 0 };
+        const current = cylinderStats.get(vk) || emptyCylinderStat();
         const qty = item.quantity ? Number(item.quantity) : 0;
         current.returned += qty;
         current.buyback += qty;
@@ -977,7 +999,7 @@ export async function GET(
       returnItems.forEach((item: any) => {
         const vk = b2bItemVariantKey(item);
         if (!vk) return;
-        const current = cylinderStats.get(vk) || { delivered: 0, returned: 0, buyback: 0, held: 0, buybackWeight: 0, buybackCredit: 0 };
+        const current = cylinderStats.get(vk) || emptyCylinderStat();
         const qty = item.quantity ? Number(item.quantity) : 0;
         current.returned += qty;
         current.held -= qty;
@@ -985,6 +1007,7 @@ export async function GET(
       });
     });
 
+    // Holding Qty = Delivered − Returned (opening dues count as Delivered).
     // Generate PDF
     const doc = await generatePDF(customer, transactionsWithBalance, startDate, endDate, cylinderTypeMap, cylinderStats);
 

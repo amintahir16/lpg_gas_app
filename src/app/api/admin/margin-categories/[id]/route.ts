@@ -96,6 +96,20 @@ export async function PUT(
       }
     }
 
+    // B2C system category must stay active.
+    if (
+      existingCategory.customerType === 'B2C' &&
+      isActive === false
+    ) {
+      return NextResponse.json(
+        {
+          error: 'Validation Error',
+          message: 'The B2C All Homes category cannot be deactivated.',
+        },
+        { status: 400 }
+      );
+    }
+
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
     if (marginPerKg !== undefined) {
@@ -162,8 +176,19 @@ export async function DELETE(
       );
     }
 
+    // B2C has a single system category — never deactivate it.
+    if (existingCategory.customerType === 'B2C') {
+      return NextResponse.json(
+        {
+          error: 'Validation Error',
+          message: 'The B2C All Homes category cannot be deactivated.',
+        },
+        { status: 400 }
+      );
+    }
+
     // Deactivate instead of delete to preserve data integrity
-    const category = await prisma.marginCategory.update({
+    await prisma.marginCategory.update({
       where: { id },
       data: { isActive: false }
     });

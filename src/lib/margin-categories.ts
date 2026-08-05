@@ -152,3 +152,91 @@ export async function ensureDefaultCategoriesExist(
   }
 }
 
+/** Canonical B2C margin category name (single system category). */
+export const B2C_ALL_HOMES_NAME = DEFAULT_CATEGORIES.B2C[0].name;
+
+/**
+ * Resolve the single B2C "All Homes" category, creating defaults if missing.
+ * Prefer exact name match; otherwise fall back to the sole/first active B2C category.
+ */
+export async function getOrCreateB2cAllHomesCategory(): Promise<{
+  id: string;
+  name: string;
+  marginPerKg: { toString(): string } | number;
+  isActive: boolean;
+}> {
+  // Find existing All Homes — do NOT reset marginPerKg (admins may have edited it).
+  const byName = await prisma.marginCategory.findFirst({
+    where: { customerType: 'B2C', name: B2C_ALL_HOMES_NAME },
+  });
+  if (byName) {
+    if (!byName.isActive) {
+      return prisma.marginCategory.update({
+        where: { id: byName.id },
+        data: { isActive: true },
+      });
+    }
+    return byName;
+  }
+
+  // Create All Homes only when missing (preserve any other legacy B2C rows).
+  const defaults = DEFAULT_CATEGORIES.B2C[0];
+  try {
+    return await prisma.marginCategory.create({
+      data: {
+        name: defaults.name,
+        customerType: defaults.customerType,
+        marginPerKg: defaults.marginPerKg,
+        description: defaults.description,
+        sortOrder: defaults.sortOrder,
+        isActive: true,
+      },
+    });
+  } catch {
+    // Race / unique name: re-read
+    const raced = await prisma.marginCategory.findFirst({
+      where: { customerType: 'B2C', name: B2C_ALL_HOMES_NAME },
+    });
+    if (raced) return raced;
+  }
+
+  // Legacy deployed DBs may have renamed the only B2C category.
+  const activeB2c = await prisma.marginCategory.findFirst({
+    where: { customerType: 'B2C', isActive: true },
+    orderBy: { sortOrder: 'asc' },
+  });
+  if (activeB2c) return activeB2c;
+
+  const anyB2c = await prisma.marginCategory.findFirst({
+    where: { customerType: 'B2C' },
+    orderBy: { sortOrder: 'asc' },
+  });
+  if (anyB2c) {
+    return prisma.marginCategory.update({
+      where: { id: anyB2c.id },
+      data: { isActive: true },
+    });
+  }
+
+  throw new Error('Failed to resolve B2C All Homes margin category');
+}
+
+/**
+ * Ensure a B2C customer has All Homes assigned. Persists when missing/stale.
+ * Safe for existing deployed customers with null marginCategoryId.
+ */
+export async function ensureB2cCustomerAllHomes(
+  customerId: string,
+  currentMarginCategoryId?: string | null
+): Promise<string> {
+  const allHomes = await getOrCreateB2cAllHomesCategory();
+  if (currentMarginCategoryId === allHomes.id) {
+    return allHomes.id;
+  }
+  await prisma.b2CCustomer.update({
+    where: { id: customerId },
+    data: { marginCategoryId: allHomes.id },
+  });
+  return allHomes.id;
+}
+

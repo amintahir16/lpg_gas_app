@@ -3,6 +3,10 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import {
+  ensureB2cCustomerAllHomes,
+  getOrCreateB2cAllHomesCategory,
+} from '@/lib/margin-categories';
 
 /**
  * Price Calculation Logic:
@@ -67,7 +71,25 @@ export async function GET(request: NextRequest) {
 
     category = customer.marginCategory;
 
-    if (!category) {
+    // B2C: always use the single All Homes category. Auto-heal deployed customers
+    // that were created without marginCategoryId (or with a stale/custom category).
+    if (customerType === 'B2C') {
+      try {
+        await ensureB2cCustomerAllHomes(customerId, customer.marginCategoryId);
+        category = await getOrCreateB2cAllHomesCategory();
+      } catch (assignError) {
+        console.error('Failed to assign B2C All Homes category:', assignError);
+        if (!category) {
+          return NextResponse.json(
+            {
+              error: 'Configuration Error',
+              message: 'B2C All Homes margin category is missing. Initialize B2C defaults in Pricing.',
+            },
+            { status: 400 }
+          );
+        }
+      }
+    } else if (!category) {
       return NextResponse.json(
         { error: 'Configuration Error', message: 'Customer margin category not assigned' },
         { status: 400 }
@@ -87,6 +109,19 @@ export async function GET(request: NextRequest) {
         where: regionScope,
         orderBy: { date: 'desc' }
       });
+    }
+
+    // Legacy rows may have regionId null (pre multi-region). Prefer scoped, then fall back.
+    if (!plantPrice && regionId) {
+      plantPrice = await prisma.dailyPlantPrice.findFirst({
+        where: { date: today, regionId: null },
+      });
+      if (!plantPrice) {
+        plantPrice = await prisma.dailyPlantPrice.findFirst({
+          where: { regionId: null },
+          orderBy: { date: 'desc' },
+        });
+      }
     }
 
     if (!plantPrice) {

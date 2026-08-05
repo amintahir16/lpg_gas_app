@@ -502,7 +502,7 @@ export default function B2CCustomerDetailPage() {
               <div className="space-y-0.5">
                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Margin Strategy</p>
                 <p className="text-sm font-bold text-gray-900">
-                  {customer.marginCategory ? customer.marginCategory.name : 'Standard'}
+                  {customer.marginCategory ? customer.marginCategory.name : 'All Homes'}
                 </p>
               </div>
             </div>

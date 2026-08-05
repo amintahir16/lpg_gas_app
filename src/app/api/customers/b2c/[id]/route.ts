@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity } from '@/lib/superAdminNotifier';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { getOrCreateB2cAllHomesCategory } from '@/lib/margin-categories';
 
 export async function GET(
   request: NextRequest,
@@ -100,7 +101,6 @@ export async function PUT(
       area,
       city,
       isActive,
-      marginCategoryId
     } = body;
 
     // Validate required fields
@@ -137,6 +137,9 @@ export async function PUT(
       );
     }
 
+    // B2C always keeps the single All Homes category.
+    const allHomes = await getOrCreateB2cAllHomesCategory();
+
     const customer = await prisma.b2CCustomer.update({
       where: { id: customerId },
       data: {
@@ -151,7 +154,7 @@ export async function PUT(
         area: area || null,
         city: city || 'Hayatabad',
         isActive: isActive !== undefined ? isActive : true,
-        marginCategoryId: marginCategoryId || null
+        marginCategoryId: allHomes.id,
       }
     });
 
