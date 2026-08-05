@@ -83,31 +83,47 @@ export function buildSalesActivitiesPdf(input: SalesActivitiesPdfInput): Blob {
   );
   y += 8;
 
-  const totalSales = input.activities
-    .filter((a) => a.paymentStatus !== 'RECEIVED')
-    .reduce((s, a) => s + a.totalAmount, 0);
-  const totalPaid = input.activities.reduce((s, a) => s + a.paidAmount, 0);
-  const totalUnpaid = input.activities.reduce((s, a) => s + a.unpaidAmount, 0);
+  // Sales Total = B2B/B2C sales + B2C security retention (matches Period Revenue sales side).
+  // Security deposit holds remain excluded. Payment rows are listed separately and
+  // must not inflate Sales Total / footer (avoids sale+payment double-count).
+  const isRevenueRow = (a: SalesActivityPdfRow) =>
+    a.title === 'B2B Sale' ||
+    a.title.startsWith('B2C');
+  const revenueRows = input.activities.filter(isRevenueRow);
+  const totalSales = revenueRows.reduce((s, a) => s + a.totalAmount, 0);
+  const totalPaidOnSales = revenueRows.reduce((s, a) => s + a.paidAmount, 0);
+  const totalUnpaidOnSales = revenueRows.reduce((s, a) => s + a.unpaidAmount, 0);
   const totalPayments = input.activities
-    .filter((a) => a.paymentStatus === 'RECEIVED')
+    .filter((a) => a.paymentStatus === 'RECEIVED' || a.title === 'B2B Payment')
     .reduce((s, a) => s + a.totalAmount, 0);
 
   autoTable(doc, {
     startY: y,
-    head: [['Sales Total', 'Payments Received', 'Sale Amount Paid', 'Amount Unpaid']],
+    head: [['Sales Total (incl. retention)', 'Payments Received', 'Paid on Sales', 'Still Unpaid']],
     body: [[
       formatRs(totalSales),
       formatRs(totalPayments),
-      formatRs(totalPaid),
-      formatRs(totalUnpaid),
+      formatRs(totalPaidOnSales),
+      formatRs(totalUnpaidOnSales),
     ]],
-    styles: { fontSize: 8, cellPadding: 2 },
-    headStyles: { fillColor: [30, 64, 175], textColor: 255 },
+    styles: { fontSize: 8, cellPadding: 2, halign: 'center' },
+    headStyles: { fillColor: [30, 64, 175], textColor: 255, halign: 'center' },
     margin: { left: 14, right: 14 },
   });
-  y = ((doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY || y) + 8;
+  y = ((doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable?.finalY || y) + 4;
 
-  const columnTotal = input.activities.reduce(
+  doc.setFontSize(7);
+  doc.setTextColor(100);
+  doc.text(
+    'Paid/Unpaid on sales include later B2B direct payments applied oldest-first. Payment rows are cash-in only (not added to Sales Total).',
+    pageWidth / 2,
+    y,
+    { align: 'center' }
+  );
+  doc.setTextColor(0);
+  y += 6;
+
+  const columnTotal = revenueRows.reduce(
     (acc, a) => {
       acc.total += a.totalAmount || 0;
       acc.paid += a.paidAmount || 0;
@@ -150,7 +166,7 @@ export function buildSalesActivitiesPdf(input: SalesActivitiesPdfInput): Blob {
     foot:
       input.activities.length > 0
         ? [[
-            'Total',
+            'Sales total',
             '',
             '',
             formatRs(columnTotal.total),
@@ -163,7 +179,12 @@ export function buildSalesActivitiesPdf(input: SalesActivitiesPdfInput): Blob {
           ]]
         : undefined,
     styles: { fontSize: 7, cellPadding: 1.5, overflow: 'linebreak' },
-    headStyles: { fillColor: [51, 65, 85], textColor: 255 },
+    headStyles: {
+      fillColor: [51, 65, 85],
+      textColor: 255,
+      halign: 'center',
+      valign: 'middle',
+    },
     footStyles: {
       fillColor: [241, 245, 249],
       textColor: [15, 23, 42],
@@ -172,16 +193,25 @@ export function buildSalesActivitiesPdf(input: SalesActivitiesPdfInput): Blob {
     },
     showFoot: 'lastPage',
     columnStyles: {
-      0: { cellWidth: 28 },
-      1: { cellWidth: 32 },
-      2: { cellWidth: 16 },
-      3: { cellWidth: 22, halign: 'right' },
-      4: { cellWidth: 22, halign: 'right' },
-      5: { cellWidth: 22, halign: 'right' },
-      6: { cellWidth: 20, halign: 'center' },
-      7: { cellWidth: 28 },
-      8: { cellWidth: 34 },
-      9: { cellWidth: 45 },
+      0: { cellWidth: 28, halign: 'left' },
+      1: { cellWidth: 32, halign: 'left' },
+      2: { cellWidth: 16, halign: 'center' }, // Bill
+      3: { cellWidth: 22, halign: 'center' }, // Total
+      4: { cellWidth: 22, halign: 'center' }, // Paid
+      5: { cellWidth: 22, halign: 'center' }, // Unpaid
+      6: { cellWidth: 20, halign: 'center' }, // Status
+      7: { cellWidth: 28, halign: 'left' },
+      8: { cellWidth: 34, halign: 'left' },
+      9: { cellWidth: 45, halign: 'left' },
+    },
+    // Keep footer number columns centered to match body
+    didParseCell: (data) => {
+      if (data.section === 'foot' && [2, 3, 4, 5].includes(data.column.index)) {
+        data.cell.styles.halign = 'center';
+      }
+      if (data.section === 'head') {
+        data.cell.styles.halign = 'center';
+      }
     },
     margin: { left: 14, right: 14 },
   });

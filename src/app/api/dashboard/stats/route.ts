@@ -15,6 +15,12 @@ import { parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { getCapacityFromTypeString, getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
 import { isOpeningDuesSaleItem, isOpeningDuesTransaction } from '@/lib/b2b-opening-entries';
 import { resolveFinancialPeriod } from '@/lib/financial-period';
+import {
+  allocateB2bPaymentsOntoSales,
+  b2cSalesActivityWhere,
+  b2cSalesAmount,
+  type DashboardSalesActivityRow,
+} from '@/lib/dashboard-sales-activities';
 
 export const dynamic = 'force-dynamic';
 
@@ -471,6 +477,8 @@ export async function GET(request: NextRequest) {
           date: { gte: startDate, lte: endDate },
           voided: false,
           ...txRegionScope,
+          // Preview list: sales only — exclude pure B2C security deposits
+          ...b2cSalesActivityWhere,
         },
         take: 40,
         orderBy: { createdAt: 'desc' },
@@ -639,7 +647,7 @@ export async function GET(request: NextRequest) {
         case 'PAYMENT':
           return {
             title: 'B2B Payment',
-            description: `Payment received from ${customer} • ${billTag}`,
+            description: `Direct payment from ${customer} (applied to open sales) • ${billTag}`,
           };
         case 'BUYBACK': {
           // Buyback is gas-by-the-kg, not by cylinder count.
@@ -711,10 +719,6 @@ export async function GET(request: NextRequest) {
       const customer = t.customer?.name || 'Unknown';
       const billTag = `Bill ${t.billSno}`;
       const gasQty = t.gasItems?.reduce((s, i) => s + Number(i.quantity || 0), 0) || 0;
-      const securityHeld = t.securityItems?.filter((s) => !s.isReturn) || [];
-      const securityReturned = t.securityItems?.filter((s) => s.isReturn) || [];
-      const heldQty = securityHeld.reduce((s, i) => s + Number(i.quantity || 0), 0);
-      const returnedQty = securityReturned.reduce((s, i) => s + Number(i.quantity || 0), 0);
       const accQty = t.accessoryItems?.reduce((s, i) => s + Number(i.quantity || 0), 0) || 0;
 
       const parts: string[] = [];
@@ -722,14 +726,7 @@ export async function GET(request: NextRequest) {
         const grouped = groupB2CCylinders(t.gasItems);
         parts.push(grouped ? `${grouped} gas sold` : `${gasQty} cylinder${gasQty > 1 ? 's' : ''} gas sold`);
       }
-      if (heldQty > 0) {
-        const grouped = groupB2CCylinders(securityHeld);
-        parts.push(grouped ? `${grouped} security held` : `${heldQty} security held`);
-      }
-      if (returnedQty > 0) {
-        const grouped = groupB2CCylinders(securityReturned);
-        parts.push(grouped ? `${grouped} empty returned` : `${returnedQty} empty returned`);
-      }
+      // Security deposits are excluded from this sales feed (not listed in parts).
       if (accQty > 0) {
         const accNames = Array.from(
           new Set((t.accessoryItems || []).map((a) => a.productName?.trim()).filter(Boolean))
@@ -738,11 +735,9 @@ export async function GET(request: NextRequest) {
         parts.push(`${accQty} ${accLabel}`);
       }
 
-      // Pick the dominant type for the badge title
+      // Pick the dominant type for the badge title (security-only rows are filtered upstream)
       let title = 'B2C Sale';
       if (gasQty > 0) title = 'B2C Gas Sale';
-      else if (returnedQty > 0) title = 'B2C Empty Return';
-      else if (heldQty > 0) title = 'B2C Security Hold';
       else if (accQty > 0) title = 'B2C Accessory Sale';
 
       const description = parts.length
@@ -767,7 +762,7 @@ export async function GET(request: NextRequest) {
       );
     };
 
-    const activities = [
+    const activityRows = [
       ...recentB2B.map((t) => {
         const { title, description } = buildB2BTitleAndDescription(t);
         const totalAmount = Number(t.totalAmount || 0);
@@ -810,12 +805,18 @@ export async function GET(request: NextRequest) {
           billSno: t.billSno,
           recordedBy: userDisplay(t.users),
           recordedById: t.createdBy,
-          status: t.voided ? 'error' : 'success',
+          status: t.voided ? ('error' as const) : ('success' as const),
         };
       }),
       ...recentB2C.map((t) => {
         const { title, description } = buildB2CTitleAndDescription(t);
-        const totalAmount = Number(t.finalAmount || t.totalAmount || 0);
+        // Strip security deposit liability from mixed bills
+        const totalAmount = b2cSalesAmount({
+          finalAmount: t.finalAmount,
+          totalAmount: t.totalAmount,
+          deliveryCharges: t.deliveryCharges,
+          securityItems: t.securityItems,
+        });
         return {
           id: `b2c-${t.id}`,
           transactionId: t.id,
@@ -835,10 +836,28 @@ export async function GET(request: NextRequest) {
           billSno: t.billSno,
           recordedBy: b2cCreatorNameById.get(t.createdBy) || null,
           recordedById: t.createdBy,
-          status: t.voided ? 'error' : 'success',
+          status: t.voided ? ('error' as const) : ('success' as const),
         };
       }),
-    ]
+    ].filter((a) => a.title !== 'B2C Security Hold');
+
+    // Apply direct B2B payments onto open sales for display (FIFO) — does not change DB.
+    const allocated = allocateB2bPaymentsOntoSales(
+      activityRows as DashboardSalesActivityRow[]
+    );
+    const paidById = new Map(allocated.map((a) => [a.id, a]));
+    const activities = activityRows
+      .map((row) => {
+        const updated = paidById.get(row.id);
+        if (!updated) return row;
+        return {
+          ...row,
+          paidAmount: updated.paidAmount,
+          unpaidAmount: updated.unpaidAmount,
+          paymentStatus: updated.paymentStatus,
+          amount: updated.amount,
+        };
+      })
       .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
       .slice(0, 25);
 

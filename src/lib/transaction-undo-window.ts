@@ -1,10 +1,10 @@
 /**
  * Time-boxed undo rights for B2B / B2C customer transactions.
  *
- * Both ADMIN and SUPER_ADMIN may undo a transaction only within a limited
- * window after it was recorded. Once the window closes the transaction is
- * immutable for everyone. Measured from `createdAt` (when the row was saved),
- * never from the user-chosen `date` / `time` fields which can be backdated.
+ * ADMIN may undo only within a limited window after the transaction was
+ * recorded. SUPER_ADMIN is exempt and may undo at any time.
+ * Measured from `createdAt` (when the row was saved), never from the
+ * user-chosen `date` / `time` fields which can be backdated.
  *
  * Single source of truth: API routes enforce, UI hides/locks the button.
  */
@@ -14,7 +14,13 @@ export const TRANSACTION_UNDO_WINDOW_MS =
   TRANSACTION_UNDO_WINDOW_HOURS * 60 * 60 * 1000;
 
 export const TRANSACTION_UNDO_WINDOW_MESSAGE =
-  `This transaction can no longer be undone. Undo is only allowed within ${TRANSACTION_UNDO_WINDOW_HOURS} hours after the transaction is recorded.`;
+  `This transaction can no longer be undone. Admins may only undo within ${TRANSACTION_UNDO_WINDOW_HOURS} hours after the transaction is recorded.`;
+
+export type CanUndoTransactionOptions = {
+  now?: number;
+  /** When SUPER_ADMIN, the 24h window does not apply. */
+  role?: string | null;
+};
 
 function toTimestamp(createdAt: Date | string | number): number {
   const time = createdAt instanceof Date ? createdAt.getTime() : new Date(createdAt).getTime();
@@ -32,14 +38,22 @@ export function transactionUndoWindowRemainingMs(
 }
 
 /**
- * Whether undo is still allowed. Applies to ADMIN and SUPER_ADMIN alike —
- * there is no role exemption.
+ * Whether undo is still allowed.
+ * - SUPER_ADMIN: always (no time window)
+ * - ADMIN / others: only within TRANSACTION_UNDO_WINDOW_HOURS of createdAt
+ *
+ * Second argument may be a timestamp (legacy) or `{ now, role }`.
  */
 export function canUndoTransaction(
   createdAt: Date | string | number,
-  now: number = Date.now()
+  nowOrOptions: number | CanUndoTransactionOptions = Date.now()
 ): boolean {
-  return transactionUndoWindowRemainingMs(createdAt, now) > 0;
+  const options: CanUndoTransactionOptions =
+    typeof nowOrOptions === 'number' ? { now: nowOrOptions } : nowOrOptions ?? {};
+
+  if (options.role === 'SUPER_ADMIN') return true;
+
+  return transactionUndoWindowRemainingMs(createdAt, options.now ?? Date.now()) > 0;
 }
 
 /** Short human hint, e.g. "5h 12m left to undo". */

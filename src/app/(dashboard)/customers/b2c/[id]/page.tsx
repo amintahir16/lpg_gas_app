@@ -902,7 +902,11 @@ export default function B2CCustomerDetailPage() {
 
                 {!selectedTransaction.voided && (() => {
                   const createdAt = selectedTransaction.createdAt || selectedTransaction.date;
-                  const undoAllowed = canUndoTransaction(createdAt, now);
+                  const userRole = session?.user?.role;
+                  const undoAllowed = canUndoTransaction(createdAt, {
+                    now,
+                    role: userRole,
+                  });
                   if (!undoAllowed) {
                     return (
                       <span
@@ -914,9 +918,12 @@ export default function B2CCustomerDetailPage() {
                       </span>
                     );
                   }
-                  const countdown = formatTransactionUndoWindowRemaining(
-                    transactionUndoWindowRemainingMs(createdAt, now)
-                  );
+                  const countdown =
+                    userRole === 'SUPER_ADMIN'
+                      ? ''
+                      : formatTransactionUndoWindowRemaining(
+                          transactionUndoWindowRemainingMs(createdAt, now)
+                        );
                   return (
                 <Button
                   variant="outline"

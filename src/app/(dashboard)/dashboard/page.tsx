@@ -115,8 +115,12 @@ export default function DashboardPage() {
 
   const activityColumnTotals = useMemo(() => {
     const rows = stats?.recentActivities || [];
+    // Sales/retention only — payment rows are cash-in and must not double-count Total.
     return rows.reduce(
       (acc, a) => {
+        const isPayment =
+          a.type === 'b2b_payment' || a.paymentStatus === 'RECEIVED';
+        if (isPayment) return acc;
         acc.total += a.totalAmount ?? a.amount ?? 0;
         acc.paid += a.paidAmount ?? 0;
         acc.unpaid += a.unpaidAmount ?? 0;
@@ -208,15 +212,60 @@ export default function DashboardPage() {
     return 'text-green-700 border-green-200 bg-green-50';
   };
 
-  const buildActivitiesPdfBlob = () => {
-    if (!stats) throw new Error('No dashboard data');
+  /** Full-period sales/payments report (excludes B2C security deposits). One lean API call. */
+  const fetchSalesActivitiesReport = async () => {
+    const params = new URLSearchParams(
+      buildFinancialPeriodQuery({ period, date, month, year })
+    );
+    const response = await fetch(
+      `/api/dashboard/sales-activities-report?${params.toString()}`
+    );
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to load sales activities report');
+    }
+    return response.json() as Promise<{
+      periodLabel: string;
+      activities: Array<{
+        title: string;
+        customerName: string;
+        billSno?: string | null;
+        totalAmount: number;
+        paidAmount: number;
+        unpaidAmount: number;
+        paymentStatus: string;
+        recordedBy: string | null;
+        time: string;
+        description: string;
+      }>;
+    }>;
+  };
+
+  const buildActivitiesPdfBlobFromReport = (report: {
+    periodLabel: string;
+    activities: Array<{
+      title: string;
+      customerName: string;
+      billSno?: string | null;
+      totalAmount: number;
+      paidAmount: number;
+      unpaidAmount: number;
+      paymentStatus: string;
+      recordedBy: string | null;
+      time: string;
+      description: string;
+    }>;
+  }) => {
+    if (!report.activities.length) {
+      throw new Error('No sales or payments found for this period');
+    }
     return buildSalesActivitiesPdf({
-      periodLabel: stats.label || periodLabel,
-      activities: stats.recentActivities.map((a) => ({
+      periodLabel: report.periodLabel || periodLabel,
+      activities: report.activities.map((a) => ({
         title: a.title,
         customerName: a.customerName || 'Unknown',
         billSno: a.billSno,
-        totalAmount: a.totalAmount ?? a.amount,
+        totalAmount: a.totalAmount,
         paidAmount: a.paidAmount ?? 0,
         unpaidAmount: a.unpaidAmount ?? 0,
         paymentStatus: a.paymentStatus || 'UNPAID',
@@ -228,11 +277,11 @@ export default function DashboardPage() {
   };
 
   const handleDownloadActivities = async () => {
-    if (!stats?.recentActivities.length) return;
     try {
       setPdfBusy('download');
-      const blob = buildActivitiesPdfBlob();
-      const fileName = salesActivitiesPdfFileName(stats.label || periodLabel);
+      const report = await fetchSalesActivitiesReport();
+      const blob = buildActivitiesPdfBlobFromReport(report);
+      const fileName = salesActivitiesPdfFileName(report.periodLabel || periodLabel);
       await downloadPdfBlob(blob, fileName);
     } catch (err) {
       console.error(err);
@@ -243,16 +292,16 @@ export default function DashboardPage() {
   };
 
   const handleShareActivities = async () => {
-    if (!stats?.recentActivities.length) return;
     try {
       setPdfBusy('share');
-      const blob = buildActivitiesPdfBlob();
-      const fileName = salesActivitiesPdfFileName(stats.label || periodLabel);
+      const report = await fetchSalesActivitiesReport();
+      const blob = buildActivitiesPdfBlobFromReport(report);
+      const fileName = salesActivitiesPdfFileName(report.periodLabel || periodLabel);
       await sharePdfBlob({
         blob,
         fileName,
         title: 'Sales Activities Report',
-        text: `Sales activities for ${stats.label || periodLabel}`,
+        text: `Sales activities for ${report.periodLabel || periodLabel}`,
       });
     } catch (err) {
       console.error(err);
@@ -673,7 +722,8 @@ export default function DashboardPage() {
                 Recent Sales Activities
               </CardTitle>
               <CardDescription className="text-xs">
-                Sales &amp; payments in {stats.label || periodLabel}
+                Sales &amp; payments in {stats.label || periodLabel}. Direct
+                payments are applied to open sales below.
               </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -683,7 +733,7 @@ export default function DashboardPage() {
                 size="sm"
                 className="h-8 text-xs"
                 onClick={handleShareActivities}
-                disabled={!stats.recentActivities.length || !!pdfBusy}
+                disabled={!!pdfBusy || loading}
               >
                 <ShareIcon className="w-3.5 h-3.5 mr-1" />
                 {pdfBusy === 'share' ? 'Sharing…' : 'Share'}
@@ -693,7 +743,7 @@ export default function DashboardPage() {
                 size="sm"
                 className="h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white"
                 onClick={handleDownloadActivities}
-                disabled={!stats.recentActivities.length || !!pdfBusy}
+                disabled={!!pdfBusy || loading}
               >
                 <DocumentArrowDownIcon className="w-3.5 h-3.5 mr-1" />
                 {pdfBusy === 'download' ? 'Preparing…' : 'Download'}
@@ -795,7 +845,7 @@ export default function DashboardPage() {
                 <TableFooter>
                   <TableRow className="bg-slate-50 border-t-2 border-slate-200">
                     <TableCell colSpan={2} className="font-bold text-gray-900">
-                      Total
+                      Sales total
                     </TableCell>
                     <TableCell className="text-right font-bold text-gray-900">
                       {formatCurrency(activityColumnTotals.total)}

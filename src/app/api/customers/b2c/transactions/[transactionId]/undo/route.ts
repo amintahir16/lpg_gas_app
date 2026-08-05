@@ -51,7 +51,7 @@ export async function POST(
       return NextResponse.json({ error: 'Transaction is already voided' }, { status: 400 });
     }
 
-    if (!canUndoTransaction(transaction.createdAt)) {
+    if (!canUndoTransaction(transaction.createdAt, { role: session.user.role })) {
       return NextResponse.json({ error: TRANSACTION_UNDO_WINDOW_MESSAGE }, { status: 403 });
     }
 
