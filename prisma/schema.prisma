@@ -570,6 +570,8 @@ model Notification {
   user      User?                @relation("UserNotifications", fields: [userId], references: [id])
 
   @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@index([isRead, priority, createdAt])
   @@index([type, createdAt])
   @@index([regionId])
   @@map("notifications")

@@ -72,10 +72,14 @@ export function NotificationDashboard({ isOpen, onClose }: NotificationDashboard
 
   const formatTimeAgo = (dateString: string) => {
     const now = new Date();
-    const date = new Date(dateString);
+    const normalized =
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(dateString.trim())
+        ? `${dateString.trim()}Z`
+        : dateString;
+    const date = new Date(normalized);
     const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
-    
-    if (diffInMinutes < 1) return 'Just now';
+
+    if (Number.isNaN(diffInMinutes) || diffInMinutes < 1) return 'Just now';
     if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
     if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
     return `${Math.floor(diffInMinutes / 1440)}d ago`;

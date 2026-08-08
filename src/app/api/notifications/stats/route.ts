@@ -5,10 +5,9 @@ import { prisma } from '@/lib/db';
 import { notificationAutoReadCutoff } from '@/lib/notification-auto-read';
 
 /**
- * Lightweight stats for the notification bell / polling.
- * Previously this ran 8 Prisma queries (counts by priority + groupBy + recent).
- * The UI only needs total / unread / urgent — 3 queries — which cuts ops by ~60%
- * on every poll cycle.
+ * Lightweight stats for the notification bell badge.
+ * Single conditional-aggregation SQL (was 3 separate counts).
+ * Prefer /api/notifications/summary?mode=stats for new callers.
  */
 export async function GET(_request: NextRequest) {
   try {
@@ -18,38 +17,34 @@ export async function GET(_request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Always derive scope from the authenticated session — never accept a
-    // `?userId=` from the query string (IDOR).
     const userId = session.user.id;
-
-    const baseWhere = {
-      OR: [{ userId }, { userId: null }],
-    };
-
-    // Auto-read rule, computed for free in the existing counts: anything
-    // issued more than 24h ago is no longer "unread". The hourly cron
-    // persists this; no writes happen here.
     const autoReadBefore = notificationAutoReadCutoff();
 
-    const [total, unread, urgent] = await Promise.all([
-      prisma.notification.count({ where: baseWhere }),
-      prisma.notification.count({
-        where: { ...baseWhere, isRead: false, createdAt: { gte: autoReadBefore } },
-      }),
-      prisma.notification.count({
-        where: {
-          ...baseWhere,
-          priority: 'URGENT',
-          isRead: false,
-          createdAt: { gte: autoReadBefore },
-        },
-      }),
-    ]);
+    const rows = await prisma.$queryRaw<
+      Array<{ total: number; unread: number; urgent: number }>
+    >`
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (
+          WHERE "isRead" = false AND "createdAt" >= ${autoReadBefore}
+        )::int AS unread,
+        COUNT(*) FILTER (
+          WHERE "isRead" = false
+            AND "priority" = CAST('URGENT' AS "NotificationPriority")
+            AND "createdAt" >= ${autoReadBefore}
+        )::int AS urgent
+      FROM "notifications"
+      WHERE "userId" = ${userId} OR "userId" IS NULL
+    `;
+
+    const row = rows[0];
+    const toInt = (v: unknown) =>
+      typeof v === 'bigint' ? Number(v) : typeof v === 'number' ? v : 0;
 
     return NextResponse.json({
-      total,
-      unread,
-      urgent,
+      total: toInt(row?.total),
+      unread: toInt(row?.unread),
+      urgent: toInt(row?.urgent),
       lastUpdated: new Date().toISOString(),
     });
   } catch (error) {

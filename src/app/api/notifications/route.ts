@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
     const limit = clampLimit(searchParams.get('limit'), 10);
     const unreadOnly = searchParams.get('unreadOnly') === 'true';
+    const includeTotal = searchParams.get('includeTotal') === '1';
 
     const skip = (page - 1) * limit;
 
@@ -47,23 +48,30 @@ export async function GET(request: NextRequest) {
       ...(unreadOnly && { isRead: false, createdAt: { gte: autoReadBefore } })
     };
 
-    const [notifications, total] = await Promise.all([
-      prisma.notification.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
-        include: {
-          user: {
-            select: { id: true, name: true, email: true }
-          },
-          region: {
-            select: { id: true, name: true, code: true }
-          }
-        }
-      }),
-      prisma.notification.count({ where })
-    ]);
+    const notifications = await prisma.notification.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+      // Lean select — header/settings list do not need user/region joins
+      select: {
+        id: true,
+        type: true,
+        title: true,
+        message: true,
+        isRead: true,
+        priority: true,
+        metadata: true,
+        link: true,
+        userId: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    const total = includeTotal
+      ? await prisma.notification.count({ where })
+      : notifications.length + skip;
 
     // Overlay the auto-read rule on rows the cron hasn't persisted yet.
     const effectiveNotifications = notifications.map((n) =>
@@ -72,7 +80,12 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       notifications: effectiveNotifications,
-      pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: includeTotal ? Math.ceil(total / limit) : undefined,
+      },
     });
   } catch (error) {
     console.error('Notifications fetch error:', error);
@@ -113,10 +126,6 @@ export async function POST(request: NextRequest) {
         userId,
         regionId,
       },
-      include: {
-        user: { select: { id: true, name: true, email: true } },
-        region: { select: { id: true, name: true, code: true } }
-      }
     });
 
     return NextResponse.json(notification, { status: 201 });

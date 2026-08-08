@@ -50,20 +50,23 @@ const initialState: NotificationState = {
   lastUpdate: null,
 };
 
+/** Tab-focus refresh only if badge data is older than this. */
+const STALE_MS = 15 * 60 * 1000;
+
 function notificationReducer(state: NotificationState, action: NotificationAction): NotificationState {
   switch (action.type) {
     case 'SET_LOADING':
       return { ...state, isLoading: action.payload };
-    
+
     case 'SET_ERROR':
       return { ...state, error: action.payload };
-    
+
     case 'SET_NOTIFICATIONS':
       return { ...state, notifications: action.payload };
-    
+
     case 'SET_STATS':
       return { ...state, stats: action.payload };
-    
+
     case 'ADD_NOTIFICATION':
       return {
         ...state,
@@ -75,7 +78,7 @@ function notificationReducer(state: NotificationState, action: NotificationActio
           urgent: action.payload.priority === 'URGENT' ? state.stats.urgent + 1 : state.stats.urgent,
         },
       };
-    
+
     case 'UPDATE_NOTIFICATION':
       return {
         ...state,
@@ -83,7 +86,7 @@ function notificationReducer(state: NotificationState, action: NotificationActio
           n.id === action.payload.id ? { ...n, ...action.payload.updates } : n
         ),
       };
-    
+
     case 'REMOVE_NOTIFICATION': {
       const removed = state.notifications.find((n) => n.id === action.payload);
       return {
@@ -103,7 +106,7 @@ function notificationReducer(state: NotificationState, action: NotificationActio
         },
       };
     }
-    
+
     case 'MARK_AS_READ': {
       const target = state.notifications.find((n) => n.id === action.payload);
       if (!target || target.isRead) return state;
@@ -122,7 +125,7 @@ function notificationReducer(state: NotificationState, action: NotificationActio
         },
       };
     }
-    
+
     case 'MARK_ALL_AS_READ':
       return {
         ...state,
@@ -130,12 +133,13 @@ function notificationReducer(state: NotificationState, action: NotificationActio
         stats: {
           ...state.stats,
           unread: 0,
+          urgent: 0,
         },
       };
-    
+
     case 'SET_LAST_UPDATE':
       return { ...state, lastUpdate: action.payload };
-    
+
     default:
       return state;
   }
@@ -150,7 +154,10 @@ interface NotificationContextType {
   createNotification: (notification: Omit<Notification, 'id' | 'createdAt'>) => Promise<Notification>;
   removeNotification: (id: string) => Promise<void>;
   clearError: () => void;
+  /** Login / tab focus: stats-only (1 SQL). */
   refresh: () => Promise<void>;
+  /** Bell dropdown open: stats + recent list (1 SQL). */
+  refreshBell: () => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -167,14 +174,90 @@ interface NotificationProviderProps {
   children: React.ReactNode;
 }
 
+function applyStats(
+  dispatch: React.Dispatch<NotificationAction>,
+  data: { total?: number; unread?: number; urgent?: number }
+) {
+  dispatch({
+    type: 'SET_STATS',
+    payload: {
+      total: data.total ?? 0,
+      unread: data.unread ?? 0,
+      urgent: data.urgent ?? 0,
+    },
+  });
+}
+
 export function NotificationProvider({ children }: NotificationProviderProps) {
   const { data: session } = useSession();
   const [state, dispatch] = useReducer(notificationReducer, initialState);
   const lastUpdateRef = useRef<Date | null>(null);
   lastUpdateRef.current = state.lastUpdate;
 
-  // Fetch notifications from API. Returns false on failure so callers can decide
-  // whether to retry — never used for background polling.
+  /** Badge counts only — 1 DB query. */
+  const fetchStats = useCallback(async (): Promise<boolean> => {
+    if (!session?.user) return true;
+
+    try {
+      const response = await fetch('/api/notifications/summary?mode=stats', {
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) return false;
+
+      const data = await response.json();
+      applyStats(dispatch, data);
+      dispatch({ type: 'SET_LAST_UPDATE', payload: new Date() });
+      return true;
+    } catch (error) {
+      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+        return false;
+      }
+      console.error('Error fetching notification stats:', error);
+      return false;
+    }
+  }, [session?.user]);
+
+  /** Bell panel: stats + recent rows — 1 DB query. */
+  const fetchBellSummary = useCallback(async (): Promise<boolean> => {
+    if (!session?.user) return true;
+
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      dispatch({ type: 'SET_ERROR', payload: null });
+
+      const response = await fetch('/api/notifications/summary?mode=bell', {
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        if (response.status !== 0) {
+          console.log('Failed to fetch notification bell summary:', response.status);
+        }
+        return false;
+      }
+
+      const data = await response.json();
+      dispatch({ type: 'SET_NOTIFICATIONS', payload: data.notifications || [] });
+      applyStats(dispatch, data);
+      dispatch({ type: 'SET_LAST_UPDATE', payload: new Date() });
+      return true;
+    } catch (error) {
+      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+        return false;
+      }
+      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch notifications';
+      dispatch({ type: 'SET_ERROR', payload: errorMessage });
+      console.error('Error fetching notification bell summary:', error);
+      return false;
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  }, [session?.user]);
+
+  /** Settings / full list pages — lean list API (not used by header bell). */
   const fetchNotifications = useCallback(async (): Promise<boolean> => {
     if (!session?.user) return true;
 
@@ -182,13 +265,11 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
 
-      const response = await fetch('/api/notifications?limit=100', {
+      const response = await fetch('/api/notifications?limit=50&includeTotal=1', {
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
       });
-      
+
       if (!response.ok) {
         if (response.status !== 0) {
           console.log('Failed to fetch notifications:', response.status, response.statusText);
@@ -213,41 +294,6 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     }
   }, [session?.user]);
 
-  // Fetch notification statistics
-  const fetchStats = useCallback(async (): Promise<boolean> => {
-    if (!session?.user) return true;
-
-    try {
-      const response = await fetch('/api/notifications/stats', {
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        dispatch({
-          type: 'SET_STATS',
-          payload: {
-            total: data.total ?? 0,
-            unread: data.unread ?? 0,
-            urgent: data.urgent ?? 0,
-          },
-        });
-        return true;
-      }
-      return false;
-    } catch (error) {
-      if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        return false;
-      }
-      console.error('Error fetching notification stats:', error);
-      return false;
-    }
-  }, [session?.user]);
-
-  // Mark notification as read
   const markAsRead = useCallback(async (id: string) => {
     try {
       const response = await fetch('/api/notifications', {
@@ -262,15 +308,14 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         throw new Error(data.error || 'Failed to mark notification as read');
       }
 
+      // Local stats only — no recount query
       dispatch({ type: 'MARK_AS_READ', payload: id });
-      await fetchStats();
     } catch (error) {
       console.error('Error marking notification as read:', error);
       throw error;
     }
-  }, [fetchStats]);
+  }, []);
 
-  // Mark all notifications as read
   const markAllAsRead = useCallback(async () => {
     try {
       const response = await fetch('/api/notifications', {
@@ -286,14 +331,12 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       }
 
       dispatch({ type: 'MARK_ALL_AS_READ' });
-      await fetchStats();
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
       throw error;
     }
-  }, [fetchStats]);
+  }, []);
 
-  // Create a new notification
   const createNotification = useCallback(async (notification: Omit<Notification, 'id' | 'createdAt'>) => {
     try {
       const response = await fetch('/api/notifications', {
@@ -316,7 +359,6 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     }
   }, []);
 
-  // Remove a notification
   const removeNotification = useCallback(async (id: string) => {
     try {
       const response = await fetch(`/api/notifications?id=${encodeURIComponent(id)}`, {
@@ -329,26 +371,28 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         throw new Error(data.error || 'Failed to delete notification');
       }
 
+      // Local stats only — no recount query
       dispatch({ type: 'REMOVE_NOTIFICATION', payload: id });
-      await fetchStats();
     } catch (error) {
       console.error('Error removing notification:', error);
       throw error;
     }
-  }, [fetchStats]);
+  }, []);
 
-  // Clear error
   const clearError = useCallback(() => {
     dispatch({ type: 'SET_ERROR', payload: null });
   }, []);
 
-  // Refresh all data
+  /** Login / tab focus — badge only. */
   const refresh = useCallback(async () => {
-    await Promise.all([fetchNotifications(), fetchStats()]);
-  }, [fetchNotifications, fetchStats]);
+    await fetchStats();
+  }, [fetchStats]);
 
-  // Action-driven only: load when the user signs in, and again when they
-  // return to this tab (if data is older than 45s). No background timer.
+  /** Bell open — list + badge in one query. */
+  const refreshBell = useCallback(async () => {
+    await fetchBellSummary();
+  }, [fetchBellSummary]);
+
   useEffect(() => {
     if (!session?.user) {
       dispatch({ type: 'SET_NOTIFICATIONS', payload: [] });
@@ -359,7 +403,6 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     void refresh();
 
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    const STALE_MS = 45_000;
 
     const onVisibility = () => {
       if (document.visibilityState !== 'visible') return;
@@ -388,6 +431,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     removeNotification,
     clearError,
     refresh,
+    refreshBell,
   };
 
   return (
@@ -395,4 +439,4 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       {children}
     </NotificationContext.Provider>
   );
-} 
+}

@@ -20,7 +20,7 @@ export function NotificationBell({
   showBadge = true, 
   variant = 'default' 
 }: NotificationBellProps) {
-  const { state, markAsRead, removeNotification, refresh } = useNotifications();
+  const { state, markAsRead, removeNotification, refreshBell } = useNotifications();
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -72,9 +72,9 @@ export function NotificationBell({
   const handleBellClick = () => {
     const next = !isOpen;
     setIsOpen(next);
-    // User action: open the panel → fetch latest (no background timer).
+    // User action: open the panel → fetch latest list + stats (1 SQL).
     if (next) {
-      void refresh();
+      void refreshBell();
     }
   };
 
@@ -123,10 +123,15 @@ export function NotificationBell({
 
   const formatTimeAgo = (dateString: string) => {
     const now = new Date();
-    const date = new Date(dateString);
+    // Guard timezone-less ISO from APIs/DBs (treat as UTC)
+    const normalized =
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(dateString.trim())
+        ? `${dateString.trim()}Z`
+        : dateString;
+    const date = new Date(normalized);
     const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
-    
-    if (diffInMinutes < 1) return 'Just now';
+
+    if (Number.isNaN(diffInMinutes) || diffInMinutes < 1) return 'Just now';
     if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
     if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
     return `${Math.floor(diffInMinutes / 1440)}d ago`;

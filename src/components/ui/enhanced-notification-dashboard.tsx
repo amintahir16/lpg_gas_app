@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -27,12 +27,17 @@ type FilterType = 'all' | 'unread' | 'urgent' | 'high' | 'medium' | 'low';
 type SortType = 'newest' | 'oldest' | 'priority' | 'type';
 
 export function EnhancedNotificationDashboard({ isOpen, onClose }: EnhancedNotificationDashboardProps) {
-  const { state, markAsRead, markAllAsRead, removeNotification, refresh } = useNotifications();
+  const { state, markAsRead, markAllAsRead, removeNotification, refreshBell } = useNotifications();
   const { notifications, stats, isLoading, error, lastUpdate } = state;
   
   const [filter, setFilter] = useState<FilterType>('all');
   const [sortBy, setSortBy] = useState<SortType>('newest');
   const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    void refreshBell();
+  }, [isOpen, refreshBell]);
 
   // Filter and sort notifications
   const filteredAndSortedNotifications = useMemo(() => {
@@ -161,7 +166,7 @@ export function EnhancedNotificationDashboard({ isOpen, onClose }: EnhancedNotif
 
   const handleRefresh = async () => {
     try {
-      await refresh();
+      await refreshBell();
     } catch (error) {
       console.error('Failed to refresh notifications:', error);
     }

@@ -68,7 +68,7 @@ const PREFS_STORAGE_KEY = 'notificationPreferences';
 
 export default function NotificationSettingsPage() {
   const router = useRouter();
-  const { state, markAsRead, markAllAsRead, removeNotification, refresh } = useNotifications();
+  const { state, markAsRead, markAllAsRead, removeNotification, fetchNotifications, fetchStats } = useNotifications();
   const { notifications, stats, isLoading } = state;
 
   const [preferences, setPreferences] = useState<NotificationPreferences>(DEFAULT_PREFERENCES);
@@ -88,6 +88,11 @@ export default function NotificationSettingsPage() {
       console.error('Failed to parse saved preferences:', e);
     }
   }, []);
+
+  // Settings page needs the list — load once on mount (not on every tab focus).
+  useEffect(() => {
+    void Promise.all([fetchNotifications(), fetchStats()]);
+  }, [fetchNotifications, fetchStats]);
 
   useEffect(() => {
     if (!statusMessage) return;
@@ -144,7 +149,7 @@ export default function NotificationSettingsPage() {
   const handleRefresh = async () => {
     try {
       setRefreshing(true);
-      await refresh();
+      await Promise.all([fetchNotifications(), fetchStats()]);
       showStatus('success', 'Notifications refreshed');
     } catch (error) {
       showStatus(
