@@ -52,61 +52,57 @@ export async function GET(
       }
     });
 
-    // Build transaction filter (region-scoped)
-    const transactionWhere: any = { customerId, ...regionScopedWhere(regionId) };
+    // Buyback stats only — same rules as before (buybackRate set), but without
+    // loading every transaction + every line item for this customer.
+    const transactionWhere: Record<string, unknown> = {
+      customerId,
+      ...regionScopedWhere(regionId),
+    };
     if (startDate || endDate) {
-      transactionWhere.date = {};
+      const dateFilter: { gte?: Date; lte?: Date } = {};
       if (startDate) {
-        transactionWhere.date.gte = new Date(startDate);
+        dateFilter.gte = new Date(startDate);
       }
       if (endDate) {
         const endDateObj = new Date(endDate);
         endDateObj.setHours(23, 59, 59, 999);
-        transactionWhere.date.lte = endDateObj;
+        dateFilter.lte = endDateObj;
       }
+      transactionWhere.date = dateFilter;
     }
 
-    // Fetch transactions with items to calculate cumulative stats
-    const transactions = await prisma.b2BTransaction.findMany({
-      where: transactionWhere,
-      include: {
-        items: true,
+    const buybackItems = await prisma.b2BTransactionItem.findMany({
+      where: {
+        buybackRate: { not: null },
+        transaction: transactionWhere,
+      },
+      select: {
+        cylinderType: true,
+        remainingKg: true,
+        quantity: true,
+        totalPrice: true,
       },
     });
 
-    // Helper to categorize items (replicated from report API for robustness)
-    const categorizeItems = (items: any[]) => {
-      const buybackItems: any[] = [];
-      items.forEach(item => {
-        // A buyback item is definitively identified by buybackRate being set
-        const hasBuybackRateSet = item.buybackRate !== null && item.buybackRate !== undefined;
-        if (hasBuybackRateSet) {
-          buybackItems.push(item);
-        }
-      });
-      return { buybackItems };
-    };
+    // Calculate cumulative stats per cylinder type (identical math to prior path)
+    const cumulativeStats = new Map<string, { buybackWeight: number; buybackCredit: number }>();
 
-    // Calculate cumulative stats per cylinder type
-    const cumulativeStats = new Map<string, { buybackWeight: number, buybackCredit: number }>();
+    buybackItems.forEach((item) => {
+      if (!item.cylinderType) return;
+      const stats = cumulativeStats.get(item.cylinderType) || {
+        buybackWeight: 0,
+        buybackCredit: 0,
+      };
+      const qty = item.quantity ? Number(item.quantity) : 0;
 
-    transactions.forEach(transaction => {
-      const { buybackItems } = categorizeItems(transaction.items || []);
-      buybackItems.forEach((item: any) => {
-        if (item.cylinderType) {
-          const stats = cumulativeStats.get(item.cylinderType) || { buybackWeight: 0, buybackCredit: 0 };
-          const qty = item.quantity ? Number(item.quantity) : 0;
-          
-          if (item.remainingKg) {
-            stats.buybackWeight += Number(item.remainingKg) * qty;
-          }
-          if (item.totalPrice) {
-            stats.buybackCredit += Number(item.totalPrice);
-          }
-          
-          cumulativeStats.set(item.cylinderType, stats);
-        }
-      });
+      if (item.remainingKg) {
+        stats.buybackWeight += Number(item.remainingKg) * qty;
+      }
+      if (item.totalPrice) {
+        stats.buybackCredit += Number(item.totalPrice);
+      }
+
+      cumulativeStats.set(item.cylinderType, stats);
     });
 
     // Process cylinder dues with proper display names (same logic as inventory stats)

@@ -220,7 +220,7 @@ export default function B2BCustomerDetailPage() {
     empty: number;
     total: number;
   }>>([]);
-  const [loadingCylinderTypes, setLoadingCylinderTypes] = useState(true);
+  const [loadingCylinderTypes, setLoadingCylinderTypes] = useState(false);
 
   // Pricing information
   const [pricingInfo, setPricingInfo] = useState<any>(null);
@@ -239,8 +239,10 @@ export default function B2BCustomerDetailPage() {
   // Inventory validation
   const { validateInventory, isFieldValid, hasAnyErrors, clearValidationError, clearAllValidationErrors } = useInventoryValidation();
 
-  // Cylinder stock information
-  const { cylinders: cylinderStock, loading: stockLoading, getCylinderStock } = useCylinderStock();
+  // Cylinder stock — only while transaction form is open (avoids mount-time inventory scans)
+  const { cylinders: cylinderStock, loading: stockLoading, getCylinderStock } = useCylinderStock({
+    enabled: showTransactionForm,
+  });
 
   // Accessory validation state
   const [hasAccessoryErrors, setHasAccessoryErrors] = useState(false);
@@ -337,8 +339,10 @@ export default function B2BCustomerDetailPage() {
     fetchMarginCategories();
   }, []);
 
-  // Fetch available cylinder types from inventory
+  // Fetch available cylinder types when needed for forms (not on every page load)
   useEffect(() => {
+    if (!showTransactionForm && !showOpeningDuesModal) return;
+
     const fetchAvailableCylinderTypes = async () => {
       try {
         setLoadingCylinderTypes(true);
@@ -359,7 +363,7 @@ export default function B2BCustomerDetailPage() {
     };
 
     fetchAvailableCylinderTypes();
-  }, [showTransactionForm]);
+  }, [showTransactionForm, showOpeningDuesModal]);
 
   // Fetch cylinder dues dynamically
   useEffect(() => {

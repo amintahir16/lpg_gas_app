@@ -152,6 +152,9 @@ model B2CTransaction {
 
   @@unique([customerId, billSno])
   @@index([regionId])
+  @@index([regionId, date])
+  @@index([customerId, createdAt])
+  @@index([customerId, date])
   @@map("b2c_transactions")
 }
 
@@ -700,6 +703,9 @@ model B2BTransaction {
 
   @@unique([customerId, billSno]) // Each customer has their own bill sequence
   @@index([regionId])
+  @@index([regionId, date])
+  @@index([customerId, createdAt])
+  @@index([customerId, date])
   @@map("b2b_transactions")
 }
 
@@ -726,6 +732,7 @@ model B2BTransactionItem {
   products            Product?         @relation(fields: [productId], references: [id])
   transaction         B2BTransaction   @relation(fields: [transactionId], references: [id])
 
+  @@index([transactionId])
   @@map("b2b_transaction_items")
 }
 
@@ -1032,6 +1039,7 @@ model OfficeExpense {
 
   @@unique([regionId, type, month, year])
   @@index([regionId])
+  @@index([regionId, expenseDate])
   @@map("office_expenses")
 }
 
@@ -1050,6 +1058,7 @@ model PersonalExpense {
 
   @@index([regionId])
   @@index([expenseDate])
+  @@index([regionId, expenseDate])
   @@map("personal_expenses")
 }
 

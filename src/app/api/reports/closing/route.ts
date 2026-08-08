@@ -11,7 +11,7 @@ import {
 import {
   buildBankLedgerEntries,
   getBankLedgerOpeningNet,
-  summarizeLedgerEntries,
+  sumBankLedgerInOut,
 } from '@/lib/bank-ledger-query';
 import {
   PAYMENT_METHOD_OPTIONS,
@@ -65,11 +65,11 @@ export async function GET(request: NextRequest) {
       method: PaymentMethodValue;
       entries: Awaited<ReturnType<typeof buildBankLedgerEntries>>;
       opening: number;
-      summary: ReturnType<typeof summarizeLedgerEntries>;
+      periodTotals: Awaited<ReturnType<typeof sumBankLedgerInOut>>;
     }> = [];
 
     for (const method of methods) {
-      const [entries, opening] = await Promise.all([
+      const [entries, opening, periodTotals] = await Promise.all([
         buildBankLedgerEntries({
           method,
           regionId,
@@ -81,24 +81,31 @@ export async function GET(request: NextRequest) {
           regionId,
           beforeDate: startDate,
         }),
+        // Same business rules as entry hydrate — SQL SUM avoids deriving totals twice
+        sumBankLedgerInOut({
+          method,
+          regionId,
+          startDate,
+          endDate,
+        }),
       ]);
       walletResults.push({
         method,
         entries,
         opening,
-        summary: summarizeLedgerEntries(entries),
+        periodTotals,
       });
     }
 
     const byWallet: WalletClosingRow[] = walletResults.map(
-      ({ method, opening, summary }) => ({
+      ({ method, opening, entries, periodTotals }) => ({
         wallet: method,
         walletLabel: formatPaymentMethodLabel(method),
         opening,
-        totalIn: summary.totalIn,
-        totalOut: summary.totalOut,
-        closing: opening + summary.totalIn - summary.totalOut,
-        recordCount: summary.recordCount,
+        totalIn: periodTotals.totalIn,
+        totalOut: periodTotals.totalOut,
+        closing: opening + periodTotals.totalIn - periodTotals.totalOut,
+        recordCount: entries.length,
       })
     );
 

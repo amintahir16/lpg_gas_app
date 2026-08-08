@@ -8,6 +8,29 @@ import { calculateGasLineProfit } from '@/lib/gas-profit';
 import { getCapacityFromTypeString } from '@/lib/cylinder-utils';
 import { compareTransactionsNewestFirst } from '@/lib/transaction-display-sort';
 
+function saleBalanceImpact(transaction: {
+  voided: boolean;
+  paymentStatus: string | null;
+  unpaidAmount: { toString(): string } | null;
+  totalAmount: { toString(): string };
+}): number {
+  const totalAmount = parseFloat(transaction.totalAmount.toString());
+  if (transaction.voided) return 0;
+  if (transaction.paymentStatus === 'FULLY_PAID') return 0;
+  if (transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined) {
+    return parseFloat(transaction.unpaidAmount.toString());
+  }
+  return totalAmount;
+}
+
+function creditBalanceImpact(transaction: {
+  voided: boolean;
+  totalAmount: { toString(): string };
+}): number {
+  const totalAmount = parseFloat(transaction.totalAmount.toString());
+  return transaction.voided ? 0 : -totalAmount;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -30,24 +53,39 @@ export async function GET(
     // Get customer details (region-scoped)
     const customer = await prisma.customer.findFirst({
       where: { id: customerId, type: 'B2B', ...regionScopedWhere(regionId) },
-      include: { marginCategory: true }
+      include: { marginCategory: true },
     });
 
     if (!customer) {
-      return NextResponse.json(
-        { error: 'Customer not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }
 
-    // Get ALL transactions once — running balance needs the full timeline;
-    // date filter is applied in memory (same results as a second findMany).
-    const allTransactions = await prisma.b2BTransaction.findMany({
+    // Lean full timeline for running balance + lifetime in/out (no line items).
+    const leanTransactions = await prisma.b2BTransaction.findMany({
       where: { customerId },
-      include: {
-        items: true,
+      select: {
+        id: true,
+        transactionType: true,
+        billSno: true,
+        customerId: true,
+        date: true,
+        time: true,
+        totalAmount: true,
+        paidAmount: true,
+        unpaidAmount: true,
+        paymentMethod: true,
+        paymentStatus: true,
+        paymentReference: true,
+        notes: true,
+        createdBy: true,
+        createdAt: true,
+        voided: true,
+        voidedBy: true,
+        voidedAt: true,
+        voidReason: true,
+        regionId: true,
       },
-      orderBy: { createdAt: 'asc' }, // Order by creation time ascending for proper running balance calculation
+      orderBy: { createdAt: 'asc' },
     });
 
     const filterStart = startDate ? new Date(startDate) : null;
@@ -59,216 +97,88 @@ export async function GET(
         })()
       : null;
 
-    const filteredTransactions = (filterStart || filterEnd)
-      ? allTransactions.filter((t) => {
+    const filteredTransactions = filterStart || filterEnd
+      ? leanTransactions.filter((t) => {
           const d = new Date(t.date);
           if (filterStart && d < filterStart) return false;
           if (filterEnd && d > filterEnd) return false;
           return true;
         })
-      : allTransactions;
+      : leanTransactions;
 
-    // Calculate running balance for each transaction (chronological order)
-    // We need to calculate balance based on ALL transactions, but only display filtered ones
-    // Net Balance = Total Out - Total In (negative when customer owes)
     let runningBalance = 0;
-
-    const allTransactionsWithBalance = allTransactions.map((transaction) => {
-      // Convert Decimal to number properly
-      const totalAmount = parseFloat(transaction.totalAmount.toString());
-
-      // Calculate the balance impact of this transaction
+    const allTransactionsWithBalance = leanTransactions.map((transaction) => {
       let balanceImpact = 0;
-
       switch (transaction.transactionType) {
         case 'SALE':
-          // For SALE transactions, only unpaid amount affects balance
-          // If transaction is voided, it has zero impact on balances
-          if (transaction.voided) {
-            balanceImpact = 0;
-          } else if (transaction.paymentStatus === 'FULLY_PAID') {
-            // Fully paid sale - zero balance impact
-            balanceImpact = 0;
-          } else if (transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined) {
-            // New format with unpaidAmount field
-            balanceImpact = parseFloat(transaction.unpaidAmount.toString());
-          } else {
-            // Old transaction format - no payment info, assume fully unpaid
-            balanceImpact = totalAmount;
-          }
+          balanceImpact = saleBalanceImpact(transaction);
           break;
         case 'PAYMENT':
         case 'BUYBACK':
         case 'ADJUSTMENT':
         case 'CREDIT_NOTE':
-          balanceImpact = transaction.voided ? 0 : -totalAmount; // Decreases what customer owes (less negative)
+          balanceImpact = creditBalanceImpact(transaction);
           break;
         default:
           balanceImpact = 0;
       }
-
-      // Update running balance (negative when customer owes)
       runningBalance += balanceImpact;
-
-      return {
-        ...transaction,
-        runningBalance: runningBalance, // This is positive (Sales - Payments), we'll negate for display
-        balanceImpact: balanceImpact
-      };
+      return { ...transaction, runningBalance, balanceImpact };
     });
 
-    // Now calculate balances for filtered transactions
-    // We need to find the starting balance before the first filtered transaction
     let startingBalance = 0;
     if (filteredTransactions.length > 0 && (startDate || endDate)) {
-      // Use balance impacts already calculated in allTransactionsWithBalance
-      // They already use the correct unpaidAmount logic
       const firstFilteredCreatedAt = filteredTransactions[0].createdAt;
-      const transactionsBeforeFilterWithBalance = allTransactionsWithBalance.filter(t =>
-        t.createdAt < firstFilteredCreatedAt
-      );
-
-      // Sum up the balance impacts (already calculated correctly with unpaidAmount logic)
-      startingBalance = transactionsBeforeFilterWithBalance.reduce((sum, t) => sum + (t.balanceImpact || 0), 0);
+      startingBalance = allTransactionsWithBalance
+        .filter((t) => t.createdAt < firstFilteredCreatedAt)
+        .reduce((sum, t) => sum + (t.balanceImpact || 0), 0);
     }
 
-    // Calculate running balances for filtered transactions
-    // currentBalance is positive (Sales - Payments), we negate for display
     let currentBalance = startingBalance;
     const filteredTransactionsWithBalance = filteredTransactions.map((transaction) => {
-      const totalAmount = parseFloat(transaction.totalAmount.toString());
       let balanceImpact = 0;
-
       switch (transaction.transactionType) {
         case 'SALE':
-          // For SALE transactions, only unpaid amount affects balance
-          if (transaction.voided) {
-            balanceImpact = 0;
-          } else if (transaction.paymentStatus === 'FULLY_PAID') {
-            balanceImpact = 0; // Fully paid sale - zero impact
-          } else if (transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined) {
-            balanceImpact = parseFloat(transaction.unpaidAmount.toString());
-          } else {
-            balanceImpact = totalAmount; // Old format - assume fully unpaid
-          }
+          balanceImpact = saleBalanceImpact(transaction);
           break;
         case 'PAYMENT':
         case 'BUYBACK':
         case 'ADJUSTMENT':
         case 'CREDIT_NOTE':
-          balanceImpact = transaction.voided ? 0 : -totalAmount; // Decreases what customer owes
+          balanceImpact = creditBalanceImpact(transaction);
           break;
       }
-
       currentBalance += balanceImpact;
-
-      return {
-        ...transaction,
-        runningBalance: currentBalance, // Positive (Sales - Payments), frontend will negate
-        balanceImpact: balanceImpact
-      };
+      return { ...transaction, runningBalance: currentBalance, balanceImpact };
     });
 
-    // Newest first for UI (keeps running-balance walk newest → oldest)
     const reversedTransactions = [...filteredTransactionsWithBalance].sort(
       compareTransactionsNewestFirst
     );
-    let displayBalance = currentBalance; // Start with the final balance
+    let displayBalance = currentBalance;
 
     const displayTransactions = reversedTransactions.map((transaction) => {
-      // Move to the balance before this transaction first
       displayBalance -= transaction.balanceImpact;
-
-      // The running balance for this transaction is the balance AFTER it
-      const result = {
+      return {
         ...transaction,
-        runningBalance: displayBalance + transaction.balanceImpact
+        runningBalance: displayBalance + transaction.balanceImpact,
       };
-
-      return result;
     });
 
-    // Calculate Total In, Total Out, and Total Profit for ALL transactions
-    let totalIn = 0; // Payments received (reduces what customer owes)
-    let totalOut = 0; // Sales made (increases what customer owes)
-    let totalProfit = 0; // Total profit from all sales
+    // Lifetime totals — sale profit needs line items only (not every page).
+    let totalIn = 0;
+    let totalOut = 0;
+    let totalProfit = 0;
 
-    allTransactions.forEach(transaction => {
-      // Safely skip voided transactions from affecting lifetime totals
+    leanTransactions.forEach((transaction) => {
       if (transaction.voided) return;
-
       const totalAmount = parseFloat(transaction.totalAmount.toString());
       switch (transaction.transactionType) {
         case 'SALE':
-          // Opening cylinder dues are holdings setup — no sold totals / margin
           if (isOpeningDuesTransaction(transaction)) break;
-
           totalOut += totalAmount;
-          // Include partial payments made at sale time in Total In
           if (transaction.paidAmount) {
-            const paidAmount = parseFloat(transaction.paidAmount.toString());
-            totalIn += paidAmount;
-          }
-
-          // Calculate Profit for this transaction
-          if (transaction.items && transaction.items.length > 0) {
-            transaction.items.forEach(item => {
-              if (isOpeningDuesSaleItem(transaction, item)) return;
-
-              // 1. Gas Profit Calculation — realized (sell − cost) when cost stored;
-              // falls back to customer margin × capacity for older rows without cost.
-              if (item.cylinderType) {
-                let capacity = 15;
-
-                const parsedVk = item.cylinderVariantKey
-                  ? parseCylinderVariantKey(item.cylinderVariantKey)
-                  : null;
-                if (
-                  parsedVk?.capacity !== null &&
-                  parsedVk?.capacity !== undefined &&
-                  Number.isFinite(parsedVk.capacity)
-                ) {
-                  capacity = parsedVk.capacity;
-                } else if (item.cylinderType) {
-                  const fromType = getCapacityFromTypeString(item.cylinderType);
-                  if (fromType > 0) capacity = fromType;
-                }
-
-                const quantity = parseFloat(item.quantity.toString());
-                const sellingPrice = parseFloat(item.pricePerItem.toString()) || 0;
-                const costPrice = item.costPrice ? parseFloat(item.costPrice.toString()) : 0;
-                const marginPerKg = customer.marginCategory
-                  ? parseFloat(customer.marginCategory.marginPerKg.toString())
-                  : 0;
-
-                totalProfit += calculateGasLineProfit({
-                  pricePerItem: sellingPrice,
-                  quantity,
-                  costPrice,
-                  capacityKg: capacity,
-                  marginPerKg,
-                });
-              }
-              // 2. Accessory Profit Calculation
-              else {
-                // Profit = (Selling Price - Cost Price) * Quantity
-                const sellingPrice = parseFloat(item.pricePerItem.toString()) || 0; // pricePerItem is selling price
-                // Use costPrice field if available, otherwise check regular cost logic
-                let costPrice = item.costPrice ? parseFloat(item.costPrice.toString()) : 0;
-
-                // If cost price is 0 (missing), assume 20% default margin
-                if (costPrice === 0 && sellingPrice > 0) {
-                  // Default 20% margin means Profit = 20% of Selling Price
-                  const itemProfit = sellingPrice * 0.20 * parseFloat(item.quantity.toString());
-                  totalProfit += itemProfit;
-                } else {
-                  // Standard profit calculation
-                  const profitPerItem = sellingPrice - costPrice;
-                  const itemProfit = profitPerItem * parseFloat(item.quantity.toString());
-                  totalProfit += itemProfit;
-                }
-              }
-            });
+            totalIn += parseFloat(transaction.paidAmount.toString());
           }
           break;
         case 'PAYMENT':
@@ -280,12 +190,93 @@ export async function GET(
       }
     });
 
-    // Net Balance = Total Out - Total In (negative when customer owes)
-    // Current ledgerBalance = Sales - Payments, so we need to negate it for display
-    const netBalance = -(customer.ledgerBalance.toNumber());
+    const saleItems = await prisma.b2BTransactionItem.findMany({
+      where: {
+        transaction: {
+          customerId,
+          voided: false,
+          transactionType: 'SALE',
+        },
+      },
+      select: {
+        quantity: true,
+        pricePerItem: true,
+        costPrice: true,
+        cylinderType: true,
+        cylinderVariantKey: true,
+        transaction: {
+          select: {
+            notes: true,
+            paymentReference: true,
+            totalAmount: true,
+            transactionType: true,
+          },
+        },
+      },
+    });
 
-    // Apply pagination
-    const paginatedTransactions = displayTransactions.slice(skip, skip + limit);
+    saleItems.forEach((item) => {
+      if (isOpeningDuesSaleItem(item.transaction, item)) return;
+      if (item.cylinderType) {
+        let capacity = 15;
+        const parsedVk = item.cylinderVariantKey
+          ? parseCylinderVariantKey(item.cylinderVariantKey)
+          : null;
+        if (
+          parsedVk?.capacity !== null &&
+          parsedVk?.capacity !== undefined &&
+          Number.isFinite(parsedVk.capacity)
+        ) {
+          capacity = parsedVk.capacity;
+        } else {
+          const fromType = getCapacityFromTypeString(item.cylinderType);
+          if (fromType > 0) capacity = fromType;
+        }
+        const quantity = parseFloat(item.quantity.toString());
+        const sellingPrice = parseFloat(item.pricePerItem.toString()) || 0;
+        const costPrice = item.costPrice ? parseFloat(item.costPrice.toString()) : 0;
+        const marginPerKg = customer.marginCategory
+          ? parseFloat(customer.marginCategory.marginPerKg.toString())
+          : 0;
+        totalProfit += calculateGasLineProfit({
+          pricePerItem: sellingPrice,
+          quantity,
+          costPrice,
+          capacityKg: capacity,
+          marginPerKg,
+        });
+      } else {
+        const sellingPrice = parseFloat(item.pricePerItem.toString()) || 0;
+        let costPrice = item.costPrice ? parseFloat(item.costPrice.toString()) : 0;
+        if (costPrice === 0 && sellingPrice > 0) {
+          totalProfit += sellingPrice * 0.2 * parseFloat(item.quantity.toString());
+        } else {
+          totalProfit += (sellingPrice - costPrice) * parseFloat(item.quantity.toString());
+        }
+      }
+    });
+
+    const netBalance = -customer.ledgerBalance.toNumber();
+
+    const pageLean = displayTransactions.slice(skip, skip + limit);
+    const pageIds = pageLean.map((t) => t.id);
+    const pageFull =
+      pageIds.length > 0
+        ? await prisma.b2BTransaction.findMany({
+            where: { id: { in: pageIds } },
+            include: { items: true },
+          })
+        : [];
+    const fullById = new Map(pageFull.map((t) => [t.id, t]));
+    const paginatedTransactions = pageLean.map((lean) => {
+      const full = fullById.get(lean.id);
+      return {
+        ...(full || lean),
+        runningBalance: lean.runningBalance,
+        balanceImpact: lean.balanceImpact,
+      };
+    });
+
     const total = filteredTransactions.length;
     const pages = Math.ceil(total / limit);
 
@@ -293,11 +284,11 @@ export async function GET(
       customer,
       transactions: paginatedTransactions,
       summary: {
-        netBalance, // Negative when customer owes, positive when customer has credit
-        totalIn, // Payments received
-        totalOut, // Sales made
-        totalProfit, // Total profit calcualted
-        ledgerBalance: customer.ledgerBalance.toNumber() // Keep original for internal calculations
+        netBalance,
+        totalIn,
+        totalOut,
+        totalProfit,
+        ledgerBalance: customer.ledgerBalance.toNumber(),
       },
       pagination: {
         page,
@@ -307,7 +298,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('Error fetching customer ledger:', error);
+    console.error('Error fetching B2B customer ledger:', error);
     return NextResponse.json(
       { error: 'Failed to fetch customer ledger' },
       { status: 500 }

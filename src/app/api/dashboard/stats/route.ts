@@ -104,8 +104,48 @@ export async function GET(request: NextRequest) {
       isDaily = false;
     }
 
-    // 1–3. Counts + cylinder statuses + transactions (chart-wide; KPI filtered in memory)
-    const [totalB2b, totalB2c, cylinderStatusGroups, b2cTransChartFull, b2bTransChartFull] =
+    const kpiStartMs = startDate.getTime();
+    const kpiEndMs = endDate.getTime();
+    const chartWiderThanKpi = chartStartDate.getTime() < kpiStartMs;
+
+    // When chart window is wider than the KPI period (day mode = last 7 days),
+    // load KPI txs (with items for profit) separately from lean chart rows.
+    // Month/year keep a single fetch — same numbers, no extra round-trips.
+    const b2cKpiSelect = {
+      date: true,
+      totalAmount: true,
+      deliveryCharges: true,
+      actualProfit: true,
+      securityItems: { select: { totalPrice: true } },
+    } as const;
+    const b2bKpiSelect = {
+      date: true,
+      customerId: true,
+      notes: true,
+      paymentReference: true,
+      totalAmount: true,
+      transactionType: true,
+      items: {
+        select: {
+          quantity: true,
+          pricePerItem: true,
+          totalPrice: true,
+          costPrice: true,
+          cylinderType: true,
+        },
+      },
+    } as const;
+    const b2cChartLeanSelect = {
+      date: true,
+      totalAmount: true,
+      securityItems: { select: { totalPrice: true } },
+    } as const;
+    const b2bChartLeanSelect = {
+      date: true,
+      totalAmount: true,
+    } as const;
+
+    const [totalB2b, totalB2c, cylinderStatusGroups, b2cTransInRange, b2bTransInRange, b2cTransChart, b2bTransChart] =
       await Promise.all([
         prisma.customer.count({ where: { isActive: true, ...regionScope } }),
         prisma.b2CCustomer.count({ where: { isActive: true, ...regionScope } }),
@@ -114,19 +154,34 @@ export async function GET(request: NextRequest) {
           where: { ...regionScope },
           _count: { id: true },
         }),
+        chartWiderThanKpi
+          ? prisma.b2CTransaction.findMany({
+              where: {
+                date: { gte: startDate, lte: endDate },
+                voided: false,
+                ...txRegionScope,
+              },
+              select: b2cKpiSelect,
+            })
+          : Promise.resolve(null as null),
+        chartWiderThanKpi
+          ? prisma.b2BTransaction.findMany({
+              where: {
+                date: { gte: startDate, lte: endDate },
+                voided: false,
+                transactionType: 'SALE',
+                ...txRegionScope,
+              },
+              select: b2bKpiSelect,
+            })
+          : Promise.resolve(null as null),
         prisma.b2CTransaction.findMany({
           where: {
             date: { gte: chartStartDate, lte: endDate },
             voided: false,
             ...txRegionScope,
           },
-          select: {
-            date: true,
-            totalAmount: true,
-            deliveryCharges: true,
-            actualProfit: true,
-            securityItems: { select: { totalPrice: true } },
-          },
+          select: chartWiderThanKpi ? b2cChartLeanSelect : b2cKpiSelect,
         }),
         prisma.b2BTransaction.findMany({
           where: {
@@ -135,23 +190,7 @@ export async function GET(request: NextRequest) {
             transactionType: 'SALE',
             ...txRegionScope,
           },
-          select: {
-            date: true,
-            customerId: true,
-            notes: true,
-            paymentReference: true,
-            totalAmount: true,
-            transactionType: true,
-            items: {
-              select: {
-                quantity: true,
-                pricePerItem: true,
-                totalPrice: true,
-                costPrice: true,
-                cylinderType: true,
-              },
-            },
-          },
+          select: chartWiderThanKpi ? b2bChartLeanSelect : b2bKpiSelect,
         }),
       ]);
 
@@ -169,31 +208,60 @@ export async function GET(request: NextRequest) {
       { name: 'Empty (In Stock)', value: emptyCylinders, fill: '#f59e0b' },
     ];
 
-    const kpiStartMs = startDate.getTime();
-    const kpiEndMs = endDate.getTime();
-    const b2cTransInRange = b2cTransChartFull.filter((t) => {
+    const b2cKpiRows = (
+      chartWiderThanKpi ? b2cTransInRange! : b2cTransChart
+    ).filter((t) => {
+      if (chartWiderThanKpi) return true;
       const ms = new Date(t.date).getTime();
       return ms >= kpiStartMs && ms <= kpiEndMs;
-    });
-    const b2bTransInRange = b2bTransChartFull.filter((t) => {
-      const ms = new Date(t.date).getTime();
-      return ms >= kpiStartMs && ms <= kpiEndMs;
-    });
-    const b2cTransChart = b2cTransChartFull;
-    const b2bTransChart = b2bTransChartFull;
+    }) as Array<{
+      date: Date;
+      totalAmount: unknown;
+      deliveryCharges?: unknown;
+      actualProfit?: unknown;
+      securityItems?: Array<{ totalPrice: unknown }>;
+    }>;
+
+    type B2bKpiRow = {
+      customerId: string;
+      notes?: string | null;
+      paymentReference?: string | null;
+      totalAmount?: string | number | { toString(): string } | null;
+      transactionType?: string;
+      items?: Array<{
+        quantity: string | number | { toString(): string };
+        pricePerItem: string | number | { toString(): string } | null;
+        totalPrice: string | number | { toString(): string } | null;
+        costPrice: string | number | { toString(): string } | null;
+        cylinderType: string | null;
+      }>;
+    };
+
+    let b2bKpiRows: B2bKpiRow[];
+    if (chartWiderThanKpi) {
+      b2bKpiRows = b2bTransInRange as unknown as B2bKpiRow[];
+    } else {
+      b2bKpiRows = (b2bTransChart as unknown as Array<B2bKpiRow & { date: Date }>).filter(
+        (t) => {
+          const ms = new Date(t.date).getTime();
+          return ms >= kpiStartMs && ms <= kpiEndMs;
+        }
+      );
+    }
 
     let rangeRevenue = 0;
     let rangeProfit = 0;
 
-    b2cTransInRange.forEach(t => {
+    b2cKpiRows.forEach((t) => {
       // Sales revenue = gas + accessories + delivery; exclude all security line amounts (deposits & refunds)
       let securityLines = 0;
       if (t.securityItems) {
-        t.securityItems.forEach(secItem => {
+        t.securityItems.forEach((secItem) => {
           securityLines += Number(secItem.totalPrice || 0);
         });
       }
-      const b2cRevenue = Number(t.totalAmount || 0) - securityLines + Number(t.deliveryCharges || 0);
+      const b2cRevenue =
+        Number(t.totalAmount || 0) - securityLines + Number(t.deliveryCharges || 0);
 
       rangeRevenue += b2cRevenue;
       // Security return retention is also folded into Period Revenue / Actual Profit below (via returnDeduction)
@@ -202,39 +270,46 @@ export async function GET(request: NextRequest) {
 
     // We need margins for B2B profit calculation (region-scoped)
     const customersForMargin = await prisma.customer.findMany({
-      where: { id: { in: Array.from(new Set(b2bTransInRange.map(t => t.customerId))) }, ...regionScope },
-      select: { id: true, marginCategoryId: true }
+      where: {
+        id: { in: Array.from(new Set(b2bKpiRows.map((t) => t.customerId))) },
+        ...regionScope,
+      },
+      select: { id: true, marginCategoryId: true },
     });
 
-    const marginCategoryIds = Array.from(new Set(customersForMargin.map(c => c.marginCategoryId).filter(Boolean)));
+    const marginCategoryIds = Array.from(
+      new Set(customersForMargin.map((c) => c.marginCategoryId).filter(Boolean))
+    );
     const marginCategories = await prisma.marginCategory.findMany({
-      where: { id: { in: marginCategoryIds as string[] } }
+      where: { id: { in: marginCategoryIds as string[] } },
     });
 
     const marginMap = new Map();
-    marginCategories.forEach(mc => marginMap.set(mc.id, Number(mc.marginPerKg)));
+    marginCategories.forEach((mc) => marginMap.set(mc.id, Number(mc.marginPerKg)));
     const custMarginMap = new Map();
-    customersForMargin.forEach(c => custMarginMap.set(c.id, c.marginCategoryId));
+    customersForMargin.forEach((c) => custMarginMap.set(c.id, c.marginCategoryId));
 
-    b2bTransInRange.forEach(tx => {
+    b2bKpiRows.forEach((tx) => {
       if (isOpeningDuesTransaction(tx)) return;
 
       const marginCategoryId = custMarginMap.get(tx.customerId);
-      const marginPerKg = marginCategoryId ? (marginMap.get(marginCategoryId) || 0) : 0;
+      const marginPerKg = marginCategoryId ? marginMap.get(marginCategoryId) || 0 : 0;
 
-      tx.items.forEach(item => {
-        if (isOpeningDuesSaleItem(tx, item)) return;
+      (tx.items || []).forEach((item) => {
+        if (isOpeningDuesSaleItem(tx, item as any)) return;
 
         const qty = Number(item.quantity);
         const sellPrice = Number(item.pricePerItem);
         const costPrice = Number(item.costPrice || 0);
-        rangeRevenue += (sellPrice * qty);
+        rangeRevenue += sellPrice * qty;
 
         if (item.cylinderType) {
           let capacity = getCapacityFromTypeString(item.cylinderType) || 15;
           const match = item.cylinderType.match(/(\d+)(?:_(\d+))?/);
           if (!(capacity > 0) && match) {
-            capacity = match[2] ? parseFloat(`${match[1]}.${match[2]}`) : parseFloat(match[1]);
+            capacity = match[2]
+              ? parseFloat(`${match[1]}.${match[2]}`)
+              : parseFloat(match[1]);
           } else if (!(capacity > 0)) {
             const customMatch = item.cylinderType.match(/(\d+(?:\.\d+)?)kg/);
             if (customMatch) {
@@ -253,7 +328,7 @@ export async function GET(request: NextRequest) {
             rangeProfit += (sellPrice - costPrice) * qty;
           } else {
             // Fallback 20% margin for accessories
-            rangeProfit += (sellPrice * 0.20) * qty;
+            rangeProfit += sellPrice * 0.2 * qty;
           }
         }
       });
@@ -461,6 +536,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 5. Recent Activities — sales & payments in the selected period
+    // Slim selects: only fields used for titles/amounts (same numbers & labels).
     const [recentB2B, recentB2C] = await Promise.all([
       prisma.b2BTransaction.findMany({
         where: {
@@ -471,11 +547,30 @@ export async function GET(request: NextRequest) {
         },
         take: 40,
         orderBy: { createdAt: 'desc' },
-        include: {
+        select: {
+          id: true,
+          billSno: true,
+          transactionType: true,
+          totalAmount: true,
+          paidAmount: true,
+          unpaidAmount: true,
+          paymentStatus: true,
+          customerId: true,
+          createdAt: true,
+          createdBy: true,
+          voided: true,
           customer: { select: { id: true, name: true } },
-          items: true,
           users: {
             select: { id: true, name: true, firstName: true, lastName: true, email: true },
+          },
+          items: {
+            select: {
+              quantity: true,
+              cylinderType: true,
+              cylinderVariantKey: true,
+              productName: true,
+              remainingKg: true,
+            },
           },
         },
       }),
@@ -489,11 +584,30 @@ export async function GET(request: NextRequest) {
         },
         take: 40,
         orderBy: { createdAt: 'desc' },
-        include: {
+        select: {
+          id: true,
+          billSno: true,
+          totalAmount: true,
+          finalAmount: true,
+          deliveryCharges: true,
+          customerId: true,
+          createdAt: true,
+          createdBy: true,
+          voided: true,
           customer: { select: { id: true, name: true } },
-          gasItems: true,
-          securityItems: true,
-          accessoryItems: true,
+          gasItems: {
+            select: {
+              quantity: true,
+              cylinderType: true,
+              cylinderVariantKey: true,
+            },
+          },
+          securityItems: {
+            select: { totalPrice: true },
+          },
+          accessoryItems: {
+            select: { quantity: true, productName: true },
+          },
         },
       }),
     ]);
@@ -555,7 +669,6 @@ export async function GET(request: NextRequest) {
     );
     recentB2C.forEach((t) => {
       t.gasItems.forEach((g) => g.cylinderType && cylinderTypesUsed.add(g.cylinderType));
-      t.securityItems.forEach((s) => s.cylinderType && cylinderTypesUsed.add(s.cylinderType));
     });
 
     const cylinderTypeFriendlyMap = new Map<string, string>();

@@ -27,6 +27,8 @@ export async function GET(request: NextRequest) {
             year: searchParams.get('year'),
         });
         const { startDate, endDate, period, month, year, date, label } = resolved;
+        const periodStartMs = startDate.getTime();
+        const periodEndMs = endDate.getTime();
 
         const cylinderTypes = await prisma.cylinder.findMany({
             where: regionScope,
@@ -34,22 +36,55 @@ export async function GET(request: NextRequest) {
             select: { cylinderType: true, typeName: true, capacity: true },
         });
         const typeLabels = new Map(
-            cylinderTypes.map((ct) => [ct.cylinderType, ct.typeName ? `${ct.typeName} (${ct.capacity}kg)` : ct.cylinderType])
+            cylinderTypes.map((ct) => [
+                ct.cylinderType,
+                ct.typeName ? `${ct.typeName} (${ct.capacity}kg)` : ct.cylinderType,
+            ])
         );
-        // Fetch transaction items
-        const [b2cGasItems, b2cAccessoryItems, b2bItems] = await Promise.all([
+
+        // One chart-range hydrate — period product maps filter in memory (avoids double fetch).
+        const chartBuckets = getFinancialChartBuckets(resolved);
+        const chartRange = getFinancialChartRange(chartBuckets);
+
+        const [chartB2cGas, chartB2cAcc, chartB2bItems, chartRetentions] = await Promise.all([
             prisma.b2CTransactionGasItem.findMany({
-                where: { transaction: { date: { gte: startDate, lte: endDate }, voided: false, ...txRegionScope } },
-                select: { cylinderType: true, quantity: true, totalPrice: true, totalCost: true, profitMargin: true },
+                where: {
+                    transaction: {
+                        date: { gte: chartRange.startDate, lte: chartRange.endDate },
+                        voided: false,
+                        ...txRegionScope,
+                    },
+                },
+                select: {
+                    cylinderType: true,
+                    quantity: true,
+                    totalPrice: true,
+                    totalCost: true,
+                    profitMargin: true,
+                    transaction: { select: { date: true } },
+                },
             }),
             prisma.b2CTransactionAccessoryItem.findMany({
-                where: { transaction: { date: { gte: startDate, lte: endDate }, voided: false, ...txRegionScope } },
-                select: { productName: true, quantity: true, totalPrice: true, totalCost: true, profitMargin: true },
+                where: {
+                    transaction: {
+                        date: { gte: chartRange.startDate, lte: chartRange.endDate },
+                        voided: false,
+                        ...txRegionScope,
+                    },
+                },
+                select: {
+                    productName: true,
+                    quantity: true,
+                    totalPrice: true,
+                    totalCost: true,
+                    profitMargin: true,
+                    transaction: { select: { date: true } },
+                },
             }),
             prisma.b2BTransactionItem.findMany({
                 where: {
                     transaction: {
-                        date: { gte: startDate, lte: endDate },
+                        date: { gte: chartRange.startDate, lte: chartRange.endDate },
                         voided: false,
                         transactionType: 'SALE',
                         ...txRegionScope,
@@ -65,6 +100,7 @@ export async function GET(request: NextRequest) {
                     costPrice: true,
                     transaction: {
                         select: {
+                            date: true,
                             customerId: true,
                             notes: true,
                             paymentReference: true,
@@ -74,23 +110,63 @@ export async function GET(request: NextRequest) {
                     },
                 },
             }),
+            prisma.b2CCylinderHolding.findMany({
+                where: {
+                    isReturned: true,
+                    returnDate: { gte: chartRange.startDate, lte: chartRange.endDate },
+                    returnDeduction: { gt: 0 },
+                    customer: regionScope,
+                },
+                select: {
+                    cylinderType: true,
+                    cylinderVariantKey: true,
+                    quantity: true,
+                    returnDeduction: true,
+                    returnDate: true,
+                },
+            }),
         ]);
-        // Get B2B margins
+
+        const inPeriod = (d: Date | string) => {
+            const ms = new Date(d).getTime();
+            return ms >= periodStartMs && ms <= periodEndMs;
+        };
+
+        const b2cGasItems = chartB2cGas.filter((i) => inPeriod(i.transaction.date));
+        const b2cAccessoryItems = chartB2cAcc.filter((i) => inPeriod(i.transaction.date));
+        const b2bItems = chartB2bItems.filter((i) => inPeriod(i.transaction.date));
+        const periodRetentions = chartRetentions.filter(
+            (h) => h.returnDate && inPeriod(h.returnDate)
+        );
+
+        // Same margin maps as before (built from period customers only).
         const b2bCustomerIds = [...new Set(b2bItems.map((i) => i.transaction.customerId))];
         const customersWithMargin = await prisma.customer.findMany({
             where: { id: { in: b2bCustomerIds }, ...regionScope },
             select: { id: true, marginCategoryId: true },
         });
-        const marginCategoryIds = [...new Set(customersWithMargin.map((c) => c.marginCategoryId).filter(Boolean))] as string[];
+        const marginCategoryIds = [
+            ...new Set(customersWithMargin.map((c) => c.marginCategoryId).filter(Boolean)),
+        ] as string[];
         const marginCategories = await prisma.marginCategory.findMany({
             where: { id: { in: marginCategoryIds } },
         });
-        const marginMap = new Map(marginCategories.map((mc) => [mc.id, Number(mc.marginPerKg)]));
-        const custMarginMap = new Map(customersWithMargin.map((c) => [c.id, c.marginCategoryId]));
-        // Aggregate
-        const cylinderMap = new Map<string, { qty: number; revenue: number; cost: number; profit: number }>();
-        const accessoryMap = new Map<string, { qty: number; revenue: number; cost: number; profit: number }>();
-        // B2C gas items
+        const marginMap = new Map(
+            marginCategories.map((mc) => [mc.id, Number(mc.marginPerKg)])
+        );
+        const custMarginMap = new Map(
+            customersWithMargin.map((c) => [c.id, c.marginCategoryId])
+        );
+
+        const cylinderMap = new Map<
+            string,
+            { qty: number; revenue: number; cost: number; profit: number }
+        >();
+        const accessoryMap = new Map<
+            string,
+            { qty: number; revenue: number; cost: number; profit: number }
+        >();
+
         b2cGasItems.forEach((item) => {
             const key = item.cylinderType;
             const existing = cylinderMap.get(key) || { qty: 0, revenue: 0, cost: 0, profit: 0 };
@@ -100,7 +176,7 @@ export async function GET(request: NextRequest) {
             existing.profit += Number(item.profitMargin || 0);
             cylinderMap.set(key, existing);
         });
-        // B2C accessory items
+
         b2cAccessoryItems.forEach((item) => {
             const key = item.productName;
             const existing = accessoryMap.get(key) || { qty: 0, revenue: 0, cost: 0, profit: 0 };
@@ -110,7 +186,7 @@ export async function GET(request: NextRequest) {
             existing.profit += Number(item.profitMargin || 0);
             accessoryMap.set(key, existing);
         });
-        // B2B items
+
         b2bItems.forEach((item) => {
             if (isOpeningDuesSaleItem(item.transaction, item)) return;
             const qty = Number(item.quantity);
@@ -122,11 +198,13 @@ export async function GET(request: NextRequest) {
                 existing.qty += qty;
                 existing.revenue += revenue;
                 const marginCategoryId = custMarginMap.get(item.transaction.customerId);
-                const marginPerKg = marginCategoryId ? (marginMap.get(marginCategoryId) || 0) : 0;
+                const marginPerKg = marginCategoryId ? marginMap.get(marginCategoryId) || 0 : 0;
                 let capacity = getCapacityFromTypeString(item.cylinderType) || 15;
                 const match = item.cylinderType.match(/(\d+)(?:_(\d+))?/);
                 if (!(capacity > 0) && match) {
-                    capacity = match[2] ? parseFloat(`${match[1]}.${match[2]}`) : parseFloat(match[1]);
+                    capacity = match[2]
+                        ? parseFloat(`${match[1]}.${match[2]}`)
+                        : parseFloat(match[1]);
                 }
                 const profit = calculateGasLineProfit({
                     pricePerItem: Number(item.pricePerItem),
@@ -154,6 +232,7 @@ export async function GET(request: NextRequest) {
                 accessoryMap.set(key, existing);
             }
         });
+
         const cylinders = Array.from(cylinderMap.entries()).map(([type, data]) => ({
             name: typeLabels.get(type) || type,
             type: 'Cylinder',
@@ -163,32 +242,32 @@ export async function GET(request: NextRequest) {
             profit: data.profit,
         }));
 
-        const retentionGroups = await prisma.b2CCylinderHolding.groupBy({
-            by: ['cylinderType', 'cylinderVariantKey'],
-            where: {
-                isReturned: true,
-                returnDate: { gte: startDate, lte: endDate },
-                returnDeduction: { gt: 0 },
-                customer: regionScope,
-            },
-            _sum: {
-                returnDeduction: true,
-                quantity: true,
-            },
-        });
-
-        for (const g of retentionGroups) {
-            const retentionAmount = Number(g._sum.returnDeduction || 0);
-            if (retentionAmount <= 0) continue;
-
+        // Retention product rows — same groupBy semantics as before (period only)
+        const retentionByType = new Map<
+            string,
+            { qty: number; retention: number; cylinderType: string }
+        >();
+        for (const h of periodRetentions) {
+            const key = `${h.cylinderType}|||${h.cylinderVariantKey || ''}`;
+            const existing = retentionByType.get(key) || {
+                qty: 0,
+                retention: 0,
+                cylinderType: h.cylinderType,
+            };
+            existing.qty += Number(h.quantity || 0);
+            existing.retention += Number(h.returnDeduction || 0);
+            retentionByType.set(key, existing);
+        }
+        for (const g of retentionByType.values()) {
+            if (g.retention <= 0) continue;
             const typeLabel = typeLabels.get(g.cylinderType) || g.cylinderType;
             cylinders.push({
                 name: `${typeLabel} — security return (25% retained)`,
                 type: 'Cylinder',
-                quantity: Number(g._sum.quantity || 0),
+                quantity: g.qty,
                 revenue: 0,
                 cost: 0,
-                profit: retentionAmount,
+                profit: g.retention,
             });
         }
 
@@ -201,75 +280,6 @@ export async function GET(request: NextRequest) {
             profit: data.profit,
         }));
 
-        // One chart-range fetch + in-memory buckets (same profit rules as per-bucket loop)
-        const chartBuckets = getFinancialChartBuckets(resolved);
-        const chartRange = getFinancialChartRange(chartBuckets);
-        const [chartB2cGas, chartB2cAcc, chartB2bItems, chartRetentions] = await Promise.all([
-            prisma.b2CTransactionGasItem.findMany({
-                where: {
-                    transaction: {
-                        date: { gte: chartRange.startDate, lte: chartRange.endDate },
-                        voided: false,
-                        ...txRegionScope,
-                    },
-                },
-                select: {
-                    profitMargin: true,
-                    transaction: { select: { date: true } },
-                },
-            }),
-            prisma.b2CTransactionAccessoryItem.findMany({
-                where: {
-                    transaction: {
-                        date: { gte: chartRange.startDate, lte: chartRange.endDate },
-                        voided: false,
-                        ...txRegionScope,
-                    },
-                },
-                select: {
-                    profitMargin: true,
-                    transaction: { select: { date: true } },
-                },
-            }),
-            prisma.b2BTransactionItem.findMany({
-                where: {
-                    transaction: {
-                        date: { gte: chartRange.startDate, lte: chartRange.endDate },
-                        voided: false,
-                        transactionType: 'SALE',
-                        ...txRegionScope,
-                    },
-                },
-                select: {
-                    cylinderType: true,
-                    quantity: true,
-                    pricePerItem: true,
-                    totalPrice: true,
-                    costPrice: true,
-                    transaction: {
-                        select: {
-                            date: true,
-                            customerId: true,
-                            notes: true,
-                            paymentReference: true,
-                            totalAmount: true,
-                            transactionType: true,
-                        },
-                    },
-                },
-            }),
-            prisma.b2CCylinderHolding.findMany({
-                where: {
-                    isReturned: true,
-                    returnDate: { gte: chartRange.startDate, lte: chartRange.endDate },
-                    returnDeduction: { gt: 0 },
-                    customer: regionScope,
-                },
-                select: { returnDeduction: true, returnDate: true },
-            }),
-        ]);
-
-        // Same margin maps as before (built from period customers only).
         const chartData = chartBuckets.map((bucket) => ({
             name: bucket.name,
             profit: 0,
@@ -292,11 +302,13 @@ export async function GET(request: NextRequest) {
             const costPrice = Number(item.costPrice || 0);
             if (item.cylinderType) {
                 const marginCategoryId = custMarginMap.get(item.transaction.customerId);
-                const marginPerKg = marginCategoryId ? (marginMap.get(marginCategoryId) || 0) : 0;
+                const marginPerKg = marginCategoryId ? marginMap.get(marginCategoryId) || 0 : 0;
                 let capacity = getCapacityFromTypeString(item.cylinderType) || 15;
                 const match = item.cylinderType.match(/(\d+)(?:_(\d+))?/);
                 if (!(capacity > 0) && match) {
-                    capacity = match[2] ? parseFloat(`${match[1]}.${match[2]}`) : parseFloat(match[1]);
+                    capacity = match[2]
+                        ? parseFloat(`${match[1]}.${match[2]}`)
+                        : parseFloat(match[1]);
                 }
                 chartData[idx].profit += calculateGasLineProfit({
                     pricePerItem: Number(item.pricePerItem),
@@ -315,6 +327,7 @@ export async function GET(request: NextRequest) {
             const idx = findChartBucketIndex(chartBuckets, holding.returnDate);
             if (idx >= 0) chartData[idx].profit += Number(holding.returnDeduction || 0);
         }
+
         return NextResponse.json({
             items: [...cylinders, ...accessories],
             chartData,

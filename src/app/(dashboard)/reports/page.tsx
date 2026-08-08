@@ -432,8 +432,8 @@ export default function ReportsPage() {
                       <TableRow>
                         <TableHead>Date / Time</TableHead>
                         <TableHead>Wallet</TableHead>
-                        <TableHead>Dir</TableHead>
-                        <TableHead className="text-right">Amount</TableHead>
+                        <TableHead className="text-center">Dir</TableHead>
+                        <TableHead className="text-center">Amount</TableHead>
                         <TableHead>Source</TableHead>
                         <TableHead>Party</TableHead>
                         <TableHead>Details</TableHead>
@@ -448,7 +448,7 @@ export default function ReportsPage() {
                             <div className="text-xs text-gray-500">{entry.timeLabel}</div>
                           </TableCell>
                           <TableCell className="text-sm font-medium">{entry.walletLabel}</TableCell>
-                          <TableCell>
+                          <TableCell className="text-center">
                             <span
                               className={`inline-flex items-center gap-1 text-xs font-semibold ${
                                 entry.direction === 'IN' ? 'text-emerald-700' : 'text-rose-700'
@@ -463,7 +463,7 @@ export default function ReportsPage() {
                             </span>
                           </TableCell>
                           <TableCell
-                            className={`text-right font-bold ${
+                            className={`text-center font-bold ${
                               entry.direction === 'IN' ? 'text-emerald-700' : 'text-rose-700'
                             }`}
                           >

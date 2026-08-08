@@ -678,12 +678,36 @@ export async function getBankLedgerOpeningNet(params: {
   const { method, regionId, beforeDate } = params;
   if (beforeDate.getTime() <= earliest.getTime()) return 0;
 
+  const { net } = await sumBankLedgerInOut({
+    method,
+    regionId,
+    startDate: earliest,
+    endDate: beforeDate,
+    endExclusive: true,
+  });
+  return net;
+}
+
+/**
+ * Period IN/OUT totals for one wallet — same inclusion rules as
+ * `buildBankLedgerEntries` / opening net, but SUM in SQL (no row hydrate).
+ */
+export async function sumBankLedgerInOut(params: {
+  method: PaymentMethodValue;
+  regionId: string | null | undefined;
+  startDate: Date;
+  endDate: Date;
+  /** When true, use date < endDate (opening net). Default: date <= endDate. */
+  endExclusive?: boolean;
+}): Promise<{ totalIn: number; totalOut: number; net: number }> {
+  const { method, regionId, startDate, endDate, endExclusive = false } = params;
   const regionScope = regionScopedWhere(regionId);
   const txRegionScope = regionId ? { regionId } : {};
-  const before = { gte: earliest, lt: beforeDate } as const;
+  const dateFilter = endExclusive
+    ? ({ gte: startDate, lt: endDate } as const)
+    : ({ gte: startDate, lte: endDate } as const);
   const methodText = stringPaymentMethodWhere('paymentMethod', method);
 
-  // Same inclusion rules as buildBankLedgerEntries, but SUM in SQL — no row hydration.
   const [
     b2bSalesPaid,
     b2bPaymentsWithPaid,
@@ -700,7 +724,7 @@ export async function getBankLedgerOpeningNet(params: {
   ] = await Promise.all([
     prisma.b2BTransaction.aggregate({
       where: {
-        date: before,
+        date: dateFilter,
         voided: false,
         transactionType: 'SALE',
         paidAmount: { gt: 0 },
@@ -709,10 +733,9 @@ export async function getBankLedgerOpeningNet(params: {
       },
       _sum: { paidAmount: true },
     }),
-    // PAYMENT: prefer paidAmount when present (including 0)
     prisma.b2BTransaction.aggregate({
       where: {
-        date: before,
+        date: dateFilter,
         voided: false,
         transactionType: 'PAYMENT',
         paymentMethod: method,
@@ -723,7 +746,7 @@ export async function getBankLedgerOpeningNet(params: {
     }),
     prisma.b2BTransaction.aggregate({
       where: {
-        date: before,
+        date: dateFilter,
         voided: false,
         transactionType: 'PAYMENT',
         paymentMethod: method,
@@ -732,24 +755,38 @@ export async function getBankLedgerOpeningNet(params: {
       },
       _sum: { totalAmount: true },
     }),
-    // B2C: Number(finalAmount || totalAmount) — same CASE as JS falsy coalesce
-    prisma.$queryRaw<Array<{ amount: unknown }>>`
-      SELECT COALESCE(SUM(
-        CASE
-          WHEN "finalAmount" IS NOT NULL AND "finalAmount" <> 0 THEN "finalAmount"
-          ELSE "totalAmount"
-        END
-      ), 0) AS amount
-      FROM b2c_transactions
-      WHERE voided = false
-        AND date >= ${earliest}
-        AND date < ${beforeDate}
-        AND UPPER(REPLACE(TRIM("paymentMethod"), ' ', '_')) = ${method}
-        AND (${regionId ?? null}::text IS NULL OR "regionId" = ${regionId ?? null})
-    `,
+    endExclusive
+      ? prisma.$queryRaw<Array<{ amount: unknown }>>`
+          SELECT COALESCE(SUM(
+            CASE
+              WHEN "finalAmount" IS NOT NULL AND "finalAmount" <> 0 THEN "finalAmount"
+              ELSE "totalAmount"
+            END
+          ), 0) AS amount
+          FROM b2c_transactions
+          WHERE voided = false
+            AND date >= ${startDate}
+            AND date < ${endDate}
+            AND UPPER(REPLACE(TRIM("paymentMethod"), ' ', '_')) = ${method}
+            AND (${regionId ?? null}::text IS NULL OR "regionId" = ${regionId ?? null})
+        `
+      : prisma.$queryRaw<Array<{ amount: unknown }>>`
+          SELECT COALESCE(SUM(
+            CASE
+              WHEN "finalAmount" IS NOT NULL AND "finalAmount" <> 0 THEN "finalAmount"
+              ELSE "totalAmount"
+            END
+          ), 0) AS amount
+          FROM b2c_transactions
+          WHERE voided = false
+            AND date >= ${startDate}
+            AND date <= ${endDate}
+            AND UPPER(REPLACE(TRIM("paymentMethod"), ' ', '_')) = ${method}
+            AND (${regionId ?? null}::text IS NULL OR "regionId" = ${regionId ?? null})
+        `,
     prisma.vendorPayment.aggregate({
       where: {
-        paymentDate: before,
+        paymentDate: dateFilter,
         status: 'COMPLETED',
         method,
         ...txRegionScope,
@@ -758,7 +795,7 @@ export async function getBankLedgerOpeningNet(params: {
     }),
     prisma.officeExpense.aggregate({
       where: {
-        expenseDate: before,
+        expenseDate: dateFilter,
         ...methodText,
         ...regionScope,
       },
@@ -766,7 +803,7 @@ export async function getBankLedgerOpeningNet(params: {
     }),
     prisma.personalExpense.aggregate({
       where: {
-        expenseDate: before,
+        expenseDate: dateFilter,
         ...methodText,
         ...regionScope,
       },
@@ -777,7 +814,7 @@ export async function getBankLedgerOpeningNet(params: {
       () =>
         prisma.salaryRecord.aggregate({
           where: {
-            paidDate: before,
+            paidDate: dateFilter,
             ...methodText,
             ...regionScope,
           },
@@ -790,7 +827,7 @@ export async function getBankLedgerOpeningNet(params: {
       () =>
         prisma.bankMovement.aggregate({
           where: {
-            movementDate: before,
+            movementDate: dateFilter,
             type: 'DEPOSIT',
             ...stringPaymentMethodWhere('toMethod', method),
             ...regionScope,
@@ -804,7 +841,7 @@ export async function getBankLedgerOpeningNet(params: {
       () =>
         prisma.bankMovement.aggregate({
           where: {
-            movementDate: before,
+            movementDate: dateFilter,
             type: 'TRANSFER',
             ...stringPaymentMethodWhere('toMethod', method),
             ...regionScope,
@@ -818,7 +855,7 @@ export async function getBankLedgerOpeningNet(params: {
       () =>
         prisma.bankMovement.aggregate({
           where: {
-            movementDate: before,
+            movementDate: dateFilter,
             type: 'TRANSFER',
             ...stringPaymentMethodWhere('fromMethod', method),
             ...regionScope,
@@ -832,7 +869,7 @@ export async function getBankLedgerOpeningNet(params: {
       () =>
         prisma.bankMovement.aggregate({
           where: {
-            movementDate: before,
+            movementDate: dateFilter,
             type: 'WITHDRAWAL',
             ...stringPaymentMethodWhere('fromMethod', method),
             ...regionScope,
@@ -859,5 +896,5 @@ export async function getBankLedgerOpeningNet(params: {
     decimalSum(transfersOut._sum.amount) +
     decimalSum(withdrawalsOut._sum.amount);
 
-  return totalIn - totalOut;
+  return { totalIn, totalOut, net: totalIn - totalOut };
 }

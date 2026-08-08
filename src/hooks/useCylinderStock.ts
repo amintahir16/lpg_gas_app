@@ -12,10 +12,17 @@ interface CylinderStockData {
   error: string | null;
 }
 
-export function useCylinderStock() {
+/**
+ * Optional `enabled` — when false, skip the inventory check fetch.
+ * B2B detail passes enabled only while the transaction form is open so page
+ * load does not burn three FULL-cylinder scans.
+ */
+export function useCylinderStock(options?: { enabled?: boolean }) {
+  const enabled = options?.enabled !== false;
+
   const [data, setData] = useState<CylinderStockData>({
     cylinders: [],
-    loading: true,
+    loading: enabled,
     error: null
   });
 
@@ -44,7 +51,6 @@ export function useCylinderStock() {
       }
 
       const result = await response.json();
-      console.log('Cylinder stock API response:', result);
       
       // Extract cylinder stock data
       const cylinders = result.results.map((item: any) => ({
@@ -52,8 +58,6 @@ export function useCylinderStock() {
         available: item.available,
         costPerItem: 0 // We'll add this later if needed
       }));
-      
-      console.log('Processed cylinder stock:', cylinders);
 
       setData({
         cylinders,
@@ -71,8 +75,12 @@ export function useCylinderStock() {
   }, []);
 
   useEffect(() => {
+    if (!enabled) {
+      setData(prev => ({ ...prev, loading: false }));
+      return;
+    }
     fetchCylinderStock();
-  }, [fetchCylinderStock]);
+  }, [enabled, fetchCylinderStock]);
 
   const getCylinderStock = useCallback((cylinderType: string): CylinderStock | null => {
     return data.cylinders.find(cylinder => cylinder.cylinderType === cylinderType) || null;

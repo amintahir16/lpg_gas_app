@@ -188,12 +188,19 @@ export function buildCashClosingPdf(input: ClosingPdfInput): Blob {
       0: { cellWidth: 28 },
       1: { cellWidth: 22 },
       2: { cellWidth: 30 },
+      // Dir + Amount: center-aligned (header and body)
       3: { cellWidth: 14, halign: 'center' },
-      4: { cellWidth: 26, halign: 'right' },
+      4: { cellWidth: 26, halign: 'center' },
       5: { cellWidth: 40 },
       6: { cellWidth: 36 },
       7: { cellWidth: 45 },
       8: { cellWidth: 28 },
+    },
+    didParseCell: (data) => {
+      // Force Dir (3) + Amount (4) center for both head and body rows
+      if (data.column.index === 3 || data.column.index === 4) {
+        data.cell.styles.halign = 'center';
+      }
     },
     margin: { left: 14, right: 14 },
   });

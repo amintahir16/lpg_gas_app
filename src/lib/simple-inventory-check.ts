@@ -25,7 +25,7 @@ export async function checkCylinderInventory(
 
   try {
     const variantWhere = buildPrismaCylinderVariantWhere(cylinderType, cylinderVariantKey);
-    const availableCylinders = await prisma.cylinder.findMany({
+    const available = await prisma.cylinder.count({
       where: {
         ...variantWhere,
         currentStatus: CylinderStatus.FULL,
@@ -33,7 +33,6 @@ export async function checkCylinderInventory(
       },
     });
 
-    const available = availableCylinders.length;
     const isValid = requested <= 0 ? true : available >= requested;
 
     return { cylinderType: echoKey, requested, available, isValid };

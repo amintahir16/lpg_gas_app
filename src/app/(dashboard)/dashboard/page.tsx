@@ -142,7 +142,6 @@ export default function DashboardPage() {
       const params = new URLSearchParams(
         buildFinancialPeriodQuery({ period, date, month, year })
       );
-      params.append('_t', Date.now().toString());
 
       const response = await fetch(`/api/dashboard/stats?${params.toString()}`);
 

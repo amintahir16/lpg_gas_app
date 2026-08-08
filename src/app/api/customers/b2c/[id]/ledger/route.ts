@@ -5,154 +5,145 @@ import { requireAdmin, clampLimit } from '@/lib/apiAuth';
 import { sortTransactionsNewestFirst } from '@/lib/transaction-display-sort';
 
 export async function GET(
-    request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
-    try {
-        const auth = await requireAdmin();
-        if (!auth.ok) return auth.response;
-        const regionId = getActiveRegionId(request);
-        const { searchParams } = new URL(request.url);
-        const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
-        const limit = clampLimit(searchParams.get('limit'), 20);
-        const startDate = searchParams.get('startDate');
-        const endDate = searchParams.get('endDate');
-        const { id: customerId } = await params;
+  try {
+    const auth = await requireAdmin();
+    if (!auth.ok) return auth.response;
+    const regionId = getActiveRegionId(request);
+    const { searchParams } = new URL(request.url);
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const limit = clampLimit(searchParams.get('limit'), 20);
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
+    const { id: customerId } = await params;
 
-        const skip = (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
-        // Get customer details (region-scoped)
-        const customer = await prisma.b2CCustomer.findFirst({
-            where: { id: customerId, ...regionScopedWhere(regionId) },
-            include: {
-                marginCategory: true,
-                cylinderHoldings: {
-                    where: { isReturned: false }
-                }
-            }
-        });
+    const customer = await prisma.b2CCustomer.findFirst({
+      where: { id: customerId, ...regionScopedWhere(regionId) },
+      include: {
+        marginCategory: true,
+        cylinderHoldings: {
+          where: { isReturned: false },
+        },
+      },
+    });
 
-        if (!customer) {
-            return NextResponse.json(
-                { error: 'Customer not found' },
-                { status: 404 }
-            );
-        }
-
-        // Build date filter
-        const dateWhere: any = { customerId };
-
-        if (startDate || endDate) {
-            dateWhere.date = {};
-            if (startDate) {
-                dateWhere.date.gte = new Date(startDate);
-            }
-            if (endDate) {
-                // Include the entire end date
-                const endDateObj = new Date(endDate);
-                endDateObj.setHours(23, 59, 59, 999);
-                dateWhere.date.lte = endDateObj;
-            }
-        }
-
-        // Fetch transactions
-        // For B2C, we don't necessarily need "running balance" in the same complex way if they are always fully paid,
-        // but we'll fetch them all if we want to calculate dynamic totals based on filters, or just fetch paginated.
-        // However, to calculate TOTAL profit matching the filter (or lifetime), we might need all.
-        // The B2B implementation calculated lifetime stats. B2C "Total Profit" on profile usually implies lifetime.
-
-        // Performance Optimization: B2C might have MANY small transactions. Fetching ALL might be heavy.
-        // But consistent with B2B logic (which fetches all), we will stick to it for now unless performance issues arise.
-        const allTransactions = await prisma.b2CTransaction.findMany({
-            where: { customerId },
-            include: {
-                gasItems: true,
-                accessoryItems: true,
-                securityItems: true,
-            },
-            orderBy: { createdAt: 'asc' },
-        });
-
-        console.log(`[B2C API] Fetching ledger for ${customerId}. Found ${allTransactions.length} transactions.`);
-
-        // Calculate Summary Stats from ALL transactions (Lifetime)
-        let totalIn = 0;
-        let totalOut = 0;
-        let totalProfit = 0;
-
-        allTransactions.forEach(tx => {
-            if (tx.voided) return; // Do not include voided transactions in lifetime totals
-
-            const finalAmount = parseFloat(tx.finalAmount.toString());
-            const profit = parseFloat(tx.actualProfit.toNumber().toString());
-
-            // Subtract security deposit/return amounts from sales (they are liabilities, not revenue)
-            const securityTotal = (tx.securityItems || []).reduce((sum, item) => {
-                return sum + parseFloat(item.totalPrice.toString());
-            }, 0);
-
-            // B2C Transaction is a SALE (excluding security deposits)
-            const salesAmount = finalAmount - securityTotal;
-            totalOut += salesAmount;
-            // Assume fully paid for B2C
-            totalIn += salesAmount;
-
-            totalProfit += profit;
-        });
-
-        // Filter for display
-        let displayTransactions = allTransactions;
-        if (startDate || endDate) {
-            const start = startDate ? new Date(startDate) : new Date(0);
-            const end = endDate ? new Date(endDate) : new Date(9999, 11, 31);
-            if (endDate) end.setHours(23, 59, 59, 999);
-
-            displayTransactions = allTransactions.filter(tx => {
-                const d = new Date(tx.date);
-                return d >= start && d <= end;
-            });
-        }
-
-        // Newest first: date → time → bill number → createdAt
-        const sortedDisplayTransactions = sortTransactionsNewestFirst(displayTransactions);
-
-        // Apply pagination
-        const paginatedTransactions = sortedDisplayTransactions.slice(skip, skip + limit);
-        const totalCount = displayTransactions.length;
-        const pages = Math.ceil(totalCount / limit);
-
-        // Calculate Total Security Held from active holdings
-        const totalSecurityHeld = customer.cylinderHoldings.reduce((sum, holding) => {
-            const qty = holding.quantity;
-            const amt = parseFloat(holding.securityAmount.toString());
-            return sum + (qty * amt);
-        }, 0);
-
-        return NextResponse.json({
-            customer,
-            transactions: paginatedTransactions,
-            summary: {
-                netBalance: 0,
-                totalTransactions: allTransactions.filter(tx => !tx.voided).length,
-                totalIn,
-                totalOut,
-                totalProfit,
-                totalSecurityHeld,
-                cylinderHoldingsCount: customer.cylinderHoldings.reduce((acc, curr) => acc + curr.quantity, 0)
-            },
-            pagination: {
-                page,
-                limit,
-                total: totalCount,
-                pages,
-            },
-        });
-
-    } catch (error) {
-        console.error('Error fetching B2C customer ledger:', error);
-        return NextResponse.json(
-            { error: 'Failed to fetch customer ledger' },
-            { status: 500 }
-        );
+    if (!customer) {
+      return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }
+
+    // Lean headers for lifetime summary + sort/paginate (no nested line items).
+    const leanTransactions = await prisma.b2CTransaction.findMany({
+      where: { customerId },
+      select: {
+        id: true,
+        date: true,
+        time: true,
+        billSno: true,
+        createdAt: true,
+        voided: true,
+        finalAmount: true,
+        actualProfit: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const securitySums = await prisma.b2CTransactionSecurityItem.groupBy({
+      by: ['transactionId'],
+      where: { transaction: { customerId } },
+      _sum: { totalPrice: true },
+    });
+    const securityByTx = new Map(
+      securitySums.map((row) => [row.transactionId, Number(row._sum.totalPrice || 0)])
+    );
+
+    let totalIn = 0;
+    let totalOut = 0;
+    let totalProfit = 0;
+    let nonVoidedCount = 0;
+
+    leanTransactions.forEach((tx) => {
+      if (tx.voided) return;
+      nonVoidedCount += 1;
+      const finalAmount = parseFloat(tx.finalAmount.toString());
+      const profit = parseFloat(tx.actualProfit.toString());
+      const securityTotal = securityByTx.get(tx.id) || 0;
+      const salesAmount = finalAmount - securityTotal;
+      totalOut += salesAmount;
+      totalIn += salesAmount;
+      totalProfit += profit;
+    });
+
+    let displayTransactions = leanTransactions;
+    if (startDate || endDate) {
+      const start = startDate ? new Date(startDate) : new Date(0);
+      const end = endDate ? new Date(endDate) : new Date(9999, 11, 31);
+      if (endDate) end.setHours(23, 59, 59, 999);
+      displayTransactions = leanTransactions.filter((tx) => {
+        const d = new Date(tx.date);
+        return d >= start && d <= end;
+      });
+    }
+
+    const sortedDisplayTransactions = sortTransactionsNewestFirst(displayTransactions);
+    const pageLean = sortedDisplayTransactions.slice(skip, skip + limit);
+    const pageIds = pageLean.map((t) => t.id);
+
+    const pageFull =
+      pageIds.length > 0
+        ? await prisma.b2CTransaction.findMany({
+            where: { id: { in: pageIds } },
+            include: {
+              gasItems: true,
+              accessoryItems: true,
+              securityItems: true,
+            },
+          })
+        : [];
+    const fullById = new Map(pageFull.map((t) => [t.id, t]));
+    const paginatedTransactions = pageLean
+      .map((lean) => fullById.get(lean.id))
+      .filter(Boolean);
+
+    const totalCount = displayTransactions.length;
+    const pages = Math.ceil(totalCount / limit);
+
+    const totalSecurityHeld = customer.cylinderHoldings.reduce((sum, holding) => {
+      const qty = holding.quantity;
+      const amt = parseFloat(holding.securityAmount.toString());
+      return sum + qty * amt;
+    }, 0);
+
+    return NextResponse.json({
+      customer,
+      transactions: paginatedTransactions,
+      summary: {
+        netBalance: 0,
+        totalTransactions: nonVoidedCount,
+        totalIn,
+        totalOut,
+        totalProfit,
+        totalSecurityHeld,
+        cylinderHoldingsCount: customer.cylinderHoldings.reduce(
+          (acc, curr) => acc + curr.quantity,
+          0
+        ),
+      },
+      pagination: {
+        page,
+        limit,
+        total: totalCount,
+        pages,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching B2C customer ledger:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch customer ledger' },
+      { status: 500 }
+    );
+  }
 }
