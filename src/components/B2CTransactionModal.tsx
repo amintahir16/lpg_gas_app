@@ -834,13 +834,22 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                                             <Input
                                                                 type="number"
                                                                 min="0"
+                                                                step="1"
+                                                                inputMode="numeric"
                                                                 value={item.pricePerItem}
-                                                                readOnly
-                                                                disabled
-                                                                tabIndex={-1}
-                                                                className="h-9 text-sm bg-gray-50 text-gray-700 cursor-not-allowed"
+                                                                onChange={(e) =>
+                                                                    updateGasItem(
+                                                                        index,
+                                                                        'pricePerItem',
+                                                                        e.target.value === ''
+                                                                            ? ''
+                                                                            : Math.max(0, Math.round(Number(e.target.value)) || 0)
+                                                                    )
+                                                                }
+                                                                onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                                                                className="h-9 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
                                                                 placeholder="0"
-                                                                title="Price is set from margin pricing and cannot be edited"
+                                                                title="Defaults from margin pricing; you can adjust the unit price"
                                                             />
                                                             {item.costPrice > 0 && (
                                                                 <div className="text-[10px] text-gray-400 mt-0.5">Cost: {item.costPrice}</div>

@@ -802,10 +802,10 @@ export default function B2BCustomerDetailPage() {
 
       if (calculatedPrice > 0) {
         if (transactionType === 'SALE' || transactionType === 'UNIFIED') {
-          newItems[index].pricePerItem = calculatedPrice;
+          newItems[index].pricePerItem = Math.round(calculatedPrice);
         } else if (transactionType === 'BUYBACK') {
           // For buyback, set originalSoldPrice (the price the cylinder was originally sold at)
-          newItems[index].originalSoldPrice = calculatedPrice;
+          newItems[index].originalSoldPrice = Math.round(calculatedPrice);
         }
       }
     }
@@ -1039,7 +1039,7 @@ export default function B2BCustomerDetailPage() {
 
       return {
         ...item,
-        pricePerItem: calculatedPrice > 0 ? calculatedPrice : item.pricePerItem
+        pricePerItem: calculatedPrice > 0 ? Math.round(calculatedPrice) : item.pricePerItem
       };
     });
 
@@ -2384,14 +2384,22 @@ export default function B2BCustomerDetailPage() {
                                 <Input
                                   type="number"
                                   min="0"
-                                  step="0.01"
+                                  step="1"
+                                  inputMode="numeric"
                                   value={item.pricePerItem || ''}
-                                  readOnly
-                                  disabled
-                                  tabIndex={-1}
-                                  title="Price is set from margin pricing and cannot be edited"
-                                  className="w-full px-3 py-1 text-sm border border-gray-300 rounded-md bg-gray-50 text-gray-700 cursor-not-allowed h-9"
-                                  placeholder="0.00"
+                                  onChange={(e) => {
+                                    const raw = e.target.value;
+                                    updateGasItem(
+                                      index,
+                                      'pricePerItem',
+                                      raw === '' ? 0 : Math.max(0, Math.round(Number(raw)) || 0)
+                                    );
+                                  }}
+                                  onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                                  disabled={!item.cylinderType}
+                                  title="Defaults from margin pricing; you can adjust the unit price"
+                                  className={`w-full px-3 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 h-9 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield] ${!item.cylinderType ? 'bg-gray-100' : 'bg-white'}`}
+                                  placeholder="0"
                                 />
                               </td>
                               <td className="py-2 px-2 align-top">
