@@ -15,13 +15,13 @@ import {
   todayLocalDate,
 } from '@/lib/financial-period';
 
-type ModalMode = 'deposit' | 'transfer' | null;
+type ModalMode = 'deposit' | 'transfer' | 'withdrawal' | null;
 
 interface BankMovementActionsProps {
   onSaved: () => void;
   /**
    * When set (wallet detail page), deposit goes into this bank and
-   * transfers always leave from this bank — Bank/From pickers are hidden.
+   * transfers/withdrawals always leave from this bank — Bank/From pickers are hidden.
    */
   lockedMethod?: PaymentMethodValue;
 }
@@ -63,14 +63,22 @@ export function BankMovementActions({ onSaved, lockedMethod }: BankMovementActio
             date: movementDate,
             notes: notes || null,
           }
-        : {
-            type: 'TRANSFER',
-            fromMethod: lockedMethod || String(fd.get('fromMethod')),
-            toMethod: String(fd.get('toMethod')),
-            amount,
-            date: movementDate,
-            notes: notes || null,
-          };
+        : mode === 'transfer'
+          ? {
+              type: 'TRANSFER',
+              fromMethod: lockedMethod || String(fd.get('fromMethod')),
+              toMethod: String(fd.get('toMethod')),
+              amount,
+              date: movementDate,
+              notes: notes || null,
+            }
+          : {
+              type: 'WITHDRAWAL',
+              fromMethod: lockedMethod || String(fd.get('fromMethod')),
+              amount,
+              date: movementDate,
+              notes: notes || null,
+            };
 
     try {
       setSubmitting(true);
@@ -97,6 +105,32 @@ export function BankMovementActions({ onSaved, lockedMethod }: BankMovementActio
   const transferTitle = walletLabel
     ? `Move Amount from ${walletLabel}`
     : 'Move Amount Between Banks';
+  const withdrawalTitle = walletLabel
+    ? `Withdraw from ${walletLabel}`
+    : 'Withdraw from Bank';
+
+  const modalSubtitle =
+    mode === 'deposit'
+      ? walletLocked
+        ? `Deposit money directly into ${walletLabel}`
+        : 'Deposit money directly into a payment method wallet'
+      : mode === 'transfer'
+        ? walletLocked
+          ? `Transfer funds out of ${walletLabel} to another wallet`
+          : 'Transfer balance from one bank wallet to another'
+        : walletLocked
+          ? `Withdraw money from ${walletLabel} — it leaves this wallet completely`
+          : 'Withdraw money from a wallet — it leaves the system completely';
+
+  const submitLabel =
+    mode === 'deposit' ? 'Add Amount' : mode === 'transfer' ? 'Move Amount' : 'Withdraw';
+
+  const notesPlaceholder =
+    mode === 'deposit'
+      ? 'e.g., Opening cash float'
+      : mode === 'transfer'
+        ? 'e.g., Moved to Jazz Cash'
+        : 'e.g., Owner withdrew cash';
 
   return (
     <>
@@ -124,6 +158,18 @@ export function BankMovementActions({ onSaved, lockedMethod }: BankMovementActio
         >
           Move Amount
         </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-9 text-xs font-bold border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+          onClick={() => {
+            setError(null);
+            setMode('withdrawal');
+          }}
+        >
+          Withdraw
+        </Button>
       </div>
 
       {mode && (
@@ -132,17 +178,13 @@ export function BankMovementActions({ onSaved, lockedMethod }: BankMovementActio
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-lg font-bold text-gray-900">
-                  {mode === 'deposit' ? depositTitle : transferTitle}
-                </h2>
-                <p className="text-[10px] text-gray-500 font-medium">
                   {mode === 'deposit'
-                    ? walletLocked
-                      ? `Deposit money directly into ${walletLabel}`
-                      : 'Deposit money directly into a payment method wallet'
-                    : walletLocked
-                      ? `Transfer funds out of ${walletLabel} to another wallet`
-                      : 'Transfer balance from one bank wallet to another'}
-                </p>
+                    ? depositTitle
+                    : mode === 'transfer'
+                      ? transferTitle
+                      : withdrawalTitle}
+                </h2>
+                <p className="text-[10px] text-gray-500 font-medium">{modalSubtitle}</p>
               </div>
               <Button
                 variant="ghost"
@@ -176,8 +218,8 @@ export function BankMovementActions({ onSaved, lockedMethod }: BankMovementActio
                 </div>
               )}
 
-              {mode === 'transfer' && (
-                walletLocked ? (
+              {mode === 'transfer' &&
+                (walletLocked ? (
                   <div className="space-y-1">
                     <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">
                       To
@@ -214,7 +256,26 @@ export function BankMovementActions({ onSaved, lockedMethod }: BankMovementActio
                       />
                     </div>
                   </div>
-                )
+                ))}
+
+              {mode === 'withdrawal' && !walletLocked && (
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">
+                    From
+                  </label>
+                  <CustomSelect
+                    name="fromMethod"
+                    defaultValue="CASH"
+                    options={[...PAYMENT_METHOD_OPTIONS]}
+                    required
+                  />
+                </div>
+              )}
+
+              {mode === 'withdrawal' && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                  This amount is withdrawn from the wallet and is not moved to another bank.
+                </div>
               )}
 
               <div className="space-y-1">
@@ -228,7 +289,7 @@ export function BankMovementActions({ onSaved, lockedMethod }: BankMovementActio
                   step="1"
                   min="1"
                   required
-                  className="h-9 font-bold text-emerald-700"
+                  className={`h-9 font-bold ${mode === 'withdrawal' ? 'text-red-700' : 'text-emerald-700'}`}
                 />
               </div>
 
@@ -266,11 +327,7 @@ export function BankMovementActions({ onSaved, lockedMethod }: BankMovementActio
                 <Input
                   name="notes"
                   type="text"
-                  placeholder={
-                    mode === 'deposit'
-                      ? 'e.g., Opening cash float'
-                      : 'e.g., Moved to Jazz Cash'
-                  }
+                  placeholder={notesPlaceholder}
                   className="h-9"
                 />
               </div>
@@ -287,13 +344,13 @@ export function BankMovementActions({ onSaved, lockedMethod }: BankMovementActio
                 <Button
                   type="submit"
                   disabled={submitting}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white h-9 px-6 text-xs font-bold shadow-md shadow-emerald-200"
+                  className={`h-9 px-6 text-xs font-bold shadow-md text-white ${
+                    mode === 'withdrawal'
+                      ? 'bg-red-600 hover:bg-red-700 shadow-red-200'
+                      : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'
+                  }`}
                 >
-                  {submitting
-                    ? 'Saving...'
-                    : mode === 'deposit'
-                      ? 'Add Amount'
-                      : 'Move Amount'}
+                  {submitting ? 'Saving...' : submitLabel}
                 </Button>
               </div>
             </form>

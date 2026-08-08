@@ -1051,12 +1051,12 @@ model PersonalExpense {
   @@map("personal_expenses")
 }
 
-/// Manual bank wallet movements: DEPOSIT (add to one bank) or TRANSFER (move between banks).
+/// Manual bank wallet movements: DEPOSIT (add), TRANSFER (between banks), WITHDRAWAL (remove from wallet).
 model BankMovement {
   id           String   @id @default(cuid())
-  type         String // "DEPOSIT" | "TRANSFER"
-  fromMethod   String? // source bank for TRANSFER; null for DEPOSIT
-  toMethod     String // destination bank (always set)
+  type         String // "DEPOSIT" | "TRANSFER" | "WITHDRAWAL"
+  fromMethod   String? // source for TRANSFER / WITHDRAWAL; null for DEPOSIT
+  toMethod     String? // destination for DEPOSIT / TRANSFER; null for WITHDRAWAL
   amount       Decimal  @db.Decimal(10, 2)
   movementDate DateTime
   notes        String?

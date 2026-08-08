@@ -10,7 +10,7 @@ import {
 import { resolveFinancialPeriod, combineLocalDateAndTime } from '@/lib/financial-period';
 import { userDisplayName } from '@/lib/bank-ledger';
 
-type MovementType = 'DEPOSIT' | 'TRANSFER';
+type MovementType = 'DEPOSIT' | 'TRANSFER' | 'WITHDRAWAL';
 
 function parseMovementDate(value: unknown, time?: unknown): Date {
   if (typeof value === 'string' && value.trim()) {
@@ -90,9 +90,9 @@ export async function POST(request: NextRequest) {
     const notes = typeof body.notes === 'string' ? body.notes.trim() || null : null;
     const movementDate = parseMovementDate(body.date || body.movementDate, body.time);
 
-    if (typeRaw !== 'DEPOSIT' && typeRaw !== 'TRANSFER') {
+    if (typeRaw !== 'DEPOSIT' && typeRaw !== 'TRANSFER' && typeRaw !== 'WITHDRAWAL') {
       return NextResponse.json(
-        { error: 'type must be DEPOSIT or TRANSFER' },
+        { error: 'type must be DEPOSIT, TRANSFER, or WITHDRAWAL' },
         { status: 400 }
       );
     }
@@ -101,22 +101,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Amount must be greater than 0' }, { status: 400 });
     }
 
-    const toMethod = normalizePaymentMethodKey(body.toMethod);
-    if (!toMethod || !isSelectablePaymentMethod(toMethod)) {
-      return NextResponse.json({ error: 'Invalid destination bank' }, { status: 400 });
-    }
-
     let fromMethod: string | null = null;
-    if (typeRaw === 'TRANSFER') {
+    let toMethod: string | null = null;
+
+    if (typeRaw === 'DEPOSIT') {
+      toMethod = normalizePaymentMethodKey(body.toMethod);
+      if (!toMethod || !isSelectablePaymentMethod(toMethod)) {
+        return NextResponse.json({ error: 'Invalid destination bank' }, { status: 400 });
+      }
+    } else if (typeRaw === 'TRANSFER') {
       fromMethod = normalizePaymentMethodKey(body.fromMethod);
+      toMethod = normalizePaymentMethodKey(body.toMethod);
       if (!fromMethod || !isSelectablePaymentMethod(fromMethod)) {
         return NextResponse.json({ error: 'Invalid source bank' }, { status: 400 });
+      }
+      if (!toMethod || !isSelectablePaymentMethod(toMethod)) {
+        return NextResponse.json({ error: 'Invalid destination bank' }, { status: 400 });
       }
       if (fromMethod === toMethod) {
         return NextResponse.json(
           { error: 'Source and destination banks must be different' },
           { status: 400 }
         );
+      }
+    } else {
+      // WITHDRAWAL — amount leaves this wallet completely (no destination)
+      fromMethod = normalizePaymentMethodKey(body.fromMethod);
+      if (!fromMethod || !isSelectablePaymentMethod(fromMethod)) {
+        return NextResponse.json({ error: 'Invalid source bank' }, { status: 400 });
       }
     }
 
@@ -138,6 +150,13 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    const message =
+      typeRaw === 'DEPOSIT'
+        ? `Deposited to ${formatPaymentMethodLabel(toMethod)}`
+        : typeRaw === 'TRANSFER'
+          ? `Moved from ${formatPaymentMethodLabel(fromMethod)} to ${formatPaymentMethodLabel(toMethod)}`
+          : `Withdrawn from ${formatPaymentMethodLabel(fromMethod)}`;
+
     return NextResponse.json(
       {
         movement: {
@@ -149,10 +168,7 @@ export async function POST(request: NextRequest) {
           movementDate: movement.movementDate,
           notes: movement.notes,
           recordedBy: userDisplayName(movement.createdByUser),
-          message:
-            typeRaw === 'DEPOSIT'
-              ? `Deposited to ${formatPaymentMethodLabel(toMethod)}`
-              : `Moved from ${formatPaymentMethodLabel(fromMethod)} to ${formatPaymentMethodLabel(toMethod)}`,
+          message,
         },
       },
       { status: 201 }

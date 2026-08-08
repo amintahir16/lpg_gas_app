@@ -294,6 +294,12 @@ export async function buildBankLedgerEntries(
                   },
                 ],
               },
+              {
+                AND: [
+                  { type: 'WITHDRAWAL' },
+                  stringPaymentMethodWhere('fromMethod', method),
+                ],
+              },
             ],
             ...regionScope,
           },
@@ -616,6 +622,25 @@ export async function buildBankLedgerEntries(
           typeDetail: `Transfer ← ${formatPaymentMethodLabel(movement.fromMethod)}`,
         });
       }
+      continue;
+    }
+
+    if (movement.type === 'WITHDRAWAL' && matchesMethod(movement.fromMethod, method)) {
+      entries.push({
+        id: `withdrawal-${movement.id}`,
+        source: 'BANK_WITHDRAWAL',
+        sourceLabel: BANK_LEDGER_SOURCE_LABELS.BANK_WITHDRAWAL,
+        direction: 'OUT',
+        amount,
+        ...parts,
+        partyName: formatPaymentMethodLabel(method),
+        partyType: 'Bank',
+        recordedBy,
+        details: movement.notes || 'Withdrawn from wallet',
+        reference: null,
+        notes: movement.notes,
+        typeDetail: 'Withdraw from wallet',
+      });
     }
   }
 
@@ -671,6 +696,7 @@ export async function getBankLedgerOpeningNet(params: {
     depositsIn,
     transfersIn,
     transfersOut,
+    withdrawalsOut,
   ] = await Promise.all([
     prisma.b2BTransaction.aggregate({
       where: {
@@ -801,6 +827,20 @@ export async function getBankLedgerOpeningNet(params: {
         }),
       { _sum: { amount: null } }
     ),
+    safeLedgerQuery(
+      'bank_movements.withdrawal',
+      () =>
+        prisma.bankMovement.aggregate({
+          where: {
+            movementDate: before,
+            type: 'WITHDRAWAL',
+            ...stringPaymentMethodWhere('fromMethod', method),
+            ...regionScope,
+          },
+          _sum: { amount: true },
+        }),
+      { _sum: { amount: null } }
+    ),
   ]);
 
   const totalIn =
@@ -816,7 +856,8 @@ export async function getBankLedgerOpeningNet(params: {
     decimalSum(expenseOut._sum.amount) +
     decimalSum(personalExpenseOut._sum.amount) +
     decimalSum(salaryOut._sum.amount) +
-    decimalSum(transfersOut._sum.amount);
+    decimalSum(transfersOut._sum.amount) +
+    decimalSum(withdrawalsOut._sum.amount);
 
   return totalIn - totalOut;
 }

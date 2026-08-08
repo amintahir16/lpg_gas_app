@@ -299,6 +299,8 @@ export async function GET(request: NextRequest) {
             } else if (movement.type === 'TRANSFER') {
                 movementDeductions.push({ method: movement.fromMethod, amount });
                 movementCollections.push({ method: movement.toMethod, amount });
+            } else if (movement.type === 'WITHDRAWAL') {
+                movementDeductions.push({ method: movement.fromMethod, amount });
             }
         }
 

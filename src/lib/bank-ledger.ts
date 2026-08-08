@@ -16,7 +16,8 @@ export type BankLedgerSource =
   | 'SALARY_PAYMENT'
   | 'BANK_DEPOSIT'
   | 'BANK_TRANSFER_IN'
-  | 'BANK_TRANSFER_OUT';
+  | 'BANK_TRANSFER_OUT'
+  | 'BANK_WITHDRAWAL';
 
 export interface BankLedgerEntry {
   id: string;
@@ -52,6 +53,7 @@ export const BANK_LEDGER_SOURCE_LABELS: Record<BankLedgerSource, string> = {
   BANK_DEPOSIT: 'Bank Deposit',
   BANK_TRANSFER_IN: 'Bank Transfer In',
   BANK_TRANSFER_OUT: 'Bank Transfer Out',
+  BANK_WITHDRAWAL: 'Withdraw',
 };
 
 export function parseBankMethodParam(
