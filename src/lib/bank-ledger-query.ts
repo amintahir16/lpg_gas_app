@@ -13,6 +13,7 @@ import {
   userDisplayName,
   type BankLedgerEntry,
 } from '@/lib/bank-ledger';
+import { formatB2bItemCylinderLabel } from '@/lib/b2b-transaction-item-variant';
 
 function matchesMethod(raw: string | null | undefined, method: string): boolean {
   return normalizePaymentMethodKey(raw) === method;
@@ -118,6 +119,7 @@ export async function buildBankLedgerEntries(
             quantity: true,
             totalPrice: true,
             cylinderType: true,
+            cylinderVariantKey: true,
           },
         },
       },
@@ -169,6 +171,7 @@ export async function buildBankLedgerEntries(
         gasItems: {
           select: {
             cylinderType: true,
+            cylinderVariantKey: true,
             quantity: true,
             totalPrice: true,
           },
@@ -183,6 +186,7 @@ export async function buildBankLedgerEntries(
         securityItems: {
           select: {
             cylinderType: true,
+            cylinderVariantKey: true,
             quantity: true,
             totalPrice: true,
           },
@@ -354,6 +358,46 @@ export async function buildBankLedgerEntries(
     users.map((u) => [u.id, userDisplayName(u) || u.id] as const)
   );
 
+  // Resolve friendly cylinder labels (Standard / Commercial / …) from inventory —
+  // same approach as B2B transaction report PDFs. Avoids "CYLINDER_15KG Cylinder".
+  const cylinderTypesUsed = new Set<string>();
+  for (const tx of b2bPaidSales) {
+    for (const item of tx.items) {
+      if (item.cylinderType) cylinderTypesUsed.add(item.cylinderType);
+    }
+  }
+  for (const tx of b2cTxs) {
+    for (const item of tx.gasItems) {
+      if (item.cylinderType) cylinderTypesUsed.add(item.cylinderType);
+    }
+    for (const item of tx.securityItems) {
+      if (item.cylinderType) cylinderTypesUsed.add(item.cylinderType);
+    }
+  }
+
+  const cylinderTypeMap = new Map<
+    string,
+    { typeName: string | null; capacity: number | null }
+  >();
+  if (cylinderTypesUsed.size > 0) {
+    const samples = await prisma.cylinder.findMany({
+      where: {
+        cylinderType: { in: Array.from(cylinderTypesUsed) },
+        ...regionScope,
+      },
+      select: { cylinderType: true, typeName: true, capacity: true },
+      distinct: ['cylinderType'],
+    });
+    for (const s of samples) {
+      if (!cylinderTypeMap.has(s.cylinderType)) {
+        cylinderTypeMap.set(s.cylinderType, {
+          typeName: s.typeName,
+          capacity: s.capacity != null ? Number(s.capacity) : null,
+        });
+      }
+    }
+  }
+
   const entries: BankLedgerEntry[] = [];
 
   for (const tx of b2bPaidSales) {
@@ -373,7 +417,9 @@ export async function buildBankLedgerEntries(
       recordedBy: userDisplayName(tx.users),
       details: summarizeLineItems(
         tx.items.map((item) => ({
-          name: item.productName || item.cylinderType || 'Item',
+          name: item.cylinderType
+            ? formatB2bItemCylinderLabel(item, cylinderTypeMap)
+            : item.productName || 'Item',
           quantity: Number(item.quantity),
           totalPrice: Number(item.totalPrice),
         }))
@@ -414,7 +460,7 @@ export async function buildBankLedgerEntries(
     const parts = formatLedgerDateParts(when);
     const lineItems = [
       ...tx.gasItems.map((item) => ({
-        name: item.cylinderType || 'Gas',
+        name: formatB2bItemCylinderLabel(item, cylinderTypeMap),
         quantity: item.quantity,
         totalPrice: Number(item.totalPrice),
       })),
@@ -424,7 +470,7 @@ export async function buildBankLedgerEntries(
         totalPrice: Number(item.totalPrice),
       })),
       ...tx.securityItems.map((item) => ({
-        name: `Security ${item.cylinderType || ''}`.trim(),
+        name: `Security ${formatB2bItemCylinderLabel(item, cylinderTypeMap)}`,
         quantity: item.quantity,
         totalPrice: Number(item.totalPrice),
       })),
