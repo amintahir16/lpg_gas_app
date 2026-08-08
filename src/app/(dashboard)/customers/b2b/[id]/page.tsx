@@ -13,6 +13,7 @@ import { useCylinderStock } from '@/hooks/useCylinderStock';
 import { ProfessionalAccessorySelector } from '@/components/ui/ProfessionalAccessorySelector';
 import { CustomSelect } from '@/components/ui/select-custom';
 import { getCylinderTypeDisplayName, getCapacityFromTypeString } from '@/lib/cylinder-utils';
+import { calculateGasUnitCostFromPlant } from '@/lib/gas-profit';
 import { parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { formatB2bItemCylinderLabel } from '@/lib/b2b-transaction-item-variant';
 import { OPENING_BALANCE_NOTE, OPENING_DUES_NOTE, OPENING_DUES_REF } from '@/lib/b2b-opening-entries';
@@ -207,7 +208,7 @@ export default function B2BCustomerDetailPage() {
 
   // Gas transaction form data - now supports dynamic rows
   const [gasItems, setGasItems] = useState([
-    { cylinderVariantKey: '', cylinderType: '', delivered: 0, pricePerItem: 0, emptyReturned: 0, remainingDue: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackPricePerItem: 0, buybackTotal: 0 }
+    { cylinderVariantKey: '', cylinderType: '', delivered: 0, pricePerItem: 0, costPrice: 0, emptyReturned: 0, remainingDue: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackPricePerItem: 0, buybackTotal: 0 }
   ]);
 
   // Available cylinder types from inventory
@@ -711,6 +712,7 @@ export default function B2BCustomerDetailPage() {
       cylinderType: '',
       delivered: 0,
       pricePerItem: 0,
+      costPrice: 0,
       emptyReturned: 0,
       remainingDue: 0,
       remainingKg: 0,
@@ -808,6 +810,16 @@ export default function B2BCustomerDetailPage() {
           newItems[index].originalSoldPrice = Math.round(calculatedPrice);
         }
       }
+
+      // Persist plant cost so realized profit tracks (sell − cost) when unit price is edited
+      const plantPrice118 = Number(pricingInfo?.plantPrice?.price118kg) || 0;
+      const capacityForCost = getCapacityFromTypeString(cylTypeForPricing);
+      newItems[index].costPrice = calculateGasUnitCostFromPlant(plantPrice118, capacityForCost);
+    } else if (
+      (field === 'cylinderVariantKey' || field === 'cylinderType') &&
+      !cylTypeForPricing
+    ) {
+      newItems[index].costPrice = 0;
     }
 
     // Auto-apply calculated price when delivered quantity is set (fallback for old logic)
@@ -818,6 +830,10 @@ export default function B2BCustomerDetailPage() {
         if (cylinderCapacity > 0 && pricingInfo.calculation?.endPricePerKg) {
           const calculatedPrice = Math.round(pricingInfo.calculation.endPricePerKg * cylinderCapacity);
           newItems[index].pricePerItem = calculatedPrice;
+        }
+        if (!newItems[index].costPrice) {
+          const plantPrice118 = Number(pricingInfo?.plantPrice?.price118kg) || 0;
+          newItems[index].costPrice = calculateGasUnitCostFromPlant(plantPrice118, cylinderCapacity);
         }
       }
     }
@@ -1022,6 +1038,8 @@ export default function B2BCustomerDetailPage() {
   const applyCalculatedPrices = () => {
     if (!pricingInfo) return;
 
+    const plantPrice118 = Number(pricingInfo?.plantPrice?.price118kg) || 0;
+
     const updatedItems = gasItems.map(item => {
       let calculatedPrice = 0;
 
@@ -1037,9 +1055,12 @@ export default function B2BCustomerDetailPage() {
           break;
       }
 
+      const capacity = item.cylinderType ? getCapacityFromTypeString(item.cylinderType) : 0;
+
       return {
         ...item,
-        pricePerItem: calculatedPrice > 0 ? Math.round(calculatedPrice) : item.pricePerItem
+        pricePerItem: calculatedPrice > 0 ? Math.round(calculatedPrice) : item.pricePerItem,
+        costPrice: calculateGasUnitCostFromPlant(plantPrice118, capacity) || item.costPrice || 0,
       };
     });
 
@@ -1219,7 +1240,7 @@ export default function B2BCustomerDetailPage() {
 
   // Reset unified form
   const resetUnifiedForm = () => {
-    setGasItems([{ cylinderVariantKey: '', cylinderType: '', delivered: 0, pricePerItem: 0, emptyReturned: 0, remainingDue: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackPricePerItem: 0, buybackTotal: 0 }]);
+    setGasItems([{ cylinderVariantKey: '', cylinderType: '', delivered: 0, pricePerItem: 0, costPrice: 0, emptyReturned: 0, remainingDue: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackPricePerItem: 0, buybackTotal: 0 }]);
     setReturnItems([{ cylinderVariantKey: '', cylinderType: '', emptyReturned: 0, buybackQuantity: 0, remainingKg: 0, originalSoldPrice: 0, buybackRate: 0.6, buybackCredit: 0 }]);
     setAccessoryItems([]);
     setSalePaymentAmount(0);
@@ -1283,6 +1304,7 @@ export default function B2BCustomerDetailPage() {
         cylinderVariantKey: item.cylinderVariantKey || undefined,
         delivered: item.delivered,
         pricePerItem: item.pricePerItem,
+        costPrice: item.costPrice || 0,
         emptyReturned: 0, // Delivery only
       }));
 

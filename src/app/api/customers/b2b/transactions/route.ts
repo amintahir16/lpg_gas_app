@@ -257,7 +257,14 @@ export async function POST(request: NextRequest) {
               buybackTotal: isBuybackItem && buybackTotal > 0 ? buybackTotal : null,
               // Store new fields
               category: item.category || null,
-              costPrice: (item.usagePrice !== undefined && item.usagePrice !== null) ? parseFloat(item.usagePrice) : (item.costPerPiece ? parseFloat(item.costPerPiece) : 0),
+              // Gas: plant cost (for realized profit). Accessories: usage/cost fields.
+              costPrice: item.cylinderType
+                ? parseFloat(String(item.costPrice ?? 0)) || 0
+                : (item.usagePrice !== undefined && item.usagePrice !== null)
+                  ? parseFloat(item.usagePrice)
+                  : (item.costPerPiece
+                    ? parseFloat(item.costPerPiece)
+                    : (item.costPrice ? parseFloat(item.costPrice) : 0)),
               sellingPrice: (item.sellingPrice !== undefined && item.sellingPrice !== null) ? parseFloat(item.sellingPrice) : (item.pricePerItem ? parseFloat(item.pricePerItem) : 0),
             };
           }),

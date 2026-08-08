@@ -5,6 +5,8 @@ import { requireAdmin } from '@/lib/apiAuth';
 import { resolveFinancialPeriod } from '@/lib/financial-period';
 import { buildPaymentMethodTotals } from '@/lib/payment-methods';
 import { isOpeningDuesSaleItem } from '@/lib/b2b-opening-entries';
+import { calculateGasLineProfit } from '@/lib/gas-profit';
+import { getCapacityFromTypeString } from '@/lib/cylinder-utils';
 
 export async function GET(request: NextRequest) {
     try {
@@ -165,12 +167,18 @@ export async function GET(request: NextRequest) {
             if (isOpeningDuesSaleItem(item.transaction, item)) return;
             if (item.cylinderType) {
                 const marginPerKg = Number(item.transaction.customer?.marginCategory?.marginPerKg || 0);
-                let capacity = 15;
+                let capacity = getCapacityFromTypeString(item.cylinderType) || 15;
                 const match = item.cylinderType.match(/(\d+)(?:_(\d+))?/);
-                if (match) {
+                if (!(capacity > 0) && match) {
                     capacity = match[2] ? parseFloat(`${match[1]}.${match[2]}`) : parseFloat(match[1]);
                 }
-                b2bGrossProfit += Number(item.quantity) * capacity * marginPerKg;
+                b2bGrossProfit += calculateGasLineProfit({
+                    pricePerItem: Number(item.pricePerItem),
+                    quantity: Number(item.quantity),
+                    costPrice: Number(item.costPrice || 0),
+                    capacityKg: capacity,
+                    marginPerKg,
+                });
             } else {
                 const costPrice = Number(item.costPrice || 0);
                 if (costPrice > 0) {

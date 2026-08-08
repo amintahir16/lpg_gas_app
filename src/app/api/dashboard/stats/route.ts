@@ -15,6 +15,7 @@ import { parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { getCapacityFromTypeString, getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
 import { isOpeningDuesSaleItem, isOpeningDuesTransaction } from '@/lib/b2b-opening-entries';
 import { resolveFinancialPeriod } from '@/lib/financial-period';
+import { calculateGasLineProfit } from '@/lib/gas-profit';
 import {
   allocateB2bPaymentsOntoSales,
   b2cSalesActivityWhere,
@@ -230,17 +231,23 @@ export async function GET(request: NextRequest) {
         rangeRevenue += (sellPrice * qty);
 
         if (item.cylinderType) {
-          let capacity = 15;
+          let capacity = getCapacityFromTypeString(item.cylinderType) || 15;
           const match = item.cylinderType.match(/(\d+)(?:_(\d+))?/);
-          if (match) {
+          if (!(capacity > 0) && match) {
             capacity = match[2] ? parseFloat(`${match[1]}.${match[2]}`) : parseFloat(match[1]);
-          } else {
+          } else if (!(capacity > 0)) {
             const customMatch = item.cylinderType.match(/(\d+(?:\.\d+)?)kg/);
             if (customMatch) {
               capacity = parseFloat(customMatch[1]);
             }
           }
-          rangeProfit += (qty * capacity * marginPerKg);
+          rangeProfit += calculateGasLineProfit({
+            pricePerItem: sellPrice,
+            quantity: qty,
+            costPrice,
+            capacityKg: capacity,
+            marginPerKg,
+          });
         } else {
           if (costPrice > 0) {
             rangeProfit += (sellPrice - costPrice) * qty;

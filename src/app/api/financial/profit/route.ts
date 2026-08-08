@@ -9,6 +9,8 @@ import {
     resolveFinancialPeriod,
 } from '@/lib/financial-period';
 import { isOpeningDuesSaleItem } from '@/lib/b2b-opening-entries';
+import { calculateGasLineProfit } from '@/lib/gas-profit';
+import { getCapacityFromTypeString } from '@/lib/cylinder-utils';
 
 export async function GET(request: NextRequest) {
     try {
@@ -119,16 +121,21 @@ export async function GET(request: NextRequest) {
                 const existing = cylinderMap.get(key) || { qty: 0, revenue: 0, cost: 0, profit: 0 };
                 existing.qty += qty;
                 existing.revenue += revenue;
-                // Calculate profit using margin
                 const marginCategoryId = custMarginMap.get(item.transaction.customerId);
                 const marginPerKg = marginCategoryId ? (marginMap.get(marginCategoryId) || 0) : 0;
-                let capacity = 15;
+                let capacity = getCapacityFromTypeString(item.cylinderType) || 15;
                 const match = item.cylinderType.match(/(\d+)(?:_(\d+))?/);
-                if (match) {
+                if (!(capacity > 0) && match) {
                     capacity = match[2] ? parseFloat(`${match[1]}.${match[2]}`) : parseFloat(match[1]);
                 }
-                const profit = qty * capacity * marginPerKg;
-                existing.cost += revenue - profit;
+                const profit = calculateGasLineProfit({
+                    pricePerItem: Number(item.pricePerItem),
+                    quantity: qty,
+                    costPrice,
+                    capacityKg: capacity,
+                    marginPerKg,
+                });
+                existing.cost += costPrice > 0 ? costPrice * qty : Math.max(0, revenue - profit);
                 existing.profit += profit;
                 cylinderMap.set(key, existing);
             } else {
@@ -286,12 +293,18 @@ export async function GET(request: NextRequest) {
             if (item.cylinderType) {
                 const marginCategoryId = custMarginMap.get(item.transaction.customerId);
                 const marginPerKg = marginCategoryId ? (marginMap.get(marginCategoryId) || 0) : 0;
-                let capacity = 15;
+                let capacity = getCapacityFromTypeString(item.cylinderType) || 15;
                 const match = item.cylinderType.match(/(\d+)(?:_(\d+))?/);
-                if (match) {
+                if (!(capacity > 0) && match) {
                     capacity = match[2] ? parseFloat(`${match[1]}.${match[2]}`) : parseFloat(match[1]);
                 }
-                chartData[idx].profit += qty * capacity * marginPerKg;
+                chartData[idx].profit += calculateGasLineProfit({
+                    pricePerItem: Number(item.pricePerItem),
+                    quantity: qty,
+                    costPrice,
+                    capacityKg: capacity,
+                    marginPerKg,
+                });
             } else if (costPrice > 0) {
                 chartData[idx].profit += (Number(item.pricePerItem) - costPrice) * qty;
             } else {

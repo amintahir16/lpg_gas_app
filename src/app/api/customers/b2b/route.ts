@@ -8,6 +8,8 @@ import { getActiveRegionId, regionScopedWhere, withRegionScope } from '@/lib/reg
 import { requireAdmin, clampLimit } from '@/lib/apiAuth';
 import { buildCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { isOpeningDuesSaleItem, isOpeningDuesTransaction } from '@/lib/b2b-opening-entries';
+import { calculateGasLineProfit } from '@/lib/gas-profit';
+import { getCapacityFromTypeString } from '@/lib/cylinder-utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -262,23 +264,29 @@ export async function GET(request: NextRequest) {
         const itemQty = Number(item.quantity);
 
         if (item.cylinderType) {
-          // Gas Item: Profit = Quantity * Capacity * MarginPerKg
-          let capacity = 15; // default
-          // Parse capacity
-          const match = item.cylinderType.match(/(\d+)(?:_(\d+))?/);
-          if (match) {
-            const whole = match[1];
-            const decimal = match[2];
-            capacity = decimal ? parseFloat(`${whole}.${decimal}`) : parseFloat(whole);
-          } else if (item.cylinderType.includes('kg')) {
-            // Handle custom string like "Commercial (45.4kg)"
-            const customMatch = item.cylinderType.match(/(\d+(?:\.\d+)?)kg/);
-            if (customMatch) {
-              capacity = parseFloat(customMatch[1]);
+          // Realized gas profit when cost is stored; margin fallback for older rows
+          let capacity = getCapacityFromTypeString(item.cylinderType) || 15;
+          if (!(capacity > 0)) {
+            const match = item.cylinderType.match(/(\d+)(?:_(\d+))?/);
+            if (match) {
+              const whole = match[1];
+              const decimal = match[2];
+              capacity = decimal ? parseFloat(`${whole}.${decimal}`) : parseFloat(whole);
+            } else if (item.cylinderType.includes('kg')) {
+              const customMatch = item.cylinderType.match(/(\d+(?:\.\d+)?)kg/);
+              if (customMatch) {
+                capacity = parseFloat(customMatch[1]);
+              }
             }
           }
 
-          totalProfit += (itemQty * capacity * marginPerKg);
+          totalProfit += calculateGasLineProfit({
+            pricePerItem: Number(item.pricePerItem),
+            quantity: itemQty,
+            costPrice: Number(item.costPrice || 0),
+            capacityKg: capacity,
+            marginPerKg,
+          });
 
         } else {
           // Accessory Item: Profit = (Selling - Cost) * Qty

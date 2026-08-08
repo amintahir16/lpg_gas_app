@@ -18,6 +18,7 @@ import {
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { buildCylinderVariantSummary } from '@/lib/cylinder-variant-summary';
 import { normalizePaymentMethodKey } from '@/lib/payment-methods';
+import { calculateGasLineProfit } from '@/lib/gas-profit';
 
 // Define types for transaction items
 interface TransactionGasItem {
@@ -172,22 +173,20 @@ export async function POST(request: NextRequest) {
 
     // Security return: 75% of original deposit refunded to customer; 25% retention is profit (see return loop).
 
-    // Calculate profit margins
-    const gasProfit = (() => {
-      const marginCategory = customer.marginCategory;
-      if (!marginCategory) return gasTotal - gasCost; // Fallback to old calculation
-
-      // Calculate profit based on margin per kg for each gas item
-      return gasItems.reduce((total: number, item: TransactionGasItem) => {
-        if (!item.cylinderType) return total;
-
-        const cylinderWeight = gasItemCapacityKg(item);
-
-        // Calculate profit based on margin per kg: marginPerKg × cylinderWeight × quantity
-        const marginPerKg = Number(marginCategory.marginPerKg);
-        return total + (marginPerKg * cylinderWeight * item.quantity);
-      }, 0);
-    })();
+    // Realized gas profit tracks edited unit price: (sell − cost) × qty.
+    // Margin category still drives default pricing; used as fallback if cost missing.
+    const gasProfit = gasItems.reduce((total: number, item: TransactionGasItem) => {
+      if (!item.cylinderType) return total;
+      return total + calculateGasLineProfit({
+        pricePerItem: item.pricePerItem,
+        quantity: item.quantity,
+        costPrice: item.costPrice,
+        capacityKg: gasItemCapacityKg(item),
+        marginPerKg: customer.marginCategory
+          ? Number(customer.marginCategory.marginPerKg)
+          : null,
+      });
+    }, 0);
 
     const accessoryProfit = accessoryTotal - accessoryCost;
     const deliveryProfit = Number(deliveryCharges) - Number(deliveryCost || 0);
@@ -226,16 +225,15 @@ export async function POST(request: NextRequest) {
             const totalPrice = item.pricePerItem * item.quantity;
             const costPrice = item.costPrice || 0;
             const totalCost = costPrice * item.quantity;
-
-            // Calculate profit margin based on margin per kg if margin category is available
-            let profitMargin = totalPrice - totalCost; // Default fallback
-            if (customer.marginCategory && item.cylinderType) {
-              const cylinderWeight = gasItemCapacityKg(item);
-
-              // Calculate profit based on margin per kg: marginPerKg × cylinderWeight × quantity
-              const marginPerKg = Number(customer.marginCategory.marginPerKg);
-              profitMargin = marginPerKg * cylinderWeight * item.quantity;
-            }
+            const profitMargin = calculateGasLineProfit({
+              pricePerItem: item.pricePerItem,
+              quantity: item.quantity,
+              costPrice,
+              capacityKg: gasItemCapacityKg(item),
+              marginPerKg: customer.marginCategory
+                ? Number(customer.marginCategory.marginPerKg)
+                : null,
+            });
 
             return {
               transactionId: newTransaction.id,

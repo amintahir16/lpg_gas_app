@@ -4,6 +4,8 @@ import { adoptLegacyB2bCustomerIfNeeded, getActiveRegionId, regionScopedWhere } 
 import { requireAdmin, clampLimit } from '@/lib/apiAuth';
 import { parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { isOpeningDuesSaleItem, isOpeningDuesTransaction } from '@/lib/b2b-opening-entries';
+import { calculateGasLineProfit } from '@/lib/gas-profit';
+import { getCapacityFromTypeString } from '@/lib/cylinder-utils';
 
 export async function GET(
   request: NextRequest,
@@ -210,16 +212,10 @@ export async function GET(
             transaction.items.forEach(item => {
               if (isOpeningDuesSaleItem(transaction, item)) return;
 
-              // 1. Gas Profit Calculation
+              // 1. Gas Profit Calculation — realized (sell − cost) when cost stored;
+              // falls back to customer margin × capacity for older rows without cost.
               if (item.cylinderType) {
-                // Profit = Margin Per Kg * Cylinder Capacity * Quantity
-                // Note: We use the customer's CURRENT margin category as historical margin isn't stored on items
-                // This is a known limitation accepted in the plan
-                if (customer.marginCategory) {
-                  const marginPerKg = parseFloat(customer.marginCategory.marginPerKg.toString());
-                  // Helper function logic inlined/adapted since we can't easily import generic utils in API route without potential path issues
-                  // But we can try to use the cylinder-utils if available, or regex parse
-                let capacity = 15; // Default fallback
+                let capacity = 15;
 
                 const parsedVk = item.cylinderVariantKey
                   ? parseCylinderVariantKey(item.cylinderVariantKey)
@@ -231,18 +227,24 @@ export async function GET(
                 ) {
                   capacity = parsedVk.capacity;
                 } else if (item.cylinderType) {
-                  const match = item.cylinderType.match(/(\d+)(?:_(\d+))?/);
-                  if (match) {
-                    const whole = match[1];
-                    const decimal = match[2];
-                    capacity = decimal ? parseFloat(`${whole}.${decimal}`) : parseFloat(whole);
-                  }
+                  const fromType = getCapacityFromTypeString(item.cylinderType);
+                  if (fromType > 0) capacity = fromType;
                 }
 
                 const quantity = parseFloat(item.quantity.toString());
-                  const itemProfit = marginPerKg * capacity * quantity;
-                  totalProfit += itemProfit;
-                }
+                const sellingPrice = parseFloat(item.pricePerItem.toString()) || 0;
+                const costPrice = item.costPrice ? parseFloat(item.costPrice.toString()) : 0;
+                const marginPerKg = customer.marginCategory
+                  ? parseFloat(customer.marginCategory.marginPerKg.toString())
+                  : 0;
+
+                totalProfit += calculateGasLineProfit({
+                  pricePerItem: sellingPrice,
+                  quantity,
+                  costPrice,
+                  capacityKg: capacity,
+                  marginPerKg,
+                });
               }
               // 2. Accessory Profit Calculation
               else {
