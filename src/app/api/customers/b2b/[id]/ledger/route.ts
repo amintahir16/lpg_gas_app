@@ -6,6 +6,7 @@ import { parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { isOpeningDuesSaleItem, isOpeningDuesTransaction } from '@/lib/b2b-opening-entries';
 import { calculateGasLineProfit } from '@/lib/gas-profit';
 import { getCapacityFromTypeString } from '@/lib/cylinder-utils';
+import { compareTransactionsNewestFirst } from '@/lib/transaction-display-sort';
 
 export async function GET(
   request: NextRequest,
@@ -168,8 +169,10 @@ export async function GET(
       };
     });
 
-    // For display, we want newest first, so reverse
-    const reversedTransactions = filteredTransactionsWithBalance.reverse();
+    // Newest first for UI (keeps running-balance walk newest → oldest)
+    const reversedTransactions = [...filteredTransactionsWithBalance].sort(
+      compareTransactionsNewestFirst
+    );
     let displayBalance = currentBalance; // Start with the final balance
 
     const displayTransactions = reversedTransactions.map((transaction) => {

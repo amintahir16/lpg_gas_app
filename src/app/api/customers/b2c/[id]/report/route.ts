@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { sortTransactionsNewestFirst } from '@/lib/transaction-display-sort';
 
 // Helper function to format currency
 function formatCurrency(amount: number): string {
@@ -413,8 +414,8 @@ export async function GET(
       }
     }
 
-    // Fetch transactions
-    const transactions = await prisma.b2CTransaction.findMany({
+    // Fetch transactions (final newest-first order applied before PDF)
+    const transactionsRaw = await prisma.b2CTransaction.findMany({
       where: {
         customerId,
         voided: false,
@@ -427,9 +428,11 @@ export async function GET(
       },
       orderBy: [
         { date: 'desc' },
-        { time: 'desc' }
+        { time: 'desc' },
+        { createdAt: 'desc' },
       ]
     });
+    const transactions = sortTransactionsNewestFirst(transactionsRaw);
 
     // Build cylinder type mapping for proper display names
     const uniqueCylinderTypes = new Set<string>();

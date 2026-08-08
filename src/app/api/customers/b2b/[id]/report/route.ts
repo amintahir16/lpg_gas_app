@@ -13,6 +13,7 @@ import {
   isOpeningDuesSaleItem,
   isOpeningDuesTransaction,
 } from '@/lib/b2b-opening-entries';
+import { sortTransactionsNewestFirst } from '@/lib/transaction-display-sort';
 // Helper function to format currency
 function formatCurrency(amount: number): string {
   return `PKR ${amount.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -374,18 +375,8 @@ async function generatePDF(
 
   yPosition += 10;
 
-  // Prepare table data - sort by date descending (newest first)
-  const sortedTransactions = [...transactions].sort((a, b) => {
-    const dateA = new Date(a.date).getTime();
-    const dateB = new Date(b.date).getTime();
-    if (dateA !== dateB) {
-      return dateB - dateA; // Descending order (newest first)
-    }
-    // If dates are equal, sort by time descending
-    const timeA = new Date(a.createdAt || a.date).getTime();
-    const timeB = new Date(b.createdAt || b.date).getTime();
-    return timeB - timeA;
-  });
+  // Prepare table data — newest first (date → time → bill no → createdAt)
+  const sortedTransactions = sortTransactionsNewestFirst(transactions);
 
   const tableData = sortedTransactions.map((transaction, index) => {
     const date = formatDate(transaction.date);

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { requireAdmin, clampLimit } from '@/lib/apiAuth';
+import { sortTransactionsNewestFirst } from '@/lib/transaction-display-sort';
 
 export async function GET(
     request: NextRequest,
@@ -112,12 +113,8 @@ export async function GET(
             });
         }
 
-        // Reverse for display (newest first)
-        // Note: B2B did reverse AFTER calculating running balances.
-        const sortedDisplayTransactions = [...displayTransactions].sort((a, b) =>
-            new Date(b.date).getTime() - new Date(a.date).getTime() ||
-            new Date(b.time).getTime() - new Date(a.time).getTime()
-        );
+        // Newest first: date → time → bill number → createdAt
+        const sortedDisplayTransactions = sortTransactionsNewestFirst(displayTransactions);
 
         // Apply pagination
         const paginatedTransactions = sortedDisplayTransactions.slice(skip, skip + limit);
