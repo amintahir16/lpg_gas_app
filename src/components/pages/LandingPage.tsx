@@ -17,7 +17,7 @@ import { FlipCard } from '@/components/animate-ui/components/community/flip-card
 import { StarsBackground } from '@/components/animate-ui/components/backgrounds/stars';
 import DepthCarousel from '@/components/landing/DepthCarousel';
 
-const ABOUT_GALLERY = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({
+const ABOUT_GALLERY = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({
   image: `/images/${n}.webp`,
   alt: `Flamora operations gallery ${n}`,
 }));
