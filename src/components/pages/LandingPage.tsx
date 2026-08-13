@@ -13,6 +13,14 @@ import { useSession } from 'next-auth/react';
 import { usePublicSiteSettings } from '@/components/providers/PublicSiteSettingsProvider';
 import { phoneToTelHref, phoneToWhatsAppHref } from '@/lib/public-site-settings';
 import FlamoraHero from '@/components/pages/FlamoraHero';
+import { FlipCard } from '@/components/animate-ui/components/community/flip-card';
+import { StarsBackground } from '@/components/animate-ui/components/backgrounds/stars';
+import DepthCarousel from '@/components/landing/DepthCarousel';
+
+const ABOUT_GALLERY = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({
+  image: `/images/${n}.webp`,
+  alt: `Flamora operations gallery ${n}`,
+}));
 
 
 /* ─── Animated Counter Hook ─── */
@@ -71,6 +79,7 @@ const cylinders = [
     name: 'Domestic',
     weight: '11.8 KG',
     icon: Home,
+    image: '/images/11.8kg.webp',
     audience: 'B2C — For Homes',
     color: '#f8a11b',
     description: 'Perfect for everyday household cooking. Reliable, safe, and long-lasting for families.',
@@ -80,6 +89,7 @@ const cylinders = [
     name: 'Standard',
     weight: '15 KG',
     icon: Building2,
+    image: '/images/15kg.webp',
     audience: 'B2C / B2B',
     color: '#f36523',
     description: 'Our versatile mid-range cylinder for small restaurants, cafes, and larger households.',
@@ -89,6 +99,7 @@ const cylinders = [
     name: 'Commercial',
     weight: '44.5 KG',
     icon: Factory,
+    image: '/images/45.4kg.webp',
     audience: 'B2B — Industries & Restaurants',
     color: '#e1382b',
     description: 'Heavy-duty cylinders designed for high-demand commercial kitchens and industrial operations.',
@@ -439,7 +450,7 @@ export default function LandingPage() {
       {/* ═══════════════════════════════════════════
           SECTION 3: ABOUT / WHO WE ARE
           ═══════════════════════════════════════════ */}
-      <section id="about" className="relative py-24 bg-[#0a0e14] overflow-hidden">
+      <section id="about" className="relative py-24 bg-[#0a0e14] overflow-x-clip">
         <div className="max-w-7xl mx-auto px-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
             {/* Text */}
@@ -480,25 +491,33 @@ export default function LandingPage() {
               </div>
             </motion.div>
 
-            {/* Image */}
+            {/* Gallery carousel */}
             <motion.div
               variants={slideInRight}
               initial="hidden"
               whileInView="visible"
               viewport={{ once: true }}
-              className="relative"
+              className="relative w-full min-h-[480px] h-[480px] md:min-h-[520px] md:h-[520px]"
             >
-              <div className="relative rounded-3xl overflow-hidden animate-float">
-                <img
-                  src="/images/section-pattern.webp"
-                  alt="Flamora warehouse operations"
-                  className="object-cover rounded-3xl w-full h-[450px]"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0a0e14] via-transparent to-transparent" />
-              </div>
+              <DepthCarousel
+                items={ABOUT_GALLERY}
+                className="h-full w-full"
+                cardWidth={480}
+                cardHeight={500}
+                radius={24}
+                tint="#0a0e14"
+                spread={48}
+                depth={160}
+                anchorY="top"
+                autoplay
+                autoplayDelay={3200}
+                loop
+                showControls
+                showIndicators
+              />
               {/* Floating stat card */}
               <motion.div
-                className="absolute -bottom-6 -left-6 glass-card p-5"
+                className="absolute bottom-1 left-2 z-[3010] glass-card p-5 md:bottom-2 md:left-3"
                 animate={{ y: [0, -8, 0] }}
                 transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
               >
@@ -556,52 +575,77 @@ export default function LandingPage() {
                 whileInView="visible"
                 viewport={{ once: true }}
                 custom={i}
-                className="product-card-glow glass-card p-8 text-center group"
+                className="h-[32rem] md:h-[34rem]"
               >
-                {/* Icon */}
-                <div
-                  className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 transition-all duration-500 group-hover:scale-110"
-                  style={{ background: `${cyl.color}15`, border: `1px solid ${cyl.color}30` }}
-                >
-                  <cyl.icon className="w-10 h-10" style={{ color: cyl.color }} />
-                </div>
+                <FlipCard
+                  className="h-full min-h-full"
+                  front={
+                    <div className="relative flex h-full flex-col overflow-hidden rounded-[1.25rem] border border-white/10 bg-[#12171f] p-0">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={cyl.image}
+                        alt={`Flamora ${cyl.name} LPG cylinder ${cyl.weight}`}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-5 pb-5 pt-16">
+                        <p className="text-xs font-semibold uppercase tracking-[0.15em]" style={{ color: cyl.color }}>
+                          {cyl.weight}
+                        </p>
+                        <h3 className="text-2xl font-bold text-white">{cyl.name}</h3>
+                        <p className="mt-1 text-xs text-white/50 md:hidden">Tap to view details</p>
+                        <p className="mt-1 hidden text-xs text-white/50 md:block">Hover to view details</p>
+                      </div>
+                    </div>
+                  }
+                  back={
+                    <div className="flex h-full flex-col rounded-[1.25rem] border border-white/10 bg-[#12171f] p-8 text-center">
+                      <div
+                        className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl"
+                        style={{ background: `${cyl.color}15`, border: `1px solid ${cyl.color}30` }}
+                      >
+                        <cyl.icon className="h-7 w-7" style={{ color: cyl.color }} />
+                      </div>
 
-                {/* Weight Badge */}
-                <div
-                  className="inline-block px-4 py-1.5 rounded-full text-sm font-bold mb-4"
-                  style={{ background: `${cyl.color}15`, color: cyl.color, border: `1px solid ${cyl.color}25` }}
-                >
-                  {cyl.weight}
-                </div>
+                      <div
+                        className="mb-3 inline-block self-center rounded-full px-4 py-1.5 text-sm font-bold"
+                        style={{ background: `${cyl.color}15`, color: cyl.color, border: `1px solid ${cyl.color}25` }}
+                      >
+                        {cyl.weight}
+                      </div>
 
-                <h3 className="text-2xl font-bold text-white mb-2">{cyl.name}</h3>
-                <p className="text-xs uppercase tracking-[0.15em] font-semibold mb-4" style={{ color: cyl.color }}>
-                  {cyl.audience}
-                </p>
-                <p className="text-white/40 text-sm mb-6 leading-relaxed">{cyl.description}</p>
+                      <h3 className="mb-2 text-2xl font-bold text-white">{cyl.name}</h3>
+                      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.15em]" style={{ color: cyl.color }}>
+                        {cyl.audience}
+                      </p>
+                      <p className="mb-5 text-sm leading-relaxed text-white/40">{cyl.description}</p>
 
-                {/* Features List */}
-                <ul className="space-y-2 text-left mb-8">
-                  {cyl.features.map((f) => (
-                    <li key={f} className="flex items-center gap-2 text-white/50 text-sm">
-                      <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: cyl.color }} />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
+                      <ul className="mb-6 flex-1 space-y-2 text-left">
+                        {cyl.features.map((f) => (
+                          <li key={f} className="flex items-center gap-2 text-sm text-white/50">
+                            <CheckCircle2 className="h-4 w-4 shrink-0" style={{ color: cyl.color }} />
+                            {f}
+                          </li>
+                        ))}
+                      </ul>
 
-                <Link
-                  href="/shop"
-                  className="group relative z-10 inline-flex w-full cursor-pointer items-center justify-center py-3 px-6 rounded-xl font-bold text-white animated-gradient-x transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_24px_rgba(243,101,35,0.3)]"
-                  style={{
-                    backgroundImage: `linear-gradient(90deg, ${cyl.color} 0%, ${cyl.color}cc 25%, #f8a11b 50%, ${cyl.color} 75%, ${cyl.color}cc 100%)`,
-                  }}
-                >
-                  <span className="flex items-center gap-2">
-                    Order Now
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </span>
-                </Link>
+                      <Link
+                        href="/shop"
+                        onClick={(event) => event.stopPropagation()}
+                        className="group relative z-10 inline-flex w-full cursor-pointer items-center justify-center rounded-xl px-6 py-3 font-bold text-white animated-gradient-x transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_24px_rgba(243,101,35,0.3)]"
+                        style={{
+                          backgroundImage: `linear-gradient(90deg, ${cyl.color} 0%, ${cyl.color}cc 25%, #f8a11b 50%, ${cyl.color} 75%, ${cyl.color}cc 100%)`,
+                        }}
+                      >
+                        <span className="flex items-center gap-2">
+                          Order Now
+                          <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                        </span>
+                      </Link>
+                    </div>
+                  }
+                />
               </motion.div>
             ))}
           </div>
@@ -612,8 +656,15 @@ export default function LandingPage() {
       {/* ═══════════════════════════════════════════
           SECTION 5: B2C vs B2B
           ═══════════════════════════════════════════ */}
-      <section className="relative py-24 bg-[#0a0e14]">
-        <div className="max-w-7xl mx-auto px-4">
+      <section className="relative py-24 bg-[#0a0e14] overflow-hidden">
+        <StarsBackground
+          starColor="rgba(255, 232, 200, 0.9)"
+          speed={75}
+          factor={0.025}
+          pointerEvents={false}
+          className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_bottom,_#121820_0%,_#0a0e14_100%)] opacity-80"
+        />
+        <div className="relative z-10 max-w-7xl mx-auto px-4">
           <motion.div
             variants={fadeUp}
             initial="hidden"
@@ -984,8 +1035,15 @@ export default function LandingPage() {
       {/* ═══════════════════════════════════════════
           SECTION 10: CONTACT
           ═══════════════════════════════════════════ */}
-      <section id="contact" className="relative py-24 bg-[#0a0e14]">
-        <div className="max-w-7xl mx-auto px-4">
+      <section id="contact" className="relative py-24 bg-[#0a0e14] overflow-hidden">
+        <StarsBackground
+          starColor="rgba(255, 232, 200, 0.9)"
+          speed={70}
+          factor={0.025}
+          pointerEvents={false}
+          className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_bottom,_#121820_0%,_#0a0e14_100%)] opacity-80"
+        />
+        <div className="relative z-10 max-w-7xl mx-auto px-4">
           <motion.div
             variants={fadeUp}
             initial="hidden"
