@@ -1214,7 +1214,7 @@ export default function B2BCustomerDetailPage() {
     };
   };
 
-  // Positive ledger = customer owes us. Credit is only created via buyback, not overpayment.
+  // Positive ledger = customer owes us; negative ledger = customer credit.
   const getCustomerOutstandingOwed = () => {
     if (customer) return Math.max(0, Math.round(Number(customer.ledgerBalance) || 0));
     if (summary) return Math.max(0, Math.round(-(summary.netBalance) || 0));
@@ -1230,9 +1230,17 @@ export default function B2BCustomerDetailPage() {
     if (txnSummary.hasReturns) {
       return 0;
     }
-    // Payment-only against outstanding balance
+    // For payment-only transactions this is the outstanding amount used by the
+    // quick-pay button. Manual payment may exceed it and create customer credit.
     return getCustomerOutstandingOwed();
   };
+
+  const isPaymentOnlyTransaction = (txnSummary = getUnifiedTransactionSummary()) =>
+    !txnSummary.hasDelivery && !txnSummary.hasAccessories && !txnSummary.hasReturns;
+
+  const isPaymentOverLimit = (txnSummary = getUnifiedTransactionSummary()) =>
+    !isPaymentOnlyTransaction(txnSummary) &&
+    salePaymentAmount > getMaxAllowedPayment(txnSummary);
 
   // Auto-sync payment amount when transaction details change (if enabled)
   useEffect(() => {
@@ -1287,9 +1295,10 @@ export default function B2BCustomerDetailPage() {
         return;
       }
 
-      // Block overpayment — credit is only allowed via buyback
+      // Item-based transactions cannot be overpaid. A payment-only transaction
+      // may exceed the outstanding balance and the excess becomes customer credit.
       const maxAllowedPayment = getMaxAllowedPayment(summary);
-      if (salePaymentAmount > maxAllowedPayment) {
+      if (isPaymentOverLimit(summary)) {
         setPaymentExpanded(true);
         const hasSaleCharges = summary.hasDelivery || summary.hasAccessories;
         setError(
@@ -2712,9 +2721,13 @@ export default function B2BCustomerDetailPage() {
                     {(() => {
                       const txnSummary = getUnifiedTransactionSummary();
                       const maxAllowedPayment = getMaxAllowedPayment(txnSummary);
-                      const paymentExceedsMax = salePaymentAmount > maxAllowedPayment;
                       const hasSaleCharges = txnSummary.hasDelivery || txnSummary.hasAccessories;
                       const isPaymentOnly = !hasSaleCharges && !txnSummary.hasReturns;
+                      const paymentExceedsMax = !isPaymentOnly && salePaymentAmount > maxAllowedPayment;
+                      const outstandingOwed = getCustomerOutstandingOwed();
+                      const creditCreated = isPaymentOnly
+                        ? Math.max(0, salePaymentAmount - outstandingOwed)
+                        : 0;
 
                       return (
                         <>
@@ -2724,7 +2737,7 @@ export default function B2BCustomerDetailPage() {
                         <Input
                           type="number"
                           min="0"
-                          max={maxAllowedPayment}
+                          max={isPaymentOnly ? undefined : maxAllowedPayment}
                           step="1"
                           value={salePaymentAmount || ''}
                           onChange={(e) => {
@@ -2750,14 +2763,18 @@ export default function B2BCustomerDetailPage() {
                                 ? `Amount exceeds what the customer owes (${formatCurrency(maxAllowedPayment)}).`
                                 : 'Customer has no outstanding balance. Credit is only given via buyback.'}
                           </p>
+                        ) : creditCreated > 0 ? (
+                          <p className="mt-1.5 text-xs font-medium text-green-600">
+                            {formatCurrency(creditCreated)} will be added as customer credit.
+                          </p>
                         ) : (
                           <p className="mt-1.5 text-xs text-gray-500">
                             {hasSaleCharges
                               ? `Max for this transaction: ${formatCurrency(maxAllowedPayment)}`
                               : isPaymentOnly
-                                ? maxAllowedPayment > 0
-                                  ? `Outstanding owed: ${formatCurrency(maxAllowedPayment)}`
-                                  : 'No outstanding balance to collect'
+                                ? outstandingOwed > 0
+                                  ? `Outstanding owed: ${formatCurrency(outstandingOwed)}. Any excess will become customer credit.`
+                                  : 'This payment will be added as customer credit.'
                                 : 'Payment not applicable for returns-only (credit via buyback)'}
                           </p>
                         )}
@@ -2915,7 +2932,7 @@ export default function B2BCustomerDetailPage() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={salePaymentAmount > getMaxAllowedPayment()}
+                  disabled={isPaymentOverLimit()}
                   className="px-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 h-9 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Create Transaction

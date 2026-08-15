@@ -40,6 +40,8 @@ model User {
   salaryRecords    SalaryRecord[]    @relation("SalaryRecords")
   vendorPaymentsCreated VendorPayment[] @relation("VendorPaymentCreatedBy")
   bankMovementsCreated  BankMovement[]  @relation("BankMovementCreatedBy")
+  vendorPurchaseBatchesCreated VendorPurchaseBatch[] @relation("VendorPurchaseBatchCreatedBy")
+  vendorPurchaseBatchesUndone  VendorPurchaseBatch[] @relation("VendorPurchaseBatchUndoneBy")
 
   @@index([regionId])
   @@map("users")
@@ -356,6 +358,7 @@ model Vendor {
   region           Region?                 @relation(fields: [regionId], references: [id])
   invoices         Invoice[]
   purchase_entries PurchaseEntry[]
+  purchaseBatches  VendorPurchaseBatch[]
   bankDetails      VendorBankDetails[]
   financialReports VendorFinancialReport[]
   inventories      VendorInventory[]
@@ -416,16 +419,77 @@ model VendorPayment {
   reference   String?
   description String?
   createdBy   String?
+  /// Optional link to a tracked purchase batch (purchases created after undo tracking).
+  purchaseBatchId String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   regionId    String?
   region      Region?       @relation(fields: [regionId], references: [id])
   vendor      Vendor        @relation(fields: [vendorId], references: [id])
   createdByUser User?       @relation("VendorPaymentCreatedBy", fields: [createdBy], references: [id])
+  purchaseBatch VendorPurchaseBatch? @relation(fields: [purchaseBatchId], references: [id], onDelete: SetNull)
 
   @@index([regionId])
   @@index([createdBy])
+  @@index([purchaseBatchId])
   @@map("vendor_payments")
+}
+
+/// Groups all PurchaseEntry rows for one invoice so undo can reverse the whole purchase atomically.
+/// Only purchases created after this model exist are undoable (historical rows have no batch).
+model VendorPurchaseBatch {
+  id            String                   @id @default(cuid())
+  vendorId      String
+  invoiceNumber String?
+  category      VendorCategory
+  purchaseDate  DateTime
+  totalAmount   Decimal                  @db.Decimal(15, 2)
+  notes         String?
+  status        VendorPurchaseBatchStatus @default(ACTIVE)
+  createdBy     String
+  regionId      String?
+  undoneAt      DateTime?
+  undoneBy      String?
+  undoReason    String?
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+
+  vendor            Vendor                    @relation(fields: [vendorId], references: [id])
+  createdByUser     User                      @relation("VendorPurchaseBatchCreatedBy", fields: [createdBy], references: [id])
+  undoneByUser      User?                     @relation("VendorPurchaseBatchUndoneBy", fields: [undoneBy], references: [id])
+  region            Region?                   @relation(fields: [regionId], references: [id])
+  purchaseEntries   PurchaseEntry[]
+  payments          VendorPayment[]
+  inventoryEffects  PurchaseInventoryEffect[]
+
+  @@index([vendorId, invoiceNumber])
+  @@index([vendorId, status])
+  @@index([regionId])
+  @@index([createdBy])
+  @@index([undoneBy])
+  @@map("vendor_purchase_batches")
+}
+
+/// Exact inventory mutation recorded at purchase time for safe, validated undo.
+model PurchaseInventoryEffect {
+  id              String                       @id @default(cuid())
+  purchaseBatchId String
+  effectType      PurchaseInventoryEffectType
+  entityType      PurchaseInventoryEntityType
+  entityId        String?
+  itemName        String?
+  quantity        Int                          @default(0)
+  /// Snapshot of entity state before the purchase mutation (JSON).
+  beforeState     Json?
+  /// Snapshot of entity state immediately after the purchase mutation (JSON).
+  afterState      Json?
+  createdAt       DateTime                     @default(now())
+
+  purchaseBatch VendorPurchaseBatch @relation(fields: [purchaseBatchId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseBatchId])
+  @@index([entityType, entityId])
+  @@map("purchase_inventory_effects")
 }
 
 model Invoice {
@@ -594,14 +658,18 @@ model PurchaseEntry {
   invoiceNumber   String?
   notes           String?
   userId          String
+  /// Null for historical purchases created before undo tracking.
+  purchaseBatchId String?
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
   regionId        String?
   region          Region?             @relation(fields: [regionId], references: [id])
   user            User                @relation("UserPurchaseEntries", fields: [userId], references: [id])
   vendors         Vendor              @relation(fields: [vendorId], references: [id])
+  purchaseBatch   VendorPurchaseBatch? @relation(fields: [purchaseBatchId], references: [id], onDelete: SetNull)
 
   @@index([regionId])
+  @@index([purchaseBatchId])
   @@map("purchase_entries")
 }
 
@@ -963,6 +1031,26 @@ enum PurchaseEntryStatus {
   PARTIAL
 }
 
+enum VendorPurchaseBatchStatus {
+  ACTIVE
+  UNDONE
+}
+
+enum PurchaseInventoryEffectType {
+  CYLINDER_STATUS_CHANGE
+  CYLINDER_CREATED
+  CUSTOM_ITEM_UPDATED
+  CUSTOM_ITEM_CREATED
+  PRODUCT_UPDATED
+  PRODUCT_CREATED
+}
+
+enum PurchaseInventoryEntityType {
+  CYLINDER
+  CUSTOM_ITEM
+  PRODUCT
+}
+
 enum NotificationType {
   CYLINDER_ADDED
   CYLINDER_UPDATED
@@ -1137,6 +1225,7 @@ model Region {
   vehicles               Vehicle[]
   purchaseEntries        PurchaseEntry[]
   vendorPayments         VendorPayment[]
+  vendorPurchaseBatches  VendorPurchaseBatch[]
   vendorOrders           VendorOrder[]
   vendorInventories      VendorInventory[]
   vendorFinancialReports VendorFinancialReport[]

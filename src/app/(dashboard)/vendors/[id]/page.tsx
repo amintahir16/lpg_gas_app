@@ -17,6 +17,7 @@ import {
   TrashIcon,
   PencilIcon,
   DocumentArrowDownIcon,
+  ArrowUturnLeftIcon,
 } from '@heroicons/react/24/outline';
 import VendorPaymentModal from '@/components/VendorPaymentModal';
 import VendorExportModal from '@/components/VendorExportModal';
@@ -155,6 +156,13 @@ export default function VendorDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmationName, setDeleteConfirmationName] = useState('');
 
+  // Undo purchase state (admin-only, tracked batches only)
+  const [showUndoModal, setShowUndoModal] = useState(false);
+  const [undoTarget, setUndoTarget] = useState<any | null>(null);
+  const [undoReason, setUndoReason] = useState('');
+  const [undoSubmitting, setUndoSubmitting] = useState(false);
+  const [undoError, setUndoError] = useState<string | null>(null);
+
   // Edit vendor state
   const [showEditModal, setShowEditModal] = useState(false);
   const [editFormData, setEditFormData] = useState({
@@ -292,6 +300,7 @@ export default function VendorDetailPage() {
   const [purchaseFormData, setPurchaseFormData] = useState({
     invoiceNumber: '',
     notes: '',
+    date: todayLocalDate(),
     time: nowLocalTime(),
     paidAmount: 0,
     paymentMethod: 'CASH' as string
@@ -565,7 +574,9 @@ export default function VendorDetailPage() {
           status: entry.status,
           notes: entry.notes,
           items: [],
-          totalPrice: 0
+          totalPrice: 0,
+          purchaseBatchId: entry.purchaseBatchId || entry.purchaseBatch?.id || null,
+          purchaseBatch: entry.purchaseBatch || null,
         };
       }
       acc[invoiceNumber].items.push(entry);
@@ -574,11 +585,21 @@ export default function VendorDetailPage() {
       if (new Date(entry.purchaseDate) < new Date(acc[invoiceNumber].purchaseDate)) {
         acc[invoiceNumber].purchaseDate = entry.purchaseDate;
       }
-      // If any entry is PAID, mark group as PAID; if any is PARTIAL, mark as PARTIAL
-      if (entry.status === 'PAID') {
-        acc[invoiceNumber].status = 'PAID';
-      } else if (entry.status === 'PARTIAL' && acc[invoiceNumber].status !== 'PAID') {
-        acc[invoiceNumber].status = 'PARTIAL';
+      // Prefer batch metadata from any linked row
+      if (!acc[invoiceNumber].purchaseBatch && entry.purchaseBatch) {
+        acc[invoiceNumber].purchaseBatch = entry.purchaseBatch;
+        acc[invoiceNumber].purchaseBatchId = entry.purchaseBatch.id;
+      }
+      // Cancelled/undone wins over other statuses for display
+      if (entry.status === 'CANCELLED' || entry.purchaseBatch?.status === 'UNDONE') {
+        acc[invoiceNumber].status = 'CANCELLED';
+      } else if (acc[invoiceNumber].status !== 'CANCELLED') {
+        // If any entry is PAID, mark group as PAID; if any is PARTIAL, mark as PARTIAL
+        if (entry.status === 'PAID') {
+          acc[invoiceNumber].status = 'PAID';
+        } else if (entry.status === 'PARTIAL' && acc[invoiceNumber].status !== 'PAID') {
+          acc[invoiceNumber].status = 'PARTIAL';
+        }
       }
       return acc;
     }, {} as Record<string, any>);
@@ -587,6 +608,75 @@ export default function VendorDetailPage() {
     return Object.values(grouped).sort((a: any, b: any) =>
       new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime()
     );
+  };
+
+  const isAdminUser =
+    session?.user?.role === 'ADMIN' || session?.user?.role === 'SUPER_ADMIN';
+
+  const getPaymentsForPurchase = (purchase: any) => {
+    if (!vendor?.payments) return [];
+    return vendor.payments.filter((payment) => {
+      if (payment.status && payment.status !== 'COMPLETED') return false;
+      if (
+        purchase.purchaseBatchId &&
+        payment.purchaseBatchId &&
+        payment.purchaseBatchId === purchase.purchaseBatchId
+      ) {
+        return true;
+      }
+      return purchase.invoiceNumber
+        ? payment.description?.includes(purchase.invoiceNumber)
+        : false;
+    });
+  };
+
+  const openUndoModal = (purchase: any) => {
+    setUndoTarget(purchase);
+    setUndoReason('');
+    setUndoError(null);
+    setShowUndoModal(true);
+  };
+
+  const handleUndoPurchase = async () => {
+    if (!undoTarget?.purchaseBatchId) {
+      setUndoError('This purchase cannot be undone.');
+      return;
+    }
+    const reason = undoReason.trim();
+    if (!reason) {
+      setUndoError('Please provide a reason for undoing this purchase.');
+      return;
+    }
+
+    setUndoSubmitting(true);
+    setUndoError(null);
+    try {
+      const response = await fetch(
+        `/api/vendors/${vendorId}/purchases/${undoTarget.purchaseBatchId}/undo`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason }),
+        }
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to undo purchase');
+      }
+
+      setShowUndoModal(false);
+      setUndoTarget(null);
+      setUndoReason('');
+      await fetchVendor();
+      await fetchDirectPayments();
+      if (activeTab === 'financial') {
+        await fetchFinancialReport();
+      }
+    } catch (error) {
+      setUndoError(error instanceof Error ? error.message : 'Failed to undo purchase');
+    } finally {
+      setUndoSubmitting(false);
+    }
   };
 
   // Keep the old function name for backward compatibility
@@ -812,6 +902,7 @@ export default function VendorDetailPage() {
     setPurchaseFormData({
       invoiceNumber: invoiceNumber,
       notes: '',
+      date: todayLocalDate(),
       time: nowLocalTime(),
       paidAmount: 0,
       paymentMethod: 'CASH'
@@ -1144,7 +1235,7 @@ export default function VendorDetailPage() {
 
     console.log('Submitting purchase with invoice number:', purchaseFormData.invoiceNumber);
     const purchaseDateTime = combineLocalDateAndTime(
-      todayLocalDate(),
+      purchaseFormData.date,
       purchaseFormData.time
     ).toISOString();
     console.log('Purchase data:', {
@@ -1202,7 +1293,14 @@ export default function VendorDetailPage() {
         setPurchaseItems([{ itemName: '', quantity: 0, unitPrice: 0, totalPrice: 0 }]);
       }
 
-      setPurchaseFormData({ invoiceNumber: '', notes: '', time: nowLocalTime(), paidAmount: 0, paymentMethod: 'CASH' });
+      setPurchaseFormData({
+        invoiceNumber: '',
+        notes: '',
+        date: todayLocalDate(),
+        time: nowLocalTime(),
+        paidAmount: 0,
+        paymentMethod: 'CASH'
+      });
       fetchVendor();
     } catch (error) {
       console.error('Error creating purchase:', error);
@@ -1563,7 +1661,7 @@ export default function VendorDetailPage() {
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmitPurchase} className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Invoice Number
@@ -1589,6 +1687,21 @@ export default function VendorDetailPage() {
                           notes: e.target.value
                         })}
                         placeholder="Additional notes"
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Date
+                      </label>
+                      <Input
+                        type="date"
+                        value={purchaseFormData.date}
+                        onChange={(e) => setPurchaseFormData({
+                          ...purchaseFormData,
+                          date: e.target.value
+                        })}
+                        required
                         className="h-9 text-sm"
                       />
                     </div>
@@ -2429,7 +2542,14 @@ export default function VendorDetailPage() {
                           setPurchaseItems([{ itemName: '', quantity: 1, unitPrice: 0, totalPrice: 0 }]);
                         }
 
-                        setPurchaseFormData({ invoiceNumber: '', notes: '', time: nowLocalTime(), paidAmount: 0, paymentMethod: 'CASH' });
+                        setPurchaseFormData({
+                          invoiceNumber: '',
+                          notes: '',
+                          date: todayLocalDate(),
+                          time: nowLocalTime(),
+                          paidAmount: 0,
+                          paymentMethod: 'CASH'
+                        });
                         setUsedCodes(new Set()); // Reset used codes
                       }}
                     >
@@ -2476,7 +2596,7 @@ export default function VendorDetailPage() {
                   : false;
 
                 return (
-                  <Card key={purchase.id}>
+                  <Card key={purchase.id} className={purchase.status === 'CANCELLED' ? 'opacity-75' : undefined}>
                     <CardContent className="p-3">
                       <div className="flex justify-between items-start mb-2">
                         <div>
@@ -2500,12 +2620,7 @@ export default function VendorDetailPage() {
                                     ) ||
                                     0
                                 );
-                                const paidForInvoice = (vendor.payments || [])
-                                  .filter((payment) =>
-                                    purchase.invoiceNumber
-                                      ? payment.description?.includes(purchase.invoiceNumber)
-                                      : false
-                                  )
+                                const paidForInvoice = getPaymentsForPurchase(purchase)
                                   .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
                                 const amountDue = Math.max(0, entryTotal - paidForInvoice);
                                 setSelectedInvoiceNumber(purchase.invoiceNumber || null);
@@ -2519,15 +2634,33 @@ export default function VendorDetailPage() {
                               Pay
                             </Button>
                           )}
+                          {/* Undo only for admin users and tracked (post-update) active batches */}
+                          {isAdminUser &&
+                            purchase.purchaseBatchId &&
+                            purchase.status !== 'CANCELLED' &&
+                            purchase.purchaseBatch?.status !== 'UNDONE' && (
+                            <Button
+                              onClick={() => openUndoModal(purchase)}
+                              variant="outline"
+                              className="h-7 text-xs px-3 border-amber-300 text-amber-700 hover:bg-amber-50"
+                              size="sm"
+                            >
+                              <ArrowUturnLeftIcon className="h-3 w-3 mr-1" />
+                              Undo
+                            </Button>
+                          )}
                           <span
-                            className={`px-2 py-0.5 text-xs font-medium rounded-full ${purchase.status === 'PAID'
+                            className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                              purchase.status === 'CANCELLED'
+                              ? 'bg-gray-100 text-gray-700'
+                              : purchase.status === 'PAID'
                               ? 'bg-green-100 text-green-700'
                               : purchase.status === 'PARTIAL'
                                 ? 'bg-yellow-100 text-yellow-700'
                                 : 'bg-red-100 text-red-700'
                               }`}
                           >
-                            {purchase.status}
+                            {purchase.status === 'CANCELLED' ? 'UNDONE' : purchase.status}
                           </span>
                         </div>
                       </div>
@@ -2608,16 +2741,7 @@ export default function VendorDetailPage() {
                           <div className="text-xs text-gray-500 mb-1">{hasMostRecentPayment ? 'Recent Payment Total' : 'Payment Total'}</div>
                           <div className="text-lg font-semibold text-green-600">
                             {(() => {
-                              // Calculate total payments for this specific purchase
-                              const purchasePayments = vendor.payments?.filter(payment =>
-                                payment.description?.includes(purchase.invoiceNumber || '')
-                              ) || [];
-
-                              // Debug logging
-                              console.log('Purchase invoice:', purchase.invoiceNumber);
-                              console.log('All payments:', vendor.payments);
-                              console.log('Filtered payments:', purchasePayments);
-
+                              const purchasePayments = getPaymentsForPurchase(purchase);
                               const totalPaid = purchasePayments.reduce((sum, payment) =>
                                 sum + Number(payment.amount), 0
                               );
@@ -2638,11 +2762,24 @@ export default function VendorDetailPage() {
                         </div>
                       )}
 
+                      {/* Undo audit details */}
+                      {purchase.status === 'CANCELLED' && purchase.purchaseBatch?.undoReason && (
+                        <div className="mt-2 pt-2 border-t border-gray-200">
+                          <h4 className="text-xs font-medium text-gray-700 mb-1">
+                            Undo Reason
+                          </h4>
+                          <p className="text-xs text-gray-600">{purchase.purchaseBatch.undoReason}</p>
+                          {purchase.purchaseBatch.undoneAt && (
+                            <p className="text-[11px] text-gray-400 mt-1">
+                              Undone on {formatDateTime(purchase.purchaseBatch.undoneAt)}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
                       {/* Payments - Show payments specific to this purchase entry */}
                       {(() => {
-                        const purchasePayments = vendor.payments?.filter(payment =>
-                          payment.description?.includes(purchase.invoiceNumber || '')
-                        ) || [];
+                        const purchasePayments = getPaymentsForPurchase(purchase);
 
                         return purchasePayments.length > 0 && (
                           <div className="mt-2 pt-2 border-t border-gray-200">
@@ -2900,11 +3037,14 @@ export default function VendorDetailPage() {
                                   <h4 className="text-xl font-bold text-gray-900">
                                     {formatCurrency(Math.round(Number(payment.amount)))}
                                   </h4>
-                                  <span className={`px-3 py-1 text-xs font-semibold rounded-full ${payment.status === 'COMPLETED'
+                                  <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                                    payment.status === 'COMPLETED'
                                     ? 'bg-green-100 text-green-800 border border-green-200'
+                                    : payment.status === 'CANCELLED'
+                                    ? 'bg-gray-100 text-gray-700 border border-gray-200'
                                     : 'bg-yellow-100 text-yellow-800 border border-yellow-200'
                                     }`}>
-                                    {payment.status}
+                                    {payment.status === 'CANCELLED' ? 'UNDONE' : payment.status}
                                   </span>
                                 </div>
 
@@ -3244,6 +3384,102 @@ export default function VendorDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Undo Purchase Modal */}
+      {showUndoModal && undoTarget && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-full max-w-lg shadow-lg rounded-md bg-white">
+            <div className="mt-1">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Undo Purchase Entry
+                </h3>
+                <button
+                  onClick={() => {
+                    if (undoSubmitting) return;
+                    setShowUndoModal(false);
+                    setUndoTarget(null);
+                    setUndoError(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-3 mb-4">
+                <p className="text-sm text-gray-600">
+                  This will reverse inventory changes, cancel linked payments, and mark the purchase as undone.
+                  The record remains visible for audit history.
+                </p>
+                <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm space-y-1">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-gray-500">Invoice</span>
+                    <span className="font-medium text-gray-900">{undoTarget.invoiceNumber || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-gray-500">Amount</span>
+                    <span className="font-medium text-gray-900">
+                      {formatCurrency(Math.round(Number(undoTarget.totalPrice || 0)))}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-gray-500">Date</span>
+                    <span className="font-medium text-gray-900">{formatDateTime(undoTarget.purchaseDate)}</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Reason for undo *
+                  </label>
+                  <textarea
+                    value={undoReason}
+                    onChange={(e) => setUndoReason(e.target.value)}
+                    rows={3}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    placeholder="e.g. Wrong quantity entered"
+                    disabled={undoSubmitting}
+                  />
+                </div>
+                {undoError && (
+                  <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {undoError}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9"
+                  disabled={undoSubmitting}
+                  onClick={() => {
+                    setShowUndoModal(false);
+                    setUndoTarget(null);
+                    setUndoError(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-9 bg-amber-600 hover:bg-amber-700 text-white"
+                  disabled={undoSubmitting || !undoReason.trim()}
+                  onClick={handleUndoPurchase}
+                >
+                  {undoSubmitting ? 'Undoing...' : 'Confirm Undo'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {confirmDialog}
     </div>
   );

@@ -114,7 +114,9 @@ export async function POST(request: NextRequest) {
 
     await adoptLegacyB2bCustomerIfNeeded(customerId, regionId);
 
-    // Prevent overpayment credit (credit is only allowed via buyback)
+    // Item-based SALE transactions cannot be overpaid. PAYMENT transactions
+    // contain no sale items, so any amount above the outstanding balance is
+    // intentionally stored as customer credit (negative ledger balance).
     const paidCheck = paidAmount !== undefined && paidAmount !== null ? parseFloat(paidAmount) || 0 : 0;
     const amountCheck = parseFloat(totalAmount) || 0;
     const isUnifiedTransaction = body.isUnifiedTransaction === true;
@@ -135,17 +137,14 @@ export async function POST(request: NextRequest) {
     if (transactionType === 'PAYMENT') {
       const customerForPay = await prisma.customer.findFirst({
         where: { id: customerId, ...regionScopedWhere(regionId) },
-        select: { ledgerBalance: true },
+        select: { id: true },
       });
       if (!customerForPay) {
         return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
       }
-      const outstandingOwed = Math.max(0, Math.round(parseFloat(customerForPay.ledgerBalance.toString()) || 0));
-      if (amountCheck > outstandingOwed + 0.01) {
+      if (!Number.isFinite(amountCheck) || amountCheck <= 0) {
         return NextResponse.json(
-          { error: outstandingOwed > 0
-            ? `Payment cannot exceed what the customer owes (Rs ${outstandingOwed.toLocaleString()}).`
-            : 'Customer has no outstanding balance to collect. Credit is only given via buyback.' },
+          { error: 'Payment amount must be greater than zero.' },
           { status: 400 }
         );
       }

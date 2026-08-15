@@ -69,22 +69,9 @@ export default function NewPaymentPage() {
 
     try {
       const amount = parseFloat(paymentData.amount);
-      const outstandingOwed = Math.max(0, Math.round(Number(customer?.ledgerBalance) || 0));
 
       if (!Number.isFinite(amount) || amount <= 0) {
         setError('Enter a valid payment amount.');
-        setSaving(false);
-        return;
-      }
-
-      if (outstandingOwed <= 0) {
-        setError('Customer has no outstanding balance to collect. Credit is only given via buyback.');
-        setSaving(false);
-        return;
-      }
-
-      if (amount > outstandingOwed) {
-        setError(`Payment cannot exceed what the customer owes (${formatCurrency(outstandingOwed)}).`);
         setSaving(false);
         return;
       }
@@ -311,7 +298,7 @@ export default function NewPaymentPage() {
               {(() => {
                 const outstandingOwed = Math.max(0, Math.round(Number(customer.ledgerBalance) || 0));
                 const amountNum = parseFloat(paymentData.amount) || 0;
-                const exceedsOwed = amountNum > outstandingOwed;
+                const creditCreated = Math.max(0, amountNum - outstandingOwed);
                 return (
                   <>
               <Input
@@ -321,20 +308,18 @@ export default function NewPaymentPage() {
                 placeholder="Enter payment amount"
                 step="1"
                 min="0.01"
-                max={outstandingOwed}
                 required
-                aria-invalid={exceedsOwed}
-                className={`text-lg ${exceedsOwed ? 'border-red-500 bg-red-50 focus-visible:ring-red-500' : ''}`}
+                className="text-lg"
               />
-              {exceedsOwed ? (
-                <p className="mt-2 text-sm font-medium text-red-600">
-                  Amount exceeds what the customer owes ({formatCurrency(outstandingOwed)}). Credit is only given via buyback.
+              {creditCreated > 0 ? (
+                <p className="mt-2 text-sm font-medium text-green-600">
+                  {formatCurrency(creditCreated)} will be added as customer credit.
                 </p>
               ) : (
                 <p className="mt-2 text-sm text-gray-500">
                   {outstandingOwed > 0
-                    ? `Outstanding owed: ${formatCurrency(outstandingOwed)}`
-                    : 'No outstanding balance to collect'}
+                    ? `Outstanding owed: ${formatCurrency(outstandingOwed)}. Any excess will become customer credit.`
+                    : 'This payment will be added as customer credit.'}
                 </p>
               )}
                   </>

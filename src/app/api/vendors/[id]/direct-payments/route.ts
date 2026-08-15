@@ -98,6 +98,22 @@ export async function POST(
         throw new Error('Vendor not found');
       }
 
+      // Prefer batch linkage for tracked invoices; fall back to invoice text for historical entries.
+      let purchaseBatchId: string | null = null;
+      if (invoiceNumber) {
+        const activeBatch = await tx.vendorPurchaseBatch.findFirst({
+          where: {
+            vendorId: id,
+            invoiceNumber,
+            status: 'ACTIVE',
+            ...regionScopedWhere(regionId),
+          },
+          select: { id: true },
+          orderBy: { createdAt: 'desc' },
+        });
+        purchaseBatchId = activeBatch?.id || null;
+      }
+
       // Create direct payment scoped to current region.
       const payment = await tx.vendorPayment.create({
         data: {
@@ -109,17 +125,19 @@ export async function POST(
           reference: reference || null,
           description: description || (invoiceNumber ? `Payment for invoice ${invoiceNumber}` : 'Direct payment to vendor'),
           createdBy: session.user.id,
+          ...(purchaseBatchId ? { purchaseBatchId } : {}),
           ...(regionId ? { regionId } : {}),
         }
       });
 
       // If invoiceNumber is provided, update purchase entry statuses
       if (invoiceNumber) {
-        // Find all purchase entries with this invoice number — region-scoped.
+        // Find all active purchase entries with this invoice number — region-scoped.
         const purchaseEntries = await tx.purchaseEntry.findMany({
           where: {
             vendorId: id,
             invoiceNumber: invoiceNumber,
+            status: { not: 'CANCELLED' },
             ...regionScopedWhere(regionId),
           }
         });
@@ -130,17 +148,25 @@ export async function POST(
             sum + Number(entry.totalPrice), 0
           );
 
-          // Get existing payments for this invoice (excluding the one we just created)
+          // Prefer batch-linked payments; keep description fallback for historical invoices.
           const existingPayments = await tx.vendorPayment.findMany({
             where: {
               vendorId: id,
-              description: {
-                contains: invoiceNumber
-              },
+              status: 'COMPLETED',
               id: {
                 not: payment.id
               },
               ...regionScopedWhere(regionId),
+              OR: [
+                ...(purchaseBatchId
+                  ? [{ purchaseBatchId }]
+                  : []),
+                {
+                  description: {
+                    contains: invoiceNumber
+                  }
+                },
+              ],
             }
           });
 
@@ -155,11 +181,12 @@ export async function POST(
             newStatus = 'PARTIAL';
           }
 
-          // Update all purchase entries with the new status
+          // Update all non-cancelled purchase entries with the new status
           await tx.purchaseEntry.updateMany({
             where: {
               vendorId: id,
               invoiceNumber: invoiceNumber,
+              status: { not: 'CANCELLED' },
               ...regionScopedWhere(regionId),
             },
             data: {

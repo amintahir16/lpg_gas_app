@@ -79,7 +79,7 @@ export async function GET(
         endDate = new Date();
     }
 
-    // Get purchases in date range (region-scoped)
+    // Get purchases in date range (region-scoped); exclude undone/cancelled
     const purchases = await prisma.purchaseEntry.findMany({
       where: {
         vendorId: id,
@@ -87,6 +87,7 @@ export async function GET(
           gte: startDate,
           lte: endDate
         },
+        status: { not: 'CANCELLED' },
         ...regionScope,
       }
     });
@@ -128,7 +129,11 @@ export async function GET(
 
     // Get overall balance (all time, region-scoped)
     const allPurchases = await prisma.purchaseEntry.findMany({
-      where: { vendorId: id, ...regionScope },
+      where: {
+        vendorId: id,
+        status: { not: 'CANCELLED' },
+        ...regionScope,
+      },
       select: {
         totalPrice: true
       }

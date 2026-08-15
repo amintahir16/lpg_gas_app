@@ -52,8 +52,9 @@ export default function VendorExportModal({
       const purchasesResponse = await fetch(`/api/vendors/${vendorId}?t=${Date.now()}`);
       if (purchasesResponse.ok) {
         const vendorData = await purchasesResponse.json();
-        console.log('Fetched purchases for export:', vendorData.purchase_entries?.length || 0, 'purchases');
-        setAllPurchases(vendorData.purchase_entries || []);
+        const fetchedPurchases = vendorData.vendor?.purchase_entries || [];
+        console.log('Fetched purchases for export:', fetchedPurchases.length, 'purchases');
+        setAllPurchases(fetchedPurchases);
         // Store vendor category slug to determine if we need to show category column
         setVendorCategorySlug(vendorData.vendor?.category?.slug || null);
       }
@@ -138,11 +139,68 @@ export default function VendorExportModal({
     return filtered;
   };
 
+  // One purchase form submission creates one row per item in the database.
+  // Consolidate those item rows back into one invoice row for the PDF.
+  const groupPurchasesByInvoice = (entries: any[]) => {
+    const grouped = entries.reduce((acc, entry) => {
+      const key =
+        entry.purchaseBatchId ||
+        entry.purchaseBatch?.id ||
+        entry.invoiceNumber ||
+        entry.id;
+
+      if (!acc[key]) {
+        acc[key] = {
+          ...entry,
+          items: [],
+          totalPrice: 0,
+          status: entry.status === 'CANCELLED' ? 'UNDONE' : entry.status,
+        };
+      }
+
+      acc[key].items.push(entry);
+      acc[key].totalPrice += Number(entry.totalPrice || 0);
+
+      if (entry.status === 'CANCELLED' || entry.purchaseBatch?.status === 'UNDONE') {
+        acc[key].status = 'UNDONE';
+      } else if (acc[key].status !== 'UNDONE') {
+        if (entry.status === 'PAID') {
+          acc[key].status = 'PAID';
+        } else if (entry.status === 'PARTIAL' && acc[key].status !== 'PAID') {
+          acc[key].status = 'PARTIAL';
+        }
+      }
+
+      if (new Date(entry.purchaseDate) < new Date(acc[key].purchaseDate)) {
+        acc[key].purchaseDate = entry.purchaseDate;
+      }
+
+      return acc;
+    }, {} as Record<string, any>);
+
+    return Object.values(grouped).map((purchase: any) => ({
+      ...purchase,
+      itemName: purchase.items.map((item: any) => item.itemName || 'N/A').join('\n'),
+      itemDescription: purchase.items
+        .map((item: any) => item.itemDescription || '-')
+        .join('\n'),
+      quantity: purchase.items.map((item: any) => Number(item.quantity || 0)).join('\n'),
+      unitPrice: purchase.items
+        .map((item: any) => formatCurrencyForPDF(Number(item.unitPrice || 0)))
+        .join('\n'),
+    }));
+  };
+
   // Get data to use for export
   const getExportData = () => {
     // Always use freshly fetched data if available, otherwise use props
-    const purchases = allPurchases.length > 0 ? allPurchases : purchaseEntries;
-    const payments = allPayments.length > 0 ? allPayments : paymentHistory;
+    const purchasesRaw = allPurchases.length > 0 ? allPurchases : purchaseEntries;
+    const paymentsRaw = allPayments.length > 0 ? allPayments : paymentHistory;
+
+    // Keep undone purchases visible so invoice-number history remains continuous.
+    // Cancelled payments stay excluded from active financial reporting.
+    const purchases = groupPurchasesByInvoice(filterDataByDateRange(purchasesRaw));
+    const payments = paymentsRaw.filter((p: any) => !p.status || p.status === 'COMPLETED');
 
     console.log('Export data sources:', {
       usingAllPurchases: allPurchases.length > 0,
@@ -152,7 +210,7 @@ export default function VendorExportModal({
     });
 
     return {
-      purchases: filterDataByDateRange(purchases),
+      purchases,
       payments: filterDataByDateRange(payments)
     };
   };
@@ -311,7 +369,7 @@ export default function VendorExportModal({
               formatDate(purchase.purchaseDate),
               purchase.itemName || 'N/A',
               purchase.quantity || 0,
-              formatCurrencyForPDF(Number(purchase.unitPrice)),
+              purchase.unitPrice || '0',
               formatCurrencyForPDF(Number(purchase.totalPrice)),
               purchase.status || 'PENDING'
             ];
@@ -326,14 +384,16 @@ export default function VendorExportModal({
           });
 
           // Add total row
-          const totalPurchases = purchases.reduce((sum, p) => sum + Number(p.totalPrice), 0);
+          const totalPurchases = purchases
+            .filter((p) => p.status !== 'UNDONE')
+            .reduce((sum, p) => sum + Number(p.totalPrice), 0);
           const totalRow: any[] = [
             '',
             '',
             '',
             '',
             '',
-            'TOTAL:',
+            'ACTIVE TOTAL:',
             formatCurrencyForPDF(totalPurchases),
             ''
           ];
@@ -379,6 +439,8 @@ export default function VendorExportModal({
             columnStyles[7] = { halign: 'center', cellWidth: 20 }; // Status
           }
 
+          const statusColIndex = isAccessoriesPurchase ? 8 : 7;
+
           autoTable(doc, {
             head: [headerRow],
             body: purchaseData,
@@ -401,7 +463,13 @@ export default function VendorExportModal({
               fillColor: [248, 249, 250]
             },
             columnStyles: columnStyles,
-            margin: { left: 15, right: 15, bottom: 35 }
+            margin: { left: 15, right: 15, bottom: 35 },
+            didParseCell: (data) => {
+              if (data.section !== 'body') return;
+              const raw = data.row.raw as any[];
+              if (!Array.isArray(raw) || raw[statusColIndex] !== 'UNDONE') return;
+              data.cell.styles.textColor = [160, 160, 160];
+            },
           });
 
           yPosition = (doc as any).lastAutoTable.finalY + 25;
@@ -519,7 +587,9 @@ export default function VendorExportModal({
       doc.text(dateRangeText, 25, yPosition + 10);
 
       // Summary Content calculations
-      const totalOut = purchases.reduce((sum, p) => sum + Number(p.totalPrice), 0);
+      const totalOut = purchases
+        .filter((p) => p.status !== 'UNDONE')
+        .reduce((sum, p) => sum + Number(p.totalPrice), 0);
       const totalIn = payments.reduce((sum, p) => sum + Number(p.amount), 0);
 
       doc.setTextColor(0, 0, 0);

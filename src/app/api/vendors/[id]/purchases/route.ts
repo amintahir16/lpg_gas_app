@@ -9,7 +9,7 @@ import { ActivityAction, logActivity } from '@/lib/activityLogger';
 // GET all purchases for a vendor
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -27,12 +27,13 @@ export async function GET(
     }
 
     const regionId = getActiveRegionId(request);
+    const { id } = await params;
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
     const where: any = {
-      vendorId: params.id,
+      vendorId: id,
       ...regionScopedWhere(regionId),
     };
 
@@ -45,6 +46,17 @@ export async function GET(
 
     const purchases = await prisma.purchaseEntry.findMany({
       where,
+      include: {
+        purchaseBatch: {
+          select: {
+            id: true,
+            status: true,
+            undoReason: true,
+            undoneAt: true,
+            undoneBy: true,
+          },
+        },
+      },
       orderBy: { purchaseDate: 'desc' }
     });
 
@@ -114,21 +126,15 @@ export async function POST(
     const paid = Number(paidAmount || 0);
     const balance = totalAmount - paid;
 
-    let paymentStatus = 'UNPAID';
-    if (paid >= totalAmount) paymentStatus = 'PAID';
-    else if (paid > 0) paymentStatus = 'PARTIAL';
-
     // Determine individual purchase entry status
     let entryStatus: 'PENDING' | 'PAID' | 'PARTIAL' = 'PENDING';
     if (paid >= totalAmount) entryStatus = 'PAID';
     else if (paid > 0) entryStatus = 'PARTIAL';
 
-    // Create purchase with items and integrate with inventory
     console.log('Creating purchase with invoice number:', invoiceNumber);
-    
-    // Use database transaction to ensure both purchase and inventory updates succeed
+
+    // Use database transaction to ensure purchase, payment, and inventory updates succeed together
     const purchase = await prisma.$transaction(async (tx) => {
-      // Get vendor category first to determine the correct category enum
       const vendor = await tx.vendor.findUnique({
         where: { id },
         include: { category: true }
@@ -138,10 +144,9 @@ export async function POST(
         throw new Error('Vendor not found');
       }
 
-      // Map vendor category slug to VendorCategory enum
       const getCategoryEnum = (slug: string | null | undefined): string => {
-        if (!slug) return 'GAS_PURCHASE'; // Default fallback
-        
+        if (!slug) return 'GAS_PURCHASE';
+
         const slugLower = slug.toLowerCase();
         if (slugLower.includes('cylinder') || slugLower === 'cylinder_purchase') {
           return 'CYLINDER_PURCHASE';
@@ -154,31 +159,36 @@ export async function POST(
         } else if (slugLower.includes('valve') || slugLower === 'valves_purchase') {
           return 'VALVES_PURCHASE';
         }
-        return 'GAS_PURCHASE'; // Default fallback
+        return 'GAS_PURCHASE';
       };
 
       const categoryEnum = getCategoryEnum(vendor.category?.slug);
 
-      // Create individual purchase entries for each item
+      const batch = await tx.vendorPurchaseBatch.create({
+        data: {
+          vendorId: id,
+          invoiceNumber: invoiceNumber || null,
+          category: categoryEnum as any,
+          purchaseDate: resolvedPurchaseDate,
+          totalAmount,
+          notes: notes || null,
+          status: 'ACTIVE',
+          createdBy: session.user.id,
+          ...(regionId ? { regionId } : {}),
+        },
+      });
+
       const purchaseEntries = await Promise.all(
         items.map((item: any) => {
-          // For accessories purchases, ALWAYS store the category in itemDescription
-          // This ensures category is always available even if vendor item is deleted later
-          // (Similar to how itemName is stored - it persists independently)
           let itemDescription = item.itemDescription || null;
           if (categoryEnum === 'ACCESSORIES_PURCHASE') {
-            // Always store category in itemDescription for accessories purchases
-            // This makes it persistent like itemName, so it shows even if vendor item is deleted
             if (item.category) {
               itemDescription = item.category;
             } else {
-              // If category not provided, try to get it from vendor items
-              // This handles cases where category might not be in the request
-              // But we should always have it from the form, so this is a fallback
               console.log('⚠️ Category not provided in item data for accessories purchase:', item.itemName);
             }
           }
-          
+
           return tx.purchaseEntry.create({
             data: {
               vendorId: id,
@@ -193,13 +203,13 @@ export async function POST(
               purchaseDate: resolvedPurchaseDate,
               invoiceNumber,
               notes,
+              purchaseBatchId: batch.id,
               ...(regionId ? { regionId } : {}),
             }
           });
         })
       );
 
-      // Create payment if paid amount > 0
       let payment = null;
       if (paid > 0) {
         payment = await tx.vendorPayment.create({
@@ -211,33 +221,52 @@ export async function POST(
             status: 'COMPLETED',
             description: `Payment for invoice ${invoiceNumber}`,
             createdBy: session.user.id,
+            purchaseBatchId: batch.id,
             ...(regionId ? { regionId } : {}),
           }
         });
       }
 
-      // Integrate purchased items with inventory system
-      try {
-        await InventoryIntegrationService.processPurchaseItems(items, vendor.category?.slug, regionId);
-        console.log('✅ Inventory integration completed successfully');
-      } catch (inventoryError) {
-        console.error('❌ Inventory integration failed:', inventoryError);
-        throw new Error(`Purchase created but inventory update failed: ${inventoryError}`);
+      const inventoryEffects = await InventoryIntegrationService.processPurchaseItems(
+        items,
+        vendor.category?.slug,
+        regionId,
+        tx,
+      );
+
+      if (inventoryEffects.length > 0) {
+        await tx.purchaseInventoryEffect.createMany({
+          data: inventoryEffects.map((effect) => ({
+            purchaseBatchId: batch.id,
+            effectType: effect.effectType,
+            entityType: effect.entityType,
+            entityId: effect.entityId,
+            itemName: effect.itemName,
+            quantity: effect.quantity,
+            beforeState: effect.beforeState ?? undefined,
+            afterState: effect.afterState ?? undefined,
+          })),
+        });
       }
 
+      console.log('✅ Inventory integration completed successfully');
+
       return {
+        batch,
         purchaseEntries,
         payment,
         totalAmount,
         paidAmount: paid,
-        balanceAmount: balance
+        balanceAmount: balance,
+        inventoryEffectCount: inventoryEffects.length,
       };
     });
 
     console.log('Purchase created and inventory updated successfully:', {
       purchaseEntriesCount: purchase.purchaseEntries.length,
       invoiceNumber,
-      totalAmount: purchase.totalAmount
+      totalAmount: purchase.totalAmount,
+      batchId: purchase.batch.id,
     });
 
     const vendorLabel = await prisma.vendor.findUnique({
@@ -249,29 +278,31 @@ export async function POST(
       userId: session.user.id,
       action: ActivityAction.VENDOR_PURCHASE_CREATED,
       entityType: 'VENDOR_PURCHASE',
-      entityId: purchase.purchaseEntries[0]?.id || id,
+      entityId: purchase.batch.id,
       details: `Created purchase for "${vendorLabel?.companyName || 'vendor'}" • Invoice: ${invoiceNumber || 'N/A'} • Amount: Rs ${Number(purchase.totalAmount).toLocaleString()}${paid > 0 ? ` • Paid: Rs ${paid.toLocaleString()}` : ''}`,
       link: `/vendors/${id}`,
       regionId,
       metadata: {
         vendorId: id,
+        purchaseBatchId: purchase.batch.id,
         invoiceNumber: invoiceNumber || null,
         totalAmount: Number(purchase.totalAmount),
         paidAmount: paid,
         entryCount: purchase.purchaseEntries.length,
+        inventoryEffectCount: purchase.inventoryEffectCount,
       },
     });
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       purchase,
       message: 'Purchase created and inventory updated successfully'
     }, { status: 201 });
   } catch (error) {
     console.error('Error creating purchase:', error);
+    const message = error instanceof Error ? error.message : 'Failed to create purchase';
     return NextResponse.json(
-      { error: 'Failed to create purchase' },
+      { error: message },
       { status: 500 }
     );
   }
 }
-

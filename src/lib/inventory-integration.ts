@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { generateCylinderTypeFromCapacity, normalizeTypeName } from './cylinder-utils';
 import { regionScopedWhere } from './region';
@@ -15,168 +16,161 @@ export interface VendorPurchaseItem {
   description?: string;
 }
 
+export type PrismaTx = Prisma.TransactionClient;
+
+export type InventoryEffectType =
+  | 'CYLINDER_STATUS_CHANGE'
+  | 'CYLINDER_CREATED'
+  | 'CUSTOM_ITEM_UPDATED'
+  | 'CUSTOM_ITEM_CREATED'
+  | 'PRODUCT_UPDATED'
+  | 'PRODUCT_CREATED';
+
+export type InventoryEntityType = 'CYLINDER' | 'CUSTOM_ITEM' | 'PRODUCT';
+
+export interface PurchaseInventoryEffectRecord {
+  effectType: InventoryEffectType;
+  entityType: InventoryEntityType;
+  entityId: string | null;
+  itemName: string | null;
+  quantity: number;
+  beforeState: Prisma.InputJsonValue | null;
+  afterState: Prisma.InputJsonValue | null;
+}
+
+function getDb(tx?: PrismaTx) {
+  return tx ?? prisma;
+}
+
 /**
- * Service to integrate vendor purchases with inventory system
+ * Service to integrate vendor purchases with inventory system.
+ * When called with a transaction client, all writes participate in that transaction
+ * and exact inventory effects are returned for safe undo tracking.
  */
 export class InventoryIntegrationService {
-  
   /**
-   * Process vendor purchase items and add them to appropriate inventory tables
+   * Process vendor purchase items and add them to appropriate inventory tables.
+   * Returns exact effects when a transaction client is provided.
    */
-  static async processPurchaseItems(items: VendorPurchaseItem[], vendorCategory?: string, regionId?: string | null): Promise<void> {
+  static async processPurchaseItems(
+    items: VendorPurchaseItem[],
+    vendorCategory?: string,
+    regionId?: string | null,
+    tx?: PrismaTx,
+  ): Promise<PurchaseInventoryEffectRecord[]> {
     console.log('🔄 Processing vendor purchase items for inventory integration...');
     console.log(`🏪 Vendor category: ${vendorCategory}, Region: ${regionId || 'NONE'}`);
-    
+
+    const effects: PurchaseInventoryEffectRecord[] = [];
+
     for (const item of items) {
       try {
-        await this.processItem(item, vendorCategory, regionId);
+        const itemEffects = await this.processItem(item, vendorCategory, regionId, tx);
+        effects.push(...itemEffects);
         console.log(`✅ Successfully processed: ${item.itemName} (${item.quantity} units)`);
       } catch (error) {
         console.error(`❌ Failed to process item ${item.itemName}:`, error);
-        throw error; // Re-throw to fail the entire transaction
+        throw error;
       }
     }
-    
+
     console.log('✅ All purchase items processed successfully');
+    return effects;
   }
 
-  /**
-   * Process individual item based on its name and type
-   */
-  private static async processItem(item: VendorPurchaseItem, vendorCategory?: string, regionId?: string | null): Promise<void> {
+  private static async processItem(
+    item: VendorPurchaseItem,
+    vendorCategory?: string,
+    regionId?: string | null,
+    tx?: PrismaTx,
+  ): Promise<PurchaseInventoryEffectRecord[]> {
     const itemName = item.itemName.toLowerCase();
-    const quantity = item.quantity;
-    const unitPrice = item.unitPrice;
 
     console.log(`🔍 Processing item: ${item.itemName} (${itemName})`);
     console.log(`🔍 Vendor category: ${vendorCategory}`);
 
-    // Check vendor category FIRST - if it's a gas purchase vendor, all items are gas purchases
     if (this.isGasPurchaseVendor(vendorCategory)) {
       console.log(`⛽ Processing as gas purchase (vendor category: ${vendorCategory})`);
-      await this.processGasPurchase(item, regionId);
-      return;
+      return this.processGasPurchase(item, regionId, tx);
     }
 
-    // Check if this is an accessories purchase vendor
     if (this.isAccessoriesPurchaseVendor(vendorCategory)) {
       console.log(`🔧 Processing as accessories purchase (vendor category: ${vendorCategory})`);
-      await this.processAccessoriesPurchase(item, regionId);
-      return;
+      return this.processAccessoriesPurchase(item, regionId, tx);
     }
 
-    // Check if this is a vaporizer purchase vendor
     if (this.isVaporizerPurchaseVendor(vendorCategory)) {
       console.log(`⚙️ Processing as vaporizer purchase (vendor category: ${vendorCategory})`);
-      await this.processVaporizerPurchase(item, regionId);
-      return;
+      return this.processVaporizerPurchase(item, regionId, tx);
     }
 
-    // Check if this is a valves purchase vendor
     if (this.isValvesPurchaseVendor(vendorCategory)) {
       console.log(`🔧 Processing as valves purchase (vendor category: ${vendorCategory})`);
-      await this.processValvesPurchase(item, regionId);
-      return;
+      return this.processValvesPurchase(item, regionId, tx);
     }
 
-    // Check if this is a cylinder purchase vendor
-    // If vendor is a cylinder purchase vendor, ALL items should be processed as cylinders
     if (this.isCylinderPurchaseVendor(vendorCategory)) {
       console.log(`📦 Processing as cylinder purchase (vendor category: ${vendorCategory})`);
-      await this.processCylinderPurchase(item, regionId);
-      return;
+      return this.processCylinderPurchase(item, regionId, tx);
     }
 
-    // For other vendors, use item name detection as fallback
     console.log(`🔍 Is cylinder item: ${this.isCylinderItem(itemName)}`);
     console.log(`🔍 Is gas item: ${this.isGasItem(itemName)}`);
 
     if (this.isCylinderItem(itemName)) {
       console.log(`📦 Processing as cylinder purchase (detected from item name)`);
-      await this.processCylinderPurchase(item, regionId);
-    } else {
-      console.log(`📦 Processing as generic product`);
-      // Generic product - add to Product table
-      await this.processGenericProduct(item, regionId);
+      return this.processCylinderPurchase(item, regionId, tx);
     }
+
+    console.log(`📦 Processing as generic product`);
+    return this.processGenericProduct(item, regionId, tx);
   }
 
-  /**
-   * Check if vendor is a gas purchase vendor
-   */
   private static isGasPurchaseVendor(categorySlug?: string): boolean {
     if (!categorySlug) return false;
-    
     const normalizedSlug = categorySlug.toLowerCase().replace(/[_-]/g, '');
-    const gasPatterns = [
-      'gaspurchase',
-      'gasfilling',
-      'gasrefill',
-      'gasrefilling'
-    ];
-    
-    return gasPatterns.some(pattern => normalizedSlug.includes(pattern));
+    const gasPatterns = ['gaspurchase', 'gasfilling', 'gasrefill', 'gasrefilling'];
+    return gasPatterns.some((pattern) => normalizedSlug.includes(pattern));
   }
 
-  /**
-   * Check if vendor is an accessories purchase vendor
-   */
   private static isAccessoriesPurchaseVendor(categorySlug?: string): boolean {
     if (!categorySlug) return false;
-    
     const normalizedSlug = categorySlug.toLowerCase().replace(/[_-]/g, '');
     const accessoriesPatterns = [
       'accessoriespurchase',
       'accessories_purchase',
       'accessorypurchase',
-      'accessory_purchase'
+      'accessory_purchase',
     ];
-    
-    return accessoriesPatterns.some(pattern => normalizedSlug.includes(pattern));
+    return accessoriesPatterns.some((pattern) => normalizedSlug.includes(pattern));
   }
 
-  /**
-   * Check if vendor is a vaporizer purchase vendor
-   */
   private static isVaporizerPurchaseVendor(categorySlug?: string): boolean {
     if (!categorySlug) return false;
-    
     const normalizedSlug = categorySlug.toLowerCase().replace(/[_-]/g, '');
     const vaporizerPatterns = [
       'vaporizerpurchase',
       'vaporizer_purchase',
       'vaporiserpurchase',
-      'vaporiser_purchase'
+      'vaporiser_purchase',
     ];
-    
-    return vaporizerPatterns.some(pattern => normalizedSlug.includes(pattern));
+    return vaporizerPatterns.some((pattern) => normalizedSlug.includes(pattern));
   }
 
-  /**
-   * Check if vendor is a valves purchase vendor
-   */
   private static isValvesPurchaseVendor(categorySlug?: string): boolean {
     if (!categorySlug) return false;
-    
     const normalizedSlug = categorySlug.toLowerCase().replace(/[_-]/g, '');
     const valvesPatterns = [
       'valvespurchase',
       'valves_purchase',
       'valvepurchase',
-      'valve_purchase'
+      'valve_purchase',
     ];
-    
-    return valvesPatterns.some(pattern => normalizedSlug.includes(pattern));
+    return valvesPatterns.some((pattern) => normalizedSlug.includes(pattern));
   }
 
-  /**
-   * Check if vendor is a cylinder purchase vendor
-   * If vendor is a cylinder purchase vendor, ALL items should be processed as cylinders
-   * regardless of item name (e.g., "plastic 12kg", "commercial 45.4kg", etc.)
-   */
   private static isCylinderPurchaseVendor(categorySlug?: string): boolean {
     if (!categorySlug) return false;
-    
     const normalizedSlug = categorySlug.toLowerCase().replace(/[_-]/g, '');
     const cylinderPurchasePatterns = [
       'cylinderpurchase',
@@ -184,97 +178,83 @@ export class InventoryIntegrationService {
       'cylinder_purchase',
       'cylinders_purchase',
       'cylinderpurchases',
-      'cylinderspurchases'
+      'cylinderspurchases',
     ];
-    
-    return cylinderPurchasePatterns.some(pattern => normalizedSlug.includes(pattern));
+    return cylinderPurchasePatterns.some((pattern) => normalizedSlug.includes(pattern));
   }
 
-  /**
-   * Check if item is a cylinder
-   */
   private static isCylinderItem(itemName: string): boolean {
-    const cylinderKeywords = [
-      'cylinder', 'gas cylinder', 'lpg cylinder'
-    ];
-    
-    // More specific patterns for cylinder purchases (not gas filling)
+    const cylinderKeywords = ['cylinder', 'gas cylinder', 'lpg cylinder'];
     const cylinderPatterns = [
-      'domestic cylinder', 'standard cylinder', 'commercial cylinder',
-      '11.8kg cylinder', '15kg cylinder', '45.4kg cylinder',
-      'domestic (11.8kg)', 'standard (15kg)', 'commercial (45.4kg)'
+      'domestic cylinder',
+      'standard cylinder',
+      'commercial cylinder',
+      '11.8kg cylinder',
+      '15kg cylinder',
+      '45.4kg cylinder',
+      'domestic (11.8kg)',
+      'standard (15kg)',
+      'commercial (45.4kg)',
     ];
-    
-    return cylinderKeywords.some(keyword => itemName.includes(keyword)) ||
-           cylinderPatterns.some(pattern => itemName.includes(pattern));
+    return (
+      cylinderKeywords.some((keyword) => itemName.includes(keyword)) ||
+      cylinderPatterns.some((pattern) => itemName.includes(pattern))
+    );
   }
 
-  /**
-   * Check if item is a gas purchase (for filling empty cylinders)
-   */
   private static isGasItem(itemName: string): boolean {
     const gasKeywords = [
-      'gas', 'domestic gas', 'standard gas', 'commercial gas',
-      '11.8kg gas', '15kg gas', '45.4kg gas',
-      'domestic (11.8kg) gas', 'standard (15kg) gas', 'commercial (45.4kg) gas'
+      'gas',
+      'domestic gas',
+      'standard gas',
+      'commercial gas',
+      '11.8kg gas',
+      '15kg gas',
+      '45.4kg gas',
+      'domestic (11.8kg) gas',
+      'standard (15kg) gas',
+      'commercial (45.4kg) gas',
     ];
-    return gasKeywords.some(keyword => itemName.toLowerCase().includes(keyword));
+    return gasKeywords.some((keyword) => itemName.toLowerCase().includes(keyword));
   }
 
-  /**
-   * Generate a unique cylinder code based on cylinder type
-   */
-  // Code generation moved to shared utility: @/lib/cylinder-code-generator
-  // This method is kept for backward compatibility but now uses the shared function
-  private static async generateUniqueCylinderCode(cylinderType: string): Promise<string> {
-    const { generateUniqueCylinderCode: generateCode } = await import('@/lib/cylinder-code-generator');
-    // Pass cylinderType as enum (isTypeName = false)
-    return generateCode(cylinderType, false);
-  }
-
-  /**
-   * Process gas purchases - automatically find and update empty cylinders to FULL status
-   */
-  private static async processGasPurchase(item: VendorPurchaseItem, regionId?: string | null): Promise<void> {
+  private static async processGasPurchase(
+    item: VendorPurchaseItem,
+    regionId?: string | null,
+    tx?: PrismaTx,
+  ): Promise<PurchaseInventoryEffectRecord[]> {
+    const db = getDb(tx);
     const { itemName, quantity: rawQuantity } = item;
     const quantity = Number(rawQuantity);
-    
+    const effects: PurchaseInventoryEffectRecord[] = [];
+
     console.log(`🔄 Processing gas purchase: ${itemName} (${quantity} units)`);
-    
+
     if (quantity <= 0) {
       console.log(`⚠️ Invalid quantity for gas purchase: ${itemName}`);
-      return;
+      return effects;
     }
 
-    // Variant-aware cylinder match:
-    // Match EMPTY cylinders by (cylinderType + typeName + capacity) so custom variants work.
     const name = itemName.toLowerCase();
-    
-    // Extract weight/capacity from item name (handles patterns like "6kg", "11.8kg", "15kg", "30kg", "45.4kg", etc.)
     const weightMatch = name.match(/(\d+\.?\d*)\s*kg/i);
-    
+
     if (!weightMatch) {
       console.log(`⚠️ Could not extract capacity from gas type: ${itemName}`);
-      return;
+      return effects;
     }
-    
+
     const capacity = parseFloat(weightMatch[1]);
-    
-    // Validate capacity
     if (isNaN(capacity) || capacity <= 0) {
       console.log(`⚠️ Invalid capacity extracted from gas type: ${itemName} (capacity: ${capacity})`);
-      return;
+      return effects;
     }
-    
-    // Extract typeName from the label if present, e.g. "Plastic 15kg" / "Plastic (15kg)"
+
     const m = itemName.match(/^\s*([^\d(]+?)\s*(?:\(|\b)\s*(\d+(?:\.\d+)?)\s*kg/i);
     const rawTypeName = m?.[1]?.trim() || '';
     const normalizedTypeName = normalizeTypeName(rawTypeName);
     const typeNameForKey =
       normalizedTypeName && !/cylinder|gas/i.test(normalizedTypeName) ? normalizedTypeName : null;
 
-    // Prefer legacy enums for common capacities so we match existing inventory:
-    // 11.8 → DOMESTIC_11_8KG, 15 → STANDARD_15KG, 45.4 → COMMERCIAL_45_4KG
     const generatedType = generateCylinderTypeFromCapacity(capacity);
     const candidates: string[] = [];
     if (Math.abs(capacity - 11.8) < 0.11 || name.includes('domestic')) {
@@ -300,8 +280,7 @@ export class InventoryIntegrationService {
       `🔍 Looking for ${quantity} empty cylinders for variant: ${typeNameForKey || 'Cylinder'} (${capacity}kg) in [${uniqueCandidates.join(', ')}]`,
     );
 
-    // Find empty cylinders matching the variant (region-scoped)
-    const emptyCylinders = await prisma.cylinder.findMany({
+    const emptyCylinders = await db.cylinder.findMany({
       where: {
         currentStatus: 'EMPTY',
         ...regionScopedWhere(regionId),
@@ -310,7 +289,7 @@ export class InventoryIntegrationService {
         })),
       },
       take: quantity,
-      orderBy: { createdAt: 'asc' }, // Take oldest empty cylinders first
+      orderBy: { createdAt: 'asc' },
     });
 
     if (emptyCylinders.length < quantity) {
@@ -319,437 +298,440 @@ export class InventoryIntegrationService {
       throw new Error(errorMessage);
     }
 
-    // Update found cylinders to FULL status
-    const cylinderIds = emptyCylinders.map(cylinder => cylinder.id);
-    const updateResult = await prisma.cylinder.updateMany({
-      where: {
-        id: {
-          in: cylinderIds
-        }
-      },
-      data: {
-        currentStatus: 'FULL'
-      }
-    });
+    for (const cylinder of emptyCylinders) {
+      const updated = await db.cylinder.update({
+        where: { id: cylinder.id },
+        data: { currentStatus: 'FULL' },
+      });
 
-    console.log(`✅ Updated ${updateResult.count} cylinder(s) to FULL for gas purchase: ${itemName}`);
+      effects.push({
+        effectType: 'CYLINDER_STATUS_CHANGE',
+        entityType: 'CYLINDER',
+        entityId: cylinder.id,
+        itemName,
+        quantity: 1,
+        beforeState: {
+          id: cylinder.id,
+          code: cylinder.code,
+          currentStatus: cylinder.currentStatus,
+          location: cylinder.location,
+          storeId: cylinder.storeId,
+          vehicleId: cylinder.vehicleId,
+        },
+        afterState: {
+          id: updated.id,
+          code: updated.code,
+          currentStatus: updated.currentStatus,
+          location: updated.location,
+          storeId: updated.storeId,
+          vehicleId: updated.vehicleId,
+        },
+      });
+    }
+
+    console.log(`✅ Updated ${emptyCylinders.length} cylinder(s) to FULL for gas purchase: ${itemName}`);
+    return effects;
   }
 
-  /**
-   * Process accessories purchase - add to CustomItem table
-   */
-  private static async processAccessoriesPurchase(item: VendorPurchaseItem, regionId?: string | null): Promise<void> {
-    const itemName = item.itemName; // This becomes the "type" in inventory
-    const quantity = Number(item.quantity); // Ensure it's a number
-    const unitPrice = Number(item.unitPrice); // Ensure it's a number
-    const totalCost = quantity * unitPrice;
-
-    console.log(`🔧 Processing accessories purchase: ${itemName} (${quantity} units at ${unitPrice} each)`);
-
-    // Get the category from the vendor item - this is the key part!
-    // The category should come from the vendor item, not determined by name
-    const category = item.category || this.determineAccessoryCategory(itemName);
-    
-    console.log(`📂 Using category: ${category} for item: ${itemName}`);
-    
-    // Use CustomItem table for all accessories
-    await this.processCustomItemPurchase(item, category, regionId);
+  private static async processAccessoriesPurchase(
+    item: VendorPurchaseItem,
+    regionId?: string | null,
+    tx?: PrismaTx,
+  ): Promise<PurchaseInventoryEffectRecord[]> {
+    const category = item.category || this.determineAccessoryCategory(item.itemName);
+    return this.processCustomItemPurchase(item, category, regionId, tx);
   }
 
-  /**
-   * Process vaporizer purchase - add to CustomItem table (same as accessories)
-   */
-  private static async processVaporizerPurchase(item: VendorPurchaseItem, regionId?: string | null): Promise<void> {
-    const itemName = item.itemName; // This becomes the "type" in inventory
-    const quantity = Number(item.quantity); // Ensure it's a number
-    const unitPrice = Number(item.unitPrice); // Ensure it's a number
-    const totalCost = quantity * unitPrice;
-
-    console.log(`⚙️ Processing vaporizer purchase: ${itemName} (${quantity} units at ${unitPrice} each)`);
-
-    // Get the category from the vendor item - this is the key part!
-    // The category should come from the vendor item, not determined by name
-    const category = item.category || this.determineVaporizerCategory(itemName);
-    
-    console.log(`📂 Using category: ${category} for item: ${itemName}`);
-    
-    // Use CustomItem table for all vaporizers (same as accessories)
-    await this.processCustomItemPurchase(item, category, regionId);
+  private static async processVaporizerPurchase(
+    item: VendorPurchaseItem,
+    regionId?: string | null,
+    tx?: PrismaTx,
+  ): Promise<PurchaseInventoryEffectRecord[]> {
+    const category = item.category || this.determineVaporizerCategory(item.itemName);
+    return this.processCustomItemPurchase(item, category, regionId, tx);
   }
 
-  /**
-   * Process valves purchase - add to CustomItem table with "Valves" category
-   */
-  private static async processValvesPurchase(item: VendorPurchaseItem, regionId?: string | null): Promise<void> {
-    const itemName = item.itemName; // This becomes the "type" in inventory
-    const quantity = Number(item.quantity); // Ensure it's a number
-    const unitPrice = Number(item.unitPrice); // Ensure it's a number
-    const totalCost = quantity * unitPrice;
-
-    console.log(`🔧 Processing valves purchase: ${itemName} (${quantity} units at ${unitPrice} each)`);
-
-    // Always use "Valves" category for valves purchases
-    // The category should come from the vendor item if available, otherwise default to "Valves"
+  private static async processValvesPurchase(
+    item: VendorPurchaseItem,
+    regionId?: string | null,
+    tx?: PrismaTx,
+  ): Promise<PurchaseInventoryEffectRecord[]> {
     const category = item.category || 'Valves';
-    
-    // Normalize to "Valves" to ensure consistency
     const normalizedCategory = this.normalizeCategoryName(category);
-    
-    console.log(`📂 Using category: ${normalizedCategory} for item: ${itemName}`);
-    
-    // Use CustomItem table for all valves (same as accessories and vaporizers)
-    await this.processCustomItemPurchase(item, normalizedCategory, regionId);
+    return this.processCustomItemPurchase(item, normalizedCategory, regionId, tx);
   }
 
-
-  /**
-   * Process custom item purchase - add to CustomItem table for other categories
-   */
-  private static async processCustomItemPurchase(item: VendorPurchaseItem, category: string, regionId?: string | null): Promise<void> {
+  private static async processCustomItemPurchase(
+    item: VendorPurchaseItem,
+    category: string,
+    regionId?: string | null,
+    tx?: PrismaTx,
+  ): Promise<PurchaseInventoryEffectRecord[]> {
+    const db = getDb(tx);
     const itemName = item.itemName;
     const quantity = Number(item.quantity);
     const unitPrice = Number(item.unitPrice);
     const totalCost = quantity * unitPrice;
-
-    console.log(`🔧 Processing custom item purchase: ${itemName} in ${category} (${quantity} units at ${unitPrice} each)`);
-
-    // Normalize category name to handle case sensitivity
     const normalizedCategory = this.normalizeCategoryName(category);
-    console.log(`📝 Normalized category: ${category} → ${normalizedCategory}`);
 
-    // Check if item already exists in CustomItem table (case-insensitive search, region-scoped)
-    const existingItem = await prisma.customItem.findFirst({
+    console.log(
+      `🔧 Processing custom item purchase: ${itemName} in ${normalizedCategory} (${quantity} units at ${unitPrice} each)`,
+    );
+
+    const existingItem = await db.customItem.findFirst({
       where: {
         name: {
           equals: normalizedCategory,
-          mode: 'insensitive'
+          mode: 'insensitive',
         },
         type: itemName,
         isActive: true,
         ...regionScopedWhere(regionId),
-      }
+      },
     });
 
     if (existingItem) {
-      // Update existing item
       const newQuantity = existingItem.quantity + quantity;
       const newTotalCost = newQuantity * unitPrice;
-      
-      await prisma.customItem.update({
+
+      const updated = await db.customItem.update({
         where: { id: existingItem.id },
         data: {
           quantity: newQuantity,
           costPerPiece: unitPrice,
-          totalCost: newTotalCost
-        }
+          totalCost: newTotalCost,
+        },
       });
 
-      console.log(`✅ Updated existing custom item: ${itemName} in ${normalizedCategory} (${existingItem.quantity} → ${newQuantity} units)`);
-    } else {
-      // Create new item with normalized category name (region-scoped)
-      await prisma.customItem.create({
-        data: {
-          name: normalizedCategory,
-          type: itemName,
-          quantity: quantity,
-          costPerPiece: unitPrice,
-          totalCost: totalCost,
-          ...(regionId ? { regionId } : {}),
-        }
-      });
+      console.log(
+        `✅ Updated existing custom item: ${itemName} in ${normalizedCategory} (${existingItem.quantity} → ${newQuantity} units)`,
+      );
 
-      console.log(`✅ Created new custom item: ${itemName} in ${normalizedCategory} (${quantity} units)`);
+      return [
+        {
+          effectType: 'CUSTOM_ITEM_UPDATED',
+          entityType: 'CUSTOM_ITEM',
+          entityId: existingItem.id,
+          itemName,
+          quantity,
+          beforeState: {
+            id: existingItem.id,
+            name: existingItem.name,
+            type: existingItem.type,
+            quantity: existingItem.quantity,
+            costPerPiece: Number(existingItem.costPerPiece),
+            totalCost: Number(existingItem.totalCost),
+            isActive: existingItem.isActive,
+          },
+          afterState: {
+            id: updated.id,
+            name: updated.name,
+            type: updated.type,
+            quantity: updated.quantity,
+            costPerPiece: Number(updated.costPerPiece),
+            totalCost: Number(updated.totalCost),
+            isActive: updated.isActive,
+          },
+        },
+      ];
     }
+
+    const created = await db.customItem.create({
+      data: {
+        name: normalizedCategory,
+        type: itemName,
+        quantity,
+        costPerPiece: unitPrice,
+        totalCost,
+        ...(regionId ? { regionId } : {}),
+      },
+    });
+
+    console.log(`✅ Created new custom item: ${itemName} in ${normalizedCategory} (${quantity} units)`);
+
+    return [
+      {
+        effectType: 'CUSTOM_ITEM_CREATED',
+        entityType: 'CUSTOM_ITEM',
+        entityId: created.id,
+        itemName,
+        quantity,
+        beforeState: null,
+        afterState: {
+          id: created.id,
+          name: created.name,
+          type: created.type,
+          quantity: created.quantity,
+          costPerPiece: Number(created.costPerPiece),
+          totalCost: Number(created.totalCost),
+          isActive: created.isActive,
+        },
+      },
+    ];
   }
 
-  /**
-   * Normalize category name to handle case sensitivity and variations
-   */
   private static normalizeCategoryName(category: string): string {
     const normalized = category.toLowerCase().trim();
-    
-    // Handle common variations
+
     if (normalized === 'stove' || normalized === 'stoves') {
       return 'Stoves';
-    } else if (normalized === 'regulator' || normalized === 'regulators') {
-      return 'Regulators';
-    } else if (normalized === 'valve' || normalized === 'valves') {
-      return 'Valves';
-    } else if (normalized === 'pipe' || normalized === 'pipes' || normalized === 'gas pipe' || normalized === 'gas pipes') {
-      return 'Gas Pipes';
-    } else if (normalized === 'vaporizer' || normalized === 'vaporizers' || normalized === 'vaporiser' || normalized === 'vaporisers') {
-      return 'Vaporizers';
-    } else {
-      // Capitalize first letter for other categories
-      return category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
     }
+    if (normalized === 'regulator' || normalized === 'regulators') {
+      return 'Regulators';
+    }
+    if (normalized === 'valve' || normalized === 'valves') {
+      return 'Valves';
+    }
+    if (
+      normalized === 'pipe' ||
+      normalized === 'pipes' ||
+      normalized === 'gas pipe' ||
+      normalized === 'gas pipes'
+    ) {
+      return 'Gas Pipes';
+    }
+    if (
+      normalized === 'vaporizer' ||
+      normalized === 'vaporizers' ||
+      normalized === 'vaporiser' ||
+      normalized === 'vaporisers'
+    ) {
+      return 'Vaporizers';
+    }
+    return category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
   }
 
-  /**
-   * Determine accessory category based on item name
-   */
   private static determineAccessoryCategory(itemName: string): string {
     const name = itemName.toLowerCase();
-    
-    if (name.includes('valve')) {
-      return 'Valves';
-    } else if (name.includes('regulator')) {
-      return 'Regulators';
-    } else if (name.includes('stove') || name.includes('burner')) {
-      return 'Stoves';
-    } else if (name.includes('pipe') || name.includes('hose')) {
-      return 'Gas Pipes';
-    } else {
-      // Default category for other accessories
-      return 'Accessories';
-    }
+    if (name.includes('valve')) return 'Valves';
+    if (name.includes('regulator')) return 'Regulators';
+    if (name.includes('stove') || name.includes('burner')) return 'Stoves';
+    if (name.includes('pipe') || name.includes('hose')) return 'Gas Pipes';
+    return 'Accessories';
   }
 
-  /**
-   * Determine vaporizer category based on item name
-   */
   private static determineVaporizerCategory(itemName: string): string {
-    const name = itemName.toLowerCase();
-    
-    if (name.includes('vaporizer') || name.includes('vaporiser')) {
-      return 'Vaporizers';
-    } else if (name.includes('20kg')) {
-      return 'Vaporizers';
-    } else if (name.includes('30kg')) {
-      return 'Vaporizers';
-    } else if (name.includes('40kg')) {
-      return 'Vaporizers';
-    } else {
-      // Default category for other vaporizer equipment
-      return 'Vaporizers';
-    }
+    return 'Vaporizers';
   }
 
-  /**
-   * Process cylinder purchases - create individual cylinder records
-   */
-  private static async processCylinderPurchase(item: VendorPurchaseItem, regionId?: string | null): Promise<void> {
+  private static async processCylinderPurchase(
+    item: VendorPurchaseItem,
+    regionId?: string | null,
+    tx?: PrismaTx,
+  ): Promise<PurchaseInventoryEffectRecord[]> {
+    const db = getDb(tx);
     const { itemName, quantity: rawQuantity, unitPrice: rawUnitPrice, cylinderCodes, status } = item;
     const quantity = Number(rawQuantity);
     const unitPrice = Number(rawUnitPrice);
-    
-    // Extract cylinder type from item name
+    const effects: PurchaseInventoryEffectRecord[] = [];
+
     const cylinderType = this.extractCylinderType(itemName);
-    
-    // Extract typeName from item name (e.g., "Domestic 11.8kg" -> "Domestic")
-    // This ensures vendor-purchased cylinders group correctly with manually added ones in stats
     const typeName = this.extractTypeNameFromItemName(itemName);
-    
-    // Extract capacity directly from item name (e.g., "Industrial 20kg" -> 20)
-    // This ensures new custom cylinder types get the correct capacity instead of defaulting to 15kg
-    // Priority: extracted capacity > getCylinderCapacity(cylinderType) > 15.0 (fallback)
     const extractedCapacity = this.extractCapacityFromItemName(itemName);
-    const capacity = extractedCapacity !== null 
-      ? extractedCapacity 
-      : this.getCylinderCapacity(cylinderType);
-    
-    // Use status from form, default to 'EMPTY' if not provided
+    const capacity =
+      extractedCapacity !== null ? extractedCapacity : this.getCylinderCapacity(cylinderType);
     const cylinderStatus = status || 'EMPTY';
-    
-    // If cylinder codes are provided, use them; otherwise generate
-    const codes = cylinderCodes ? cylinderCodes.split(',').map(c => c.trim()) : [];
-    
-    // Create individual cylinder records
+    const codes = cylinderCodes ? cylinderCodes.split(',').map((c) => c.trim()) : [];
+
     for (let i = 0; i < quantity; i++) {
-      // Use provided code if available, otherwise generate unique code based on cylinder type
       let cylinderCode: string;
       if (codes[i] && codes[i].trim()) {
-        // Use the provided code from the form
         cylinderCode = codes[i].trim();
       } else {
-        // Generate unique code using shared utility
-        // Use typeName if available, otherwise fall back to cylinderType
         const codeInput = typeName || cylinderType;
         const isTypeName = !!typeName;
         const { generateUniqueCylinderCode } = await import('@/lib/cylinder-code-generator');
         cylinderCode = await generateUniqueCylinderCode(codeInput, isTypeName);
       }
-      
-      await prisma.cylinder.create({
+
+      const created = await db.cylinder.create({
         data: {
           code: cylinderCode,
           cylinderType,
-          typeName: typeName || null, // Set typeName for proper grouping in stats
-          capacity: capacity, // Use extracted capacity (handles new custom types correctly)
-          currentStatus: cylinderStatus as any, // Use status from form
+          typeName: typeName || null,
+          capacity,
+          currentStatus: cylinderStatus as any,
           location: 'Store',
           purchaseDate: new Date(),
           purchasePrice: unitPrice,
           ...(regionId ? { regionId } : {}),
-        }
+        },
+      });
+
+      effects.push({
+        effectType: 'CYLINDER_CREATED',
+        entityType: 'CYLINDER',
+        entityId: created.id,
+        itemName,
+        quantity: 1,
+        beforeState: null,
+        afterState: {
+          id: created.id,
+          code: created.code,
+          cylinderType: created.cylinderType,
+          typeName: created.typeName,
+          capacity: Number(created.capacity),
+          currentStatus: created.currentStatus,
+          location: created.location,
+          storeId: created.storeId,
+          vehicleId: created.vehicleId,
+          purchasePrice: created.purchasePrice != null ? Number(created.purchasePrice) : null,
+        },
       });
     }
-    
-    console.log(`📦 Created ${quantity} ${cylinderType} cylinders with typeName: ${typeName || 'null'}, capacity: ${capacity}kg, status: ${cylinderStatus}`);
+
+    console.log(
+      `📦 Created ${quantity} ${cylinderType} cylinders with typeName: ${typeName || 'null'}, capacity: ${capacity}kg, status: ${cylinderStatus}`,
+    );
+    return effects;
   }
 
-  /**
-   * Process generic products - add to Product table
-   */
-  private static async processGenericProduct(item: VendorPurchaseItem, regionId?: string | null): Promise<void> {
+  private static async processGenericProduct(
+    item: VendorPurchaseItem,
+    regionId?: string | null,
+    tx?: PrismaTx,
+  ): Promise<PurchaseInventoryEffectRecord[]> {
+    const db = getDb(tx);
     const { itemName, quantity: rawQuantity, unitPrice: rawUnitPrice } = item;
     const quantity = Number(rawQuantity);
     const unitPrice = Number(rawUnitPrice);
-    
-    // Find existing product or create new one
-    const existingProduct = await prisma.product.findFirst({
+
+    const existingProduct = await db.product.findFirst({
       where: {
         name: {
           contains: itemName,
-          mode: 'insensitive'
+          mode: 'insensitive',
         },
         ...regionScopedWhere(regionId),
-      }
+      },
     });
-    
+
     if (existingProduct) {
-      // Update existing product
-      await prisma.product.update({
+      const updated = await db.product.update({
         where: { id: existingProduct.id },
         data: {
-          stockQuantity: { increment: quantity }
-        }
+          stockQuantity: { increment: quantity },
+        },
       });
+
       console.log(`📦 Updated product: ${existingProduct.name} (+${quantity} units)`);
-    } else {
-      // Create new product (region-scoped)
-      await prisma.product.create({
-        data: {
-          name: itemName,
-          category: 'ACCESSORY',
-          unit: 'piece',
-          stockQuantity: quantity,
-          stockType: 'FILLED',
-          priceSoldToCustomer: unitPrice * 1.2, // 20% markup
-          lowStockThreshold: 10,
-          isActive: true,
-          ...(regionId ? { regionId } : {}),
-        }
-      });
-      console.log(`📦 Created new product: ${itemName} (${quantity} units)`);
+
+      return [
+        {
+          effectType: 'PRODUCT_UPDATED',
+          entityType: 'PRODUCT',
+          entityId: existingProduct.id,
+          itemName,
+          quantity,
+          beforeState: {
+            id: existingProduct.id,
+            name: existingProduct.name,
+            stockQuantity: Number(existingProduct.stockQuantity),
+            isActive: existingProduct.isActive,
+          },
+          afterState: {
+            id: updated.id,
+            name: updated.name,
+            stockQuantity: Number(updated.stockQuantity),
+            isActive: updated.isActive,
+          },
+        },
+      ];
     }
+
+    const created = await db.product.create({
+      data: {
+        name: itemName,
+        category: 'ACCESSORY',
+        unit: 'piece',
+        stockQuantity: quantity,
+        stockType: 'FILLED',
+        priceSoldToCustomer: unitPrice * 1.2,
+        lowStockThreshold: 10,
+        isActive: true,
+        ...(regionId ? { regionId } : {}),
+      },
+    });
+
+    console.log(`📦 Created new product: ${itemName} (${quantity} units)`);
+
+    return [
+      {
+        effectType: 'PRODUCT_CREATED',
+        entityType: 'PRODUCT',
+        entityId: created.id,
+        itemName,
+        quantity,
+        beforeState: null,
+        afterState: {
+          id: created.id,
+          name: created.name,
+          stockQuantity: Number(created.stockQuantity),
+          isActive: created.isActive,
+        },
+      },
+    ];
   }
 
-  /**
-   * Extract cylinder type from item name (fully dynamic - handles any cylinder type)
-   */
   private static extractCylinderType(itemName: string): string {
     const name = itemName.toLowerCase();
-    
-    // Extract weight/capacity from item name (handles patterns like "6kg", "11.8kg", "15kg", "30kg", "45.4kg", etc.)
     const weightMatch = name.match(/(\d+\.?\d*)\s*kg/i);
-    
+
     if (weightMatch) {
       const capacity = parseFloat(weightMatch[1]);
-      
-      // Validate capacity
       if (!isNaN(capacity) && capacity > 0) {
-        // Generate enum type dynamically from capacity - fully flexible
         return generateCylinderTypeFromCapacity(capacity);
       }
     }
-    
-    // If no capacity found, log warning and return a default (this should rarely happen)
+
     console.log(`⚠️ Could not extract capacity from item name: ${itemName}, using default`);
     return 'STANDARD_15KG';
   }
 
-  /**
-   * Extract capacity from item name (e.g., "Domestic 11.8kg" -> 11.8, "Industrial (20kg)" -> 20)
-   * This ensures vendor-purchased cylinders store the correct capacity, especially for new custom types
-   * Handles multiple formats:
-   * - "Domestic 11.8kg" -> 11.8
-   * - "Domestic (11.8kg)" -> 11.8
-   * - "Industrial 20kg" -> 20
-   * - "Special (10kg)" -> 10
-   */
   private static extractCapacityFromItemName(itemName: string): number | null {
     if (!itemName) return null;
-    
     const name = itemName.trim();
-    
-    // Extract capacity from item name
-    // Handles formats:
-    // - "Domestic 11.8kg" -> 11.8
-    // - "Domestic (11.8kg)" -> 11.8
-    // - "Industrial 20 kg" -> 20
-    // Pattern: optional parentheses, numbers (with optional decimal), optional space, and "kg"
     const capacityMatch = name.match(/(?:\(?)(\d+\.?\d*)\s*kg\)?/i);
-    
+
     if (capacityMatch && capacityMatch[1]) {
       const capacity = parseFloat(capacityMatch[1]);
-      // Validate capacity is a reasonable number (between 0.1 and 1000 kg)
       if (!isNaN(capacity) && capacity > 0.1 && capacity <= 1000) {
         return capacity;
       }
     }
-    
-    // If no match found, return null (will fall back to getCylinderCapacity)
     return null;
   }
 
-  /**
-   * Extract type name from item name (e.g., "Domestic 11.8kg" -> "Domestic", "Domestic (11.8kg)" -> "Domestic")
-   * This ensures vendor-purchased cylinders group correctly with manually added ones in stats
-   * Handles multiple formats:
-   * - "Domestic 11.8kg" -> "Domestic"
-   * - "Domestic (11.8kg)" -> "Domestic"
-   * - "Standard 15kg" -> "Standard"
-   * - "Special (10kg)" -> "Special"
-   * - "special 10kg" -> "Special" (case-insensitive normalization)
-   * 
-   * IMPORTANT: Always normalizes to consistent case (capitalize first letter of each word)
-   * to ensure "special" and "Special" are treated as the same cylinder type
-   */
   private static extractTypeNameFromItemName(itemName: string): string | null {
     if (!itemName) return null;
-    
     const name = itemName.trim();
-    
-    // Extract the text part before the capacity
-    // Handles formats:
-    // - "Domestic 11.8kg" -> "Domestic"
-    // - "Domestic (11.8kg)" -> "Domestic"
-    // - "Standard 15 kg" -> "Standard"
-    // Pattern: text followed by optional space, optional parentheses, numbers (with optional decimal), and "kg"
     const typeNameMatch = name.match(/^([A-Za-z]+(?:\s+[A-Za-z]+)*)\s*(?:\(?\d+\.?\d*\s*kg\)?)?/i);
-    
+
     if (typeNameMatch && typeNameMatch[1]) {
-      const extractedName = typeNameMatch[1].trim();
-      
-      // Use shared normalization function to ensure consistent case
-      // This ensures "special", "Special", "SPECIAL" all become "Special"
-      return normalizeTypeName(extractedName);
+      return normalizeTypeName(typeNameMatch[1].trim());
     }
-    
-    // If no match found, return null (will use default display logic)
     return null;
   }
 
-  /**
-   * Get cylinder capacity based on type (dynamic - extracts weight from enum name)
-   */
   private static getCylinderCapacity(type: string): number {
-    // Extract weight from cylinder type enum name (e.g., "CYLINDER_6KG" -> 6, "DOMESTIC_11_8KG" -> 11.8)
     const weightMatch = type.match(/(\d+\.?\d*)/);
     if (weightMatch) {
       return parseFloat(weightMatch[1]);
     }
-    
-    // Fallback for known types (backward compatibility)
+
     switch (type) {
-      case 'DOMESTIC_11_8KG': return 11.8;
-      case 'STANDARD_15KG': return 15.0;
-      case 'COMMERCIAL_45_4KG': return 45.4;
-      case 'CYLINDER_6KG': return 6.0;
-      case 'CYLINDER_30KG': return 30.0;
-      default: return 15.0; // Default fallback
+      case 'DOMESTIC_11_8KG':
+        return 11.8;
+      case 'STANDARD_15KG':
+        return 15.0;
+      case 'COMMERCIAL_45_4KG':
+        return 45.4;
+      case 'CYLINDER_6KG':
+        return 6.0;
+      case 'CYLINDER_30KG':
+        return 30.0;
+      default:
+        return 15.0;
     }
   }
 }
-

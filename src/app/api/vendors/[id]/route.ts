@@ -29,6 +29,17 @@ export async function GET(
         },
         purchase_entries: {
           where: regionScope,
+          include: {
+            purchaseBatch: {
+              select: {
+                id: true,
+                status: true,
+                undoReason: true,
+                undoneAt: true,
+                undoneBy: true,
+              },
+            },
+          },
           orderBy: { purchaseDate: 'desc' }
         },
         payments: {
@@ -47,8 +58,13 @@ export async function GET(
       );
     }
 
+    // Active (non-cancelled) purchases drive balances; cancelled/undone remain in history.
+    const activePurchaseEntries = vendor.purchase_entries.filter(
+      (p) => p.status !== 'CANCELLED'
+    );
+
     // Calculate purchase-related totals
-    const totalPurchases = vendor.purchase_entries.reduce(
+    const totalPurchases = activePurchaseEntries.reduce(
       (sum, p) => sum + Number(p.totalPrice), 0
     );
     

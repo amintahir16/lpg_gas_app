@@ -134,22 +134,20 @@ export async function POST(request: NextRequest) {
 
     const regionId = getActiveRegionId(request);
 
-    // Prevent overpayment credit on simple payments (credit only via buyback)
+    // Payment-only transactions may create customer credit. Item-based SALE
+    // overpayment is validated by the canonical customer transaction route.
     if (transactionType === 'PAYMENT') {
       const amountCheck = parseFloat(totalAmount) || 0;
       const customerForPay = await prisma.customer.findFirst({
         where: { id: customerId, ...regionScopedWhere(regionId) },
-        select: { ledgerBalance: true },
+        select: { id: true },
       });
       if (!customerForPay) {
         return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
       }
-      const outstandingOwed = Math.max(0, Math.round(parseFloat(customerForPay.ledgerBalance.toString()) || 0));
-      if (amountCheck > outstandingOwed + 0.01) {
+      if (!Number.isFinite(amountCheck) || amountCheck <= 0) {
         return NextResponse.json(
-          { error: outstandingOwed > 0
-            ? `Payment cannot exceed what the customer owes (Rs ${outstandingOwed.toLocaleString()}).`
-            : 'Customer has no outstanding balance to collect. Credit is only given via buyback.' },
+          { error: 'Payment amount must be greater than zero.' },
           { status: 400 }
         );
       }

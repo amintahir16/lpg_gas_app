@@ -65,9 +65,9 @@ export async function GET(request: NextRequest) {
 
     // Calculate totals for each vendor
     const vendorsWithTotals = vendors.map(vendor => {
-      const totalPurchases = vendor.purchase_entries.reduce(
-        (sum, p) => sum + Number(p.totalPrice), 0
-      );
+      const totalPurchases = vendor.purchase_entries
+        .filter((p) => p.status !== 'CANCELLED')
+        .reduce((sum, p) => sum + Number(p.totalPrice), 0);
       
       // Calculate all payments (direct payments to vendor)
       const totalPaid = vendor.payments.reduce(
