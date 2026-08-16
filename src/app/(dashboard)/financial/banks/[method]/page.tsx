@@ -219,6 +219,7 @@ export default function BankMethodDetailPage() {
             onYearChange={setYear}
           />
           <BankMovementActions
+            lockedMethod={method}
             defaultMethod={method}
             onSuccess={() => setRefreshKey((k) => k + 1)}
           />

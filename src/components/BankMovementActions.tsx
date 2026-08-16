@@ -22,7 +22,7 @@ interface BankMovementActionsProps {
   onSuccess?: () => void;
   /**
    * When set (wallet detail page), deposit goes into this bank and
-   * transfers/withdrawals always leave from this bank — Bank/From pickers are hidden.
+   * transfers/withdrawals always leave from this bank — From/To pickers automatically adapt.
    */
   lockedMethod?: PaymentMethodValue;
   defaultMethod?: PaymentMethodValue;
@@ -39,17 +39,20 @@ export function BankMovementActions({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const activeLockedMethod = lockedMethod || defaultMethod;
-  const walletLocked = Boolean(lockedMethod);
-  const walletLabel = activeLockedMethod
-    ? formatPaymentMethodLabel(activeLockedMethod, wallets)
+  const activeMethod = lockedMethod || defaultMethod;
+  const isInsideWallet = Boolean(activeMethod);
+  const walletLabel = activeMethod
+    ? formatPaymentMethodLabel(activeMethod, wallets)
     : null;
 
-  const defaultFrom = activeLockedMethod || options[0]?.value || 'CASH';
-  const defaultTo = options.find((o) => o.value !== defaultFrom)?.value || options[1]?.value || 'BANK_TRANSFER';
+  const defaultFrom = activeMethod || options[0]?.value || 'CASH';
+  const defaultTo =
+    options.find((o) => o.value !== defaultFrom)?.value ||
+    options[1]?.value ||
+    'BANK_TRANSFER';
 
-  const transferToOptions = lockedMethod
-    ? options.filter((opt) => opt.value !== lockedMethod)
+  const transferToOptions = activeMethod
+    ? options.filter((opt) => opt.value !== activeMethod)
     : [...options];
 
   const close = () => {
@@ -77,7 +80,7 @@ export function BankMovementActions({
       mode === 'deposit'
         ? {
             type: 'DEPOSIT',
-            toMethod: lockedMethod || String(fd.get('toMethod')),
+            toMethod: activeMethod || String(fd.get('toMethod')),
             amount,
             date: movementDate,
             notes: notes || null,
@@ -85,7 +88,7 @@ export function BankMovementActions({
         : mode === 'transfer'
           ? {
               type: 'TRANSFER',
-              fromMethod: lockedMethod || String(fd.get('fromMethod')),
+              fromMethod: activeMethod || String(fd.get('fromMethod')),
               toMethod: String(fd.get('toMethod')),
               amount,
               date: movementDate,
@@ -93,7 +96,7 @@ export function BankMovementActions({
             }
           : {
               type: 'WITHDRAWAL',
-              fromMethod: lockedMethod || String(fd.get('fromMethod')),
+              fromMethod: activeMethod || String(fd.get('fromMethod')),
               amount,
               date: movementDate,
               notes: notes || null,
@@ -120,26 +123,29 @@ export function BankMovementActions({
     }
   };
 
-  const depositTitle = walletLocked && walletLabel
-    ? `Add Amount to ${walletLabel}`
-    : 'Add Amount to Bank';
-  const transferTitle = walletLocked && walletLabel
-    ? `Move Amount from ${walletLabel}`
-    : 'Move Amount Between Banks';
-  const withdrawalTitle = walletLocked && walletLabel
-    ? `Withdraw from ${walletLabel}`
-    : 'Withdraw from Bank';
+  const depositTitle =
+    isInsideWallet && walletLabel
+      ? `Add Amount to ${walletLabel}`
+      : 'Add Amount to Bank / Wallet';
+  const transferTitle =
+    isInsideWallet && walletLabel
+      ? `Move Amount from ${walletLabel}`
+      : 'Move Amount Between Banks / Wallets';
+  const withdrawalTitle =
+    isInsideWallet && walletLabel
+      ? `Withdraw from ${walletLabel}`
+      : 'Withdraw from Bank / Wallet';
 
   const modalSubtitle =
     mode === 'deposit'
-      ? walletLocked && walletLabel
+      ? isInsideWallet && walletLabel
         ? `Record an external deposit directly into ${walletLabel}`
         : 'Record an external deposit directly into a selected bank/wallet'
       : mode === 'transfer'
-        ? walletLocked && walletLabel
+        ? isInsideWallet && walletLabel
           ? `Transfer funds out of ${walletLabel} into another bank/wallet`
           : 'Move funds internally from one bank/wallet into another'
-        : walletLocked && walletLabel
+        : isInsideWallet && walletLabel
           ? `Record cash/funds leaving ${walletLabel}`
           : 'Record cash/funds leaving a bank/wallet';
 
@@ -215,32 +221,51 @@ export function BankMovementActions({
             )}
 
             <form onSubmit={submit} className="space-y-3">
-              {mode === 'deposit' && !walletLocked && (
-                <div className="space-y-1">
-                  <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">
-                    Bank / Destination Wallet
-                  </label>
-                  <CustomSelect
-                    name="toMethod"
-                    defaultValue={defaultFrom}
-                    options={[...options]}
-                    required
-                  />
-                </div>
-              )}
-
-              {mode === 'transfer' &&
-                (walletLocked ? (
+              {/* Deposit Mode */}
+              {mode === 'deposit' && (
+                isInsideWallet && walletLabel ? (
+                  <div className="rounded-lg bg-emerald-50/80 border border-emerald-200 p-2.5 flex items-center justify-between">
+                    <span className="text-xs text-emerald-800 font-medium">Adding funds directly to:</span>
+                    <span className="text-xs font-bold text-emerald-900 bg-white px-2.5 py-1 rounded shadow-xs border border-emerald-200">
+                      {walletLabel}
+                    </span>
+                  </div>
+                ) : (
                   <div className="space-y-1">
                     <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">
-                      To
+                      Bank / Destination Wallet
                     </label>
                     <CustomSelect
                       name="toMethod"
-                      defaultValue={transferToOptions[0]?.value}
-                      options={[...transferToOptions]}
+                      defaultValue={defaultFrom}
+                      options={[...options]}
                       required
                     />
+                  </div>
+                )
+              )}
+
+              {/* Transfer Mode */}
+              {mode === 'transfer' && (
+                isInsideWallet && walletLabel ? (
+                  <div className="space-y-2.5">
+                    <div className="rounded-lg bg-indigo-50/80 border border-indigo-200 p-2.5 flex items-center justify-between">
+                      <span className="text-xs text-indigo-800 font-medium">Transferring from:</span>
+                      <span className="text-xs font-bold text-indigo-900 bg-white px-2.5 py-1 rounded shadow-xs border border-indigo-200">
+                        {walletLabel}
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">
+                        Transfer To (Destination Wallet)
+                      </label>
+                      <CustomSelect
+                        name="toMethod"
+                        defaultValue={transferToOptions[0]?.value}
+                        options={[...transferToOptions]}
+                        required
+                      />
+                    </div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-3">
@@ -267,26 +292,41 @@ export function BankMovementActions({
                       />
                     </div>
                   </div>
-                ))}
-
-              {mode === 'withdrawal' && !walletLocked && (
-                <div className="space-y-1">
-                  <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">
-                    From Wallet
-                  </label>
-                  <CustomSelect
-                    name="fromMethod"
-                    defaultValue={defaultFrom}
-                    options={[...options]}
-                    required
-                  />
-                </div>
+                )
               )}
 
+              {/* Withdrawal Mode */}
               {mode === 'withdrawal' && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-                  This amount is withdrawn from the wallet and is not moved to another bank.
-                </div>
+                isInsideWallet && walletLabel ? (
+                  <div className="space-y-2">
+                    <div className="rounded-lg bg-rose-50/80 border border-rose-200 p-2.5 flex items-center justify-between">
+                      <span className="text-xs text-rose-800 font-medium">Withdrawing funds from:</span>
+                      <span className="text-xs font-bold text-rose-900 bg-white px-2.5 py-1 rounded shadow-xs border border-rose-200">
+                        {walletLabel}
+                      </span>
+                    </div>
+                    <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-[11px] text-amber-800">
+                      This amount is withdrawn from <span className="font-semibold">{walletLabel}</span> and is not moved to another bank.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">
+                        From Wallet
+                      </label>
+                      <CustomSelect
+                        name="fromMethod"
+                        defaultValue={defaultFrom}
+                        options={[...options]}
+                        required
+                      />
+                    </div>
+                    <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-[11px] text-amber-800">
+                      This amount is withdrawn from the selected wallet and is not moved to another bank.
+                    </div>
+                  </div>
+                )
               )}
 
               <div className="space-y-1">
