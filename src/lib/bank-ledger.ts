@@ -35,6 +35,9 @@ export interface BankLedgerEntry {
   partyType: 'B2B Customer' | 'B2C Customer' | 'Vendor' | 'Office' | 'Personal' | 'Bank' | 'Employee';
   /** Staff who recorded the entry */
   recordedBy: string | null;
+  /** Region / branch where the event took place */
+  regionId?: string | null;
+  regionName?: string | null;
   /** What was sold / paid / expense purpose */
   details: string;
   reference: string | null;

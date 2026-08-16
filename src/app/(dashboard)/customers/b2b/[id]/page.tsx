@@ -39,6 +39,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { sharePdfFromUrl, downloadPdfBlob } from '@/lib/sharePdf';
 import { PAYMENT_METHOD_OPTIONS, formatPaymentMethodLabel } from '@/lib/payment-methods';
+import { usePaymentWallets } from '@/hooks/usePaymentWallets';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import {
   canUndoTransaction,
@@ -197,6 +198,7 @@ export default function B2BCustomerDetailPage() {
   const [now, setNow] = useState(() => Date.now());
 
   // Payment form states (for separate PAYMENT transactions)
+  const { options: paymentMethodOptions } = usePaymentWallets();
   const [paymentAgainst, setPaymentAgainst] = useState('');
   const [paymentQuantity, setPaymentQuantity] = useState(0);
 
@@ -2786,7 +2788,7 @@ export default function B2BCustomerDetailPage() {
                           value={salePaymentMethod}
                           onChange={(val) => setSalePaymentMethod(val as string)}
                           placeholder="Select method"
-                          options={[...PAYMENT_METHOD_OPTIONS]}
+                          options={paymentMethodOptions}
                           className="h-9"
                         />
                       </div>

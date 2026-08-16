@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
         };
         if (type) where.type = type;
 
-        const [expenses, total, periodAgg, dailyCount, rentAgg, vehicleAgg, personalAgg] = await Promise.all([
+        const [expenses, total, periodAgg, dailyAgg, rentAgg, vehicleAgg, personalAgg] = await Promise.all([
             prisma.officeExpense.findMany({
                 where,
                 skip,
@@ -54,8 +54,10 @@ export async function GET(request: NextRequest) {
                 where,
                 _sum: { amount: true },
             }),
-            prisma.officeExpense.count({
+            prisma.officeExpense.aggregate({
                 where: { ...where, type: 'DAILY' },
+                _sum: { amount: true },
+                _count: true,
             }),
             prisma.officeExpense.aggregate({
                 where: { ...where, type: 'RENT' },
@@ -156,7 +158,8 @@ export async function GET(request: NextRequest) {
                 officeTotal,
                 personalTotal,
                 personalCount: personalAgg._count || 0,
-                dailyCount,
+                dailyTotal: Number(dailyAgg._sum.amount || 0),
+                dailyCount: dailyAgg._count || 0,
                 vehicleTotal: Number(vehicleAgg._sum.amount || 0),
                 rentAmount: Number(rentAgg._sum.amount || 0),
                 rentCount: rentAgg._count || 0,

@@ -28,15 +28,15 @@ import {
 } from '@/lib/financial-period';
 import { FinancialPeriodFilter } from '@/components/FinancialPeriodFilter';
 import {
-  PAYMENT_METHOD_CARD_STYLES,
-  type PaymentMethodValue,
+  getWalletStyle,
+  type BankWalletOption,
 } from '@/lib/payment-methods';
 import { sharePdfBlob, downloadPdfBlob } from '@/lib/sharePdf';
 import { buildCashClosingPdf, closingPdfFileName } from '@/lib/cash-closing-pdf';
 
 type ClosingLedgerEntry = {
   id: string;
-  wallet: PaymentMethodValue;
+  wallet: string;
   walletLabel: string;
   source: string;
   sourceLabel: string;
@@ -56,8 +56,11 @@ type ClosingLedgerEntry = {
 };
 
 type WalletClosingRow = {
-  wallet: PaymentMethodValue;
+  wallet: string;
   walletLabel: string;
+  type?: string;
+  gradient?: string;
+  labelTone?: string;
   opening: number;
   totalIn: number;
   totalOut: number;
@@ -326,7 +329,7 @@ export default function ReportsPage() {
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
               {report.byWallet.map((wallet) => {
-                const style = PAYMENT_METHOD_CARD_STYLES[wallet.wallet];
+                const style = getWalletStyle(wallet.wallet, wallet);
                 return (
                   <Card key={wallet.wallet} className="overflow-hidden border-0 shadow-md">
                     <div className={`bg-gradient-to-br ${style.gradient} px-3 py-2`}>
@@ -417,7 +420,7 @@ export default function ReportsPage() {
                 Transaction Ledger ({report.entries.length})
               </CardTitle>
               <CardDescription>
-                All Ins and Outs across Cash, Bank Transfer, Easypaisa, and Jazz Cash
+                All Ins and Outs across all company wallets & bank accounts for {report.branchName || 'selected branch'}
               </CardDescription>
             </CardHeader>
             <CardContent>

@@ -14,19 +14,23 @@ import {
   sumBankLedgerInOut,
 } from '@/lib/bank-ledger-query';
 import {
-  PAYMENT_METHOD_OPTIONS,
+  DEFAULT_WALLETS,
   formatPaymentMethodLabel,
-  type PaymentMethodValue,
+  getWalletStyle,
+  type BankWalletOption,
 } from '@/lib/payment-methods';
 
 export type ClosingLedgerEntry = BankLedgerEntry & {
-  wallet: PaymentMethodValue;
+  wallet: string;
   walletLabel: string;
 };
 
 export type WalletClosingRow = {
-  wallet: PaymentMethodValue;
+  wallet: string;
   walletLabel: string;
+  type?: string;
+  gradient?: string;
+  labelTone?: string;
   opening: number;
   totalIn: number;
   totalOut: number;
@@ -57,18 +61,25 @@ export async function GET(request: NextRequest) {
     });
     const { startDate, endDate, period, month, year, date, label } = resolved;
 
-    const methods = PAYMENT_METHOD_OPTIONS.map((o) => o.value);
+    let activeWallets = await prisma.bankWallet.findMany({
+      where: { isActive: true },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    });
 
-    // Period detail rows + SQL opening nets (same business rules, no full-history hydrate).
-    // Sequential per wallet keeps the connection pool stable under load.
+    if (activeWallets.length === 0) {
+      activeWallets = DEFAULT_WALLETS as any;
+    }
+
+    // Period detail rows + SQL opening nets (region-scoped).
     const walletResults: Array<{
-      method: PaymentMethodValue;
+      wallet: BankWalletOption;
       entries: Awaited<ReturnType<typeof buildBankLedgerEntries>>;
       opening: number;
       periodTotals: Awaited<ReturnType<typeof sumBankLedgerInOut>>;
     }> = [];
 
-    for (const method of methods) {
+    for (const w of activeWallets) {
+      const method = w.code;
       const [entries, opening, periodTotals] = await Promise.all([
         buildBankLedgerEntries({
           method,
@@ -81,7 +92,6 @@ export async function GET(request: NextRequest) {
           regionId,
           beforeDate: startDate,
         }),
-        // Same business rules as entry hydrate — SQL SUM avoids deriving totals twice
         sumBankLedgerInOut({
           method,
           regionId,
@@ -90,7 +100,7 @@ export async function GET(request: NextRequest) {
         }),
       ]);
       walletResults.push({
-        method,
+        wallet: w,
         entries,
         opening,
         periodTotals,
@@ -98,25 +108,31 @@ export async function GET(request: NextRequest) {
     }
 
     const byWallet: WalletClosingRow[] = walletResults.map(
-      ({ method, opening, entries, periodTotals }) => ({
-        wallet: method,
-        walletLabel: formatPaymentMethodLabel(method),
-        opening,
-        totalIn: periodTotals.totalIn,
-        totalOut: periodTotals.totalOut,
-        closing: opening + periodTotals.totalIn - periodTotals.totalOut,
-        recordCount: entries.length,
-      })
+      ({ wallet, opening, entries, periodTotals }) => {
+        const style = getWalletStyle(wallet.code, wallet);
+        return {
+          wallet: wallet.code,
+          walletLabel: wallet.name || formatPaymentMethodLabel(wallet.code, activeWallets),
+          type: wallet.type || 'BANK',
+          gradient: style.gradient,
+          labelTone: style.labelTone,
+          opening,
+          totalIn: periodTotals.totalIn,
+          totalOut: periodTotals.totalOut,
+          closing: opening + periodTotals.totalIn - periodTotals.totalOut,
+          recordCount: entries.length,
+        };
+      }
     );
 
     const entries: ClosingLedgerEntry[] = walletResults
-      .flatMap(({ method, entries: walletEntries }) =>
+      .flatMap(({ wallet, entries: walletEntries }) =>
         walletEntries.map((entry) => ({
           ...entry,
           // Prefix id with wallet so transfer in/out on different wallets stay unique when merged
-          id: `${method}:${entry.id}`,
-          wallet: method,
-          walletLabel: formatPaymentMethodLabel(method),
+          id: `${wallet.code}:${entry.id}`,
+          wallet: wallet.code,
+          walletLabel: wallet.name || formatPaymentMethodLabel(wallet.code, activeWallets),
         }))
       )
       .sort(

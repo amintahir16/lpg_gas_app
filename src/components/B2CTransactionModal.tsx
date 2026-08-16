@@ -22,6 +22,7 @@ import { buildCylinderVariantKey, parseCylinderVariantKey } from '@/lib/cylinder
 import { CustomSelect } from '@/components/ui/select-custom';
 import { todayLocalDate } from '@/lib/financial-period';
 import { PAYMENT_METHOD_OPTIONS } from '@/lib/payment-methods';
+import { usePaymentWallets } from '@/hooks/usePaymentWallets';
 
 interface B2CTransactionModalProps {
     customerId: string;
@@ -57,6 +58,7 @@ function b2cModalHoldingKey(h: { cylinderType: string; cylinderVariantKey?: stri
 }
 
 export function B2CTransactionModal({ customerId, customerName, customer, onClose, onSuccess }: B2CTransactionModalProps) {
+    const { options: paymentOptions } = usePaymentWallets();
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
@@ -729,7 +731,7 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                 <CustomSelect
                                     value={paymentMethod}
                                     onChange={(val) => setPaymentMethod(val)}
-                                    options={[...PAYMENT_METHOD_OPTIONS]}
+                                    options={paymentOptions}
                                     className="h-9 text-sm"
                                 />
                             </div>

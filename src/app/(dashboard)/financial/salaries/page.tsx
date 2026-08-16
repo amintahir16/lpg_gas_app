@@ -24,6 +24,7 @@ import {
   PAYMENT_METHOD_OPTIONS,
   formatPaymentMethodLabel,
 } from '@/lib/payment-methods';
+import { usePaymentWallets } from '@/hooks/usePaymentWallets';
 
 interface Employee {
     id: string;
@@ -57,6 +58,7 @@ const monthNames = [
     'July', 'August', 'September', 'October', 'November', 'December'
 ];
 export default function SalariesPage() {
+    const { options: paymentMethodOptions, formatLabel: formatWalletLabel } = usePaymentWallets();
     const { confirm, dialog: confirmDialog } = useConfirmDialog();
     const router = useRouter();
     const [employees, setEmployees] = useState<Employee[]>([]);
@@ -339,7 +341,7 @@ export default function SalariesPage() {
                                             <TableCell className="font-medium">{record.monthLabel}</TableCell>
                                             <TableCell className="text-right font-bold text-emerald-700">{formatCurrency(record.amount)}</TableCell>
                                             <TableCell>
-                                                <Badge variant="outline">{formatPaymentMethodLabel(record.paymentMethod)}</Badge>
+                                                <Badge variant="outline">{formatWalletLabel(record.paymentMethod)}</Badge>
                                             </TableCell>
                                             <TableCell className="text-gray-600" suppressHydrationWarning>{formatDate(record.paidDate)}</TableCell>
                                             <TableCell className="text-gray-500 text-sm">{record.notes || '—'}</TableCell>
@@ -387,7 +389,7 @@ export default function SalariesPage() {
                                 <CustomSelect
                                     name="paymentMethod"
                                     defaultValue="CASH"
-                                    options={[...PAYMENT_METHOD_OPTIONS]}
+                                    options={paymentMethodOptions}
                                 />
                             </div>
                             

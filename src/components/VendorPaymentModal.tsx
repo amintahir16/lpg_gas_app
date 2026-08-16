@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { XMarkIcon, BanknotesIcon, CheckIcon } from '@heroicons/react/24/outline';
 import { CustomSelect } from '@/components/ui/select-custom';
 import { PAYMENT_METHOD_OPTIONS } from '@/lib/payment-methods';
+import { usePaymentWallets } from '@/hooks/usePaymentWallets';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import {
   combineLocalDateAndTime,
@@ -35,6 +36,7 @@ export default function VendorPaymentModal({
   invoiceNumber,
   purchaseEntryTotal
 }: VendorPaymentModalProps) {
+  const { options: paymentMethodOptions } = usePaymentWallets();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const [amount, setAmount] = useState('');
   const [paymentDate, setPaymentDate] = useState(todayLocalDate);
@@ -184,7 +186,7 @@ export default function VendorPaymentModal({
               <CustomSelect
                 value={paymentMethod}
                 onChange={setPaymentMethod}
-                options={[...PAYMENT_METHOD_OPTIONS]}
+                options={paymentMethodOptions}
                 placeholder="Select Payment Method"
               />
             </div>

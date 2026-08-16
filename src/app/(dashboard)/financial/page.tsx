@@ -7,7 +7,9 @@ import {
   ChartBarIcon,
   UserGroupIcon,
   ArrowRightIcon,
+  BuildingLibraryIcon,
 } from '@heroicons/react/24/outline';
+import { Button } from '@/components/ui/button';
 import {
   buildFinancialPeriodQuery,
   resolveFinancialPeriod,
@@ -17,9 +19,10 @@ import {
 import { FinancialPeriodFilter } from '@/components/FinancialPeriodFilter';
 import { PaymentMethodStatCards } from '@/components/PaymentMethodStatCards';
 import { BankMovementActions } from '@/components/BankMovementActions';
+import { WalletManagementModal } from '@/components/WalletManagementModal';
 import {
   emptyPaymentMethodTotals,
-  type PaymentMethodValue,
+  type BankWalletOption,
 } from '@/lib/payment-methods';
 
 interface FinancialSummary {
@@ -27,7 +30,8 @@ interface FinancialSummary {
   totalExpenses: number;
   totalProfit: number;
   totalSalaries: number;
-  byPaymentMethod?: Record<PaymentMethodValue, number>;
+  byPaymentMethod?: Record<string, number>;
+  wallets?: BankWalletOption[];
   period?: FinancialPeriodMode;
   date?: string | null;
   month?: number | null;
@@ -43,6 +47,7 @@ export default function FinancialPage() {
   const [date, setDate] = useState(todayLocalDate);
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
+  const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
 
   const periodLabel = useMemo(
     () =>
@@ -70,7 +75,7 @@ export default function FinancialPage() {
         setSummary(data);
       }
     } catch (error) {
-      console.error('Error fetching summary:', error);
+      console.error('Error fetching financial summary:', error);
     } finally {
       setLoading(false);
     }
@@ -85,76 +90,65 @@ export default function FinancialPage() {
     }).format(amount);
   };
 
-  const byPaymentMethod = {
-    ...emptyPaymentMethodTotals(),
-    ...(summary?.byPaymentMethod || {}),
-  };
+  const byPaymentMethod = summary?.byPaymentMethod ?? emptyPaymentMethodTotals();
 
   const cards = [
     {
-      title: 'Revenue',
+      title: 'Total Revenue',
       value: summary?.totalRevenue || 0,
-      subtitle: 'Total sales revenue',
       icon: CurrencyDollarIcon,
+      gradient: 'from-emerald-500 to-teal-600',
+      textColor: 'text-emerald-100',
+      valueColor: 'text-white',
+      subtitleColor: 'text-emerald-100/90',
+      subtitle: 'From all sales & accessories',
       href: '/financial/revenue',
-      gradient: 'from-emerald-500 to-emerald-600',
-      hoverGradient: 'hover:from-emerald-600 hover:to-emerald-700',
-      iconBg: 'text-emerald-200',
-      subtitleColor: 'text-emerald-100',
-      valueColor: 'text-white',
     },
     {
-      title: 'Expenses',
+      title: 'Total Expenses',
       value: summary?.totalExpenses || 0,
-      subtitle: 'Office rent & daily expenses',
       icon: BuildingOfficeIcon,
+      gradient: 'from-rose-500 to-red-600',
+      textColor: 'text-rose-100',
+      valueColor: 'text-white',
+      subtitleColor: 'text-rose-100/90',
+      subtitle: 'Office, maintenance & rent',
       href: '/financial/expenses',
-      gradient: 'from-rose-500 to-orange-500',
-      hoverGradient: 'hover:from-rose-600 hover:to-orange-600',
-      iconBg: 'text-rose-200',
-      subtitleColor: 'text-rose-100',
-      valueColor: 'text-white',
     },
     {
-      title: 'Profit',
+      title: 'Total Profit',
       value: summary?.totalProfit || 0,
-      subtitle: 'Margins',
       icon: ChartBarIcon,
-      href: '/financial/profit',
-      gradient: 'from-violet-500 to-purple-600',
-      hoverGradient: 'hover:from-violet-600 hover:to-purple-700',
-      iconBg: 'text-violet-200',
-      subtitleColor: 'text-violet-100',
+      gradient: 'from-blue-500 to-indigo-600',
+      textColor: 'text-blue-100',
       valueColor: 'text-white',
+      subtitleColor: 'text-blue-100/90',
+      subtitle: 'Gross revenue minus total costs',
+      href: '/financial/profit',
     },
     {
-      title: 'Salaries',
+      title: 'Total Salaries',
       value: summary?.totalSalaries || 0,
-      subtitle: 'Employee salaries paid',
       icon: UserGroupIcon,
-      href: '/financial/salaries',
-      gradient: 'from-blue-500 to-indigo-600',
-      hoverGradient: 'hover:from-blue-600 hover:to-indigo-700',
-      iconBg: 'text-blue-200',
-      subtitleColor: 'text-blue-100',
+      gradient: 'from-purple-500 to-violet-600',
+      textColor: 'text-purple-100',
       valueColor: 'text-white',
+      subtitleColor: 'text-purple-100/90',
+      subtitle: 'Employee payouts this period',
+      href: '/financial/salaries',
     },
   ];
 
   return (
-    <div className="space-y-6 max-w-[1200px] mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-8">
+      {/* Header with Title and Period Filter */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center">
-            <CurrencyDollarIcon className="w-8 h-8 mr-3 text-blue-600" />
-            Financial Management
-          </h1>
-          <p className="mt-1 text-gray-600 font-medium">
-            Track revenue, expenses, profits, and salaries
+          <h1 className="text-2xl font-bold text-gray-900">Financial Management</h1>
+          <p className="text-sm text-gray-500">
+            Overview of revenue, expenses, profitability, and bank accounts
           </p>
         </div>
-
         <FinancialPeriodFilter
           period={period}
           date={date}
@@ -167,26 +161,36 @@ export default function FinancialPage() {
         />
       </div>
 
-      {/* Financial Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+      {/* 4 Core Metric Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {cards.map((card) => (
           <button
             key={card.title}
-            onClick={() => router.push(card.href)}
-            className={`group relative overflow-hidden rounded-2xl bg-gradient-to-br ${card.gradient} ${card.hoverGradient} shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 text-left w-full`}
+            type="button"
+            onClick={() => {
+              const q = buildFinancialPeriodQuery({ period, date, month, year });
+              router.push(`${card.href}?${q}`);
+            }}
+            className="text-left group relative overflow-hidden rounded-2xl p-6 bg-gradient-to-br transition-all duration-300 hover:shadow-xl hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500"
+            style={{
+              backgroundImage: `linear-gradient(to bottom right, var(--tw-gradient-stops))`,
+            }}
           >
-            <div className="absolute top-0 right-0 p-4 opacity-15 group-hover:opacity-25 transition-opacity duration-300">
-              <card.icon className="w-24 h-24 text-white" />
-            </div>
+            <div
+              className={`absolute inset-0 bg-gradient-to-br ${card.gradient} opacity-100`}
+            />
+            {/* Subtle decorative circle */}
+            <div className="absolute -right-6 -bottom-6 w-32 h-32 rounded-full bg-white/10 blur-xl pointer-events-none" />
 
-            <div className="relative z-10 p-6">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-4">
+                <span className={`text-sm font-semibold tracking-wide uppercase ${card.textColor}`}>
+                  {card.title}
+                </span>
+                <div className="p-2.5 rounded-xl bg-white/20 backdrop-blur-sm">
                   <card.icon className="w-5 h-5 text-white" />
                 </div>
-                <h3 className="text-lg font-bold text-white">{card.title}</h3>
               </div>
-
               <div className={`text-3xl font-extrabold ${card.valueColor} mb-1`}>
                 {loading ? (
                   <div className="h-9 w-40 bg-white/20 rounded-lg animate-pulse" />
@@ -208,27 +212,33 @@ export default function FinancialPage() {
         ))}
       </div>
 
-      {/* BANKS — net by payment method + deposits/transfers */}
-      <div className="space-y-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      {/* BANKS — net by payment method + deposits/transfers + Manage Wallets */}
+      <div className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between pb-2 border-b border-gray-100">
           <div>
-            <h2 className="text-base font-bold text-gray-900">Bank/Wallets</h2>
+            <h2 className="text-lg font-bold text-gray-900">Wallets & Bank Accounts</h2>
             <p className="text-xs text-gray-500">
-              Collections − vendor payments − office expenses + deposits / transfers
+              Real-time balance: Collections − vendor payments − expenses + deposits/transfers
             </p>
           </div>
-          <div className="flex flex-col sm:items-end gap-2">
-            <p className="text-sm text-gray-500 font-medium">
-              Showing data for{' '}
-              <span className="text-gray-800 font-semibold">
-                {summary?.label || periodLabel}
-              </span>
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsWalletModalOpen(true)}
+              className="h-9 text-xs font-bold border-blue-200 bg-blue-50/50 text-blue-700 hover:bg-blue-100/70 hover:text-blue-800 shadow-sm"
+            >
+              <BuildingLibraryIcon className="w-4 h-4 mr-1.5 text-blue-600" />
+              Manage Wallets
+            </Button>
             <BankMovementActions onSaved={fetchSummary} />
           </div>
         </div>
+
         <PaymentMethodStatCards
           totals={byPaymentMethod}
+          wallets={summary?.wallets}
           loading={loading}
           formatCurrency={formatCurrency}
           onMethodClick={(method) => {
@@ -237,6 +247,13 @@ export default function FinancialPage() {
           }}
         />
       </div>
+
+      {/* Wallet Management Modal */}
+      <WalletManagementModal
+        isOpen={isWalletModalOpen}
+        onClose={() => setIsWalletModalOpen(false)}
+        onChanged={fetchSummary}
+      />
     </div>
   );
 }

@@ -16,7 +16,8 @@ import {
 import { formatB2bItemCylinderLabel } from '@/lib/b2b-transaction-item-variant';
 
 function matchesMethod(raw: string | null | undefined, method: string): boolean {
-  return normalizePaymentMethodKey(raw) === method;
+  if (!raw || !method) return false;
+  return normalizePaymentMethodKey(raw) === normalizePaymentMethodKey(method);
 }
 
 function isMissingRelationError(error: unknown): boolean {
@@ -40,21 +41,18 @@ async function safeLedgerQuery<T>(label: string, query: () => Promise<T>, fallba
   }
 }
 
-/** Match string payment-method columns the same way `matchesMethod` does. */
+/** Match string payment-method columns safely (case-insensitive and formatted variants). */
 function stringPaymentMethodWhere(
-  field: 'paymentMethod' | 'toMethod' | 'fromMethod',
-  method: PaymentMethodValue
+  field: 'paymentMethod' | 'toMethod' | 'fromMethod' | 'method',
+  method: string
 ) {
+  const norm = normalizePaymentMethodKey(method) || method;
   const spaced = method.replace(/_/g, ' ');
-  const variants =
-    spaced === method
-      ? [{ equals: method, mode: 'insensitive' as const }]
-      : [
-          { equals: method, mode: 'insensitive' as const },
-          { equals: spaced, mode: 'insensitive' as const },
-        ];
+  const variants = Array.from(new Set([method, norm, spaced, method.toLowerCase()]));
   return {
-    OR: variants.map((value) => ({ [field]: value })),
+    OR: variants.map((value) => ({
+      [field]: { equals: value, mode: 'insensitive' as const },
+    })),
   };
 }
 
@@ -96,7 +94,7 @@ export async function buildBankLedgerEntries(
         voided: false,
         transactionType: 'SALE',
         paidAmount: { gt: 0 },
-        paymentMethod: method,
+        ...stringPaymentMethodWhere('paymentMethod', method),
         ...txRegionScope,
       },
       select: {
@@ -109,6 +107,8 @@ export async function buildBankLedgerEntries(
         paymentReference: true,
         notes: true,
         createdBy: true,
+        regionId: true,
+        region: { select: { id: true, name: true } },
         customer: { select: { name: true } },
         users: {
           select: { name: true, firstName: true, lastName: true, email: true },
@@ -130,7 +130,7 @@ export async function buildBankLedgerEntries(
         date: { gte: startDate, lte: endDate },
         voided: false,
         transactionType: 'PAYMENT',
-        paymentMethod: method,
+        ...stringPaymentMethodWhere('paymentMethod', method),
         ...txRegionScope,
       },
       select: {
@@ -143,6 +143,8 @@ export async function buildBankLedgerEntries(
         paymentReference: true,
         notes: true,
         createdBy: true,
+        regionId: true,
+        region: { select: { id: true, name: true } },
         customer: { select: { name: true } },
         users: {
           select: { name: true, firstName: true, lastName: true, email: true },
@@ -167,6 +169,8 @@ export async function buildBankLedgerEntries(
         paymentMethod: true,
         notes: true,
         createdBy: true,
+        regionId: true,
+        region: { select: { id: true, name: true } },
         customer: { select: { name: true } },
         gasItems: {
           select: {
@@ -198,7 +202,7 @@ export async function buildBankLedgerEntries(
       where: {
         paymentDate: { gte: startDate, lte: endDate },
         status: 'COMPLETED',
-        method,
+        ...stringPaymentMethodWhere('method', method),
         ...txRegionScope,
       },
       select: {
@@ -210,6 +214,8 @@ export async function buildBankLedgerEntries(
         description: true,
         method: true,
         createdBy: true,
+        regionId: true,
+        region: { select: { id: true, name: true } },
         createdByUser: {
           select: { name: true, firstName: true, lastName: true, email: true },
         },
@@ -232,6 +238,8 @@ export async function buildBankLedgerEntries(
         createdAt: true,
         paymentMethod: true,
         createdBy: true,
+        regionId: true,
+        region: { select: { id: true, name: true } },
       },
       orderBy: { expenseDate: 'desc' },
     }),
@@ -249,6 +257,8 @@ export async function buildBankLedgerEntries(
         createdAt: true,
         paymentMethod: true,
         createdBy: true,
+        regionId: true,
+        region: { select: { id: true, name: true } },
       },
       orderBy: { expenseDate: 'desc' },
     }),
@@ -271,6 +281,8 @@ export async function buildBankLedgerEntries(
             paymentMethod: true,
             notes: true,
             createdBy: true,
+            regionId: true,
+            region: { select: { id: true, name: true } },
             user: {
               select: { name: true, firstName: true, lastName: true, email: true },
             },
@@ -317,6 +329,8 @@ export async function buildBankLedgerEntries(
             createdAt: true,
             notes: true,
             createdBy: true,
+            regionId: true,
+            region: { select: { id: true, name: true } },
             createdByUser: {
               select: { name: true, firstName: true, lastName: true, email: true },
             },
@@ -358,8 +372,6 @@ export async function buildBankLedgerEntries(
     users.map((u) => [u.id, userDisplayName(u) || u.id] as const)
   );
 
-  // Resolve friendly cylinder labels (Standard / Commercial / …) from inventory —
-  // same approach as B2B transaction report PDFs. Avoids "CYLINDER_15KG Cylinder".
   const cylinderTypesUsed = new Set<string>();
   for (const tx of b2bPaidSales) {
     for (const item of tx.items) {
@@ -415,6 +427,8 @@ export async function buildBankLedgerEntries(
       partyName: tx.customer.name,
       partyType: 'B2B Customer',
       recordedBy: userDisplayName(tx.users),
+      regionId: tx.regionId || null,
+      regionName: tx.region?.name || null,
       details: summarizeLineItems(
         tx.items.map((item) => ({
           name: item.cylinderType
@@ -445,6 +459,8 @@ export async function buildBankLedgerEntries(
       partyName: tx.customer.name,
       partyType: 'B2B Customer',
       recordedBy: userDisplayName(tx.users),
+      regionId: tx.regionId || null,
+      regionName: tx.region?.name || null,
       details: 'Ledger payment received',
       reference: tx.paymentReference || tx.billSno || null,
       notes: tx.notes,
@@ -485,6 +501,8 @@ export async function buildBankLedgerEntries(
       partyName: tx.customer.name,
       partyType: 'B2C Customer',
       recordedBy: userNameById.get(tx.createdBy) || null,
+      regionId: tx.regionId || null,
+      regionName: tx.region?.name || null,
       details: summarizeLineItems(lineItems),
       reference: tx.billSno || null,
       notes: tx.notes,
@@ -509,6 +527,8 @@ export async function buildBankLedgerEntries(
       recordedBy:
         userDisplayName(payment.createdByUser) ||
         (payment.createdBy ? userNameById.get(payment.createdBy) || null : null),
+      regionId: payment.regionId || null,
+      regionName: payment.region?.name || null,
       details:
         payment.description ||
         (payment.vendor.contactPerson
@@ -542,6 +562,8 @@ export async function buildBankLedgerEntries(
       partyName: 'Office',
       partyType: 'Office',
       recordedBy: userNameById.get(expense.createdBy) || null,
+      regionId: expense.regionId || null,
+      regionName: expense.region?.name || null,
       details: expense.description || typeLabel,
       reference: null,
       notes: expense.description,
@@ -565,6 +587,8 @@ export async function buildBankLedgerEntries(
       partyName: 'Personal',
       partyType: 'Personal',
       recordedBy: userNameById.get(expense.createdBy) || null,
+      regionId: expense.regionId || null,
+      regionName: expense.region?.name || null,
       details: expense.description || 'Personal Expense',
       reference: null,
       notes: expense.description,
@@ -593,6 +617,8 @@ export async function buildBankLedgerEntries(
       partyName: employeeName,
       partyType: 'Employee',
       recordedBy: userNameById.get(salary.createdBy) || null,
+      regionId: salary.regionId || null,
+      regionName: salary.region?.name || null,
       details: `Salary for ${monthLabel}`,
       reference: null,
       notes: salary.notes,
@@ -621,6 +647,8 @@ export async function buildBankLedgerEntries(
         partyName: formatPaymentMethodLabel(method),
         partyType: 'Bank',
         recordedBy,
+        regionId: movement.regionId || null,
+        regionName: movement.region?.name || null,
         details: movement.notes || 'Manual deposit',
         reference: null,
         notes: movement.notes,
@@ -641,6 +669,8 @@ export async function buildBankLedgerEntries(
           partyName: formatPaymentMethodLabel(movement.toMethod),
           partyType: 'Bank',
           recordedBy,
+          regionId: movement.regionId || null,
+          regionName: movement.region?.name || null,
           details:
             movement.notes ||
             `Moved to ${formatPaymentMethodLabel(movement.toMethod)}`,
@@ -660,6 +690,8 @@ export async function buildBankLedgerEntries(
           partyName: formatPaymentMethodLabel(movement.fromMethod),
           partyType: 'Bank',
           recordedBy,
+          regionId: movement.regionId || null,
+          regionName: movement.region?.name || null,
           details:
             movement.notes ||
             `Received from ${formatPaymentMethodLabel(movement.fromMethod)}`,
@@ -682,6 +714,8 @@ export async function buildBankLedgerEntries(
         partyName: formatPaymentMethodLabel(method),
         partyType: 'Bank',
         recordedBy,
+        regionId: movement.regionId || null,
+        regionName: movement.region?.name || null,
         details: movement.notes || 'Withdrawn from wallet',
         reference: null,
         notes: movement.notes,
@@ -753,6 +787,7 @@ export async function sumBankLedgerInOut(params: {
     ? ({ gte: startDate, lt: endDate } as const)
     : ({ gte: startDate, lte: endDate } as const);
   const methodText = stringPaymentMethodWhere('paymentMethod', method);
+  const normMethod = normalizePaymentMethodKey(method) || method;
 
   const [
     b2bSalesPaid,
@@ -774,7 +809,7 @@ export async function sumBankLedgerInOut(params: {
         voided: false,
         transactionType: 'SALE',
         paidAmount: { gt: 0 },
-        paymentMethod: method,
+        ...stringPaymentMethodWhere('paymentMethod', method),
         ...txRegionScope,
       },
       _sum: { paidAmount: true },
@@ -784,7 +819,7 @@ export async function sumBankLedgerInOut(params: {
         date: dateFilter,
         voided: false,
         transactionType: 'PAYMENT',
-        paymentMethod: method,
+        ...stringPaymentMethodWhere('paymentMethod', method),
         paidAmount: { not: null },
         ...txRegionScope,
       },
@@ -795,7 +830,7 @@ export async function sumBankLedgerInOut(params: {
         date: dateFilter,
         voided: false,
         transactionType: 'PAYMENT',
-        paymentMethod: method,
+        ...stringPaymentMethodWhere('paymentMethod', method),
         paidAmount: null,
         ...txRegionScope,
       },
@@ -813,7 +848,7 @@ export async function sumBankLedgerInOut(params: {
           WHERE voided = false
             AND date >= ${startDate}
             AND date < ${endDate}
-            AND UPPER(REPLACE(TRIM("paymentMethod"), ' ', '_')) = ${method}
+            AND UPPER(REPLACE(TRIM("paymentMethod"), ' ', '_')) = ${normMethod}
             AND (${regionId ?? null}::text IS NULL OR "regionId" = ${regionId ?? null})
         `
       : prisma.$queryRaw<Array<{ amount: unknown }>>`
@@ -827,14 +862,14 @@ export async function sumBankLedgerInOut(params: {
           WHERE voided = false
             AND date >= ${startDate}
             AND date <= ${endDate}
-            AND UPPER(REPLACE(TRIM("paymentMethod"), ' ', '_')) = ${method}
+            AND UPPER(REPLACE(TRIM("paymentMethod"), ' ', '_')) = ${normMethod}
             AND (${regionId ?? null}::text IS NULL OR "regionId" = ${regionId ?? null})
         `,
     prisma.vendorPayment.aggregate({
       where: {
         paymentDate: dateFilter,
         status: 'COMPLETED',
-        method,
+        ...stringPaymentMethodWhere('method', method),
         ...txRegionScope,
       },
       _sum: { amount: true },

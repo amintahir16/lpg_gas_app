@@ -2,49 +2,65 @@
 
 import { Card, CardContent } from '@/components/ui/card';
 import {
-  PAYMENT_METHOD_CARD_STYLES,
-  PAYMENT_METHOD_OPTIONS,
+  getWalletStyle,
   emptyPaymentMethodTotals,
-  type PaymentMethodValue,
+  type BankWalletOption,
 } from '@/lib/payment-methods';
+import { usePaymentWallets } from '@/hooks/usePaymentWallets';
 
 interface PaymentMethodStatCardsProps {
-  totals: Record<PaymentMethodValue, number>;
+  totals: Record<string, number>;
+  wallets?: BankWalletOption[];
   loading?: boolean;
   formatCurrency: (amount: number) => string;
   /** Optional short hint shown under each amount (e.g. "Collected" / "Net"). */
   subtitle?: string;
   /** When set, cards become clickable (e.g. open bank ledger). */
-  onMethodClick?: (method: PaymentMethodValue) => void;
+  onMethodClick?: (method: string) => void;
 }
 
 export function PaymentMethodStatCards({
   totals,
+  wallets: propWallets,
   loading = false,
   formatCurrency,
   subtitle,
   onMethodClick,
 }: PaymentMethodStatCardsProps) {
+  const { wallets: hookWallets } = usePaymentWallets();
+  const wallets = (propWallets && propWallets.length > 0) ? propWallets : hookWallets;
   const safeTotals = { ...emptyPaymentMethodTotals(), ...totals };
   const clickable = typeof onMethodClick === 'function';
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      {PAYMENT_METHOD_OPTIONS.map((method) => {
-        const styles = PAYMENT_METHOD_CARD_STYLES[method.value];
+      {wallets.map((wallet) => {
+        const styles = getWalletStyle(wallet.code, wallet);
+        const amount = safeTotals[wallet.code] !== undefined
+          ? safeTotals[wallet.code]
+          : safeTotals[wallet.name.toUpperCase().replace(/\s+/g, '_')] || 0;
+
         const content = (
           <CardContent className="p-4">
-            <p className={`text-sm font-medium ${styles.labelTone}`}>{method.label}</p>
-            <p className="text-2xl font-bold text-white">
-              {loading ? '…' : formatCurrency(safeTotals[method.value] || 0)}
+            <div className="flex items-center justify-between">
+              <p className={`text-sm font-semibold ${styles.labelTone}`}>{wallet.name}</p>
+              {wallet.accountNumber && (
+                <span className={`text-[10px] font-mono opacity-80 ${styles.labelTone}`}>
+                  {wallet.accountNumber}
+                </span>
+              )}
+            </div>
+            <p className="text-2xl font-bold text-white mt-1">
+              {loading ? '…' : formatCurrency(amount)}
             </p>
             {subtitle ? (
               <p className={`text-xs font-medium mt-0.5 ${styles.labelTone} opacity-90`}>
                 {subtitle}
               </p>
             ) : clickable ? (
-              <p className={`text-xs font-medium mt-1 ${styles.labelTone} opacity-90`}>
-                View all records →
+              <p className={`text-xs font-medium mt-1 ${styles.labelTone} opacity-90 flex items-center justify-between`}>
+                <span>View all records</span>
+                <span>→</span>
               </p>
             ) : null}
           </CardContent>
@@ -53,10 +69,10 @@ export function PaymentMethodStatCards({
         if (clickable) {
           return (
             <button
-              key={method.value}
+              key={wallet.id || wallet.code}
               type="button"
-              onClick={() => onMethodClick(method.value)}
-              className="text-left rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500"
+              onClick={() => onMethodClick(wallet.code)}
+              className="text-left rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 w-full"
             >
               <Card
                 className={`border-0 shadow-sm bg-gradient-to-br ${styles.gradient} transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-md cursor-pointer h-full`}
@@ -69,7 +85,7 @@ export function PaymentMethodStatCards({
 
         return (
           <Card
-            key={method.value}
+            key={wallet.id || wallet.code}
             className={`border-0 shadow-sm bg-gradient-to-br ${styles.gradient}`}
           >
             {content}

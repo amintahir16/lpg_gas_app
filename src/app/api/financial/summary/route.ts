@@ -289,6 +289,11 @@ export async function GET(request: NextRequest) {
             }
         }
 
+        const activeWallets = await prisma.bankWallet.findMany({
+            where: { isActive: true },
+            orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        });
+
         const byPaymentMethod = buildPaymentMethodTotals({
             collections: [
                 ...b2bPaidSales.map((row) => ({
@@ -324,6 +329,7 @@ export async function GET(request: NextRequest) {
                 })),
                 ...movementDeductions,
             ],
+            wallets: activeWallets,
         });
 
         return NextResponse.json({
@@ -332,6 +338,7 @@ export async function GET(request: NextRequest) {
             totalProfit,
             totalSalaries,
             byPaymentMethod,
+            wallets: activeWallets,
             period,
             date,
             month,

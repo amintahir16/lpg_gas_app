@@ -18,6 +18,8 @@ import {
   ArrowLeftIcon,
   ArrowUpIcon,
   BanknotesIcon,
+  BuildingLibraryIcon,
+  MapPinIcon,
 } from '@heroicons/react/24/outline';
 import {
   buildFinancialPeriodQuery,
@@ -28,15 +30,25 @@ import {
 import { FinancialPeriodFilter } from '@/components/FinancialPeriodFilter';
 import { BankMovementActions } from '@/components/BankMovementActions';
 import {
-  PAYMENT_METHOD_CARD_STYLES,
+  getWalletStyle,
   formatPaymentMethodLabel,
-  isSelectablePaymentMethod,
-  type PaymentMethodValue,
+  type BankWalletOption,
 } from '@/lib/payment-methods';
 import type { BankLedgerEntry } from '@/lib/bank-ledger';
 
 interface BankLedgerResponse {
-  method: PaymentMethodValue;
+  method: string;
+  wallet?: {
+    name: string;
+    code: string;
+    type?: string;
+    gradient?: string;
+    labelTone?: string;
+    accountNumber?: string | null;
+    accountTitle?: string | null;
+    bankName?: string | null;
+    description?: string | null;
+  };
   entries: BankLedgerEntry[];
   summary: {
     totalIn: number;
@@ -72,9 +84,8 @@ export default function BankMethodDetailPage() {
   const params = useParams<{ method: string }>();
   const searchParams = useSearchParams();
 
-  const methodKey = String(params.method || '').toUpperCase();
-  const methodValid = isSelectablePaymentMethod(methodKey);
-  const method = methodValid ? (methodKey as PaymentMethodValue) : null;
+  const methodParam = String(params.method || '');
+  const method = methodParam.trim().toUpperCase().replace(/\s+/g, '_');
 
   const initial = useMemo(() => readPeriodFromSearch(searchParams), [searchParams]);
   const [period, setPeriod] = useState<FinancialPeriodMode>(initial.period);
@@ -85,6 +96,7 @@ export default function BankMethodDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [entries, setEntries] = useState<BankLedgerEntry[]>([]);
+  const [walletMeta, setWalletMeta] = useState<BankLedgerResponse['wallet'] | null>(null);
   const [summary, setSummary] = useState<BankLedgerResponse['summary']>({
     totalIn: 0,
     totalOut: 0,
@@ -102,10 +114,8 @@ export default function BankMethodDetailPage() {
   );
 
   const displayLabel = periodLabel || resolvedLabel;
-  const methodLabel = method ? formatPaymentMethodLabel(method) : 'Unknown';
-  const styles = method
-    ? PAYMENT_METHOD_CARD_STYLES[method]
-    : { gradient: 'from-gray-500 to-gray-600', labelTone: 'text-gray-100' };
+  const methodLabel = walletMeta?.name || formatPaymentMethodLabel(method);
+  const styles = getWalletStyle(method, walletMeta);
 
   useEffect(() => {
     if (!method) return;
@@ -133,6 +143,9 @@ export default function BankMethodDetailPage() {
         const data: BankLedgerResponse = await res.json();
         if (cancelled) return;
         setEntries(data.entries || []);
+        if (data.wallet) {
+          setWalletMeta(data.wallet);
+        }
         setSummary(
           data.summary || {
             totalIn: 0,
@@ -181,20 +194,20 @@ export default function BankMethodDetailPage() {
             <ArrowLeftIcon className="w-4 h-4" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <span
-                className={`inline-flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br ${styles.gradient} text-white shadow-sm`}
-              >
-                <BanknotesIcon className="w-5 h-5" />
-              </span>
-              {methodLabel}
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-gray-900">{methodLabel}</h1>
+              <Badge variant="outline" className="text-xs font-semibold">
+                {walletMeta?.type || 'WALLET'}
+              </Badge>
+            </div>
             <p className="text-sm text-gray-600">
-              Every record tied to this payment method — who, whom, what, when, and amount
+              Shared company wallet · Branch ledger & movement history
+              {walletMeta?.accountNumber && ` · A/C: ${walletMeta.accountNumber}`}
             </p>
           </div>
         </div>
-        <div className="flex flex-col items-stretch sm:items-end gap-2">
+
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <FinancialPeriodFilter
             period={period}
             date={date}
@@ -206,45 +219,54 @@ export default function BankMethodDetailPage() {
             onYearChange={setYear}
           />
           <BankMovementActions
-            lockedMethod={method || undefined}
-            onSaved={() => setRefreshKey((k) => k + 1)}
+            defaultMethod={method}
+            onSuccess={() => setRefreshKey((k) => k + 1)}
           />
         </div>
       </div>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-800 font-medium">
+      {error ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           {error}
         </div>
-      )}
+      ) : null}
 
+      {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-500 to-emerald-600">
           <CardContent className="p-4">
-            <p className="text-sm font-medium text-emerald-100 flex items-center gap-1">
-              <ArrowDownIcon className="w-4 h-4" /> Money In
-            </p>
-            <p className="text-2xl font-bold text-white">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-emerald-100">Total In</p>
+              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white">
+                <ArrowDownIcon className="w-4 h-4" />
+              </div>
+            </div>
+            <p className="text-2xl font-bold text-white mt-1">
               {loading ? '…' : formatCurrency(summary.totalIn)}
             </p>
             <p className="text-xs text-emerald-100 mt-0.5">
-              {summary.inflowCount} inflow record{summary.inflowCount === 1 ? '' : 's'}
+              {loading ? '…' : `${summary.inflowCount} collections`}
             </p>
           </CardContent>
         </Card>
+
         <Card className="border-0 shadow-sm bg-gradient-to-br from-rose-500 to-rose-600">
           <CardContent className="p-4">
-            <p className="text-sm font-medium text-rose-100 flex items-center gap-1">
-              <ArrowUpIcon className="w-4 h-4" /> Money Out
-            </p>
-            <p className="text-2xl font-bold text-white">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-rose-100">Total Out</p>
+              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white">
+                <ArrowUpIcon className="w-4 h-4" />
+              </div>
+            </div>
+            <p className="text-2xl font-bold text-white mt-1">
               {loading ? '…' : formatCurrency(summary.totalOut)}
             </p>
             <p className="text-xs text-rose-100 mt-0.5">
-              {summary.outflowCount} outflow record{summary.outflowCount === 1 ? '' : 's'}
+              {loading ? '…' : `${summary.outflowCount} payments & expenses`}
             </p>
           </CardContent>
         </Card>
+
         <Card className={`border-0 shadow-sm bg-gradient-to-br ${styles.gradient}`}>
           <CardContent className="p-4">
             <p className={`text-sm font-medium ${styles.labelTone}`}>Net Balance</p>
@@ -254,17 +276,19 @@ export default function BankMethodDetailPage() {
             <p className={`text-xs mt-0.5 ${styles.labelTone}`}>{displayLabel}</p>
           </CardContent>
         </Card>
+
         <Card className="border-0 shadow-sm bg-gradient-to-br from-slate-600 to-slate-700">
           <CardContent className="p-4">
             <p className="text-sm font-medium text-slate-200">Total Records</p>
             <p className="text-2xl font-bold text-white">
               {loading ? '…' : summary.recordCount}
             </p>
-            <p className="text-xs text-slate-300 mt-0.5">All sources combined</p>
+            <p className="text-xs text-slate-300 mt-0.5">All branches combined</p>
           </CardContent>
         </Card>
       </div>
 
+      {/* Ledger Table with Region column */}
       <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
         <CardHeader>
           <CardTitle className="text-lg">{methodLabel} Ledger</CardTitle>
@@ -282,13 +306,14 @@ export default function BankMethodDetailPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <Table className="min-w-[1100px]">
+              <Table className="min-w-[1200px]">
                 <TableHeader>
                   <TableRow className="bg-gray-50/50">
                     <TableHead className="font-semibold">Date / Time</TableHead>
                     <TableHead className="font-semibold">Type</TableHead>
                     <TableHead className="font-semibold">Direction</TableHead>
                     <TableHead className="font-semibold text-right">Amount</TableHead>
+                    <TableHead className="font-semibold">Branch / Region</TableHead>
                     <TableHead className="font-semibold">To / From</TableHead>
                     <TableHead className="font-semibold">Recorded By</TableHead>
                     <TableHead className="font-semibold">Details</TableHead>
@@ -299,7 +324,7 @@ export default function BankMethodDetailPage() {
                   {entries.map((entry) => {
                     const isIn = entry.direction === 'IN';
                     return (
-                      <TableRow key={entry.id} className="align-top">
+                      <TableRow key={entry.id} className="align-top hover:bg-gray-50/60">
                         <TableCell className="whitespace-nowrap">
                           <div className="font-semibold text-gray-900">{entry.dateLabel}</div>
                           <div className="text-xs text-gray-500">
@@ -317,8 +342,8 @@ export default function BankMethodDetailPage() {
                             variant="outline"
                             className={
                               isIn
-                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                                : 'border-rose-200 bg-rose-50 text-rose-700'
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 font-semibold'
+                                : 'border-rose-200 bg-rose-50 text-rose-700 font-semibold'
                             }
                           >
                             {isIn ? 'IN' : 'OUT'}
@@ -331,6 +356,18 @@ export default function BankMethodDetailPage() {
                         >
                           {isIn ? '+' : '−'}
                           {formatCurrency(entry.amount)}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {entry.regionName ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                              <MapPinIcon className="w-3 h-3 text-blue-500" />
+                              {entry.regionName}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400 font-medium">
+                              All Branches
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <div className="font-medium text-gray-900">{entry.partyName}</div>
@@ -345,7 +382,7 @@ export default function BankMethodDetailPage() {
                             <p className="text-xs text-gray-500 mt-1">{entry.notes}</p>
                           ) : null}
                         </TableCell>
-                        <TableCell className="text-sm text-gray-600 whitespace-nowrap">
+                        <TableCell className="text-sm text-gray-600 whitespace-nowrap font-mono text-xs">
                           {entry.reference || '—'}
                         </TableCell>
                       </TableRow>

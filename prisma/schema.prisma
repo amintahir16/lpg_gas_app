@@ -414,7 +414,7 @@ model VendorPayment {
   vendorId    String
   amount      Decimal       @db.Decimal(10, 2)
   paymentDate DateTime
-  method      PaymentMethod
+  method      String
   status      PaymentStatus @default(PENDING)
   reference   String?
   description String?
@@ -753,7 +753,7 @@ model B2BTransaction {
   totalAmount      Decimal              @db.Decimal(10, 2)
   paidAmount       Decimal?             @db.Decimal(10, 2) // Amount paid at sale time
   unpaidAmount     Decimal?             @db.Decimal(10, 2) // Remaining amount to be paid
-  paymentMethod    PaymentMethod? // Payment method if paid at sale
+  paymentMethod    String? // Payment method if paid at sale
   paymentStatus    SalePaymentStatus? // Payment status for sale transactions
   paymentReference String?
   notes            String?
@@ -1172,6 +1172,30 @@ model BankMovement {
   @@index([fromMethod])
   @@map("bank_movements")
 }
+
+/// Custom company-wide bank & cash wallets shared across all regions.
+model BankWallet {
+  id            String   @id @default(cuid())
+  name          String   @unique
+  code          String   @unique
+  type          String   @default("BANK") // CASH | BANK | MOBILE_WALLET | OTHER
+  accountNumber String?
+  accountTitle  String?
+  bankName      String?
+  gradient      String?  @default("from-indigo-500 to-indigo-600")
+  labelTone     String?  @default("text-indigo-100")
+  icon          String?  @default("BANK")
+  description   String?
+  isActive      Boolean  @default(true)
+  isDefault     Boolean  @default(false)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([isActive, sortOrder])
+  @@map("bank_wallets")
+}
+
 
 model SalaryRecord {
   id            String   @id @default(cuid())

@@ -18,6 +18,7 @@ import {
     PAYMENT_METHOD_OPTIONS,
     formatPaymentMethodLabel,
 } from '@/lib/payment-methods';
+import { usePaymentWallets } from '@/hooks/usePaymentWallets';
 import {
     buildFinancialPeriodQuery,
     chartDescriptionForPeriod,
@@ -109,6 +110,7 @@ function ExpenseRowActions({ createdAt, role, now, onEdit, onDelete }: ExpenseRo
 }
 
 export default function ExpensesPage() {
+    const { options: paymentMethodOptions, formatLabel: formatWalletLabel } = usePaymentWallets();
     const { confirm, dialog: confirmDialog } = useConfirmDialog();
     const router = useRouter();
     const { data: session } = useSession();
@@ -126,6 +128,7 @@ export default function ExpensesPage() {
         officeTotal: 0,
         personalTotal: 0,
         personalCount: 0,
+        dailyTotal: 0,
         dailyCount: 0,
         vehicleTotal: 0,
         rentAmount: 0,
@@ -373,9 +376,12 @@ export default function ExpensesPage() {
                 </Card>
                 <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-500 to-blue-600">
                     <CardContent className="p-4">
-                        <p className="text-sm font-medium text-blue-100">Daily Expenses Count</p>
+                        <p className="text-sm font-medium text-blue-100">Daily Office Expenses</p>
                         <p className="text-2xl font-bold text-white">
-                            {loading ? '…' : summary.dailyCount}
+                            {loading ? '…' : formatCurrency(summary.dailyTotal || 0)}
+                        </p>
+                        <p className="text-[10px] text-blue-200 mt-1 truncate">
+                            {summary.dailyCount || 0} record{(summary.dailyCount || 0) === 1 ? '' : 's'}
                         </p>
                     </CardContent>
                 </Card>
@@ -485,7 +491,7 @@ export default function ExpensesPage() {
                                         <TableRow key={exp.id}>
                                             <TableCell className="font-medium" suppressHydrationWarning>{formatDate(exp.expenseDate)}</TableCell>
                                             <TableCell className="text-gray-700">{exp.description}</TableCell>
-                                            <TableCell className="text-gray-700">{formatPaymentMethodLabel(exp.paymentMethod)}</TableCell>
+                                            <TableCell className="text-gray-700">{formatWalletLabel(exp.paymentMethod)}</TableCell>
                                             <TableCell className="text-right font-bold text-violet-700">{formatCurrency(Number(exp.amount))}</TableCell>
                                             <TableCell className="text-center">
                                                 <ExpenseRowActions
@@ -532,7 +538,7 @@ export default function ExpensesPage() {
                                         <TableRow key={exp.id}>
                                             <TableCell className="font-medium" suppressHydrationWarning>{formatDate(exp.expenseDate)}</TableCell>
                                             <TableCell className="text-gray-700">{exp.description}</TableCell>
-                                            <TableCell className="text-gray-700">{formatPaymentMethodLabel(exp.paymentMethod)}</TableCell>
+                                            <TableCell className="text-gray-700">{formatWalletLabel(exp.paymentMethod)}</TableCell>
                                             <TableCell className="text-right font-bold text-blue-700">{formatCurrency(Number(exp.amount))}</TableCell>
                                             <TableCell className="text-center">
                                                 <ExpenseRowActions
@@ -579,7 +585,7 @@ export default function ExpensesPage() {
                                         <TableRow key={exp.id}>
                                             <TableCell className="font-medium" suppressHydrationWarning>{formatDate(exp.expenseDate)}</TableCell>
                                             <TableCell className="text-gray-700">{exp.description}</TableCell>
-                                            <TableCell className="text-gray-700">{formatPaymentMethodLabel(exp.paymentMethod)}</TableCell>
+                                            <TableCell className="text-gray-700">{formatWalletLabel(exp.paymentMethod)}</TableCell>
                                             <TableCell className="text-right font-bold text-teal-700">{formatCurrency(Number(exp.amount))}</TableCell>
                                             <TableCell className="text-center">
                                                 <ExpenseRowActions
@@ -691,7 +697,7 @@ export default function ExpensesPage() {
                                 <CustomSelect
                                     name="paymentMethod"
                                     defaultValue="CASH"
-                                    options={[...PAYMENT_METHOD_OPTIONS]}
+                                    options={paymentMethodOptions}
                                 />
                             </div>
                             
@@ -759,7 +765,7 @@ export default function ExpensesPage() {
                                 <CustomSelect
                                     name="paymentMethod"
                                     defaultValue="CASH"
-                                    options={[...PAYMENT_METHOD_OPTIONS]}
+                                    options={paymentMethodOptions}
                                 />
                             </div>
 
@@ -827,7 +833,7 @@ export default function ExpensesPage() {
                                 <CustomSelect
                                     name="paymentMethod"
                                     defaultValue="CASH"
-                                    options={[...PAYMENT_METHOD_OPTIONS]}
+                                    options={paymentMethodOptions}
                                 />
                             </div>
                             
@@ -895,7 +901,7 @@ export default function ExpensesPage() {
                                 <CustomSelect
                                     name="paymentMethod"
                                     defaultValue="CASH"
-                                    options={[...PAYMENT_METHOD_OPTIONS]}
+                                    options={paymentMethodOptions}
                                 />
                             </div>
                             
@@ -968,7 +974,7 @@ export default function ExpensesPage() {
                                 <CustomSelect
                                     name="paymentMethod"
                                     defaultValue={editingExpense.paymentMethod || 'CASH'}
-                                    options={[...PAYMENT_METHOD_OPTIONS]}
+                                    options={paymentMethodOptions}
                                 />
                             </div>
                             

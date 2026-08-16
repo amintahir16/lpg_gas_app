@@ -25,6 +25,7 @@ import { generateCylinderTypeFromCapacity } from '@/lib/cylinder-utils';
 import { CustomSelect } from '@/components/ui/select-custom';
 import { buildCylinderVariantKey, parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { PAYMENT_METHOD_OPTIONS, formatPaymentMethodLabel } from '@/lib/payment-methods';
+import { usePaymentWallets } from '@/hooks/usePaymentWallets';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import {
   combineLocalDateAndTime,
@@ -148,6 +149,7 @@ export default function VendorDetailPage() {
   const [purchaseFilter, setPurchaseFilter] = useState('all');
 
   // Payment modal state
+  const { options: paymentMethodOptions, formatLabel: formatWalletLabel } = usePaymentWallets();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedInvoiceNumber, setSelectedInvoiceNumber] = useState<string | null>(null);
   const [selectedEntryTotal, setSelectedEntryTotal] = useState<number | null>(null);
@@ -2509,7 +2511,7 @@ export default function VendorDetailPage() {
                           ...purchaseFormData,
                           paymentMethod: val
                         })}
-                        options={[...PAYMENT_METHOD_OPTIONS]}
+                        options={paymentMethodOptions}
                         className="h-9"
                         required
                       />
@@ -2787,19 +2789,22 @@ export default function VendorDetailPage() {
                               {hasMostRecentPayment ? 'Recent Payments' : 'Payments'}
                             </h4>
                             <div className="space-y-1">
-                              {purchasePayments.slice(0, 3).map((payment) => (
-                                <div
-                                  key={payment.id}
-                                  className="flex justify-between text-xs"
-                                >
-                                  <span className="text-gray-600">
-                                    {formatDateTime(payment.paymentDate)} - {formatPaymentMethodLabel(payment.method)}
-                                  </span>
-                                  <span className="font-medium text-green-600">
-                                    {formatCurrency(Math.round(Number(payment.amount)))}
-                                  </span>
-                                </div>
-                              ))}
+                              {purchasePayments.slice(0, 3).map((payment) => {
+                                const isEntryUndone = purchase.status === 'CANCELLED' || payment.status === 'CANCELLED';
+                                return (
+                                  <div
+                                    key={payment.id}
+                                    className="flex justify-between text-xs"
+                                  >
+                                    <span className={isEntryUndone ? 'text-gray-400' : 'text-gray-600'}>
+                                      {formatDateTime(payment.paymentDate)} - {formatWalletLabel(payment.method)}
+                                    </span>
+                                    <span className={isEntryUndone ? 'font-normal text-gray-400 line-through' : 'font-medium text-green-600'}>
+                                      {formatCurrency(Math.round(Number(payment.amount)))}
+                                    </span>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         );
@@ -3023,80 +3028,117 @@ export default function VendorDetailPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
-                      {getFilteredPaymentHistory().map((payment, index) => (
-                        <div key={payment.id} className="bg-gradient-to-r from-gray-50 to-blue-50 border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-start gap-4">
-                              <div className="flex-shrink-0">
-                                <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center shadow-lg">
-                                  <BanknotesIcon className="h-6 w-6 text-white" />
-                                </div>
-                              </div>
-                              <div className="flex-1">
-                                <div className="flex items-center gap-3 mb-2">
-                                  <h4 className="text-xl font-bold text-gray-900">
-                                    {formatCurrency(Math.round(Number(payment.amount)))}
-                                  </h4>
-                                  <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
-                                    payment.status === 'COMPLETED'
-                                    ? 'bg-green-100 text-green-800 border border-green-200'
-                                    : payment.status === 'CANCELLED'
-                                    ? 'bg-gray-100 text-gray-700 border border-gray-200'
-                                    : 'bg-yellow-100 text-yellow-800 border border-yellow-200'
-                                    }`}>
-                                    {payment.status === 'CANCELLED' ? 'UNDONE' : payment.status}
-                                  </span>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-gray-500 font-medium">Date:</span>
-                                    <span className="text-gray-700 font-semibold">{formatDateTime(payment.paymentDate)}</span>
+                      {getFilteredPaymentHistory().map((payment, index) => {
+                        const isUndone = payment.status === 'CANCELLED';
+                        return (
+                          <div
+                            key={payment.id}
+                            className={`border rounded-lg p-4 transition-all ${
+                              isUndone
+                                ? 'bg-gray-50/70 border-gray-200 opacity-60'
+                                : 'bg-gradient-to-r from-gray-50 to-blue-50 border-gray-200 hover:shadow-md'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-start gap-4">
+                                <div className="flex-shrink-0">
+                                  <div
+                                    className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                                      isUndone
+                                        ? 'bg-gray-200 text-gray-400'
+                                        : 'bg-gradient-to-br from-green-400 to-green-600 text-white shadow-lg'
+                                    }`}
+                                  >
+                                    <BanknotesIcon className="h-6 w-6" />
                                   </div>
-
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-gray-500 font-medium">Method:</span>
-                                    <span className="text-gray-700 font-semibold">{formatPaymentMethodLabel(payment.method)}</span>
-                                  </div>
-
-                                  {payment.reference && (
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-gray-500 font-medium">Reference:</span>
-                                      <span className="text-blue-600 font-semibold bg-blue-50 px-2 py-1 rounded text-xs">
-                                        {payment.reference}
-                                      </span>
-                                    </div>
-                                  )}
-
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-gray-500 font-medium">Transaction ID:</span>
-                                    <span className="text-gray-600 font-mono text-xs bg-gray-100 px-2 py-1 rounded">
-                                      {payment.id.slice(-8).toUpperCase()}
+                                </div>
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-3 mb-2">
+                                    <h4
+                                      className={`text-xl font-bold ${
+                                        isUndone ? 'text-gray-400 line-through' : 'text-gray-900'
+                                      }`}
+                                    >
+                                      {formatCurrency(Math.round(Number(payment.amount)))}
+                                    </h4>
+                                    <span
+                                      className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                                        isUndone
+                                          ? 'bg-gray-100 text-gray-500 border border-gray-200'
+                                          : payment.status === 'COMPLETED'
+                                            ? 'bg-green-100 text-green-800 border border-green-200'
+                                            : 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                                      }`}
+                                    >
+                                      {isUndone ? 'UNDONE' : payment.status}
                                     </span>
                                   </div>
-                                </div>
 
-                                {payment.description && (
-                                  <div className="mt-3 p-3 bg-white rounded-lg border border-gray-100">
-                                    <p className="text-sm text-gray-600">
-                                      <span className="font-medium text-gray-700">Description:</span> {payment.description}
-                                    </p>
+                                  <div className={`grid grid-cols-1 md:grid-cols-2 gap-3 text-sm ${isUndone ? 'text-gray-400' : ''}`}>
+                                    <div className="flex items-center gap-2">
+                                      <span className={isUndone ? 'text-gray-400 font-medium' : 'text-gray-500 font-medium'}>Date:</span>
+                                      <span className={isUndone ? 'text-gray-500 font-normal' : 'text-gray-700 font-semibold'}>
+                                        {formatDateTime(payment.paymentDate)}
+                                      </span>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                      <span className={isUndone ? 'text-gray-400 font-medium' : 'text-gray-500 font-medium'}>Method:</span>
+                                      <span className={isUndone ? 'text-gray-500 font-normal' : 'text-gray-700 font-semibold'}>
+                                        {formatWalletLabel(payment.method)}
+                                      </span>
+                                    </div>
+
+                                    {payment.reference && (
+                                      <div className="flex items-center gap-2">
+                                        <span className={isUndone ? 'text-gray-400 font-medium' : 'text-gray-500 font-medium'}>Reference:</span>
+                                        <span
+                                          className={
+                                            isUndone
+                                              ? 'text-gray-500 bg-gray-100 px-2 py-1 rounded text-xs'
+                                              : 'text-blue-600 font-semibold bg-blue-50 px-2 py-1 rounded text-xs'
+                                          }
+                                        >
+                                          {payment.reference}
+                                        </span>
+                                      </div>
+                                    )}
+
+                                    <div className="flex items-center gap-2">
+                                      <span className={isUndone ? 'text-gray-400 font-medium' : 'text-gray-500 font-medium'}>Transaction ID:</span>
+                                      <span className="text-gray-500 font-mono text-xs bg-gray-100 px-2 py-1 rounded">
+                                        {payment.id.slice(-8).toUpperCase()}
+                                      </span>
+                                    </div>
                                   </div>
-                                )}
-                              </div>
-                            </div>
 
-                            <div className="flex flex-col items-end gap-2">
-                              <div className="text-xs text-gray-400 font-medium">
-                                #{index + 1}
+                                  {payment.description && (
+                                    <div
+                                      className={`mt-3 p-3 rounded-lg border ${
+                                        isUndone ? 'bg-gray-50/50 border-gray-200' : 'bg-white border-gray-100'
+                                      }`}
+                                    >
+                                      <p className={`text-sm ${isUndone ? 'text-gray-400' : 'text-gray-600'}`}>
+                                        <span className={`font-medium ${isUndone ? 'text-gray-400' : 'text-gray-700'}`}>Description:</span>{' '}
+                                        {payment.description}
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                              <div className="text-xs text-gray-500">
-                                {payment.createdAt ? new Date(payment.createdAt).toLocaleTimeString() : 'N/A'}
+
+                              <div className="flex flex-col items-end gap-2">
+                                <div className="text-xs text-gray-400 font-medium">
+                                  #{index + 1}
+                                </div>
+                                <div className="text-xs text-gray-400">
+                                  {payment.createdAt ? new Date(payment.createdAt).toLocaleTimeString() : 'N/A'}
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </CardContent>
                 </Card>
