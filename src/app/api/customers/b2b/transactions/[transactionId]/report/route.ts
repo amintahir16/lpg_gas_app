@@ -7,12 +7,13 @@ import {
   formatB2bItemCylinderLabel,
   formatB2bVariantKeyForReport,
 } from '@/lib/b2b-transaction-item-variant';
-import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { adoptLegacyB2bCustomerIfNeeded, getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import {
   isOpeningBalanceTransaction,
   isOpeningDuesSaleItem,
   isOpeningDuesTransaction,
 } from '@/lib/b2b-opening-entries';
+import { formatPaymentMethodLabel } from '@/lib/payment-methods';
 
 // Helper function to format currency
 function formatCurrency(amount: number): string {
@@ -33,6 +34,21 @@ function formatDate(dateString: string | Date): string {
     month: 'short',
     day: 'numeric'
   });
+}
+
+// Helper function to format time
+function formatTime(timeString?: string | Date | null): string {
+  if (!timeString) return '-';
+  try {
+    const date = typeof timeString === 'string' ? new Date(timeString) : timeString;
+    return date.toLocaleTimeString('en-PK', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  } catch {
+    return String(timeString);
+  }
 }
 
 // Categorize items into Sale, Buyback, and Return
@@ -253,7 +269,7 @@ async function generatePDF(
   doc.text('Transaction Type: ', margin + 5, yPosition);
 
   let badgeX = margin + 45;
-  badges.forEach((badge, index) => {
+  badges.forEach((badge) => {
     // Draw badge background
     const badgeWidth = doc.getTextWidth(badge) + 8;
     let badgeColor: [number, number, number];
@@ -283,28 +299,108 @@ async function generatePDF(
     badgeX += badgeWidth + 3;
   });
 
+  if (transaction.voided) {
+    const voidBadge = 'VOIDED';
+    const voidWidth = doc.getTextWidth(voidBadge) + 8;
+    doc.setFillColor(220, 38, 38);
+    doc.roundedRect(badgeX, yPosition - 4, voidWidth, 6, 1, 1, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(8);
+    doc.text(voidBadge, badgeX + 4, yPosition);
+    badgeX += voidWidth + 3;
+  }
+
+  const midX = margin + contentWidth / 2;
   yPosition += 8;
 
-  // Payment Status
+  // Date & Time
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
+  doc.text(`Date: ${formatDate(transaction.date)}`, margin + 5, yPosition);
+  doc.text(`Time: ${formatTime(transaction.time || transaction.createdAt)}`, midX, yPosition);
+  yPosition += 6;
 
-  // Always show payment status for SALE transactions, default to Unpaid if null
-  if (transaction.transactionType === 'SALE') {
+  // Total Amount & Payment Details based on type
+  const totalAmountVal = Number(transaction.totalAmount || transaction.finalAmount || 0);
+  const paidAmountVal = Number(transaction.paidAmount || (transaction.transactionType === 'PAYMENT' ? totalAmountVal : 0));
+
+  if (transaction.transactionType === 'PAYMENT') {
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Amount Paid: ${formatCurrencyRs(totalAmountVal || paidAmountVal)}`, margin + 5, yPosition);
+    doc.setFont('helvetica', 'normal');
+    if (transaction.paymentMethod) {
+      doc.text(`Payment Method: ${formatPaymentMethodLabel(transaction.paymentMethod)}`, midX, yPosition);
+    }
+    yPosition += 6;
+
+    if (transaction.paymentReference) {
+      doc.text(`Payment Reference: ${transaction.paymentReference}`, margin + 5, yPosition);
+      yPosition += 6;
+    }
+  } else if (transaction.transactionType === 'SALE') {
     const status = transaction.paymentStatus || 'UNPAID';
-    const statusText = status === 'FULLY_PAID' ? 'Paid' :
-      status === 'PARTIAL' ? 'Partial' : 'Unpaid';
-    doc.text(`Payment Status: ${statusText}`, margin + 5, yPosition);
-    yPosition += 8;
-  } else if (transaction.paymentStatus) {
-    const statusText = transaction.paymentStatus === 'FULLY_PAID' ? 'Paid' :
-      transaction.paymentStatus === 'PARTIAL' ? 'Partial' : 'Unpaid';
-    doc.text(`Payment Status: ${statusText}`, margin + 5, yPosition);
-    yPosition += 8;
+    const statusText = status === 'FULLY_PAID' ? 'Paid' : status === 'PARTIAL' ? 'Partial' : 'Unpaid';
+
+    doc.text(`Total Amount: ${formatCurrencyRs(totalAmountVal)}`, margin + 5, yPosition);
+    doc.text(`Payment Status: ${statusText}`, midX, yPosition);
+    yPosition += 6;
+
+    doc.text(`Paid Amount: ${formatCurrencyRs(paidAmountVal)}`, margin + 5, yPosition);
+    const unpaidVal = transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined
+      ? Number(transaction.unpaidAmount)
+      : Math.max(0, totalAmountVal - paidAmountVal);
+
+    if (unpaidVal > 0) {
+      doc.setTextColor(220, 38, 38);
+      doc.text(`Unpaid Amount: ${formatCurrencyRs(unpaidVal)}`, midX, yPosition);
+      doc.setTextColor(0, 0, 0);
+    } else if (transaction.paymentMethod) {
+      doc.text(`Payment Method: ${formatPaymentMethodLabel(transaction.paymentMethod)}`, midX, yPosition);
+    }
+    yPosition += 6;
+
+    if (unpaidVal > 0 && transaction.paymentMethod) {
+      doc.text(`Payment Method: ${formatPaymentMethodLabel(transaction.paymentMethod)}`, margin + 5, yPosition);
+      if (transaction.paymentReference) {
+        doc.text(`Payment Reference: ${transaction.paymentReference}`, midX, yPosition);
+      }
+      yPosition += 6;
+    } else if (transaction.paymentReference) {
+      doc.text(`Payment Reference: ${transaction.paymentReference}`, margin + 5, yPosition);
+      yPosition += 6;
+    }
+  } else {
+    // BUYBACK, RETURN_EMPTY, etc.
+    doc.text(`Total Amount: ${formatCurrencyRs(totalAmountVal)}`, margin + 5, yPosition);
+    if (transaction.paymentMethod) {
+      doc.text(`Payment Method: ${formatPaymentMethodLabel(transaction.paymentMethod)}`, midX, yPosition);
+    }
+    yPosition += 6;
+
+    if (transaction.paymentReference) {
+      doc.text(`Payment Reference: ${transaction.paymentReference}`, margin + 5, yPosition);
+      yPosition += 6;
+    }
   }
 
-  yPosition += 5;
+  // Notes (if present)
+  if (transaction.notes) {
+    const notesLines = doc.splitTextToSize(`Notes: ${transaction.notes}`, contentWidth - 10);
+    doc.text(notesLines, margin + 5, yPosition);
+    yPosition += notesLines.length * 5;
+  }
+
+  // Void Reason (if voided)
+  if (transaction.voided && transaction.voidReason) {
+    doc.setTextColor(220, 38, 38);
+    const voidLines = doc.splitTextToSize(`Void Reason: ${transaction.voidReason}`, contentWidth - 10);
+    doc.text(voidLines, margin + 5, yPosition);
+    yPosition += voidLines.length * 5;
+    doc.setTextColor(0, 0, 0);
+  }
+
+  yPosition += 3;
 
   // Helper function to draw an items table
   const drawItemsTable = (title: string, items: any[], isBuyback: boolean = false, isReturn: boolean = false, titleColor: [number, number, number]) => {
@@ -544,7 +640,7 @@ async function generatePDF(
   // Summary Section
   yPosition += 5;
 
-  if (yPosition > pageHeight - 120) {
+  if (yPosition > pageHeight - 85) {
     doc.addPage();
     yPosition = 20;
   }
@@ -558,9 +654,27 @@ async function generatePDF(
 
   yPosition += 15;
 
+  // Calculate totals
+  const isPaymentOnly = transaction.transactionType === 'PAYMENT';
+  const saleTotal = saleItems.reduce((sum, item) => sum + (Number(item.totalPrice) || 0), 0);
+  const buybackTotal = buybackItems.reduce((sum, item) => sum + (Number(item.totalPrice) || 0), 0);
+
+  let summaryLinesCount = 2;
+  if (isPaymentOnly) {
+    summaryLinesCount = 3;
+    if (transaction.paymentMethod) summaryLinesCount++;
+    if (transaction.paymentReference) summaryLinesCount++;
+  } else {
+    if (saleTotal > 0) summaryLinesCount++;
+    if (buybackTotal > 0) summaryLinesCount++;
+    if (returnItems.length > 0) summaryLinesCount++;
+    if (paidAmountVal > 0) summaryLinesCount++;
+  }
+
+  const summaryHeight = Math.max(45, summaryLinesCount * 8 + 12);
+
   // Summary Box
   doc.setFillColor(248, 249, 250);
-  const summaryHeight = 50;
   doc.rect(margin, yPosition, contentWidth, summaryHeight, 'F');
   doc.setDrawColor(200, 200, 200);
   doc.rect(margin, yPosition, contentWidth, summaryHeight, 'S');
@@ -570,94 +684,114 @@ async function generatePDF(
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(10);
 
-  // Calculate totals
-  const saleTotal = saleItems.reduce((sum, item) => sum + (Number(item.totalPrice) || 0), 0);
-  const buybackTotal = buybackItems.reduce((sum, item) => sum + (Number(item.totalPrice) || 0), 0);
-
   let currentY = summaryY;
 
-  // Sale Total
-  if (saleTotal > 0) {
+  if (isPaymentOnly) {
+    // Payment Transaction Summary
     doc.setFont('helvetica', 'normal');
-    doc.text('Sale Total:', margin + 10, currentY);
+    doc.text('Payment Amount:', margin + 10, currentY);
     doc.setTextColor(34, 197, 94);
-    doc.text(formatCurrencyRs(saleTotal), rightX, currentY, { align: 'right' });
+    doc.text(formatCurrencyRs(totalAmountVal || paidAmountVal), rightX, currentY, { align: 'right' });
     doc.setTextColor(0, 0, 0);
     currentY += 8;
-  }
 
-  // Buyback Credit
-  if (buybackTotal > 0) {
-    doc.setFont('helvetica', 'normal');
-    doc.text('Buyback Credit:', margin + 10, currentY);
-    doc.setTextColor(251, 146, 60);
-    doc.text(`-${formatCurrencyRs(buybackTotal)}`, rightX, currentY, { align: 'right' });
+    if (transaction.paymentMethod) {
+      doc.text('Payment Method:', margin + 10, currentY);
+      doc.text(formatPaymentMethodLabel(transaction.paymentMethod), rightX, currentY, { align: 'right' });
+      currentY += 8;
+    }
+
+    if (transaction.paymentReference) {
+      doc.text('Payment Reference:', margin + 10, currentY);
+      doc.text(transaction.paymentReference, rightX, currentY, { align: 'right' });
+      currentY += 8;
+    }
+
+    // Net Total Paid
+    currentY += 2;
+    doc.setDrawColor(150, 150, 150);
+    doc.line(margin + 10, currentY - 2, rightX, currentY - 2);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('Total Paid:', margin + 10, currentY + 4);
+    doc.setTextColor(34, 197, 94);
+    doc.text(formatCurrencyRs(totalAmountVal || paidAmountVal), rightX, currentY + 4, { align: 'right' });
     doc.setTextColor(0, 0, 0);
-    currentY += 8;
-  }
-
-  // Empty Returns Count
-  if (returnItems.length > 0) {
-    const returnCount = returnItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Empty Cylinders Returned:', margin + 10, currentY);
-    doc.setTextColor(107, 114, 128);
-    doc.text(`${returnCount} cylinder${returnCount > 1 ? 's' : ''}`, rightX, currentY, { align: 'right' });
-    doc.setTextColor(0, 0, 0);
-    currentY += 8;
-  }
-
-  // Net Amount / Total
-  currentY += 2;
-  doc.setDrawColor(150, 150, 150);
-  doc.line(margin + 10, currentY - 2, rightX, currentY - 2);
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  const netAmount = saleTotal - buybackTotal;
-  doc.text('Net Amount:', margin + 10, currentY + 4);
-
-  if (netAmount >= 0) {
-    doc.setTextColor(0, 0, 0);
-    doc.text(formatCurrencyRs(netAmount), rightX, currentY + 4, { align: 'right' });
   } else {
-    doc.setTextColor(34, 197, 94);
-    doc.text(`Credit: ${formatCurrencyRs(Math.abs(netAmount))}`, rightX, currentY + 4, { align: 'right' });
+    // Sale / Buyback / Return Summary
+    if (saleTotal > 0) {
+      doc.setFont('helvetica', 'normal');
+      doc.text('Sale Total:', margin + 10, currentY);
+      doc.setTextColor(34, 197, 94);
+      doc.text(formatCurrencyRs(saleTotal), rightX, currentY, { align: 'right' });
+      doc.setTextColor(0, 0, 0);
+      currentY += 8;
+    }
+
+    if (buybackTotal > 0) {
+      doc.setFont('helvetica', 'normal');
+      doc.text('Buyback Credit:', margin + 10, currentY);
+      doc.setTextColor(251, 146, 60);
+      doc.text(`-${formatCurrencyRs(buybackTotal)}`, rightX, currentY, { align: 'right' });
+      doc.setTextColor(0, 0, 0);
+      currentY += 8;
+    }
+
+    if (returnItems.length > 0) {
+      const returnCount = returnItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Empty Cylinders Returned:', margin + 10, currentY);
+      doc.setTextColor(107, 114, 128);
+      doc.text(`${returnCount} cylinder${returnCount > 1 ? 's' : ''}`, rightX, currentY, { align: 'right' });
+      doc.setTextColor(0, 0, 0);
+      currentY += 8;
+    }
+
+    // Net Amount / Total
+    currentY += 2;
+    doc.setDrawColor(150, 150, 150);
+    doc.line(margin + 10, currentY - 2, rightX, currentY - 2);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    const netAmount = saleTotal - buybackTotal;
+    doc.text('Net Amount:', margin + 10, currentY + 4);
+
+    if (netAmount >= 0) {
+      doc.setTextColor(0, 0, 0);
+      doc.text(formatCurrencyRs(netAmount), rightX, currentY + 4, { align: 'right' });
+    } else {
+      doc.setTextColor(34, 197, 94);
+      doc.text(`Credit: ${formatCurrencyRs(Math.abs(netAmount))}`, rightX, currentY + 4, { align: 'right' });
+    }
+    currentY += 8;
+
+    // Payment details inside summary
+    if (transaction.transactionType === 'SALE' || paidAmountVal > 0) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
+      doc.text('Payment Received:', margin + 10, currentY + 4);
+      doc.setTextColor(34, 197, 94);
+      doc.text(formatCurrencyRs(paidAmountVal), rightX, currentY + 4, { align: 'right' });
+      doc.setTextColor(0, 0, 0);
+      currentY += 6;
+
+      const unpaidAmount = transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined
+        ? Number(transaction.unpaidAmount)
+        : Math.max(0, netAmount - paidAmountVal);
+
+      if (unpaidAmount > 0) {
+        doc.setTextColor(220, 38, 38);
+        doc.text('Remaining Balance:', margin + 10, currentY + 4);
+        doc.text(formatCurrencyRs(unpaidAmount), rightX, currentY + 4, { align: 'right' });
+        doc.setTextColor(0, 0, 0);
+      }
+    }
   }
 
   yPosition += summaryHeight + 10;
-
-  // Payment Details (if applicable)
-  if (transaction.transactionType === 'SALE' || transaction.paidAmount || transaction.paymentStatus === 'FULLY_PAID') {
-    if (yPosition > pageHeight - 40) {
-      doc.addPage();
-      yPosition = 20;
-    }
-
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-
-    // Always show payment received for sales, even if 0
-    const paidAmount = Number(transaction.paidAmount || 0);
-    doc.text(`Payment Received: ${formatCurrencyRs(paidAmount)}`, margin + 5, yPosition);
-    yPosition += 6;
-
-    if (transaction.paymentMethod) {
-      doc.text(`Payment Method: ${transaction.paymentMethod}`, margin + 5, yPosition);
-      yPosition += 6;
-    }
-
-    // Calculate unpaid amount if not explicitly set
-    const unpaidAmount = transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined
-      ? Number(transaction.unpaidAmount)
-      : (transaction.transactionType === 'SALE' ? (Number(transaction.totalAmount) - Number(transaction.paidAmount || 0)) : 0);
-
-    if (unpaidAmount > 0) {
-      doc.setTextColor(220, 38, 38);
-      doc.text(`Remaining Balance: ${formatCurrencyRs(unpaidAmount)}`, margin + 5, yPosition);
-    }
-  }
 
   // Footer
   // Add Footer to all pages
@@ -720,10 +854,13 @@ export async function GET(
       return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
     }
 
-    // Get all transactions for this customer up to this transaction to calculate holding (region-scoped)
+    await adoptLegacyB2bCustomerIfNeeded(transaction.customerId, regionId);
+
+    // Get all transactions for this customer up to this transaction to calculate holding (region-scoped, active only)
     const allTransactions = await prisma.b2BTransaction.findMany({
       where: {
         customerId: transaction.customerId,
+        voided: false,
         createdAt: {
           lte: transaction.createdAt
         },
