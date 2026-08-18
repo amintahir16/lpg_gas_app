@@ -2010,24 +2010,15 @@ export default function VendorDetailPage() {
                                       type="number"
                                       value={item.unitPrice === 0 ? '' : item.unitPrice}
                                       onChange={(e) => {
-                                        // If price per 11.8kg is set, don't allow manual editing
-                                        // Otherwise allow manual entry
-                                        if (pricePer11_8kg > 0) {
-                                          // Recalculate from base price
-                                          const calculatedPrice = calculateUnitPriceFromBase(item.itemName, pricePer11_8kg);
-                                          handlePurchaseItemChange(index, 'unitPrice', calculatedPrice);
-                                        } else {
-                                          handlePurchaseItemChange(index, 'unitPrice', e.target.value);
-                                        }
+                                        handlePurchaseItemChange(index, 'unitPrice', e.target.value);
                                       }}
                                       placeholder="Enter price per unit"
                                       min="0"
                                       step="0.01"
-                                      className="text-center border-0 focus:ring-1 bg-transparent h-9 text-sm"
-                                      readOnly={pricePer11_8kg > 0 && item.itemName ? true : false}
+                                      className="text-center border-0 focus:ring-1 bg-transparent h-9 text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
                                     />
                                     {pricePer11_8kg > 0 && item.itemName && (
-                                      <p className="text-[10px] text-gray-500 text-center mt-0.5">
+                                      <p className="text-[10px] text-gray-400 text-center mt-0.5">
                                         Auto-calculated
                                       </p>
                                     )}
