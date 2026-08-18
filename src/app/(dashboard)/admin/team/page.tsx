@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import RegionMultiSelect from '@/components/RegionMultiSelect';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface BranchSummary {
     id: string;
@@ -409,14 +410,31 @@ export default function TeamManagementPage() {
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {isLoading ? (
-                                <tr>
-                                    <td colSpan={6} className="px-4 py-6 text-center text-gray-500">
-                                        <div className="flex items-center justify-center space-x-2">
-                                            <div className="h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                                            <span>Loading...</span>
-                                        </div>
-                                    </td>
-                                </tr>
+                                Array.from({ length: 5 }).map((_, i) => (
+                                    <tr key={i} className="animate-pulse">
+                                        <td className="px-4 py-3">
+                                            <div className="space-y-1.5">
+                                                <Skeleton className="h-4 w-32" />
+                                                <Skeleton className="h-3 w-40" />
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <Skeleton className="h-5 w-16 rounded-full" />
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <Skeleton className="h-5 w-24 rounded-full" />
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <Skeleton className="h-4 w-28" />
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <Skeleton className="h-4 w-28 font-mono" />
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <Skeleton className="h-5 w-14 rounded-full" />
+                                        </td>
+                                    </tr>
+                                ))
                             ) : teamMembers.length === 0 ? (
                                 <tr>
                                     <td colSpan={6} className="px-4 py-6 text-center text-gray-500">

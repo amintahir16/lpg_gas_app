@@ -33,6 +33,7 @@ import {
 } from '@/lib/payment-methods';
 import { sharePdfBlob, downloadPdfBlob } from '@/lib/sharePdf';
 import { buildCashClosingPdf, closingPdfFileName } from '@/lib/cash-closing-pdf';
+import { ReportsSkeleton } from '@/components/skeletons';
 
 type ClosingLedgerEntry = {
   id: string;
@@ -283,7 +284,7 @@ export default function ReportsPage() {
       )}
 
       {loading && !report ? (
-        <div className="py-16 text-center text-gray-500">Loading closing report…</div>
+        <ReportsSkeleton />
       ) : report ? (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

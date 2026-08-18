@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +19,7 @@ import { CustomSelect } from '@/components/ui/select-custom';
 import { getCylinderTypeDisplayName, getCapacityFromTypeString } from '@/lib/cylinder-utils';
 import { getCylinderTypeOptions } from '@/lib/cylinder-types';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface CustomerCylinder {
   id: string;
@@ -53,6 +55,7 @@ interface CustomerCylinderStats {
 }
 
 export default function CustomerCylindersPage() {
+  const router = useRouter();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const [customerCylinders, setCustomerCylinders] = useState<CustomerCylinder[]>([]);
   const [stats, setStats] = useState<CustomerCylinderStats[]>([]);
@@ -210,7 +213,7 @@ Address: ${customer.address || 'N/A'}
           <Button
             variant="outline"
             size="sm"
-            onClick={() => window.location.href = '/inventory'}
+            onClick={() => router.push('/inventory')}
             className="flex items-center justify-center h-9 w-9 p-0 shrink-0 -ml-2"
             aria-label="Back"
           >
@@ -334,11 +337,34 @@ Address: ${customer.address || 'N/A'}
               </thead>
               <tbody className="bg-white">
                 {loading ? (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-2 text-center border-b">
-                      <div className="animate-pulse">Loading customer cylinders...</div>
-                    </td>
-                  </tr>
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i} className="animate-pulse border-b">
+                      <td className="px-4 py-2.5">
+                        <div className="space-y-1">
+                          <Skeleton className="h-4 w-24" />
+                          <Skeleton className="h-3 w-32" />
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="space-y-1">
+                          <Skeleton className="h-4 w-32" />
+                          <Skeleton className="h-3 w-24" />
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Skeleton className="h-5 w-16 rounded-full" />
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Skeleton className="h-4 w-20" />
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Skeleton className="h-5 w-16 rounded-full" />
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <Skeleton className="h-7 w-16 rounded ml-auto" />
+                      </td>
+                    </tr>
+                  ))
                 ) : customerCylinders.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-4 py-2 text-center text-gray-500 border-b">

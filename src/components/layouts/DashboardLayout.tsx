@@ -30,6 +30,7 @@ import { Footer } from '@/components/ui/footer';
 import { NotificationBell } from '@/components/ui/notification-bell';
 import FlamoraAnimatedLogo from '@/components/ui/FlamoraAnimatedLogo';
 import { RegionSwitcher } from '@/components/RegionSwitcher';
+import { LayoutAuthSkeleton } from '@/components/skeletons';
 
 import { cn } from '@/lib/utils';
 
@@ -92,16 +93,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
 
 
-  // Show loading while checking authentication
+  // Show layout skeleton while checking authentication
   if (status === 'loading') {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600 font-medium">Loading...</p>
-        </div>
-      </div>
-    );
+    return <LayoutAuthSkeleton />;
   }
 
   // Don't render if not authenticated

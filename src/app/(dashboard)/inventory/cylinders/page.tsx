@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +23,7 @@ import { getCylinderTypeDisplayName, getCylinderWeight, generateCylinderTypeFrom
 import { formatLocalDateInput } from '@/lib/financial-period';
 import { getCylinderTypeOptions } from '@/lib/cylinder-types';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface Cylinder {
   id: string;
@@ -68,6 +69,7 @@ interface CylinderTypePurchaseValue {
 }
 
 export default function CylindersInventoryPage() {
+  const router = useRouter();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const { data: session } = useSession();
   const searchParams = useSearchParams();
@@ -799,7 +801,7 @@ export default function CylindersInventoryPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => window.location.href = '/inventory'}
+            onClick={() => router.push('/inventory')}
             className="flex items-center justify-center h-9 w-9 p-0 shrink-0 -ml-2"
             aria-label="Back"
           >
@@ -1059,11 +1061,31 @@ export default function CylindersInventoryPage() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {loading ? (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-4 text-center">
-                      <div className="animate-pulse">Loading cylinders...</div>
-                    </td>
-                  </tr>
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i} className="animate-pulse border-b">
+                      <td className="px-4 py-2.5">
+                        <Skeleton className="h-4 w-24" />
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Skeleton className="h-5 w-28 rounded-full" />
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Skeleton className="h-5 w-20 rounded-full" />
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Skeleton className="h-4 w-32" />
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Skeleton className="h-4 w-24" />
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Skeleton className="h-4 w-20" />
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <Skeleton className="h-7 w-16 rounded ml-auto" />
+                      </td>
+                    </tr>
+                  ))
                 ) : cylinders.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-6 py-4 text-center text-gray-500">

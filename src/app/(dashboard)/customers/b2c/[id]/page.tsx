@@ -35,6 +35,7 @@ import {
   TRANSACTION_UNDO_WINDOW_MESSAGE,
 } from '@/lib/transaction-undo-window';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
+import { CustomerDetailSkeleton } from '@/components/skeletons';
 
 function b2cDetailHoldingKey(h: { cylinderType: string; cylinderVariantKey?: string | null }) {
   if (h.cylinderVariantKey?.trim()) return h.cylinderVariantKey.trim();
@@ -399,11 +400,8 @@ export default function B2CCustomerDetailPage() {
 
   if (loading && !customer) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600 font-medium">Loading customer details...</p>
-        </div>
+      <div className="space-y-6 max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+        <CustomerDetailSkeleton />
       </div>
     );
   }

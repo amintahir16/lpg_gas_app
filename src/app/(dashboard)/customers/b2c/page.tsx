@@ -25,6 +25,7 @@ import {
 import { getCylinderTypeDisplayName, getCapacityFromTypeString } from '@/lib/cylinder-utils';
 import { buildCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { CustomSelect } from '@/components/ui/select-custom';
+import { TableSkeleton } from '@/components/skeletons';
 
 // Palette for dynamic cylinder badges
 const CYLINDER_COLORS = [
@@ -517,9 +518,8 @@ export default function B2CCustomersPage() {
         </CardHeader>
         <CardContent className="p-0">
           {loading && customers.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mb-4"></div>
-              <p className="text-gray-500">Loading customers...</p>
+            <div className="p-4">
+              <TableSkeleton rows={6} cols={7} hasSearch={false} />
             </div>
           ) : customers.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 px-4 text-center">

@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 
 import { BanknotesIcon, BriefcaseIcon, CubeIcon, HomeIcon, UserGroupIcon } from '@heroicons/react/24/outline';
+import { TableSkeleton, StatCardsSkeleton } from '@/components/skeletons';
 
 interface Customer {
   id: string;
@@ -220,12 +221,7 @@ export default function CustomersPage() {
 
       {/* Loading State */}
       {loading && customers.length === 0 && !error && (
-        <div className="flex items-center justify-center py-10">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-sm text-gray-600 font-medium">Loading customers...</p>
-          </div>
-        </div>
+        <TableSkeleton rows={6} cols={6} />
       )}
 
       {/* Search and Filters */}

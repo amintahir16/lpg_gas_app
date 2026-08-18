@@ -35,6 +35,7 @@ import {
   type BankWalletOption,
 } from '@/lib/payment-methods';
 import type { BankLedgerEntry } from '@/lib/bank-ledger';
+import { TableSkeleton } from '@/components/skeletons';
 
 interface BankLedgerResponse {
   method: string;
@@ -242,11 +243,15 @@ export default function BankMethodDetailPage() {
                 <ArrowDownIcon className="w-4 h-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-white mt-1">
-              {loading ? '…' : formatCurrency(summary.totalIn)}
-            </p>
+            {loading ? (
+              <div className="h-7 w-32 bg-white/30 rounded-md animate-pulse my-1" />
+            ) : (
+              <p className="text-2xl font-bold text-white mt-1">
+                {formatCurrency(summary.totalIn)}
+              </p>
+            )}
             <p className="text-xs text-emerald-100 mt-0.5">
-              {loading ? '…' : `${summary.inflowCount} collections`}
+              {loading ? 'Calculating collections…' : `${summary.inflowCount} collections`}
             </p>
           </CardContent>
         </Card>
@@ -259,11 +264,15 @@ export default function BankMethodDetailPage() {
                 <ArrowUpIcon className="w-4 h-4" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-white mt-1">
-              {loading ? '…' : formatCurrency(summary.totalOut)}
-            </p>
+            {loading ? (
+              <div className="h-7 w-32 bg-white/30 rounded-md animate-pulse my-1" />
+            ) : (
+              <p className="text-2xl font-bold text-white mt-1">
+                {formatCurrency(summary.totalOut)}
+              </p>
+            )}
             <p className="text-xs text-rose-100 mt-0.5">
-              {loading ? '…' : `${summary.outflowCount} payments & expenses`}
+              {loading ? 'Calculating payments…' : `${summary.outflowCount} payments & expenses`}
             </p>
           </CardContent>
         </Card>
@@ -271,9 +280,13 @@ export default function BankMethodDetailPage() {
         <Card className={`border-0 shadow-sm bg-gradient-to-br ${styles.gradient}`}>
           <CardContent className="p-4">
             <p className={`text-sm font-medium ${styles.labelTone}`}>Net Balance</p>
-            <p className="text-2xl font-bold text-white">
-              {loading ? '…' : formatCurrency(summary.net)}
-            </p>
+            {loading ? (
+              <div className="h-7 w-32 bg-white/30 rounded-md animate-pulse my-1" />
+            ) : (
+              <p className="text-2xl font-bold text-white">
+                {formatCurrency(summary.net)}
+              </p>
+            )}
             <p className={`text-xs mt-0.5 ${styles.labelTone}`}>{displayLabel}</p>
           </CardContent>
         </Card>
@@ -281,9 +294,13 @@ export default function BankMethodDetailPage() {
         <Card className="border-0 shadow-sm bg-gradient-to-br from-slate-600 to-slate-700">
           <CardContent className="p-4">
             <p className="text-sm font-medium text-slate-200">Total Records</p>
-            <p className="text-2xl font-bold text-white">
-              {loading ? '…' : summary.recordCount}
-            </p>
+            {loading ? (
+              <div className="h-7 w-20 bg-white/30 rounded-md animate-pulse my-1" />
+            ) : (
+              <p className="text-2xl font-bold text-white">
+                {summary.recordCount}
+              </p>
+            )}
             <p className="text-xs text-slate-300 mt-0.5">All branches combined</p>
           </CardContent>
         </Card>
@@ -300,7 +317,7 @@ export default function BankMethodDetailPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="py-10 text-center text-gray-500">Loading records…</div>
+            <TableSkeleton rows={5} cols={8} hasSearch={false} />
           ) : entries.length === 0 ? (
             <div className="py-10 text-center text-gray-500">
               No records for this method in the selected period

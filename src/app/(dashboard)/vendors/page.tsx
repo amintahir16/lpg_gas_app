@@ -22,6 +22,7 @@ import {
   // Valves icons
   Cog6ToothIcon, // Control/mechanical components
 } from '@heroicons/react/24/outline';
+import { PageHeaderSkeleton, StatCardsSkeleton, TableSkeleton } from '@/components/skeletons';
 
 interface VendorCategory {
   id: string;
@@ -215,10 +216,10 @@ export default function VendorsPage() {
   // Show loading state
   if (status === 'loading' || loading) {
     return (
-      <div className="p-6">
-        <div className="flex justify-center items-center h-64">
-          <div className="text-lg">Loading vendor categories...</div>
-        </div>
+      <div className="p-6 space-y-6">
+        <PageHeaderSkeleton />
+        <StatCardsSkeleton count={3} />
+        <TableSkeleton rows={5} cols={5} />
       </div>
     );
   }

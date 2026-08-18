@@ -19,6 +19,7 @@ import {
   ArrowLeftIcon
 } from '@heroicons/react/24/outline';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
+import { PricingSkeleton } from '@/components/skeletons';
 
 interface MarginCategory {
   id: string;
@@ -338,11 +339,7 @@ export default function PricingManagementPage() {
     .sort((a, b) => Number(b.isActive) - Number(a.isActive) || a.sortOrder - b.sortOrder);
 
   if (loading) {
-    return (
-      <div className="p-8">
-        <div className="text-center">Loading pricing management...</div>
-      </div>
-    );
+    return <PricingSkeleton />;
   }
 
   return (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -59,6 +60,7 @@ interface Cylinder {
 }
 
 export default function StoreVehiclesInventoryPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'stores' | 'vehicles'>('stores');
   const [stores, setStores] = useState<Store[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -242,7 +244,7 @@ export default function StoreVehiclesInventoryPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => window.location.href = '/inventory'}
+            onClick={() => router.push('/inventory')}
             className="flex items-center justify-center h-9 w-9 p-0 shrink-0"
             aria-label="Back"
           >
@@ -487,21 +489,22 @@ export default function StoreVehiclesInventoryPage() {
               </h3>
               <form className="space-y-4" onSubmit={(e) => {
                 e.preventDefault();
-                const form = e.currentTarget;
+                const formData = new FormData(e.currentTarget);
                 
                 if (activeTab === 'stores') {
                   const data = {
-                    name: form.name.value,
-                    location: form.location.value,
-                    address: form.address.value || null
+                    name: (formData.get('name') as string) || '',
+                    location: (formData.get('location') as string) || '',
+                    address: (formData.get('address') as string) || null
                   };
                   handleAddStore(data);
                 } else {
+                  const cap = formData.get('capacity') as string;
                   const data = {
-                    vehicleNumber: form.vehicleNumber.value,
-                    vehicleType: form.vehicleType.value,
-                    driverName: form.driverName.value || null,
-                    capacity: form.capacity.value ? parseInt(form.capacity.value) : null
+                    vehicleNumber: (formData.get('vehicleNumber') as string) || '',
+                    vehicleType: (formData.get('vehicleType') as string) || '',
+                    driverName: (formData.get('driverName') as string) || null,
+                    capacity: cap ? parseInt(cap) : null
                   };
                   handleAddVehicle(data);
                 }

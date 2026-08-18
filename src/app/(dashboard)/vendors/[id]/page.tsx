@@ -32,6 +32,7 @@ import {
   nowLocalTime,
   todayLocalDate,
 } from '@/lib/financial-period';
+import { VendorDetailSkeleton } from '@/components/skeletons';
 
 interface Vendor {
   id: string;
@@ -1367,9 +1368,7 @@ export default function VendorDetailPage() {
   if (loading) {
     return (
       <div className="p-6">
-        <div className="flex justify-center items-center h-64">
-          <div className="text-lg">Loading vendor details...</div>
-        </div>
+        <VendorDetailSkeleton />
       </div>
     );
   }

@@ -18,6 +18,7 @@ import {
   emptyPaymentMethodTotals,
   type BankWalletOption,
 } from '@/lib/payment-methods';
+import { WalletsGridSkeleton } from '@/components/skeletons';
 
 interface FinancialSummary {
   totalRevenue: number;
@@ -83,6 +84,10 @@ export default function WalletsManagementPage() {
       maximumFractionDigits: 0,
     }).format(amount);
   };
+
+  if (loading && !summary) {
+    return <WalletsGridSkeleton />;
+  }
 
   const byPaymentMethod = summary?.byPaymentMethod ?? emptyPaymentMethodTotals();
 

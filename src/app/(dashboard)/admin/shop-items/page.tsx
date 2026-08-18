@@ -24,6 +24,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { SHOP_ACCENT_COLORS, SHOP_ICON_OPTIONS } from '@/lib/shop-catalog';
+import { Skeleton } from '@/components/ui/skeleton';
 
 type ShopCatalogIcon = 'HOME' | 'BUILDING' | 'FACTORY' | 'FLAME' | 'PACKAGE' | 'TRUCK';
 
@@ -203,9 +204,37 @@ export default function ShopCatalogAdminPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">Loading...</td>
-                </tr>
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="animate-pulse">
+                    <td className="px-4 py-3">
+                      <div className="flex items-start gap-3">
+                        <Skeleton className="w-9 h-9 rounded-lg shrink-0" />
+                        <div className="space-y-1">
+                          <Skeleton className="h-4 w-32" />
+                          <Skeleton className="h-3 w-48" />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Skeleton className="h-4 w-20" />
+                    </td>
+                    <td className="px-4 py-3">
+                      <Skeleton className="h-4 w-24" />
+                    </td>
+                    <td className="px-4 py-3">
+                      <Skeleton className="h-5 w-16 rounded-full" />
+                    </td>
+                    <td className="px-4 py-3">
+                      <Skeleton className="h-5 w-14 rounded-full" />
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Skeleton className="h-7 w-7 rounded" />
+                        <Skeleton className="h-7 w-7 rounded" />
+                      </div>
+                    </td>
+                  </tr>
+                ))
               ) : items.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-gray-500">No shop items yet</td>

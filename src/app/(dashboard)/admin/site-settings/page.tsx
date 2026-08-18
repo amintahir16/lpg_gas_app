@@ -14,6 +14,7 @@ import {
   extractMapEmbedUrl,
   isValidMapEmbedUrl,
 } from '@/lib/public-site-settings';
+import { SiteSettingsSkeleton } from '@/components/skeletons';
 
 export default function PublicSiteSettingsPage() {
   const { data: session } = useSession();
@@ -81,7 +82,7 @@ export default function PublicSiteSettingsPage() {
   }
 
   if (loading) {
-    return <div className="p-8 text-center text-gray-500">Loading site settings...</div>;
+    return <SiteSettingsSkeleton />;
   }
 
   return (

@@ -50,9 +50,13 @@ export function PaymentMethodStatCards({
                 </span>
               )}
             </div>
-            <p className="text-2xl font-bold text-white mt-1">
-              {loading ? '…' : formatCurrency(amount)}
-            </p>
+            {loading ? (
+              <div className="h-7 w-32 bg-white/30 rounded-md animate-pulse my-1" />
+            ) : (
+              <p className="text-2xl font-bold text-white mt-1">
+                {formatCurrency(amount)}
+              </p>
+            )}
             {subtitle ? (
               <p className={`text-xs font-medium mt-0.5 ${styles.labelTone} opacity-90`}>
                 {subtitle}

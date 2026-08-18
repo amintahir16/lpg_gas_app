@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CustomSelect } from '@/components/ui/select-custom';
 import { Textarea } from '@/components/ui/textarea';
+import { Skeleton } from '@/components/ui/skeleton';
 
 type InquiryStatus = 'NEW' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
 type InquiryType = 'CONTACT' | 'SHOP_ORDER';
@@ -191,9 +192,28 @@ export default function WebsiteInquiriesPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-gray-500">Loading...</td>
-                  </tr>
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i} className="animate-pulse">
+                      <td className="px-4 py-3">
+                        <div className="space-y-1">
+                          <Skeleton className="h-4 w-32" />
+                          <Skeleton className="h-3 w-40" />
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Skeleton className="h-5 w-16 rounded-full" />
+                      </td>
+                      <td className="px-4 py-3">
+                        <Skeleton className="h-4 w-48" />
+                      </td>
+                      <td className="px-4 py-3">
+                        <Skeleton className="h-5 w-14 rounded-full" />
+                      </td>
+                      <td className="px-4 py-3">
+                        <Skeleton className="h-3.5 w-24" />
+                      </td>
+                    </tr>
+                  ))
                 ) : inquiries.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-4 py-8 text-center text-gray-500">No inquiries yet</td>

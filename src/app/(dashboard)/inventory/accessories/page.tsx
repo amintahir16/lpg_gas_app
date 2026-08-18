@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,7 @@ import {
 } from '@heroicons/react/24/outline';
 
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface CustomItem {
   id: string;
@@ -34,6 +35,7 @@ interface EquipmentStats {
 }
 
 export default function AccessoriesInventoryPage() {
+  const router = useRouter();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const { data: session } = useSession();
   const searchParams = useSearchParams();
@@ -471,7 +473,7 @@ export default function AccessoriesInventoryPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => window.location.href = '/inventory'}
+            onClick={() => router.push('/inventory')}
             className="flex items-center justify-center h-9 w-9 p-0 shrink-0 -ml-2"
             aria-label="Back"
           >
@@ -643,11 +645,28 @@ export default function AccessoriesInventoryPage() {
               </thead>
               <tbody className="bg-white">
                 {loading ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-2 text-center border-b">
-                      <div className="animate-pulse">Loading items...</div>
-                    </td>
-                  </tr>
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i} className="animate-pulse border-b">
+                      <td className="px-4 py-2.5">
+                        <Skeleton className="h-4 w-32" />
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Skeleton className="h-4 w-20" />
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Skeleton className="h-4 w-12" />
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Skeleton className="h-4 w-24" />
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Skeleton className="h-7 w-7 rounded" />
+                          <Skeleton className="h-7 w-7 rounded" />
+                        </div>
+                      </td>
+                    </tr>
+                  ))
                 ) : filteredCustomItems.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-4 py-2 text-center text-gray-500 border-b">

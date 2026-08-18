@@ -41,6 +41,7 @@ import { sharePdfFromUrl, downloadPdfBlob } from '@/lib/sharePdf';
 import { PAYMENT_METHOD_OPTIONS, formatPaymentMethodLabel } from '@/lib/payment-methods';
 import { usePaymentWallets } from '@/hooks/usePaymentWallets';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
+import { CustomerDetailSkeleton } from '@/components/skeletons';
 import {
   canUndoTransaction,
   transactionUndoWindowRemainingMs,
@@ -1694,11 +1695,8 @@ export default function B2BCustomerDetailPage() {
 
   if (loading && !customer) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600 font-medium">Loading customer details...</p>
-        </div>
+      <div className="space-y-6 max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+        <CustomerDetailSkeleton />
       </div>
     );
   }

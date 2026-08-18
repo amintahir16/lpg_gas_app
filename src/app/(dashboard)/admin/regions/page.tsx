@@ -32,6 +32,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface Region {
   id: string;
@@ -311,14 +312,43 @@ export default function RegionsManagementPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                      <span>Loading regions…</span>
-                    </div>
-                  </td>
-                </tr>
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="animate-pulse">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="w-4 h-4 rounded" />
+                        <div className="space-y-1">
+                          <Skeleton className="h-4 w-32" />
+                          <Skeleton className="h-3 w-48" />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Skeleton className="h-4 w-12 font-mono" />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="space-y-1">
+                        <Skeleton className="h-3.5 w-40" />
+                        <Skeleton className="h-3 w-28" />
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <Skeleton className="h-5 w-14 rounded-full" />
+                        <Skeleton className="h-5 w-14 rounded-full" />
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Skeleton className="h-5 w-16 rounded-full" />
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Skeleton className="h-7 w-7 rounded" />
+                        <Skeleton className="h-7 w-7 rounded" />
+                      </div>
+                    </td>
+                  </tr>
+                ))
               ) : filteredRegions.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-10 text-center text-gray-500">

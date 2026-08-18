@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { CustomSelect } from "@/components/ui/select-custom";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "react-hot-toast";
+import { SettingsSkeleton } from "@/components/skeletons";
 
 interface SystemSettings {
   companyName: string;
@@ -109,15 +110,7 @@ export default function SettingsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-4">System Settings</h1>
-        <div className="flex items-center space-x-2">
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-          <p className="text-gray-600">Loading settings...</p>
-        </div>
-      </div>
-    );
+    return <SettingsSkeleton />;
   }
 
   if (error && !settings) {
