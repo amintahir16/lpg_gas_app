@@ -27,9 +27,6 @@ const routePermissions = {
     // The `/api/` catch-all is intentional: only ADMIN/SUPER_ADMIN can sign in
     // (enforced in `src/lib/auth.ts`), and individual API routes do their own
     // role/permission checks on top of this gate.
-    // NOTE: `/vendors` is intentionally NOT here — it lives in
-    // `superAdminOnly` below. `/financial` stays here so the ADMIN
-    // carve-outs (see `superAdminOnlyExceptions`) can pass through.
     admin: [
         '/dashboard',
         '/customers',
@@ -43,25 +40,22 @@ const routePermissions = {
     ],
 
     // Routes reserved for SUPER_ADMIN. These are checked BEFORE the `admin`
-    // list, so they win even though they overlap with the `/financial` and
-    // `/api/` admin prefixes. SUPER_ADMIN itself never hits this check (it
-    // short-circuits to "allow" at the top of `checkRouteAccess`).
+    // list. ADMIN can access the main Financial hub, Wallets, and Expenses,
+    // but Revenue, Profit, and Salaries drilldowns/APIs remain SUPER_ADMIN-only.
     superAdminOnly: [
         '/vendors',
         '/api/vendors',
         '/api/vendor-categories',
-        '/financial',
-        '/api/financial'
+        '/financial/revenue',
+        '/api/financial/revenue',
+        '/financial/profit',
+        '/api/financial/profit',
+        '/financial/salaries',
+        '/api/financial/salaries'
     ],
 
-    // Carve-outs from `superAdminOnly` that ADMIN may still access:
-    // expense recording is delegated to ADMIN, everything else in the
-    // Financial section stays SUPER_ADMIN-only.
-    superAdminOnlyExceptions: [
-        '/financial/expenses',
-        '/api/financial/expenses',
-        '/api/financial/personal-expenses'
-    ],
+    // Carve-outs from `superAdminOnly` that ADMIN may still access (if any).
+    superAdminOnlyExceptions: [],
 
     // Routes any authenticated user (regardless of role) may hit.
     notifications: [

@@ -22,6 +22,7 @@ import {
   EnvelopeIcon,
   ShoppingBagIcon,
   GlobeAltIcon,
+  BuildingLibraryIcon,
 } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -60,6 +61,8 @@ const adminNavigation: NavigationItem[] = [
   { name: 'Customers', href: '/customers', icon: UsersIcon, roles: ['ADMIN'] },
   { name: 'Inventory', href: '/inventory', icon: CubeIcon, roles: ['ADMIN'] },
   { name: 'Expenses', href: '/financial/expenses', icon: CurrencyDollarIcon, roles: ['ADMIN'] },
+  { name: 'Wallets & Bank Accounts', href: '/financial/wallets', icon: BuildingLibraryIcon, roles: ['ADMIN'] },
+  { name: 'Reports', href: '/reports', icon: ChartBarIcon, roles: ['ADMIN'] },
 ];
 
 const customerNavigation: NavigationItem[] = [

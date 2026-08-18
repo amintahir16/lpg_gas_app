@@ -115,7 +115,6 @@ export default function ExpensesPage() {
     const router = useRouter();
     const { data: session } = useSession();
     const userRole = session?.user?.role;
-    // ADMIN can only access this page within Financial; the hub is SUPER_ADMIN-only.
     const backHref = userRole === 'SUPER_ADMIN' ? '/financial' : '/dashboard';
     // Ticks so a row's edit window closes on screen without needing a reload.
     const [now, setNow] = useState(() => Date.now());

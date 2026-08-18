@@ -187,7 +187,7 @@ export default function BankMethodDetailPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => router.push('/financial')}
+            onClick={() => router.back()}
             className="flex items-center justify-center h-9 w-9 p-0 shrink-0"
             aria-label="Back"
           >

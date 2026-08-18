@@ -35,8 +35,8 @@ const rolePermissions: Record<Role, Permission[]> = {
   ADMIN: [
     { resource: 'customer', action: 'manage' },
     { resource: 'inventory', action: 'manage' },
-    { resource: 'financial', action: 'read' },
-    { resource: 'reports', action: 'read' },
+    { resource: 'financial', action: 'manage' },
+    { resource: 'reports', action: 'manage' },
     { resource: 'vendor', action: 'read' },
     { resource: 'user', action: 'read' },
   ],

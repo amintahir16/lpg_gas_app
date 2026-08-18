@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
-import { requireAdmin } from '@/lib/apiAuth';
+import { requireSuperAdmin } from '@/lib/apiAuth';
 import { buildPaymentMethodTotals } from '@/lib/payment-methods';
 import {
     getFinancialChartBuckets,
@@ -13,7 +13,7 @@ import { isOpeningDuesSaleItem } from '@/lib/b2b-opening-entries';
 
 export async function GET(request: NextRequest) {
     try {
-        const auth = await requireAdmin();
+        const auth = await requireSuperAdmin();
         if (!auth.ok) return auth.response;
         const regionId = getActiveRegionId(request);
         const regionScope = regionScopedWhere(regionId);

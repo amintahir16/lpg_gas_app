@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
-import { requireAdmin } from '@/lib/apiAuth';
+import { requireSuperAdmin } from '@/lib/apiAuth';
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
-        const auth = await requireAdmin();
+        const auth = await requireSuperAdmin();
         if (!auth.ok) return auth.response;
         const regionId = getActiveRegionId(request);
         const { id } = await params;

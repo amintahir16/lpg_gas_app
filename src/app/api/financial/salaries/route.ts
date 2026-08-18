@@ -6,12 +6,12 @@ import { format } from 'date-fns';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity } from '@/lib/superAdminNotifier';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
-import { requireAdmin } from '@/lib/apiAuth';
+import { requireSuperAdmin } from '@/lib/apiAuth';
 import { resolveFinancialPeriod } from '@/lib/financial-period';
 import { normalizePaymentMethodKey } from '@/lib/payment-methods';
 export async function GET(request: NextRequest) {
     try {
-        const auth = await requireAdmin();
+        const auth = await requireSuperAdmin();
         if (!auth.ok) return auth.response;
         const session = auth.session;
         const regionId = getActiveRegionId(request);
@@ -131,7 +131,7 @@ export async function GET(request: NextRequest) {
 }
 export async function POST(request: NextRequest) {
     try {
-        const auth = await requireAdmin();
+        const auth = await requireSuperAdmin();
         if (!auth.ok) return auth.response;
         const session = auth.session;
         const regionId = getActiveRegionId(request);

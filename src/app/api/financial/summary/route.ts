@@ -332,11 +332,13 @@ export async function GET(request: NextRequest) {
             wallets: activeWallets,
         });
 
+        const isSuperAdmin = auth.session.user.role === 'SUPER_ADMIN';
+
         return NextResponse.json({
-            totalRevenue,
+            totalRevenue: isSuperAdmin ? totalRevenue : 0,
             totalExpenses,
-            totalProfit,
-            totalSalaries,
+            totalProfit: isSuperAdmin ? totalProfit : 0,
+            totalSalaries: isSuperAdmin ? totalSalaries : 0,
             byPaymentMethod,
             wallets: activeWallets,
             period,

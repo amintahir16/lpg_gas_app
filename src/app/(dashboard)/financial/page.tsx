@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import {
   CurrencyDollarIcon,
   BuildingOfficeIcon,
@@ -41,6 +42,7 @@ interface FinancialSummary {
 
 export default function FinancialPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<FinancialPeriodMode>('month');
@@ -48,6 +50,14 @@ export default function FinancialPage() {
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
+
+  const isSuperAdmin = session?.user?.role === 'SUPER_ADMIN';
+
+  useEffect(() => {
+    if (session?.user?.role === 'ADMIN') {
+      router.replace('/financial/wallets');
+    }
+  }, [session, router]);
 
   const periodLabel = useMemo(
     () =>
@@ -139,6 +149,10 @@ export default function FinancialPage() {
     },
   ];
 
+  const visibleCards = isSuperAdmin
+    ? cards
+    : cards.filter((card) => card.href === '/financial/expenses');
+
   return (
     <div className="space-y-8">
       {/* Header with Title and Period Filter */}
@@ -161,9 +175,15 @@ export default function FinancialPage() {
         />
       </div>
 
-      {/* 4 Core Metric Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {cards.map((card) => (
+      {/* Metric Cards (Super Admin sees all 4; Admin sees Expenses) */}
+      <div
+        className={`grid gap-6 ${
+          visibleCards.length === 1
+            ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+            : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4'
+        }`}
+      >
+        {visibleCards.map((card) => (
           <button
             key={card.title}
             type="button"

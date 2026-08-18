@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getActiveRegionId } from '@/lib/region';
-import { requireSuperAdmin } from '@/lib/apiAuth';
+import { requireAdmin } from '@/lib/apiAuth';
 import { resolveFinancialPeriod } from '@/lib/financial-period';
 import {
   BANK_LEDGER_SOURCE_LABELS,
@@ -48,7 +48,7 @@ export type SourceBreakdownRow = {
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireSuperAdmin();
+    const auth = await requireAdmin();
     if (!auth.ok) return auth.response;
 
     const regionId = getActiveRegionId(request);

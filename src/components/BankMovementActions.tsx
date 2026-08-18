@@ -396,9 +396,25 @@ export function BankMovementActions({
                 <Button
                   type="submit"
                   disabled={submitting}
-                  className="h-8 px-4 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+                  className={`h-8 px-4 text-xs font-bold text-white shadow-sm ${
+                    mode === 'deposit'
+                      ? 'bg-emerald-600 hover:bg-emerald-700'
+                      : mode === 'transfer'
+                        ? 'bg-indigo-600 hover:bg-indigo-700'
+                        : 'bg-rose-600 hover:bg-rose-700'
+                  }`}
                 >
-                  {submitting ? 'Saving...' : 'Save Movement'}
+                  {mode === 'deposit'
+                    ? submitting
+                      ? 'Adding Amount...'
+                      : 'Add Amount'
+                    : mode === 'transfer'
+                      ? submitting
+                        ? 'Moving Amount...'
+                        : 'Move Amount'
+                      : submitting
+                        ? 'Withdrawing...'
+                        : 'Withdraw Amount'}
                 </Button>
               </div>
             </form>

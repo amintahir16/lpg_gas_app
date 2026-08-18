@@ -114,7 +114,8 @@ export default function ReportsPage() {
   const [error, setError] = useState<string | null>(null);
   const [pdfBusy, setPdfBusy] = useState<'download' | 'share' | null>(null);
 
-  const isSuperAdmin = session?.user?.role === 'SUPER_ADMIN';
+  const userRole = session?.user?.role;
+  const isAllowed = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
 
   const periodLabel = useMemo(
     () => resolveFinancialPeriod({ period, date, month, year }).label,
@@ -123,10 +124,10 @@ export default function ReportsPage() {
 
   useEffect(() => {
     if (status === 'loading') return;
-    if (!isSuperAdmin) {
+    if (!isAllowed) {
       router.replace('/dashboard');
     }
-  }, [status, isSuperAdmin, router]);
+  }, [status, isAllowed, router]);
 
   const fetchReport = async (signal?: AbortSignal) => {
     try {
@@ -155,13 +156,13 @@ export default function ReportsPage() {
   };
 
   useEffect(() => {
-    if (status === 'loading' || !isSuperAdmin) return;
+    if (status === 'loading' || !isAllowed) return;
     const controller = new AbortController();
     fetchReport(controller.signal);
     return () => controller.abort();
-  }, [period, date, month, year, status, isSuperAdmin]);
+  }, [period, date, month, year, status, isAllowed]);
 
-  if (status === 'loading' || !isSuperAdmin) {
+  if (status === 'loading' || !isAllowed) {
     return (
       <div className="p-6 text-center text-gray-500">
         {status === 'loading' ? 'Loading…' : 'Redirecting…'}
