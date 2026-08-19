@@ -164,6 +164,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <Link
                   key={item.name}
                   href={item.href}
+                  prefetch={false}
                   className={cn(
                     "group flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-all duration-200",
                     isActive
@@ -210,6 +211,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <div className="flex items-center gap-1 flex-shrink-0">
               <Link
                 href="/"
+                prefetch={false}
                 className="text-xs text-blue-600 hover:text-blue-800 font-medium px-1.5"
               >
                 Landing
@@ -246,6 +248,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             </h2>
             <Link
               href="/"
+              prefetch={false}
               className="hidden sm:inline-block ml-4 text-sm text-blue-600 hover:text-blue-800 lg:hidden flex-shrink-0"
             >
               ← Landing
@@ -338,6 +341,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <div className="hidden lg:flex items-center space-x-4">
               <Link
                 href="/"
+                prefetch={false}
                 className="group inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded-lg transition-all duration-300 hover:shadow-md"
               >
                 <span>Landing Page</span>
