@@ -114,27 +114,31 @@ export async function PUT(
     // Region-scope guard: ensure the customer belongs to the active region
     const customerScopeCheck = await prisma.b2CCustomer.findFirst({
       where: { id: customerId, ...regionScopedWhere(regionId) },
-      select: { id: true }
+      select: { id: true, phone: true }
     });
 
     if (!customerScopeCheck) {
       return NextResponse.json({ error: 'Customer not found in current region' }, { status: 404 });
     }
 
-    // Check if another customer with same phone already exists in the same region
-    const existingCustomer = await prisma.b2CCustomer.findFirst({
-      where: {
-        phone,
-        id: { not: customerId },
-        ...regionScopedWhere(regionId),
-      }
-    });
+    // Check if another customer with same phone already exists in the same region (only if phone changed)
+    const newPhone = phone ? String(phone).trim() : '';
+    const oldPhone = customerScopeCheck.phone ? String(customerScopeCheck.phone).trim() : '';
+    if (newPhone && newPhone !== oldPhone) {
+      const existingCustomer = await prisma.b2CCustomer.findFirst({
+        where: {
+          phone: newPhone,
+          id: { not: customerId },
+          ...regionScopedWhere(regionId),
+        }
+      });
 
-    if (existingCustomer) {
-      return NextResponse.json(
-        { error: 'Another customer with this phone number already exists' },
-        { status: 400 }
-      );
+      if (existingCustomer) {
+        return NextResponse.json(
+          { error: 'Another customer with this phone number already exists' },
+          { status: 400 }
+        );
+      }
     }
 
     // B2C always keeps the single All Homes category.

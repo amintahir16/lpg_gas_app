@@ -60,6 +60,15 @@ export async function PUT(
 
     await adoptLegacyB2bCustomerIfNeeded(customerId, regionId);
 
+    // Verify customer exists in active region
+    const currentCustomer = await prisma.customer.findFirst({
+      where: { id: customerId, type: 'B2B', ...regionScopedWhere(regionId) },
+    });
+
+    if (!currentCustomer) {
+      return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+    }
+
     const body = await request.json();
     const {
       name,
@@ -83,12 +92,15 @@ export async function PUT(
       );
     }
 
-    // Check if another customer with same phone already exists (only if phone is being updated)
-    if (phone) {
+    // Check if another customer with same phone already exists (only if phone is being changed)
+    const newPhone = phone !== undefined ? String(phone).trim() : '';
+    const oldPhone = currentCustomer.phone ? String(currentCustomer.phone).trim() : '';
+    if (newPhone && newPhone !== oldPhone) {
       const existingCustomer = await prisma.customer.findFirst({
         where: {
-          phone,
+          phone: newPhone,
           id: { not: customerId },
+          type: 'B2B',
           ...regionScopedWhere(regionId),
         }
       });

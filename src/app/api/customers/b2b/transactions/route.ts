@@ -15,6 +15,7 @@ import {
 import { adoptLegacyB2bCustomerIfNeeded, getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { getB2bCustomerCylinderDueAggregatesFromPhysicalStock } from '@/lib/b2b-customer-cylinder-dues-from-stock';
 import { buildCylinderVariantSummary } from '@/lib/cylinder-variant-summary';
+import { recordB2BCustomerActivity } from '@/lib/b2b-activity-cache';
 
 export async function POST(request: NextRequest) {
   try {
@@ -629,6 +630,11 @@ export async function POST(request: NextRequest) {
         if (accessoriesForCheck.length > 0) {
           await checkAccessoriesForLowStock(accessoriesForCheck, regionId);
         }
+      }
+
+      // Optimistically update daily active cache
+      if (customerId) {
+        recordB2BCustomerActivity(customerId, regionId);
       }
     } catch (sideEffectError) {
       console.error('B2B transaction post-commit side effects failed:', sideEffectError);

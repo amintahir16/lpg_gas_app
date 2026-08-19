@@ -10,6 +10,7 @@ import { buildCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { isOpeningDuesSaleItem, isOpeningDuesTransaction } from '@/lib/b2b-opening-entries';
 import { calculateGasLineProfit } from '@/lib/gas-profit';
 import { getCapacityFromTypeString } from '@/lib/cylinder-utils';
+import { getDailyActiveB2BCustomerIds } from '@/lib/b2b-activity-cache';
 
 export async function GET(request: NextRequest) {
   try {
@@ -53,70 +54,42 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // ALL/ACTIVE never need archived rows — push isActive into SQL (same as prior in-memory ALL filter)
-    if (filterStatus === 'ALL' || filterStatus === 'ACTIVE') {
-      whereClause.isActive = true;
-    }
+    // 1. Fetch matching customers and get daily cached active customer IDs (runs at most ONCE a day)
+    // Only active (non-archived) customers are included
+    whereClause.isActive = true;
 
-    // 2. Fetch ALL matching customers first (needed for Active/Inactive filter which relies on relation)
-    // We have to fetch ID and some fields to determine status if filtering by status.
-    // Optimization: If NOT filtering by status, we can just paginate directly. 
-    // BUT we need summary stats for everything effectively. 
-    // To be robust, let's fetch essential data for filtering first.
+    const [allCustomers, activeCustomerIds] = await Promise.all([
+      prisma.customer.findMany({
+        where: whereClause,
+        select: {
+          id: true,
+          name: true,
+          contactPerson: true,
+          phone: true,
+          email: true,
+          notes: true,
+          ledgerBalance: true,
+          domestic118kgDue: true,
+          standard15kgDue: true,
+          commercial454kgDue: true,
+          address: true,
+          creditLimit: true,
+          paymentTermsDays: true,
+          marginCategoryId: true,
+          createdAt: true,
+          isActive: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      getDailyActiveB2BCustomerIds(regionId),
+    ]);
 
-    let allMatchingCustomers = await prisma.customer.findMany({
-      where: whereClause,
-      select: {
-        id: true,
-        name: true,
-        contactPerson: true,
-        phone: true,
-        email: true,
-        notes: true,
-        ledgerBalance: true,
-        domestic118kgDue: true,
-        standard15kgDue: true,
-        commercial454kgDue: true,
-
-        address: true,
-        creditLimit: true,
-        paymentTermsDays: true,
-        marginCategoryId: true,
-        createdAt: true,
-        isActive: true,
-        // Fetch most recent transaction date for "Active" status check
-        b2bTransactions: {
-          take: 1,
-          orderBy: { date: 'desc' },
-          select: { date: true }
-        }
-      },
-      orderBy: { createdAt: 'desc' } // Default sort for initial fetch
-    });
-
-    // 3. Apply "Active/Inactive" Filter in Memory (Complex Relation Logic)
-    // Active = Last transaction within 7 days
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-    const enrichedCustomers = allMatchingCustomers.map(c => {
-      const lastTxDate = c.b2bTransactions[0]?.date;
-      const recentActivity = lastTxDate ? new Date(lastTxDate) >= sevenDaysAgo : false;
-      // Archived (soft-deleted) customers are never "active", even with old activity.
-      // Active = still open (isActive) AND recent transaction activity.
-      const isEffectivelyActive = c.isActive && recentActivity;
-      return { ...c, isEffectivelyActive };
-    });
-
-    let filteredCustomers = enrichedCustomers;
+    // 2. Filter by status: Active = transaction in last 7 days; Inactive = no transaction in 7 days
+    let filteredCustomers = allCustomers;
     if (filterStatus === 'ACTIVE') {
-      filteredCustomers = enrichedCustomers.filter(c => c.isEffectivelyActive);
+      filteredCustomers = allCustomers.filter((c) => c.isActive && activeCustomerIds.has(c.id));
     } else if (filterStatus === 'INACTIVE') {
-      // Dormant open accounts + archived (soft-deleted) accounts
-      filteredCustomers = enrichedCustomers.filter(c => !c.isEffectivelyActive);
-    } else {
-      // ALL — hide archived customers from the main register (like vendors)
-      filteredCustomers = enrichedCustomers.filter(c => c.isActive);
+      filteredCustomers = allCustomers.filter((c) => !c.isActive || !activeCustomerIds.has(c.id));
     }
 
     // 4. Calculate Summary Statistics (On Filtered Data)
@@ -401,7 +374,7 @@ export async function GET(request: NextRequest) {
       const mergedHoldings: Record<string, number> = { ...physicalHoldings };
       return {
         ...c,
-        isActive: (c as any).isEffectivelyActive,
+        isActive: c.isActive && activeCustomerIds.has(c.id),
         holdings: mergedHoldings
       };
     });

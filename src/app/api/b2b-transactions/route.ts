@@ -4,6 +4,7 @@ import { B2BTransactionType } from '@prisma/client';
 import { generateCylinderTypeFromCapacity, getCapacityFromTypeString } from '@/lib/cylinder-utils';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { requireAdmin, clampLimit } from '@/lib/apiAuth';
+import { recordB2BCustomerActivity } from '@/lib/b2b-activity-cache';
 
 export async function GET(request: NextRequest) {
   try {
@@ -271,12 +272,14 @@ export async function POST(request: NextRequest) {
           });
 
           if (product) {
-            let newStockQuantity = product.stockQuantity;
+            const currentStock = Number(product.stockQuantity);
+            const itemQty = parseFloat(item.quantity) || 0;
+            let newStockQuantity = currentStock;
             
             if (transactionType === 'SALE') {
-              newStockQuantity -= parseFloat(item.quantity);
+              newStockQuantity -= itemQty;
             } else if (transactionType === 'RETURN_EMPTY' || transactionType === 'BUYBACK') {
-              newStockQuantity += parseFloat(item.quantity);
+              newStockQuantity += itemQty;
             }
 
             await tx.product.update({
@@ -344,6 +347,10 @@ export async function POST(request: NextRequest) {
 
       return transaction;
     });
+
+    if (customerId) {
+      recordB2BCustomerActivity(customerId, regionId);
+    }
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {

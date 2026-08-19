@@ -118,6 +118,7 @@ export default function B2BCustomersPage() {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [showEditForm, setShowEditForm] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<B2BCustomer | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleteConfirmationName, setDeleteConfirmationName] = useState('');
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -300,6 +301,7 @@ export default function B2BCustomersPage() {
 
   const handleEditCustomer = (customer: B2BCustomer) => {
     setEditingCustomer(customer);
+    setEditError(null);
     setShowEditForm(true);
   };
 
@@ -327,17 +329,24 @@ export default function B2BCustomersPage() {
     try {
       setIsLoading(true);
       setError(null);
+      setEditError(null);
       const response = await fetch(`/api/customers/b2b/${editingCustomer.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
-      if (!response.ok) throw new Error((await response.json()).error || 'Failed to update customer');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to update customer');
+      }
       setShowEditForm(false);
       setEditingCustomer(null);
+      setEditError(null);
       await fetchB2BCustomers();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update customer');
+      const errorMsg = err instanceof Error ? err.message : 'Failed to update customer';
+      setEditError(errorMsg);
+      setError(errorMsg);
     } finally {
       setIsLoading(false);
     }
@@ -870,6 +879,12 @@ export default function B2BCustomersPage() {
               </Button>
             </div>
             <div className="p-6">
+              {editError && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center justify-between">
+                  <span>{editError}</span>
+                  <button type="button" onClick={() => setEditError(null)} className="text-red-500 hover:text-red-700 font-bold ml-2">×</button>
+                </div>
+              )}
               <form className="space-y-5" onSubmit={(e) => {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
@@ -975,8 +990,10 @@ export default function B2BCustomersPage() {
                 </div>
 
                 <div className="flex justify-end gap-3 pt-2 mt-2">
-                  <Button type="button" variant="ghost" onClick={() => setShowEditForm(false)}>Cancel</Button>
-                  <Button type="submit" className="bg-blue-600 px-6">Update Customer</Button>
+                  <Button type="button" variant="ghost" onClick={() => setShowEditForm(false)} disabled={isLoading}>Cancel</Button>
+                  <Button type="submit" className="bg-blue-600 px-6" disabled={isLoading}>
+                    {isLoading ? 'Updating...' : 'Update Customer'}
+                  </Button>
                 </div>
               </form>
             </div>
