@@ -262,12 +262,16 @@ export default function B2BCustomerDetailPage() {
   const [showOpeningBalanceModal, setShowOpeningBalanceModal] = useState(false);
   const [openingBalanceAmount, setOpeningBalanceAmount] = useState('');
   const [openingBalanceDirection, setOpeningBalanceDirection] = useState<'OWES' | 'CREDIT'>('OWES');
+  const [openingBalanceDate, setOpeningBalanceDate] = useState(todayLocalDate);
+  const [openingBalanceTime, setOpeningBalanceTime] = useState(() => new Date().toTimeString().slice(0, 5));
   const [submittingOpeningBalance, setSubmittingOpeningBalance] = useState(false);
 
   const [showOpeningDuesModal, setShowOpeningDuesModal] = useState(false);
   const [openingDuesRows, setOpeningDuesRows] = useState<Array<{ variantKey: string; quantity: number }>>([
     { variantKey: '', quantity: 0 },
   ]);
+  const [openingDuesDate, setOpeningDuesDate] = useState(todayLocalDate);
+  const [openingDuesTime, setOpeningDuesTime] = useState(() => new Date().toTimeString().slice(0, 5));
   const [submittingOpeningDues, setSubmittingOpeningDues] = useState(false);
 
   // Margin category editing
@@ -1582,18 +1586,21 @@ export default function B2BCustomerDetailPage() {
       setError('Please enter a valid opening balance amount greater than 0.');
       return;
     }
+    if (!openingBalanceDate) {
+      setError('Please select a date for the opening balance.');
+      return;
+    }
 
     setSubmittingOpeningBalance(true);
     setError(null);
     try {
       // OWES  -> SALE (unpaid) increases ledgerBalance -> "Customer owes you"
       // CREDIT-> CREDIT_NOTE decreases ledgerBalance   -> "Customer has credit"
-      const now = new Date();
       const payload = {
         transactionType: openingBalanceDirection === 'OWES' ? 'SALE' : 'CREDIT_NOTE',
         customerId,
-        date: todayLocalDate(),
-        time: now.toTimeString().slice(0, 5),
+        date: openingBalanceDate,
+        time: openingBalanceTime || new Date().toTimeString().slice(0, 5),
         totalAmount: amount,
         ...(openingBalanceDirection === 'OWES' ? { paidAmount: 0, paymentMethod: 'CASH' } : {}),
         notes: OPENING_BALANCE_NOTE,
@@ -1615,6 +1622,8 @@ export default function B2BCustomerDetailPage() {
       setShowOpeningBalanceModal(false);
       setOpeningBalanceAmount('');
       setOpeningBalanceDirection('OWES');
+      setOpeningBalanceDate(todayLocalDate());
+      setOpeningBalanceTime(new Date().toTimeString().slice(0, 5));
       await refreshAfterOpeningEntry();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add opening balance');
@@ -1630,6 +1639,10 @@ export default function B2BCustomerDetailPage() {
     const selected = openingDuesRows.filter((r) => r.variantKey && r.quantity > 0);
     if (selected.length === 0) {
       setError('Please select at least one cylinder type and quantity.');
+      return;
+    }
+    if (!openingDuesDate) {
+      setError('Please select a date for cylinder dues.');
       return;
     }
 
@@ -1648,7 +1661,6 @@ export default function B2BCustomerDetailPage() {
     setSubmittingOpeningDues(true);
     setError(null);
     try {
-      const now = new Date();
       const gasItems = selected.map((row) => {
         const stat = availableCylinderTypes.find((s) => s.variantKey === row.variantKey);
         return {
@@ -1663,8 +1675,8 @@ export default function B2BCustomerDetailPage() {
       const payload = {
         transactionType: 'SALE',
         customerId,
-        date: todayLocalDate(),
-        time: now.toTimeString().slice(0, 5),
+        date: openingDuesDate,
+        time: openingDuesTime || new Date().toTimeString().slice(0, 5),
         totalAmount: 0,
         notes: OPENING_DUES_NOTE,
         paymentReference: OPENING_DUES_REF,
@@ -1685,6 +1697,8 @@ export default function B2BCustomerDetailPage() {
 
       setShowOpeningDuesModal(false);
       setOpeningDuesRows([{ variantKey: '', quantity: 0 }]);
+      setOpeningDuesDate(todayLocalDate());
+      setOpeningDuesTime(new Date().toTimeString().slice(0, 5));
       await refreshAfterOpeningEntry();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add cylinder dues');
@@ -1922,6 +1936,8 @@ export default function B2BCustomerDetailPage() {
                     setError(null);
                     setOpeningBalanceAmount('');
                     setOpeningBalanceDirection('OWES');
+                    setOpeningBalanceDate(todayLocalDate());
+                    setOpeningBalanceTime(new Date().toTimeString().slice(0, 5));
                     setShowOpeningBalanceModal(true);
                   }}
                   className="mt-2 h-7 text-[11px] px-3 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
@@ -1993,6 +2009,8 @@ export default function B2BCustomerDetailPage() {
                   onClick={() => {
                     setError(null);
                     setOpeningDuesRows([{ variantKey: '', quantity: 0 }]);
+                    setOpeningDuesDate(todayLocalDate());
+                    setOpeningDuesTime(new Date().toTimeString().slice(0, 5));
                     setShowOpeningDuesModal(true);
                   }}
                   className="mt-2 h-7 text-[11px] px-3 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
@@ -2050,6 +2068,30 @@ export default function B2BCustomerDetailPage() {
                   <p className="text-sm font-medium text-red-800">{error}</p>
                 </div>
               )}
+
+              {/* Date and Time Row */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Date</label>
+                  <Input
+                    type="date"
+                    value={openingBalanceDate}
+                    onChange={(e) => setOpeningBalanceDate(e.target.value)}
+                    required
+                    className="bg-white h-9 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Time</label>
+                  <Input
+                    type="time"
+                    value={openingBalanceTime}
+                    onChange={(e) => setOpeningBalanceTime(e.target.value)}
+                    required
+                    className="bg-white h-9 text-sm"
+                  />
+                </div>
+              </div>
 
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1.5">Balance Type</label>
@@ -2139,6 +2181,30 @@ export default function B2BCustomerDetailPage() {
                   <p className="text-sm font-medium text-red-800">{error}</p>
                 </div>
               )}
+
+              {/* Date and Time Row */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Date</label>
+                  <Input
+                    type="date"
+                    value={openingDuesDate}
+                    onChange={(e) => setOpeningDuesDate(e.target.value)}
+                    required
+                    className="bg-white h-9 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Time</label>
+                  <Input
+                    type="time"
+                    value={openingDuesTime}
+                    onChange={(e) => setOpeningDuesTime(e.target.value)}
+                    required
+                    className="bg-white h-9 text-sm"
+                  />
+                </div>
+              </div>
 
               <p className="text-[11px] text-gray-500">
                 Selected cylinders move from <span className="font-medium">Full</span> stock to{' '}
