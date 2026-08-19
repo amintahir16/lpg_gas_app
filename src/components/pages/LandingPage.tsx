@@ -506,13 +506,15 @@ export default function LandingPage() {
                 cardHeight={500}
                 radius={24}
                 tint="#0a0e14"
-                spread={48}
-                depth={160}
+                spread={45}
+                depth={420}
                 anchorY="top"
+                perspective={2400}
+                ease="expo.out"
                 autoplay
                 autoplayDelay={3200}
                 loop
-                showControls
+                showControls={false}
                 showIndicators
               />
               {/* Floating stat card */}
