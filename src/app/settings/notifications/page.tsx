@@ -8,85 +8,33 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useNotifications } from '@/contexts/NotificationContext';
-import { BellIcon, CogIcon, TrashIcon, ArrowPathIcon, ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { BellIcon, CogIcon, TrashIcon, ArrowPathIcon, ArrowLeftIcon, CheckIcon } from '@heroicons/react/24/outline';
+import { toast } from 'react-hot-toast';
+import { cn } from '@/lib/utils';
 
-interface NotificationPreferences {
-  email: boolean;
-  push: boolean;
-  sms: boolean;
-  lowPriority: boolean;
-  mediumPriority: boolean;
-  highPriority: boolean;
-  urgentPriority: boolean;
-  businessHours: boolean;
-  quietHours: {
-    enabled: boolean;
-    start: string;
-    end: string;
-  };
-  types: {
-    customer: boolean;
-    vendor: boolean;
-    cylinder: boolean;
-    rental: boolean;
-    payment: boolean;
-    expense: boolean;
-    inventory: boolean;
-    maintenance: boolean;
-    system: boolean;
-  };
-}
-
-const DEFAULT_PREFERENCES: NotificationPreferences = {
-  email: true,
-  push: true,
-  sms: false,
-  lowPriority: true,
-  mediumPriority: true,
-  highPriority: true,
-  urgentPriority: true,
-  businessHours: true,
-  quietHours: {
-    enabled: false,
-    start: '22:00',
-    end: '08:00',
-  },
-  types: {
-    customer: true,
-    vendor: true,
-    cylinder: true,
-    rental: true,
-    payment: true,
-    expense: true,
-    inventory: true,
-    maintenance: true,
-    system: true,
-  },
-};
-
-const PREFS_STORAGE_KEY = 'notificationPreferences';
+import {
+  NotificationPreferences,
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  getStoredNotificationPreferences,
+  setStoredNotificationPreferences,
+} from '@/lib/notificationPreferences';
 
 export default function NotificationSettingsPage() {
   const router = useRouter();
-  const { state, markAsRead, markAllAsRead, removeNotification, fetchNotifications, fetchStats } = useNotifications();
+  const { state, markAsRead, markAllAsRead, removeNotification, fetchNotifications, fetchStats, preferences: contextPrefs, updatePreferences } = useNotifications();
   const { notifications, stats, isLoading } = state;
 
-  const [preferences, setPreferences] = useState<NotificationPreferences>(DEFAULT_PREFERENCES);
+  const [preferences, setPreferences] = useState<NotificationPreferences>(contextPrefs || DEFAULT_NOTIFICATION_PREFERENCES);
   const [activeTab, setActiveTab] = useState<'preferences' | 'history' | 'stats'>('preferences');
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [savingPrefs, setSavingPrefs] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
-    const savedPreferences = localStorage.getItem(PREFS_STORAGE_KEY);
-    if (!savedPreferences) return;
-    try {
-      setPreferences({ ...DEFAULT_PREFERENCES, ...JSON.parse(savedPreferences) });
-    } catch (e) {
-      console.error('Failed to parse saved preferences:', e);
-    }
+    setPreferences(getStoredNotificationPreferences());
   }, []);
 
   // Settings page needs the list — load once on mount (not on every tab focus).
@@ -107,9 +55,16 @@ export default function NotificationSettingsPage() {
   const savePreferences = () => {
     try {
       setSavingPrefs(true);
-      localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify(preferences));
-      showStatus('success', 'Preferences saved');
+      updatePreferences(preferences);
+      setJustSaved(true);
+      toast.success('Notification preferences saved successfully!', {
+        id: 'pref-save-toast',
+        duration: 3500,
+      });
+      showStatus('success', 'Notification preferences saved successfully');
+      setTimeout(() => setJustSaved(false), 3000);
     } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save preferences');
       showStatus(
         'error',
         error instanceof Error ? error.message : 'Failed to save preferences'
@@ -529,10 +484,46 @@ export default function NotificationSettingsPage() {
             </CardContent>
           </Card>
 
-          <div className="flex justify-end">
-            <Button type="button" onClick={savePreferences} disabled={savingPrefs} className="px-8">
-              {savingPrefs ? 'Saving…' : 'Save Preferences'}
-            </Button>
+          <div className="sticky bottom-4 z-20 flex items-center justify-between gap-4 p-4 rounded-xl bg-white/95 backdrop-blur-md border border-gray-200/80 shadow-lg transition-all duration-200">
+            <div className="flex items-center gap-2 text-sm">
+              {justSaved ? (
+                <span className="flex items-center gap-1.5 font-semibold text-emerald-600">
+                  <CheckIcon className="w-4 h-4 text-emerald-600 stroke-2" />
+                  Preferences saved successfully!
+                </span>
+              ) : (
+                <span className="text-gray-500 text-xs sm:text-sm">
+                  Changes apply immediately to your notification bell and popups.
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <Button
+                type="button"
+                onClick={savePreferences}
+                disabled={savingPrefs}
+                className={cn(
+                  "px-6 h-10 font-medium transition-all duration-200 shadow-sm",
+                  justSaved
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                    : "bg-blue-600 hover:bg-blue-700 text-white"
+                )}
+              >
+                {savingPrefs ? (
+                  <span className="flex items-center gap-2">
+                    <ArrowPathIcon className="w-4 h-4 animate-spin" />
+                    Saving…
+                  </span>
+                ) : justSaved ? (
+                  <span className="flex items-center gap-2">
+                    <CheckIcon className="w-4 h-4 stroke-2" />
+                    Saved
+                  </span>
+                ) : (
+                  'Save Preferences'
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       )}

@@ -15,11 +15,18 @@ export default function TestNotificationsPage() {
   const { createNotification } = useNotifications();
   const { success, error, warning, info } = useToast();
   
-  const [notificationData, setNotificationData] = useState({
+  const [notificationData, setNotificationData] = useState<{
+    type: string;
+    title: string;
+    message: string;
+    priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+    userId: string;
+    metadata: string;
+  }>({
     type: 'SYSTEM_ALERT',
     title: '',
     message: '',
-    priority: 'MEDIUM' as const,
+    priority: 'MEDIUM',
     userId: '',
     metadata: ''
   });
@@ -47,7 +54,8 @@ export default function TestNotificationsPage() {
         message: notificationData.message,
         userId: notificationData.userId || undefined,
         metadata,
-        priority: notificationData.priority
+        priority: notificationData.priority,
+        isRead: false
       });
 
       addTestResult(`✅ Created notification: ${notificationData.title}`);
@@ -212,7 +220,7 @@ export default function TestNotificationsPage() {
               <Label htmlFor="priority">Priority</Label>
               <Select 
                 value={notificationData.priority} 
-                onChange={(e) => setNotificationData(prev => ({ ...prev, priority: e.target.value }))}
+                onChange={(e) => setNotificationData(prev => ({ ...prev, priority: (e.target.value as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT') || 'MEDIUM' }))}
               >
                 <option value="">Select priority</option>
                 <option value="LOW">Low</option>

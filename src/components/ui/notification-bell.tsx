@@ -20,16 +20,16 @@ export function NotificationBell({
   showBadge = true, 
   variant = 'default' 
 }: NotificationBellProps) {
-  const { state, markAsRead, removeNotification, refreshBell } = useNotifications();
+  const { state, markAsRead, removeNotification, refreshBell, filteredNotifications } = useNotifications();
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const bellRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const { notifications, stats } = state;
-  const unreadCount = stats.unread || 0;
-  const urgentCount = stats.urgent || 0;
+  const notifications = filteredNotifications;
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
+  const urgentCount = notifications.filter((n) => !n.isRead && n.priority === 'URGENT').length;
 
   // Handle click outside to close
   useEffect(() => {

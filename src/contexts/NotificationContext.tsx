@@ -1,7 +1,15 @@
 'use client';
 
-import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
+import {
+  NotificationPreferences,
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  getStoredNotificationPreferences,
+  setStoredNotificationPreferences,
+  NOTIFICATION_PREFERENCES_CHANGED_EVENT,
+  matchesNotificationPreferences,
+} from '@/lib/notificationPreferences';
 
 export interface Notification {
   id: string;
@@ -147,11 +155,14 @@ function notificationReducer(state: NotificationState, action: NotificationActio
 
 interface NotificationContextType {
   state: NotificationState;
+  preferences: NotificationPreferences;
+  updatePreferences: (newPrefs: NotificationPreferences) => void;
+  filteredNotifications: Notification[];
   fetchNotifications: () => Promise<boolean>;
   fetchStats: () => Promise<boolean>;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
-  createNotification: (notification: Omit<Notification, 'id' | 'createdAt'>) => Promise<Notification>;
+  createNotification: (notification: Omit<Notification, 'id' | 'createdAt' | 'isRead'> & { isRead?: boolean }) => Promise<Notification>;
   removeNotification: (id: string) => Promise<void>;
   clearError: () => void;
   /** Login / tab focus: stats-only (1 SQL). */
@@ -191,8 +202,34 @@ function applyStats(
 export function NotificationProvider({ children }: NotificationProviderProps) {
   const { data: session } = useSession();
   const [state, dispatch] = useReducer(notificationReducer, initialState);
+  const [preferences, setPreferencesState] = useState<NotificationPreferences>(DEFAULT_NOTIFICATION_PREFERENCES);
   const lastUpdateRef = useRef<Date | null>(null);
   lastUpdateRef.current = state.lastUpdate;
+
+  useEffect(() => {
+    setPreferencesState(getStoredNotificationPreferences());
+
+    const handlePrefChange = () => {
+      setPreferencesState(getStoredNotificationPreferences());
+    };
+
+    window.addEventListener(NOTIFICATION_PREFERENCES_CHANGED_EVENT, handlePrefChange);
+    window.addEventListener('storage', handlePrefChange);
+
+    return () => {
+      window.removeEventListener(NOTIFICATION_PREFERENCES_CHANGED_EVENT, handlePrefChange);
+      window.removeEventListener('storage', handlePrefChange);
+    };
+  }, []);
+
+  const updatePreferences = useCallback((newPrefs: NotificationPreferences) => {
+    setPreferencesState(newPrefs);
+    setStoredNotificationPreferences(newPrefs);
+  }, []);
+
+  const filteredNotifications = useMemo(() => {
+    return state.notifications.filter((n) => matchesNotificationPreferences(n, preferences));
+  }, [state.notifications, preferences]);
 
   /** Badge counts only — 1 DB query. */
   const fetchStats = useCallback(async (): Promise<boolean> => {
@@ -337,7 +374,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     }
   }, []);
 
-  const createNotification = useCallback(async (notification: Omit<Notification, 'id' | 'createdAt'>) => {
+  const createNotification = useCallback(async (notification: Omit<Notification, 'id' | 'createdAt' | 'isRead'> & { isRead?: boolean }) => {
     try {
       const response = await fetch('/api/notifications', {
         method: 'POST',
@@ -423,6 +460,9 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 
   const contextValue: NotificationContextType = {
     state,
+    preferences,
+    updatePreferences,
+    filteredNotifications,
     fetchNotifications,
     fetchStats,
     markAsRead,
