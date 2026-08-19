@@ -532,16 +532,19 @@ export class InventoryIntegrationService {
       extractedCapacity !== null ? extractedCapacity : this.getCylinderCapacity(cylinderType);
     const cylinderStatus = status || 'EMPTY';
     const codes = cylinderCodes ? cylinderCodes.split(',').map((c) => c.trim()) : [];
+    const usedCodesInBatch = new Set<string>();
 
     for (let i = 0; i < quantity; i++) {
       let cylinderCode: string;
       if (codes[i] && codes[i].trim()) {
         cylinderCode = codes[i].trim();
+        usedCodesInBatch.add(cylinderCode);
       } else {
         const codeInput = typeName || cylinderType;
         const isTypeName = !!typeName;
         const { generateUniqueCylinderCode } = await import('@/lib/cylinder-code-generator');
-        cylinderCode = await generateUniqueCylinderCode(codeInput, isTypeName);
+        cylinderCode = await generateUniqueCylinderCode(codeInput, isTypeName, tx, usedCodesInBatch);
+        usedCodesInBatch.add(cylinderCode);
       }
 
       const created = await db.cylinder.create({

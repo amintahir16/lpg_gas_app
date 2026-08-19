@@ -619,7 +619,6 @@ export default function VendorDetailPage() {
   const getPaymentsForPurchase = (purchase: any) => {
     if (!vendor?.payments) return [];
     return vendor.payments.filter((payment) => {
-      if (payment.status && payment.status !== 'COMPLETED') return false;
       if (
         purchase.purchaseBatchId &&
         payment.purchaseBatchId &&
@@ -641,7 +640,13 @@ export default function VendorDetailPage() {
   };
 
   const handleUndoPurchase = async () => {
-    if (!undoTarget?.purchaseBatchId) {
+    const targetIdentifier =
+      undoTarget?.purchaseBatchId ||
+      undoTarget?.invoiceNumber ||
+      undoTarget?.items?.[0]?.id ||
+      undoTarget?.id;
+
+    if (!targetIdentifier) {
       setUndoError('This purchase cannot be undone.');
       return;
     }
@@ -655,7 +660,7 @@ export default function VendorDetailPage() {
     setUndoError(null);
     try {
       const response = await fetch(
-        `/api/vendors/${vendorId}/purchases/${undoTarget.purchaseBatchId}/undo`,
+        `/api/vendors/${vendorId}/purchases/${encodeURIComponent(targetIdentifier)}/undo`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2626,9 +2631,8 @@ export default function VendorDetailPage() {
                               Pay
                             </Button>
                           )}
-                          {/* Undo only for admin users and tracked (post-update) active batches */}
+                          {/* Undo for admin users on any active purchase */}
                           {isAdminUser &&
-                            purchase.purchaseBatchId &&
                             purchase.status !== 'CANCELLED' &&
                             purchase.purchaseBatch?.status !== 'UNDONE' && (
                             <Button

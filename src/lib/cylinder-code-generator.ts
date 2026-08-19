@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
 import { getCylinderCodePrefix } from './cylinder-utils';
 
 /**
@@ -8,19 +9,25 @@ import { getCylinderCodePrefix } from './cylinder-utils';
  * 
  * @param input - Type name (e.g., "Domestic") or cylinder type (e.g., "DOMESTIC_11_8KG")
  * @param isTypeName - Whether input is a type name (true) or cylinder type enum (false)
+ * @param tx - Optional Prisma transaction client
+ * @param usedCodes - Optional Set of codes already generated in the current operation
  * @returns Unique cylinder code (e.g., "DM-0001")
  */
 export async function generateUniqueCylinderCode(
   input: string,
-  isTypeName: boolean = true
+  isTypeName: boolean = true,
+  tx?: Prisma.TransactionClient,
+  usedCodes?: Set<string>
 ): Promise<string> {
+  const db = tx || prisma;
   const prefix = getCylinderCodePrefix(input, isTypeName);
   
-  // Find all existing cylinders with this prefix
-  const existingCylinders = await prisma.cylinder.findMany({
+  // Find all existing cylinders with this prefix (case-insensitive)
+  const existingCylinders = await db.cylinder.findMany({
     where: {
       code: {
-        startsWith: prefix
+        startsWith: prefix,
+        mode: 'insensitive'
       }
     },
     select: {
@@ -32,43 +39,42 @@ export async function generateUniqueCylinderCode(
   });
   
   // Extract numbers from existing codes and find the highest
-  // Handle both formats: DM-0001 (with dash) and DM0001 (without dash)
   let maxNumber = 0;
   existingCylinders.forEach(cylinder => {
-    // Match patterns like:
-    // - DM-0001, ST-0001, CM-0001 (with dash, any number of digits)
-    // - DM0001, ST0001, CM0001 (without dash, any number of digits)
-    // - DM-0001-1234 (with suffix, ignore suffix)
-    const match = cylinder.code.match(new RegExp(`^${prefix}[-]?(\\d+)(?:-\\d+)?$`));
+    const match = cylinder.code.match(new RegExp(`^${prefix}[-]?(\\d+)`, 'i'));
     if (match) {
       const number = parseInt(match[1], 10);
-      if (number > maxNumber) {
+      if (Number.isFinite(number) && number > maxNumber) {
         maxNumber = number;
       }
     }
   });
   
-  // Generate the next sequential number
-  const nextNumber = maxNumber + 1;
-  
-  // Determine padding: use 4 digits for numbers up to 9999, then extend
-  // For numbers 1-9999: use 4 digits (DM-0001 to DM-9999)
-  // For numbers 10000+: use 5 digits (DM-10000, DM-10001, etc.)
-  const padding = nextNumber > 9999 ? 5 : 4;
-  const cylinderCode = `${prefix}-${nextNumber.toString().padStart(padding, '0')}`;
-  
-  // Double-check that this code doesn't exist (safety check)
-  const existingCylinder = await prisma.cylinder.findUnique({
-    where: { code: cylinderCode }
-  });
-  
-  if (existingCylinder) {
-    // If somehow it exists, add a timestamp to make it unique
-    const timestamp = Date.now().toString().slice(-4);
-    return `${prefix}-${nextNumber.toString().padStart(padding, '0')}-${timestamp}`;
+  // Find the next available number that does not exist in DB or usedCodes
+  let candidateNumber = maxNumber + 1;
+  while (true) {
+    const padding = candidateNumber > 9999 ? 5 : 4;
+    const cylinderCode = `${prefix}-${candidateNumber.toString().padStart(padding, '0')}`;
+
+    if (usedCodes?.has(cylinderCode)) {
+      candidateNumber++;
+      continue;
+    }
+
+    const existingCylinder = await db.cylinder.findUnique({
+      where: { code: cylinderCode },
+      select: { id: true }
+    });
+
+    if (!existingCylinder) {
+      if (usedCodes) {
+        usedCodes.add(cylinderCode);
+      }
+      return cylinderCode;
+    }
+
+    candidateNumber++;
   }
-  
-  return cylinderCode;
 }
 
 

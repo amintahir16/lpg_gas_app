@@ -43,10 +43,8 @@ export async function GET(
           orderBy: { purchaseDate: 'desc' }
         },
         payments: {
-          where: {
-            status: 'COMPLETED',
-            ...regionScope,
-          }
+          where: regionScope,
+          orderBy: { paymentDate: 'desc' },
         }
       }
     });
@@ -71,8 +69,9 @@ export async function GET(
     // Calculate purchase-related payments (simplified since purchase_entries don't have payments relation)
     const totalPurchasePayments = 0; // Purchase entries don't have direct payment relations
 
-    // Calculate direct payments
-    const totalDirectPayments = vendor.payments.reduce(
+    // Calculate active direct payments (completed only)
+    const activePayments = vendor.payments.filter((p) => p.status === 'COMPLETED');
+    const totalDirectPayments = activePayments.reduce(
       (sum, payment) => sum + Number(payment.amount),
       0
     );

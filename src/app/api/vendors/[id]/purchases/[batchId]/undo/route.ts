@@ -7,6 +7,7 @@ import { ActivityAction, logActivity } from '@/lib/activityLogger';
 import {
   assertPurchaseEffectsReversible,
   reversePurchaseInventoryEffects,
+  reverseHistoricalPurchaseInventoryFallback,
 } from '@/lib/purchase-undo';
 
 function isAdminRole(role?: string | null): boolean {
@@ -55,10 +56,10 @@ export async function POST(
       return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
     }
 
-    const existingBatch = await prisma.vendorPurchaseBatch.findFirst({
+    let existingBatch = await prisma.vendorPurchaseBatch.findFirst({
       where: {
-        id: batchId,
         vendorId,
+        OR: [{ id: batchId }, { invoiceNumber: batchId }],
       },
       select: {
         id: true,
@@ -71,21 +72,29 @@ export async function POST(
       },
     });
 
+    // If no batch exists, check for unbatched purchase entries (historical purchases)
+    let fallbackEntries: any[] = [];
     if (!existingBatch) {
-      return NextResponse.json(
-        {
-          error:
-            'This purchase cannot be undone. Only purchases created after undo tracking are eligible.',
+      fallbackEntries = await prisma.purchaseEntry.findMany({
+        where: {
+          vendorId,
+          OR: [{ invoiceNumber: batchId }, { id: batchId }],
         },
-        { status: 404 }
-      );
+      });
+
+      if (fallbackEntries.length === 0) {
+        return NextResponse.json(
+          { error: 'Purchase entry not found' },
+          { status: 404 }
+        );
+      }
     }
 
-    if (!belongsToActiveRegion(existingBatch.regionId, regionId)) {
+    if (existingBatch && !belongsToActiveRegion(existingBatch.regionId, regionId)) {
       return NextResponse.json({ error: 'Purchase not found in active region' }, { status: 404 });
     }
 
-    if (existingBatch.status === 'UNDONE') {
+    if (existingBatch && existingBatch.status === 'UNDONE') {
       return NextResponse.json({
         alreadyUndone: true,
         message: 'Purchase entry is already undone',
@@ -96,20 +105,69 @@ export async function POST(
     let result;
     try {
       result = await prisma.$transaction(async (tx) => {
-        const batch = await tx.vendorPurchaseBatch.findFirst({
-          where: {
-            id: batchId,
-            vendorId,
-            status: 'ACTIVE',
-          },
-          include: {
-            inventoryEffects: {
-              orderBy: { createdAt: 'asc' },
+        let batch;
+
+        if (existingBatch) {
+          batch = await tx.vendorPurchaseBatch.findFirst({
+            where: {
+              id: existingBatch.id,
+              vendorId,
+              status: 'ACTIVE',
             },
-            payments: true,
-            purchaseEntries: true,
-          },
-        });
+            include: {
+              inventoryEffects: {
+                orderBy: { createdAt: 'asc' },
+              },
+              payments: true,
+              purchaseEntries: true,
+            },
+          });
+        } else {
+          // Dynamic batch synthesis for historical unbatched purchases
+          const firstEntry = fallbackEntries[0];
+          const invoiceNum = firstEntry.invoiceNumber || null;
+          const totalAmt = fallbackEntries.reduce((sum, e) => sum + Number(e.totalPrice || 0), 0);
+
+          const newBatch = await tx.vendorPurchaseBatch.create({
+            data: {
+              vendorId,
+              invoiceNumber: invoiceNum,
+              category: firstEntry.category || 'GAS_PURCHASE',
+              purchaseDate: firstEntry.purchaseDate,
+              totalAmount: totalAmt,
+              status: 'ACTIVE',
+              createdBy: firstEntry.userId || session.user.id,
+              regionId: firstEntry.regionId || null,
+            },
+          });
+
+          // Link entries to the new batch
+          await tx.purchaseEntry.updateMany({
+            where: { id: { in: fallbackEntries.map((e) => e.id) } },
+            data: { purchaseBatchId: newBatch.id },
+          });
+
+          // Link any payments matching invoice number
+          if (invoiceNum) {
+            await tx.vendorPayment.updateMany({
+              where: {
+                vendorId,
+                purchaseBatchId: null,
+                description: { contains: invoiceNum },
+              },
+              data: { purchaseBatchId: newBatch.id },
+            });
+          }
+
+          batch = await tx.vendorPurchaseBatch.findUnique({
+            where: { id: newBatch.id },
+            include: {
+              inventoryEffects: true,
+              payments: true,
+              purchaseEntries: true,
+            },
+          });
+        }
 
         if (!batch) {
           throw Object.assign(new Error('Purchase batch is no longer active'), {
@@ -117,8 +175,17 @@ export async function POST(
           });
         }
 
-        await assertPurchaseEffectsReversible(tx, batch.inventoryEffects);
-        await reversePurchaseInventoryEffects(tx, batch.inventoryEffects);
+        let effectCount = batch.inventoryEffects?.length || 0;
+        if (batch.inventoryEffects && batch.inventoryEffects.length > 0) {
+          await assertPurchaseEffectsReversible(tx, batch.inventoryEffects);
+          await reversePurchaseInventoryEffects(tx, batch.inventoryEffects);
+        } else if (batch.purchaseEntries && batch.purchaseEntries.length > 0) {
+          effectCount = await reverseHistoricalPurchaseInventoryFallback(
+            tx,
+            batch.purchaseEntries,
+            batch.regionId || regionId,
+          );
+        }
 
         if (batch.payments.length > 0) {
           await tx.vendorPayment.updateMany({
@@ -156,7 +223,7 @@ export async function POST(
           batch: undoneBatch,
           paymentCount: batch.payments.length,
           entryCount: batch.purchaseEntries.length,
-          effectCount: batch.inventoryEffects.length,
+          effectCount,
         };
       });
     } catch (error) {

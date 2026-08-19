@@ -1,5 +1,8 @@
 import { Prisma } from '@prisma/client';
 import type { PurchaseInventoryEffect } from '@prisma/client';
+import { generateCylinderTypeFromCapacity, normalizeTypeName } from './cylinder-utils';
+import { buildCylinderVariantKey, buildPrismaCylinderVariantWhere } from '@/lib/cylinder-variant-key';
+import { regionScopedWhere } from './region';
 
 type PrismaTx = Prisma.TransactionClient;
 
@@ -285,4 +288,219 @@ export async function reversePurchaseInventoryEffects(
 
     void after;
   }
+}
+
+/**
+ * Fallback inventory reversal for historical purchases that were created before
+ * PurchaseInventoryEffect tracking was implemented.
+ */
+export async function reverseHistoricalPurchaseInventoryFallback(
+  tx: PrismaTx,
+  purchaseEntries: Array<{
+    id: string;
+    category: string;
+    itemName: string;
+    quantity: number;
+    regionId?: string | null;
+  }>,
+  regionId?: string | null,
+): Promise<number> {
+  let reversedCount = 0;
+
+  for (const entry of purchaseEntries) {
+    const qty = Number(entry.quantity || 0);
+    if (qty <= 0) continue;
+
+    const itemNameLower = entry.itemName.toLowerCase();
+    const isCylinderPurchase = entry.category === 'CYLINDER_PURCHASE';
+    const isGasPurchase =
+      entry.category === 'GAS_PURCHASE' ||
+      (!isCylinderPurchase && (itemNameLower.includes('gas') || /(\d+\.?\d*)\s*kg/i.test(entry.itemName)));
+
+    if (isGasPurchase) {
+      const weightMatch = itemNameLower.match(/(\d+\.?\d*)\s*kg/i);
+      if (!weightMatch) continue;
+
+      const capacity = parseFloat(weightMatch[1]);
+      if (isNaN(capacity) || capacity <= 0) continue;
+
+      const m = entry.itemName.match(/^\s*([^\d(]+?)\s*(?:\(|\b)\s*(\d+(?:\.\d+)?)\s*kg/i);
+      const rawTypeName = m?.[1]?.trim() || '';
+      const normalizedTypeName = normalizeTypeName(rawTypeName);
+      const typeNameForKey =
+        normalizedTypeName && !/cylinder|gas/i.test(normalizedTypeName) ? normalizedTypeName : null;
+
+      const generatedType = generateCylinderTypeFromCapacity(capacity);
+      const candidates: string[] = [];
+      if (Math.abs(capacity - 11.8) < 0.11 || itemNameLower.includes('domestic')) {
+        candidates.push('DOMESTIC_11_8KG', generatedType);
+      } else if (Math.abs(capacity - 15) < 0.11 || itemNameLower.includes('standard')) {
+        candidates.push('STANDARD_15KG', generatedType);
+      } else if (Math.abs(capacity - 45.4) < 0.11 || itemNameLower.includes('commercial')) {
+        candidates.push('COMMERCIAL_45_4KG', generatedType);
+      } else {
+        candidates.push(generatedType);
+      }
+
+      const uniqueCandidates = Array.from(new Set(candidates.filter(Boolean)));
+      const variantKeys = uniqueCandidates.map((ct) =>
+        buildCylinderVariantKey({
+          cylinderType: ct,
+          typeName: typeNameForKey,
+          capacity,
+        }),
+      );
+
+      const targetRegion = entry.regionId || regionId;
+
+      // Find available FULL cylinders to revert back to EMPTY
+      const fullCylinders = await tx.cylinder.findMany({
+        where: {
+          currentStatus: 'FULL',
+          ...(targetRegion ? regionScopedWhere(targetRegion) : {}),
+          OR: uniqueCandidates.map((ct, idx) => ({
+            ...buildPrismaCylinderVariantWhere(ct, variantKeys[idx]),
+          })),
+        },
+        take: qty,
+        orderBy: { updatedAt: 'desc' },
+      });
+
+      if (fullCylinders.length < qty) {
+        throw new Error(
+          `Cannot undo: Not enough FULL ${entry.itemName} cylinders available in inventory to revert to EMPTY (Found: ${fullCylinders.length}, Needed: ${qty}). Some cylinders may have already been sold or moved.`,
+        );
+      }
+
+      await tx.cylinder.updateMany({
+        where: { id: { in: fullCylinders.map((c) => c.id) } },
+        data: { currentStatus: 'EMPTY' },
+      });
+
+      reversedCount += fullCylinders.length;
+    } else if (isCylinderPurchase) {
+      const weightMatch = itemNameLower.match(/(\d+\.?\d*)\s*kg/i);
+      let capacity = 15;
+      if (weightMatch) {
+        capacity = parseFloat(weightMatch[1]);
+      }
+
+      const m = entry.itemName.match(/^\s*([^\d(]+?)\s*(?:\(|\b)\s*(\d+(?:\.\d+)?)\s*kg/i);
+      const rawTypeName = m?.[1]?.trim() || '';
+      const normalizedTypeName = normalizeTypeName(rawTypeName);
+      const typeNameForKey =
+        normalizedTypeName && !/cylinder|gas/i.test(normalizedTypeName) ? normalizedTypeName : null;
+
+      const generatedType = generateCylinderTypeFromCapacity(capacity);
+      const candidates: string[] = [];
+      if (Math.abs(capacity - 11.8) < 0.11 || itemNameLower.includes('domestic')) {
+        candidates.push('DOMESTIC_11_8KG', generatedType);
+      } else if (Math.abs(capacity - 15) < 0.11 || itemNameLower.includes('standard')) {
+        candidates.push('STANDARD_15KG', generatedType);
+      } else if (Math.abs(capacity - 45.4) < 0.11 || itemNameLower.includes('commercial')) {
+        candidates.push('COMMERCIAL_45_4KG', generatedType);
+      } else {
+        candidates.push(generatedType);
+      }
+
+      const uniqueCandidates = Array.from(new Set(candidates.filter(Boolean)));
+      const variantKeys = uniqueCandidates.map((ct) =>
+        buildCylinderVariantKey({
+          cylinderType: ct,
+          typeName: typeNameForKey,
+          capacity,
+        }),
+      );
+
+      const targetRegion = entry.regionId || regionId;
+
+      // Find cylinders created that are still in store and not rented or with customer
+      const cylindersToDelete = await tx.cylinder.findMany({
+        where: {
+          currentStatus: { in: ['EMPTY', 'FULL'] },
+          location: { in: ['Store', 'Main Store'] },
+          cylinderRentals: { none: { status: 'ACTIVE' } },
+          ...(targetRegion ? regionScopedWhere(targetRegion) : {}),
+          OR: uniqueCandidates.map((ct, idx) => ({
+            ...buildPrismaCylinderVariantWhere(ct, variantKeys[idx]),
+          })),
+        },
+        take: qty,
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (cylindersToDelete.length < qty) {
+        throw new Error(
+          `Cannot undo: Only ${cylindersToDelete.length} of ${qty} ${entry.itemName} cylinder(s) available in store to remove. Some cylinders may have been issued, rented, or reassigned.`,
+        );
+      }
+
+      await tx.cylinder.deleteMany({
+        where: { id: { in: cylindersToDelete.map((c) => c.id) } },
+      });
+
+      reversedCount += cylindersToDelete.length;
+    } else if (
+      entry.category === 'ACCESSORIES_PURCHASE' ||
+      entry.category === 'VALVES_PURCHASE' ||
+      entry.category === 'VAPORIZER_PURCHASE'
+    ) {
+      const targetRegion = entry.regionId || regionId;
+      const customItem = await tx.customItem.findFirst({
+        where: {
+          OR: [
+            { type: { equals: entry.itemName, mode: 'insensitive' } },
+            { name: { equals: entry.itemName, mode: 'insensitive' } },
+          ],
+          ...(targetRegion ? regionScopedWhere(targetRegion) : {}),
+        },
+      });
+
+      if (customItem) {
+        if (customItem.quantity < qty) {
+          throw new Error(
+            `Cannot undo: Not enough stock of "${entry.itemName}" remaining in inventory to deduct (Found: ${customItem.quantity}, Needed: ${qty}). Some items may have already been sold.`,
+          );
+        }
+
+        const remainingQty = customItem.quantity - qty;
+        const newTotalCost = remainingQty * Number(customItem.costPerPiece || 0);
+
+        await tx.customItem.update({
+          where: { id: customItem.id },
+          data: {
+            quantity: remainingQty,
+            totalCost: newTotalCost,
+          },
+        });
+        reversedCount += qty;
+      } else {
+        const product = await tx.product.findFirst({
+          where: {
+            name: { equals: entry.itemName, mode: 'insensitive' },
+            ...(targetRegion ? regionScopedWhere(targetRegion) : {}),
+          },
+        });
+
+        if (product) {
+          const currentStock = Number(product.stockQuantity);
+          if (currentStock < qty) {
+            throw new Error(
+              `Cannot undo: Not enough stock of "${entry.itemName}" remaining in inventory to deduct (Found: ${currentStock}, Needed: ${qty}). Some items may have already been sold.`,
+            );
+          }
+
+          await tx.product.update({
+            where: { id: product.id },
+            data: {
+              stockQuantity: { decrement: qty },
+            },
+          });
+          reversedCount += qty;
+        }
+      }
+    }
+  }
+
+  return reversedCount;
 }
