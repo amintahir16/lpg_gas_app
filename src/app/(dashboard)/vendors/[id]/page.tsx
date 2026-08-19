@@ -18,6 +18,8 @@ import {
   PencilIcon,
   DocumentArrowDownIcon,
   ArrowUturnLeftIcon,
+  ExclamationTriangleIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import VendorPaymentModal from '@/components/VendorPaymentModal';
 import VendorExportModal from '@/components/VendorExportModal';
@@ -158,6 +160,12 @@ export default function VendorDetailPage() {
   const [directPayments, setDirectPayments] = useState<DirectPayment[]>([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmationName, setDeleteConfirmationName] = useState('');
+
+  // Clear records state (Super Admin only)
+  const [showClearRecordsModal, setShowClearRecordsModal] = useState(false);
+  const [clearRecordsReason, setClearRecordsReason] = useState('');
+  const [clearingRecords, setClearingRecords] = useState(false);
+  const [clearRecordsError, setClearRecordsError] = useState<string | null>(null);
 
   // Undo purchase state (admin-only, tracked batches only)
   const [showUndoModal, setShowUndoModal] = useState(false);
@@ -802,6 +810,40 @@ export default function VendorDetailPage() {
     }
   };
 
+  const handleClearVendorRecords = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clearRecordsReason || clearRecordsReason.trim().length < 5) {
+      setClearRecordsError('Please provide a valid reason (minimum 5 characters).');
+      return;
+    }
+
+    setClearingRecords(true);
+    setClearRecordsError(null);
+
+    try {
+      const response = await fetch(`/api/vendors/${vendorId}/clear-records`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: clearRecordsReason.trim() }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to clear vendor records');
+      }
+
+      setShowClearRecordsModal(false);
+      setClearRecordsReason('');
+      await fetchVendor();
+
+      alert('All vendor records cleared successfully. Purchases, payments, and balances reset to 0.');
+    } catch (err) {
+      setClearRecordsError(err instanceof Error ? err.message : 'Failed to clear vendor records');
+    } finally {
+      setClearingRecords(false);
+    }
+  };
+
   const handleEditItem = (item: any) => {
     setEditingItem(item);
     setEditItemFormData({
@@ -1434,18 +1476,33 @@ export default function VendorDetailPage() {
               Edit Vendor
             </Button>
             {session?.user?.role === 'SUPER_ADMIN' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setDeleteConfirmationName('');
-                  setShowDeleteConfirm(true);
-                }}
-                className="text-red-600 hover:text-red-700 hover:bg-red-50 h-9"
-              >
-                <TrashIcon className="w-4 h-4 mr-1" />
-                Delete Vendor
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setClearRecordsReason('');
+                    setClearRecordsError(null);
+                    setShowClearRecordsModal(true);
+                  }}
+                  className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-200 h-9"
+                >
+                  <TrashIcon className="w-4 h-4 mr-1" />
+                  Clear Records
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setDeleteConfirmationName('');
+                    setShowDeleteConfirm(true);
+                  }}
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50 h-9"
+                >
+                  <TrashIcon className="w-4 h-4 mr-1" />
+                  Delete Vendor
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -3417,6 +3474,99 @@ export default function VendorDetailPage() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear Vendor Records Modal (Super Admin only) */}
+      {showClearRecordsModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+          <div className="relative mx-auto border w-full max-w-lg shadow-xl rounded-xl bg-white overflow-hidden">
+            <div className="flex items-center justify-between p-5 border-b border-gray-200 bg-gradient-to-r from-red-50 to-amber-50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600">
+                  <ExclamationTriangleIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Clear Vendor Records</h3>
+                  <p className="text-xs text-gray-500">Permanently clear test records for {vendor?.companyName || vendor?.name}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!clearingRecords) {
+                    setShowClearRecordsModal(false);
+                    setClearRecordsError(null);
+                  }
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <XMarkIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleClearVendorRecords} className="p-6 space-y-4">
+              {clearRecordsError && (
+                <div className="p-3 bg-red-50 border-l-4 border-red-500 rounded-lg">
+                  <p className="text-sm font-medium text-red-800">{clearRecordsError}</p>
+                </div>
+              )}
+
+              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-lg space-y-1.5 text-xs text-amber-900">
+                <p className="font-semibold flex items-center gap-1.5 text-amber-800">
+                  <ExclamationTriangleIcon className="w-4 h-4 text-amber-600 shrink-0" />
+                  What will happen:
+                </p>
+                <ul className="list-disc pl-5 space-y-1 text-amber-800/90">
+                  <li>The vendor profile (company name, contact, phone, bank details) <strong>will be kept</strong>.</li>
+                  <li>All purchase history, line items, batches, and payment entries will be <strong>permanently deleted</strong>.</li>
+                  <li>Total purchases, total payments, and outstanding balance will <strong>reset to 0</strong>.</li>
+                  <li>Physical warehouse inventory <strong>remains unchanged</strong>.</li>
+                </ul>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                  Reason for Clearing Records <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={clearRecordsReason}
+                  onChange={(e) => setClearRecordsReason(e.target.value)}
+                  placeholder="e.g. Clearing test purchase records before production launch..."
+                  required
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
+                  disabled={clearingRecords}
+                  autoFocus
+                />
+                <p className="mt-1 text-[11px] text-gray-500">
+                  This reason will be recorded in the system audit log.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-gray-200">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowClearRecordsModal(false);
+                    setClearRecordsError(null);
+                  }}
+                  disabled={clearingRecords}
+                  className="px-5 h-9 text-sm"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={clearingRecords || clearRecordsReason.trim().length < 5}
+                  className="px-5 h-9 text-sm bg-red-600 hover:bg-red-700 text-white font-medium shadow-sm transition-colors"
+                >
+                  {clearingRecords ? 'Clearing Records...' : 'Confirm & Clear Records'}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}
