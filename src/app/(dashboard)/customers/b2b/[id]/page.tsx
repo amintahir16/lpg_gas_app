@@ -1546,28 +1546,13 @@ export default function B2BCustomerDetailPage() {
     }
   };
 
-  // ----- Opening balances (new-customer setup) ------------------------------
-  // Opening entries are normal transactions tagged via their notes. They are
-  // excluded from the "operational" check so that adding one type doesn't hide
-  // the other button, and each prevents its own duplicate. Voided opening
-  // entries are ignored so they can be redone.
-  // SUPER_ADMIN always sees both buttons (even after operational transactions);
-  // ADMIN keeps the new-customer-only gate.
-  const isSuperAdmin = session?.user?.role === 'SUPER_ADMIN';
-  const isOpeningBalanceTxn = (t: B2BTransaction) => !t.voided && t.notes === OPENING_BALANCE_NOTE;
-  const isOpeningDuesTxn = (t: B2BTransaction) => !t.voided && t.notes === OPENING_DUES_NOTE;
-  const hasOperationalTransactions = transactions.some(
-    (t) => t.notes !== OPENING_BALANCE_NOTE && t.notes !== OPENING_DUES_NOTE,
-  );
-  const canSetupOpening = !loading && !!customer && !hasOperationalTransactions;
-  const showAddBalanceButton =
-    !loading &&
-    !!customer &&
-    (isSuperAdmin || (canSetupOpening && !transactions.some(isOpeningBalanceTxn)));
-  const showAddDuesButton =
-    !loading &&
-    !!customer &&
-    (isSuperAdmin || (canSetupOpening && !transactions.some(isOpeningDuesTxn)));
+  // ----- Opening balances (customer setup) ----------------------------------
+  // Opening entries are normal transactions tagged via their notes.
+  // Both SUPER_ADMIN and ADMIN always see both "Add Balance" and "Add Cylinder Dues" buttons.
+  const isAuthorizedAdmin =
+    session?.user?.role === 'SUPER_ADMIN' || session?.user?.role === 'ADMIN';
+  const showAddBalanceButton = !loading && !!customer && isAuthorizedAdmin;
+  const showAddDuesButton = !loading && !!customer && isAuthorizedAdmin;
 
   const refreshAfterOpeningEntry = async () => {
     await fetchCustomerLedger();
