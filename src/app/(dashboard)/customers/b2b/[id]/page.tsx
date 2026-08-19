@@ -35,7 +35,9 @@ import {
   XMarkIcon,
   PlusIcon,
   ShareIcon,
-  LockClosedIcon
+  LockClosedIcon,
+  TrashIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 import { sharePdfFromUrl, downloadPdfBlob } from '@/lib/sharePdf';
 import { PAYMENT_METHOD_OPTIONS, formatPaymentMethodLabel } from '@/lib/payment-methods';
@@ -273,6 +275,12 @@ export default function B2BCustomerDetailPage() {
   const [openingDuesDate, setOpeningDuesDate] = useState(todayLocalDate);
   const [openingDuesTime, setOpeningDuesTime] = useState(() => new Date().toTimeString().slice(0, 5));
   const [submittingOpeningDues, setSubmittingOpeningDues] = useState(false);
+
+  // Clear customer test records (SUPER_ADMIN only)
+  const [showClearRecordsModal, setShowClearRecordsModal] = useState(false);
+  const [clearRecordsReason, setClearRecordsReason] = useState('');
+  const [clearingRecords, setClearingRecords] = useState(false);
+  const [clearRecordsError, setClearRecordsError] = useState<string | null>(null);
 
   // Margin category editing
   const [showCategoryEdit, setShowCategoryEdit] = useState(false);
@@ -1707,6 +1715,52 @@ export default function B2BCustomerDetailPage() {
     }
   };
 
+  const handleClearCustomerRecords = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clearRecordsReason || clearRecordsReason.trim().length < 5) {
+      setClearRecordsError('Please provide a valid reason (minimum 5 characters).');
+      return;
+    }
+
+    setClearingRecords(true);
+    setClearRecordsError(null);
+
+    try {
+      const response = await fetch(`/api/customers/b2b/${customerId}/clear-records`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: clearRecordsReason.trim() }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to clear customer records');
+      }
+
+      setShowClearRecordsModal(false);
+      setClearRecordsReason('');
+      await fetchCustomerLedger();
+
+      // Refresh cylinder dues
+      const duesParams = new URLSearchParams();
+      if (dateFilter.startDate) duesParams.append('startDate', dateFilter.startDate);
+      if (dateFilter.endDate) duesParams.append('endDate', dateFilter.endDate);
+      const duesResponse = await fetch(`/api/customers/b2b/${customerId}/cylinder-dues?${duesParams.toString()}`);
+      if (duesResponse.ok) {
+        const duesData = await duesResponse.json();
+        if (duesData.success && duesData.cylinderDues) {
+          setCylinderDues(duesData.cylinderDues);
+        }
+      }
+
+      alert('All customer records cleared successfully. Balances reset to 0 and cylinder holdings returned to inventory as EMPTY.');
+    } catch (err) {
+      setClearRecordsError(err instanceof Error ? err.message : 'Failed to clear customer records');
+    } finally {
+      setClearingRecords(false);
+    }
+  };
+
   if (loading && !customer) {
     return (
       <div className="space-y-6 max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
@@ -1785,14 +1839,31 @@ export default function B2BCustomerDetailPage() {
           <CardHeader className="py-3 px-4 pb-0">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base font-semibold text-gray-900">Customer Information</CardTitle>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleModalOpen}
-                className="text-xs font-medium h-7 px-2"
-              >
-                Edit Margin Category
-              </Button>
+              <div className="flex items-center gap-2">
+                {session?.user?.role === 'SUPER_ADMIN' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setClearRecordsReason('');
+                      setClearRecordsError(null);
+                      setShowClearRecordsModal(true);
+                    }}
+                    className="text-xs font-medium h-7 px-2.5 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 transition-colors"
+                  >
+                    <TrashIcon className="w-3.5 h-3.5 mr-1" />
+                    Clear Records
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleModalOpen}
+                  className="text-xs font-medium h-7 px-2"
+                >
+                  Edit Margin Category
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4 p-4">
@@ -2043,6 +2114,99 @@ export default function B2BCustomerDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Clear Customer Records Modal (SUPER_ADMIN only) */}
+      {showClearRecordsModal && (
+        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+          <div className="relative mx-auto p-0 border-0 w-full max-w-lg shadow-2xl rounded-xl bg-white overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-white px-6 py-4 border-b flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center text-red-600">
+                  <ExclamationTriangleIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Clear Customer Records</h3>
+                  <p className="text-xs text-gray-500">Permanently clear test records for {customer?.name}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!clearingRecords) {
+                    setShowClearRecordsModal(false);
+                    setClearRecordsError(null);
+                  }
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <XMarkIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleClearCustomerRecords} className="p-6 space-y-4">
+              {clearRecordsError && (
+                <div className="p-3 bg-red-50 border-l-4 border-red-500 rounded-lg">
+                  <p className="text-sm font-medium text-red-800">{clearRecordsError}</p>
+                </div>
+              )}
+
+              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-lg space-y-1.5 text-xs text-amber-900">
+                <p className="font-semibold flex items-center gap-1.5 text-amber-800">
+                  <ExclamationTriangleIcon className="w-4 h-4 text-amber-600 shrink-0" />
+                  What will happen:
+                </p>
+                <ul className="list-disc pl-5 space-y-1 text-amber-800/90">
+                  <li>The customer profile (name, phone, address, margin category) <strong>will be kept</strong>.</li>
+                  <li>All transaction history, line items, and ledger entries will be <strong>permanently deleted</strong>.</li>
+                  <li>Net balance, cylinder dues, and bill sequence will <strong>reset to 0</strong>.</li>
+                  <li>Any cylinders currently held by this customer will be <strong>returned to inventory as EMPTY</strong>.</li>
+                </ul>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                  Reason for Clearing Records <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={clearRecordsReason}
+                  onChange={(e) => setClearRecordsReason(e.target.value)}
+                  placeholder="e.g. Clearing test transactions before launch..."
+                  required
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
+                  disabled={clearingRecords}
+                  autoFocus
+                />
+                <p className="mt-1 text-[11px] text-gray-500">
+                  This reason will be recorded in the system audit log.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-gray-200">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowClearRecordsModal(false);
+                    setClearRecordsError(null);
+                  }}
+                  disabled={clearingRecords}
+                  className="px-5 h-9 text-sm"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={clearingRecords || clearRecordsReason.trim().length < 5}
+                  className="px-5 h-9 text-sm bg-red-600 hover:bg-red-700 text-white font-medium shadow-sm transition-colors"
+                >
+                  {clearingRecords ? 'Clearing Records...' : 'Confirm & Clear Records'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Opening Balance Modal (new-customer setup) */}
       {showOpeningBalanceModal && (
