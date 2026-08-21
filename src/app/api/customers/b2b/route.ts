@@ -84,12 +84,16 @@ export async function GET(request: NextRequest) {
       getDailyActiveB2BCustomerIds(regionId),
     ]);
 
-    // 2. Filter by status: Active = transaction in last 7 days; Inactive = no transaction in 7 days
+    // 2. Filter by status: Active = transaction in last 7 days; Inactive = no transaction in 7 days; Stagnant = debt + no transaction in 7 days
     let filteredCustomers = allCustomers;
     if (filterStatus === 'ACTIVE') {
       filteredCustomers = allCustomers.filter((c) => c.isActive && activeCustomerIds.has(c.id));
     } else if (filterStatus === 'INACTIVE') {
       filteredCustomers = allCustomers.filter((c) => !c.isActive || !activeCustomerIds.has(c.id));
+    } else if (filterStatus === 'STAGNANT') {
+      filteredCustomers = allCustomers.filter(
+        (c) => Number(c.ledgerBalance) > 0 && (!c.isActive || !activeCustomerIds.has(c.id))
+      );
     }
 
     // 4. Calculate Summary Statistics (On Filtered Data)
@@ -372,9 +376,11 @@ export async function GET(request: NextRequest) {
     const finalCustomers = paginatedCustomers.map(c => {
       const physicalHoldings = pageHoldings.map[c.id] || {};
       const mergedHoldings: Record<string, number> = { ...physicalHoldings };
+      const isActiveStatus = c.isActive && activeCustomerIds.has(c.id);
       return {
         ...c,
-        isActive: c.isActive && activeCustomerIds.has(c.id),
+        isActive: isActiveStatus,
+        isStagnant: Number(c.ledgerBalance) > 0 && !isActiveStatus,
         holdings: mergedHoldings
       };
     });

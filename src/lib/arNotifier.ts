@@ -4,7 +4,7 @@ import { NotificationPriority } from '@prisma/client';
 /**
  * Robustly checks for stagnant Accounts Receivable (AR).
  * If a customer has a debt (ledgerBalance > 0) and hasn't made a payment
- * for over 7 days, it notifies all SUPER_ADMINs.
+ * for over 7 days, it notifies all active SUPER_ADMINs and relevant branch ADMINs.
  *
  * Batched queries (same outcomes as the prior per-customer N+1 loop).
  */
@@ -17,11 +17,11 @@ export async function checkAndNotifyStagnantAR() {
   const customersWithDebt = await prisma.customer.findMany({
     where: {
       ledgerBalance: { gt: 0 },
-      isActive: true,
     },
     select: {
       id: true,
       name: true,
+      isActive: true,
       ledgerBalance: true,
       regionId: true,
       region: { select: { name: true } },
@@ -37,7 +37,7 @@ export async function checkAndNotifyStagnantAR() {
 
   const customerIds = customersWithDebt.map((c) => c.id);
 
-  const [recentPaymentRows, recentNotifications, superAdmins] = await Promise.all([
+  const [recentPaymentRows, recentNotifications, superAdmins, branchAdmins] = await Promise.all([
     prisma.b2BTransaction.findMany({
       where: {
         customerId: { in: customerIds },
@@ -60,6 +60,14 @@ export async function checkAndNotifyStagnantAR() {
       where: { role: 'SUPER_ADMIN', isActive: true },
       select: { id: true },
     }),
+    prisma.user.findMany({
+      where: { role: 'ADMIN', isActive: true },
+      select: {
+        id: true,
+        regionId: true,
+        userRegions: { select: { regionId: true } },
+      },
+    }),
   ]);
 
   const recentlyPaid = new Set(recentPaymentRows.map((r) => r.customerId));
@@ -75,8 +83,8 @@ export async function checkAndNotifyStagnantAR() {
     }
   }
 
-  if (superAdmins.length === 0) {
-    console.warn('[AR-Notifier] No active SUPER_ADMINs found to notify.');
+  if (superAdmins.length === 0 && branchAdmins.length === 0) {
+    console.warn('[AR-Notifier] No active SUPER_ADMINs or ADMINs found to notify.');
     console.log('[AR-Notifier] Stagnant AR check completed.');
     return;
   }
@@ -101,22 +109,42 @@ export async function checkAndNotifyStagnantAR() {
 
     const balance = Math.round(parseFloat(customer.ledgerBalance.toString())).toLocaleString();
     const regionName = customer.region?.name || 'Main Branch';
-    const title = `Stagnant AR Alert: ${customer.name} (${regionName})`;
-    const message = `Customer "${customer.name}" in branch "${regionName}" hasn't made any payment for over 7 days and currently owes Rs ${balance}.`;
+    const statusTag = customer.isActive ? '' : ' [Inactive]';
+    const title = `Stagnant AR Alert: ${customer.name}${statusTag} (${regionName})`;
+    const message = `Customer "${customer.name}"${customer.isActive ? '' : ' (Inactive)'} in branch "${regionName}" hasn't made any payment for over 7 days and currently owes Rs ${balance}.`;
 
-    console.log(`[AR-Notifier] Notifying Super Admins: ${message}`);
+    console.log(`[AR-Notifier] Notifying Admins: ${message}`);
 
     const metadata = JSON.stringify({
       domain: 'STAGNANT_AR',
       customerId: customer.id,
       customerName: customer.name,
+      isActive: customer.isActive,
       amountOwed: balance,
       lastChecked: new Date().toISOString(),
     });
 
+    const recipientUserIds = new Set<string>();
+
+    // All SUPER_ADMINs receive notification
     for (const admin of superAdmins) {
+      recipientUserIds.add(admin.id);
+    }
+
+    // Branch ADMINs who have access to this customer's region
+    for (const admin of branchAdmins) {
+      if (
+        !customer.regionId ||
+        admin.regionId === customer.regionId ||
+        admin.userRegions.some((ur) => ur.regionId === customer.regionId)
+      ) {
+        recipientUserIds.add(admin.id);
+      }
+    }
+
+    for (const userId of recipientUserIds) {
       notificationsToCreate.push({
-        userId: admin.id,
+        userId,
         type: 'SYSTEM_ALERT',
         title,
         message,

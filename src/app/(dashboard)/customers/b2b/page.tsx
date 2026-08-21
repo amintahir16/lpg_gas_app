@@ -24,7 +24,8 @@ import {
   BanknotesIcon,
   ArrowUpIcon,
   ArrowDownIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  ClockIcon
 } from '@heroicons/react/24/outline';
 import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
 import { parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
@@ -74,6 +75,7 @@ interface B2BCustomer {
   commercial454kgDue: number;
   notes: string | null;
   isActive: boolean;
+  isStagnant?: boolean;
   createdAt: string;
   marginCategoryId: string | null;
   holdings?: Record<string, number>;
@@ -135,7 +137,7 @@ export default function B2BCustomersPage() {
   });
 
   // Filters State
-  const [filterStatus, setFilterStatus] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [filterStatus, setFilterStatus] = useState<'ALL' | 'ACTIVE' | 'INACTIVE' | 'STAGNANT'>('ALL');
   const [filterType, setFilterType] = useState<'ALL' | 'INDUSTRIAL' | 'RESTAURANT'>('ALL');
   const [sortBy, setSortBy] = useState<'createdAt' | 'RECEIVABLES' | 'CYLINDERS' | 'NAME'>('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -551,6 +553,13 @@ export default function B2BCustomersPage() {
                 onClick={() => setFilterStatus('INACTIVE')}
                 className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${filterStatus === 'INACTIVE' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
               >Inactive Customers</button>
+              <button
+                onClick={() => setFilterStatus('STAGNANT')}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${filterStatus === 'STAGNANT' ? 'bg-white text-amber-700 shadow-sm font-semibold' : 'text-gray-500 hover:text-gray-900'}`}
+              >
+                <ClockIcon className="w-3.5 h-3.5 text-amber-500" />
+                Unpaid (7d+)
+              </button>
             </div>
           </div>
         </CardContent>
@@ -660,9 +669,20 @@ export default function B2BCustomersPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         {/* Net Balance Logic: Negative = Customer Owes (Red), Positive = Credit (Green) */}
-                        <span className={`font-semibold ${-customer.ledgerBalance < 0 ? 'text-red-600' : -customer.ledgerBalance > 0 ? 'text-green-600' : 'text-gray-400'}`}>
-                          {formatCurrency(-customer.ledgerBalance)}
-                        </span>
+                        <div className="flex flex-col items-end">
+                          <span className={`font-semibold ${-customer.ledgerBalance < 0 ? 'text-red-600' : -customer.ledgerBalance > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                            {formatCurrency(-customer.ledgerBalance)}
+                          </span>
+                          {(customer.isStagnant ?? (Number(customer.ledgerBalance) > 0 && !customer.isActive)) && (
+                            <span
+                              className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/70"
+                              title="Stagnant AR: Customer has unpaid balance with no payment in over 7 days"
+                            >
+                              <ClockIcon className="w-2.5 h-2.5 text-amber-500 shrink-0" />
+                              7d+ Unpaid
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-center">
                         <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${customer.isActive ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
