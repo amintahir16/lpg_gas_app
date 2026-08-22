@@ -276,10 +276,35 @@ export async function DELETE(request: NextRequest) {
     const regionId = getActiveRegionId(request);
     const existing = await prisma.vendor.findUnique({
       where: { id },
-      select: { regionId: true, companyName: true, vendorCode: true }
+      select: {
+        regionId: true,
+        companyName: true,
+        vendorCode: true,
+        purchase_entries: {
+          where: { status: { not: 'CANCELLED' } },
+          select: { totalPrice: true }
+        },
+        payments: {
+          where: { status: 'COMPLETED' },
+          select: { amount: true }
+        }
+      }
     });
     if (!existing || !belongsToActiveRegion(existing.regionId, regionId)) {
       return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
+    }
+
+    const totalPurchases = existing.purchase_entries.reduce((sum, p) => sum + Number(p.totalPrice), 0);
+    const totalPayments = existing.payments.reduce((sum, p) => sum + Number(p.amount), 0);
+    const netBalance = Math.round(totalPayments - totalPurchases);
+
+    if (netBalance !== 0) {
+      return NextResponse.json(
+        {
+          error: `Cannot delete vendor with an unsettled balance of ${netBalance < 0 ? `-Rs ${Math.abs(netBalance).toLocaleString('en-PK')}` : `Rs ${netBalance.toLocaleString('en-PK')}`}. All balances must be exactly Rs 0 (settled or cleared) before deletion.`
+        },
+        { status: 400 }
+      );
     }
 
     // Soft delete

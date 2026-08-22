@@ -20,6 +20,7 @@ import {
   ArrowUturnLeftIcon,
   ExclamationTriangleIcon,
   XMarkIcon,
+  EllipsisVerticalIcon,
 } from '@heroicons/react/24/outline';
 import VendorPaymentModal from '@/components/VendorPaymentModal';
 import VendorExportModal from '@/components/VendorExportModal';
@@ -164,6 +165,8 @@ export default function VendorDetailPage() {
   // Clear records state (Super Admin only)
   const [showClearRecordsModal, setShowClearRecordsModal] = useState(false);
   const [clearRecordsReason, setClearRecordsReason] = useState('');
+  const [confirmVendorNameInput, setConfirmVendorNameInput] = useState('');
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [clearingRecords, setClearingRecords] = useState(false);
   const [clearRecordsError, setClearRecordsError] = useState<string | null>(null);
 
@@ -778,11 +781,17 @@ export default function VendorDetailPage() {
   };
 
   const handleDeleteVendor = async () => {
+    const netBalance = Math.round(vendor?.financialSummary?.netBalance || 0);
+    if (netBalance !== 0) {
+      alert(`Cannot delete vendor with an unsettled balance of ${formatCurrency(netBalance)}. Please settle all balances or clear test records first.`);
+      return;
+    }
+
     // Get the vendor name to match
     const vendorName = vendor?.name || vendor?.companyName || '';
 
     // Validate that the confirmation name matches
-    if (deleteConfirmationName.trim() !== vendorName.trim()) {
+    if (deleteConfirmationName.trim().toLowerCase() !== vendorName.trim().toLowerCase()) {
       alert('Vendor name does not match. Please type the exact vendor name to confirm deletion.');
       return;
     }
@@ -812,6 +821,12 @@ export default function VendorDetailPage() {
 
   const handleClearVendorRecords = async (e: React.FormEvent) => {
     e.preventDefault();
+    const vendorName = vendor?.name || vendor?.companyName || '';
+    if (!vendorName || confirmVendorNameInput.trim().toLowerCase() !== vendorName.trim().toLowerCase()) {
+      setClearRecordsError(`Please type the exact vendor name "${vendorName}" to confirm.`);
+      return;
+    }
+
     if (!clearRecordsReason || clearRecordsReason.trim().length < 5) {
       setClearRecordsError('Please provide a valid reason (minimum 5 characters).');
       return;
@@ -834,6 +849,7 @@ export default function VendorDetailPage() {
 
       setShowClearRecordsModal(false);
       setClearRecordsReason('');
+      setConfirmVendorNameInput('');
       await fetchVendor();
 
       alert('All vendor records cleared successfully. Purchases, payments, and balances reset to 0.');
@@ -1457,53 +1473,81 @@ export default function VendorDetailPage() {
             <p className="text-gray-600">{vendor.vendorCode}</p>
           </div>
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setEditFormData({
-                  name: vendor.name || vendor.companyName || '',
-                  contactPerson: vendor.contactPerson || '',
-                  phone: vendor.phone || '',
-                  email: vendor.email || '',
-                  address: vendor.address || ''
-                });
-                setShowEditModal(true);
-              }}
-              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 h-9"
-            >
-              <PencilIcon className="w-4 h-4 mr-1" />
-              Edit Vendor
-            </Button>
-            {session?.user?.role === 'SUPER_ADMIN' && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setClearRecordsReason('');
-                    setClearRecordsError(null);
-                    setShowClearRecordsModal(true);
-                  }}
-                  className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-200 h-9"
-                >
-                  <TrashIcon className="w-4 h-4 mr-1" />
-                  Clear Records
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setDeleteConfirmationName('');
-                    setShowDeleteConfirm(true);
-                  }}
-                  className="text-red-600 hover:text-red-700 hover:bg-red-50 h-9"
-                >
-                  <TrashIcon className="w-4 h-4 mr-1" />
-                  Delete Vendor
-                </Button>
-              </>
-            )}
+            <div className="relative">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowMoreMenu(!showMoreMenu)}
+                className="text-xs h-9 w-9 p-0 flex items-center justify-center text-gray-600 hover:text-gray-900 border-gray-300 hover:bg-gray-50"
+                title="More Options"
+              >
+                <EllipsisVerticalIcon className="w-5 h-5" />
+              </Button>
+
+              {showMoreMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-20"
+                    onClick={() => setShowMoreMenu(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg shadow-xl border border-gray-100 py-1.5 z-30 animate-in fade-in zoom-in-95 duration-100">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowMoreMenu(false);
+                        setEditFormData({
+                          name: vendor.name || vendor.companyName || '',
+                          contactPerson: vendor.contactPerson || '',
+                          phone: vendor.phone || '',
+                          email: vendor.email || '',
+                          address: vendor.address || ''
+                        });
+                        setShowEditModal(true);
+                      }}
+                      className="w-full text-left px-3.5 py-2 text-xs font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-2 transition-colors"
+                    >
+                      <PencilIcon className="w-4 h-4 text-blue-500" />
+                      Edit Vendor
+                    </button>
+
+                    {session?.user?.role === 'SUPER_ADMIN' && (
+                      <>
+                        <div className="my-1 border-t border-gray-100" />
+                        <div className="px-3.5 py-1">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Advanced Actions</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowMoreMenu(false);
+                            setClearRecordsReason('');
+                            setConfirmVendorNameInput('');
+                            setClearRecordsError(null);
+                            setShowClearRecordsModal(true);
+                          }}
+                          className="w-full text-left px-3.5 py-2 text-xs font-medium text-amber-600 hover:bg-amber-50 flex items-center gap-2 transition-colors"
+                        >
+                          <TrashIcon className="w-4 h-4 text-amber-500" />
+                          Clear All Records...
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowMoreMenu(false);
+                            setDeleteConfirmationName('');
+                            setShowDeleteConfirm(true);
+                          }}
+                          className="w-full text-left px-3.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
+                        >
+                          <TrashIcon className="w-4 h-4 text-red-500" />
+                          Delete Vendor...
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -3414,69 +3458,97 @@ export default function VendorDetailPage() {
         />
       )}
 
-      {/* Delete Confirmation Dialog */}
-      {showDeleteConfirm && vendor && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
-                <TrashIcon className="h-6 w-6 text-red-600" />
-              </div>
-              <div className="mt-3 text-center">
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  Delete Vendor
-                </h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  This action cannot be undone. This will permanently delete the vendor and all associated data.
-                </p>
-                <div className="mb-4 text-left">
-                  <p className="text-sm font-medium text-gray-700 mb-2">
-                    To confirm, please type <span className="font-bold text-gray-900">"{vendor.name || vendor.companyName || 'Unnamed Vendor'}"</span> to proceed:
-                  </p>
-                  <Input
-                    type="text"
-                    value={deleteConfirmationName}
-                    onChange={(e) => setDeleteConfirmationName(e.target.value)}
-                    placeholder="Enter vendor name"
-                    className="w-full h-9 text-sm"
-                    autoFocus
-                  />
-                  {deleteConfirmationName.trim() !== '' &&
-                    deleteConfirmationName.trim() !== (vendor.name || vendor.companyName || '').trim() && (
-                      <p className="mt-2 text-sm text-red-600">
-                        The name does not match. Please type the exact vendor name.
-                      </p>
-                    )}
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && vendor && (() => {
+        const vendorNetBalance = Math.round(vendor.financialSummary?.netBalance || 0);
+        const hasUnsettledBalance = vendorNetBalance !== 0;
+        const vendorName = vendor.name || vendor.companyName || '';
+
+        return (
+          <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+            <div className="relative mx-auto p-0 border-0 w-full max-w-md shadow-2xl rounded-xl bg-white overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+              <div className="p-6">
+                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-3">
+                  <TrashIcon className="h-6 w-6 text-red-600" />
                 </div>
-                <div className="flex justify-center space-x-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9"
-                    onClick={() => {
-                      setShowDeleteConfirm(false);
-                      setDeleteConfirmationName('');
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={handleDeleteVendor}
-                    disabled={
-                      deleteConfirmationName.trim() !== (vendor.name || vendor.companyName || '').trim()
-                    }
-                    className="disabled:opacity-50 disabled:cursor-not-allowed h-9"
-                  >
+                <div className="text-center">
+                  <h3 className="text-lg font-bold text-gray-900 mb-1">
                     Delete Vendor
-                  </Button>
+                  </h3>
+                  <p className="text-xs text-gray-500 mb-4">
+                    This action cannot be undone. This will permanently delete the vendor and all associated data.
+                  </p>
+
+                  {hasUnsettledBalance ? (
+                    <div className="p-3.5 bg-red-50 border border-red-200 rounded-lg text-left space-y-2 mb-5">
+                      <p className="text-xs font-bold text-red-800 flex items-center gap-1.5">
+                        <ExclamationTriangleIcon className="w-4 h-4 text-red-600 shrink-0" />
+                        Deletion Blocked — Unsettled Balance
+                      </p>
+                      <p className="text-xs text-red-700 leading-relaxed">
+                        This vendor has an active net balance of{' '}
+                        <strong className="font-bold underline">
+                          {formatCurrency(vendorNetBalance)} ({vendorNetBalance < 0 ? 'You Owe' : 'Vendor Owes You'})
+                        </strong>.
+                      </p>
+                      <p className="text-[11px] text-red-600 leading-relaxed">
+                        The net balance must be exactly <strong>Rs 0</strong> before this vendor can be deleted. Please settle outstanding payments or clear test records first.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mb-4 text-left">
+                      <p className="text-xs font-medium text-gray-700 mb-1.5">
+                        To confirm, please type <span className="font-bold font-mono bg-gray-100 px-1 py-0.5 rounded text-gray-900 select-all">"{vendorName || 'Unnamed Vendor'}"</span> to proceed:
+                      </p>
+                      <Input
+                        type="text"
+                        value={deleteConfirmationName}
+                        onChange={(e) => setDeleteConfirmationName(e.target.value)}
+                        placeholder="Enter vendor name"
+                        className="w-full h-9 text-sm border-gray-300 focus:ring-red-500 focus:border-red-500"
+                        autoFocus
+                      />
+                      {deleteConfirmationName.trim() !== '' &&
+                        deleteConfirmationName.trim().toLowerCase() !== vendorName.trim().toLowerCase() && (
+                          <p className="mt-1.5 text-xs text-red-600">
+                            The name does not match. Please type the exact vendor name.
+                          </p>
+                        )}
+                    </div>
+                  )}
+
+                  <div className="flex justify-center space-x-3 pt-2 border-t border-gray-100">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 px-4 text-xs font-medium"
+                      onClick={() => {
+                        setShowDeleteConfirm(false);
+                        setDeleteConfirmationName('');
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleDeleteVendor}
+                      disabled={
+                        hasUnsettledBalance ||
+                        !vendorName ||
+                        deleteConfirmationName.trim().toLowerCase() !== vendorName.trim().toLowerCase()
+                      }
+                      className="disabled:opacity-50 disabled:cursor-not-allowed h-9 px-4 text-xs font-medium shadow-sm"
+                    >
+                      Delete Vendor
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Clear Vendor Records Modal (Super Admin only) */}
       {showClearRecordsModal && (
@@ -3518,12 +3590,33 @@ export default function VendorDetailPage() {
                   <ExclamationTriangleIcon className="w-4 h-4 text-amber-600 shrink-0" />
                   What will happen:
                 </p>
-                <ul className="list-disc pl-5 space-y-1 text-amber-800/90">
+                <ul className="list-disc pl-5 space-y-1.5 text-amber-800/90">
                   <li>The vendor profile (company name, contact, phone, bank details) <strong>will be kept</strong>.</li>
                   <li>All purchase history, line items, batches, and payment entries will be <strong>permanently deleted</strong>.</li>
+                  <li className="text-red-600 font-semibold">
+                    Removing these records will cause discrepancies in all dashboards, financial revenue/profit cards, wallets &amp; bank ledgers, and closing reports.
+                  </li>
                   <li>Total purchases, total payments, and outstanding balance will <strong>reset to 0</strong>.</li>
                   <li>Physical warehouse inventory <strong>remains unchanged</strong>.</li>
                 </ul>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Confirm Vendor Name <span className="text-red-500">*</span>
+                </label>
+                <p className="text-[11px] text-gray-500 mb-1.5">
+                  Please type <strong className="text-gray-900 font-mono select-all bg-gray-100 px-1 py-0.5 rounded">{vendor?.name || vendor?.companyName}</strong> to confirm.
+                </p>
+                <Input
+                  type="text"
+                  value={confirmVendorNameInput}
+                  onChange={(e) => setConfirmVendorNameInput(e.target.value)}
+                  placeholder={`Type "${vendor?.name || vendor?.companyName}"`}
+                  className="h-9 text-sm border-gray-300 focus:ring-red-500 focus:border-red-500"
+                  disabled={clearingRecords}
+                  autoComplete="off"
+                />
               </div>
 
               <div>
@@ -3531,14 +3624,13 @@ export default function VendorDetailPage() {
                   Reason for Clearing Records <span className="text-red-500">*</span>
                 </label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={clearRecordsReason}
                   onChange={(e) => setClearRecordsReason(e.target.value)}
                   placeholder="e.g. Clearing test purchase records before production launch..."
                   required
                   className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
                   disabled={clearingRecords}
-                  autoFocus
                 />
                 <p className="mt-1 text-[11px] text-gray-500">
                   This reason will be recorded in the system audit log.
@@ -3560,8 +3652,13 @@ export default function VendorDetailPage() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={clearingRecords || clearRecordsReason.trim().length < 5}
-                  className="px-5 h-9 text-sm bg-red-600 hover:bg-red-700 text-white font-medium shadow-sm transition-colors"
+                  disabled={
+                    clearingRecords ||
+                    clearRecordsReason.trim().length < 5 ||
+                    !(vendor?.name || vendor?.companyName) ||
+                    confirmVendorNameInput.trim().toLowerCase() !== (vendor?.name || vendor?.companyName || '').trim().toLowerCase()
+                  }
+                  className="px-5 h-9 text-sm bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white font-medium shadow-sm transition-colors"
                 >
                   {clearingRecords ? 'Clearing Records...' : 'Confirm & Clear Records'}
                 </Button>
