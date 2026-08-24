@@ -23,6 +23,7 @@ import {
   Cog6ToothIcon, // Control/mechanical components
 } from '@heroicons/react/24/outline';
 import { PageHeaderSkeleton, StatCardsSkeleton, TableSkeleton } from '@/components/skeletons';
+import RecentVendorPurchases from '@/components/vendors/RecentVendorPurchases';
 
 interface VendorCategory {
   id: string;
@@ -455,6 +456,9 @@ export default function VendorsPage() {
           </div>
         )
       }
+
+      {/* Recent Vendor Purchases (Last 5 Purchases) */}
+      <RecentVendorPurchases />
 
       {/* Edit Category Modal */}
       {

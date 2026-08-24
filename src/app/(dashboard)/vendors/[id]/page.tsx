@@ -577,7 +577,7 @@ export default function VendorDetailPage() {
       }
     });
 
-    // Group entries by invoice number
+    // 1. Group entries by invoice number
     const grouped = filtered.reduce((acc, entry) => {
       const invoiceNumber = entry.invoiceNumber || `no-invoice-${entry.id}`;
       if (!acc[invoiceNumber]) {
@@ -591,6 +591,9 @@ export default function VendorDetailPage() {
           totalPrice: 0,
           purchaseBatchId: entry.purchaseBatchId || entry.purchaseBatch?.id || null,
           purchaseBatch: entry.purchaseBatch || null,
+          payments: [] as any[],
+          totalPaid: 0,
+          amountDue: 0,
         };
       }
       acc[invoiceNumber].items.push(entry);
@@ -607,19 +610,92 @@ export default function VendorDetailPage() {
       // Cancelled/undone wins over other statuses for display
       if (entry.status === 'CANCELLED' || entry.purchaseBatch?.status === 'UNDONE') {
         acc[invoiceNumber].status = 'CANCELLED';
-      } else if (acc[invoiceNumber].status !== 'CANCELLED') {
-        // If any entry is PAID, mark group as PAID; if any is PARTIAL, mark as PARTIAL
-        if (entry.status === 'PAID') {
-          acc[invoiceNumber].status = 'PAID';
-        } else if (entry.status === 'PARTIAL' && acc[invoiceNumber].status !== 'PAID') {
-          acc[invoiceNumber].status = 'PARTIAL';
-        }
       }
       return acc;
     }, {} as Record<string, any>);
 
-    // Convert to array and sort by date (newest first)
-    return Object.values(grouped).sort((a: any, b: any) =>
+    const purchaseList: any[] = Object.values(grouped);
+
+    // 2. Prepare payment pool from completed payments
+    const completedPayments = (vendor.payments || [])
+      .filter((p: any) => p.status === 'COMPLETED')
+      .map((p: any) => ({
+        ...p,
+        remainingAmount: Number(p.amount || 0),
+      }));
+
+    // 3. Pass 1: Explicit matching (by purchaseBatchId or invoiceNumber in description)
+    purchaseList.forEach((purchase) => {
+      if (purchase.status === 'CANCELLED') return;
+
+      completedPayments.forEach((p) => {
+        if (p.remainingAmount <= 0) return;
+
+        const isExplicitBatchMatch =
+          purchase.purchaseBatchId &&
+          p.purchaseBatchId &&
+          p.purchaseBatchId === purchase.purchaseBatchId;
+
+        const isExplicitInvoiceMatch =
+          purchase.invoiceNumber &&
+          p.description &&
+          p.description.toLowerCase().includes(purchase.invoiceNumber.toLowerCase());
+
+        if (isExplicitBatchMatch || isExplicitInvoiceMatch) {
+          const needed = Math.max(0, purchase.totalPrice - purchase.totalPaid);
+          if (needed > 0) {
+            const take = Math.min(needed, p.remainingAmount);
+            purchase.totalPaid += take;
+            p.remainingAmount -= take;
+            purchase.payments.push({
+              ...p,
+              allocatedAmount: take,
+            });
+          }
+        }
+      });
+    });
+
+    // 4. Pass 2: FIFO allocation of remaining unallocated payments to oldest active purchases
+    const activePurchasesChronological = purchaseList
+      .filter((p) => p.status !== 'CANCELLED')
+      .sort((a, b) => new Date(a.purchaseDate).getTime() - new Date(b.purchaseDate).getTime());
+
+    activePurchasesChronological.forEach((purchase) => {
+      const needed = Math.max(0, purchase.totalPrice - purchase.totalPaid);
+      if (needed <= 0) return;
+
+      completedPayments.forEach((p) => {
+        if (p.remainingAmount <= 0) return;
+
+        const take = Math.min(Math.max(0, purchase.totalPrice - purchase.totalPaid), p.remainingAmount);
+        if (take > 0) {
+          purchase.totalPaid += take;
+          p.remainingAmount -= take;
+          purchase.payments.push({
+            ...p,
+            allocatedAmount: take,
+          });
+        }
+      });
+    });
+
+    // 5. Finalize status and amountDue for each purchase
+    purchaseList.forEach((purchase) => {
+      purchase.amountDue = Math.max(0, purchase.totalPrice - purchase.totalPaid);
+      if (purchase.status !== 'CANCELLED') {
+        if (purchase.totalPaid >= purchase.totalPrice && purchase.totalPrice > 0) {
+          purchase.status = 'PAID';
+        } else if (purchase.totalPaid > 0) {
+          purchase.status = 'PARTIAL';
+        } else {
+          purchase.status = 'PENDING';
+        }
+      }
+    });
+
+    // Sort by date descending (newest first) for UI display
+    return purchaseList.sort((a: any, b: any) =>
       new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime()
     );
   };
@@ -628,6 +704,9 @@ export default function VendorDetailPage() {
     session?.user?.role === 'ADMIN' || session?.user?.role === 'SUPER_ADMIN';
 
   const getPaymentsForPurchase = (purchase: any) => {
+    if (purchase.payments && Array.isArray(purchase.payments) && purchase.payments.length > 0) {
+      return purchase.payments;
+    }
     if (!vendor?.payments) return [];
     return vendor.payments.filter((payment) => {
       if (
@@ -1640,22 +1719,6 @@ export default function VendorDetailPage() {
                 <CurrencyDollarIcon className={`w-5 h-5 ${vendor.financialSummary.netBalance < 0 ? 'text-red-600' : vendor.financialSummary.netBalance > 0 ? 'text-green-600' : 'text-gray-500'}`} />
               </div>
             </div>
-            {vendor.financialSummary.outstandingBalance < 0 && (
-              <div className="mt-2 pt-2 border-t border-gray-100">
-                <Button
-                  onClick={() => {
-                    setSelectedInvoiceNumber(null);
-                    setSelectedEntryTotal(null);
-                    setShowPaymentModal(true);
-                  }}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white h-7 text-xs"
-                  size="sm"
-                >
-                  <BanknotesIcon className="h-3 w-3 mr-1.5" />
-                  Pay Now
-                </Button>
-              </div>
-            )}
           </CardContent>
         </Card>
 
@@ -2719,8 +2782,8 @@ export default function VendorDetailPage() {
                                     0
                                 );
                                 const paidForInvoice = getPaymentsForPurchase(purchase)
-                                  .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-                                const amountDue = Math.max(0, entryTotal - paidForInvoice);
+                                  .reduce((sum: number, payment: any) => sum + Number(payment.allocatedAmount ?? payment.amount ?? 0), 0);
+                                const amountDue = purchase.amountDue !== undefined ? purchase.amountDue : Math.max(0, entryTotal - paidForInvoice);
                                 setSelectedInvoiceNumber(purchase.invoiceNumber || null);
                                 setSelectedEntryTotal(amountDue);
                                 setShowPaymentModal(true);
@@ -2837,13 +2900,7 @@ export default function VendorDetailPage() {
                         <div>
                           <div className="text-xs text-gray-500 mb-1">{hasMostRecentPayment ? 'Recent Payment Total' : 'Payment Total'}</div>
                           <div className="text-lg font-semibold text-green-600">
-                            {(() => {
-                              const purchasePayments = getPaymentsForPurchase(purchase);
-                              const totalPaid = purchasePayments.reduce((sum, payment) =>
-                                sum + Number(payment.amount), 0
-                              );
-                              return formatCurrency(Math.round(totalPaid));
-                            })()}
+                            {formatCurrency(Math.round(Number(purchase.totalPaid !== undefined ? purchase.totalPaid : 0)))}
                           </div>
                         </div>
 
@@ -2884,8 +2941,9 @@ export default function VendorDetailPage() {
                               {hasMostRecentPayment ? 'Recent Payments' : 'Payments'}
                             </h4>
                             <div className="space-y-1">
-                              {purchasePayments.slice(0, 3).map((payment) => {
+                              {purchasePayments.slice(0, 3).map((payment: any) => {
                                 const isEntryUndone = purchase.status === 'CANCELLED' || payment.status === 'CANCELLED';
+                                const paymentDisplayAmount = payment.allocatedAmount !== undefined ? Number(payment.allocatedAmount) : Number(payment.amount || 0);
                                 return (
                                   <div
                                     key={payment.id}
@@ -2895,7 +2953,7 @@ export default function VendorDetailPage() {
                                       {formatDateTime(payment.paymentDate)} - {formatWalletLabel(payment.method)}
                                     </span>
                                     <span className={isEntryUndone ? 'font-normal text-gray-400 line-through' : 'font-medium text-green-600'}>
-                                      {formatCurrency(Math.round(Number(payment.amount)))}
+                                      {formatCurrency(Math.round(paymentDisplayAmount))}
                                     </span>
                                   </div>
                                 );

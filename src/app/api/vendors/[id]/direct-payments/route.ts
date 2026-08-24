@@ -196,6 +196,48 @@ export async function POST(
 
           console.log(`✅ Updated ${purchaseEntries.length} purchase entries for invoice ${invoiceNumber} to status: ${newStatus}`);
         }
+      } else {
+        // FIFO allocation for unassigned direct payments to settle oldest pending/partial purchase entries
+        let remainingPaymentToAllocate = Number(amount);
+        const activeEntries = await tx.purchaseEntry.findMany({
+          where: {
+            vendorId: id,
+            status: { in: ['PENDING', 'PARTIAL'] },
+            ...regionScopedWhere(regionId),
+          },
+          orderBy: { purchaseDate: 'asc' },
+        });
+
+        const groupedInvoices = new Map<string, typeof activeEntries>();
+        for (const entry of activeEntries) {
+          const inv = entry.invoiceNumber || `entry_${entry.id}`;
+          if (!groupedInvoices.has(inv)) {
+            groupedInvoices.set(inv, []);
+          }
+          groupedInvoices.get(inv)!.push(entry);
+        }
+
+        for (const [inv, entries] of groupedInvoices) {
+          if (remainingPaymentToAllocate <= 0) break;
+          const invoiceTotal = entries.reduce((s, e) => s + Number(e.totalPrice), 0);
+          if (remainingPaymentToAllocate >= invoiceTotal) {
+            await tx.purchaseEntry.updateMany({
+              where: {
+                id: { in: entries.map(e => e.id) },
+              },
+              data: { status: 'PAID' },
+            });
+            remainingPaymentToAllocate -= invoiceTotal;
+          } else {
+            await tx.purchaseEntry.updateMany({
+              where: {
+                id: { in: entries.map(e => e.id) },
+              },
+              data: { status: 'PARTIAL' },
+            });
+            remainingPaymentToAllocate = 0;
+          }
+        }
       }
 
       console.log('✅ Direct payment created:', {
