@@ -375,7 +375,7 @@ export default function RecentVendorPurchases() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -385,16 +385,6 @@ export default function RecentVendorPurchases() {
                         >
                           <EyeIcon className="w-3.5 h-3.5" />
                         </Button>
-                        <Link href={`/vendors/${purchase.vendor.id}`}>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 px-2.5 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200 gap-1"
-                          >
-                            <span>Vendor</span>
-                            <ArrowTopRightOnSquareIcon className="w-3 h-3" />
-                          </Button>
-                        </Link>
                       </div>
                     </div>
                   </div>
