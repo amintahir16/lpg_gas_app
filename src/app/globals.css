@@ -56,8 +56,18 @@
  * gradient means any exposed area matches the dashboard.
  */
 
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: #e2e8f0;
+  }
+}
+
 * {
-  border-color: hsl(var(--border));
+  border-color: #e2e8f0;
 }
 
 html,

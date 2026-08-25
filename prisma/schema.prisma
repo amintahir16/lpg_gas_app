@@ -640,6 +640,7 @@ model Notification {
   updatedAt DateTime             @updatedAt
   user      User?                @relation("UserNotifications", fields: [userId], references: [id])
 
+  @@index([userId, isRead, priority, createdAt])
   @@index([userId, isRead])
   @@index([userId, createdAt])
   @@index([isRead, priority, createdAt])

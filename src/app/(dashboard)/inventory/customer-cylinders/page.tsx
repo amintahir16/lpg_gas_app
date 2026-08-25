@@ -338,7 +338,7 @@ Address: ${customer.address || 'N/A'}
               <tbody className="bg-white">
                 {loading ? (
                   Array.from({ length: 5 }).map((_, i) => (
-                    <tr key={i} className="animate-pulse border-b">
+                    <tr key={i} className="animate-pulse border-b border-slate-100">
                       <td className="px-4 py-2.5">
                         <div className="space-y-1">
                           <Skeleton className="h-4 w-24" />

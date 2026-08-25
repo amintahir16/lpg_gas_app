@@ -34,7 +34,7 @@ export function StatCardsSkeleton({ count = 4 }: { count?: number }) {
   return (
     <div className={`grid gap-4 sm:gap-6 ${gridClass}`}>
       {Array.from({ length: count }).map((_, i) => (
-        <Card key={i} className="border border-slate-100 shadow-xs overflow-hidden">
+        <Card key={i} className="border-0 shadow-xs overflow-hidden bg-white">
           <CardContent className="p-5 space-y-3">
             <div className="flex items-center justify-between">
               <Skeleton className="h-4 w-28" />
@@ -74,9 +74,9 @@ export function TableSkeleton({
         </div>
       )}
 
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-xs">
+      <div className="rounded-xl border-0 bg-white overflow-hidden shadow-xs">
         {/* Table Header */}
-        <div className="bg-slate-50/80 px-4 py-3 border-b border-slate-200 flex items-center justify-between gap-4">
+        <div className="bg-slate-50/80 px-4 py-3 border-0 flex items-center justify-between gap-4">
           {Array.from({ length: cols }).map((_, i) => (
             <Skeleton
               key={i}
@@ -111,7 +111,7 @@ export function TableSkeleton({
         </div>
 
         {/* Table Footer / Pagination */}
-        <div className="bg-slate-50/50 px-4 py-3 border-t border-slate-200 flex items-center justify-between">
+        <div className="bg-slate-50/50 px-4 py-3 border-t border-slate-100 flex items-center justify-between">
           <Skeleton className="h-4 w-36" />
           <div className="flex items-center gap-2">
             <Skeleton className="h-8 w-8 rounded-md" />
@@ -174,7 +174,7 @@ export function VendorDetailSkeleton() {
   return (
     <div className="space-y-6">
       {/* Top Header Card */}
-      <Card className="border border-slate-200 shadow-sm bg-white">
+      <Card className="border-0 shadow-xs bg-white">
         <CardContent className="p-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-4 border-b border-slate-100">
             <div className="flex items-start gap-4">
@@ -208,7 +208,7 @@ export function VendorDetailSkeleton() {
       {/* 3 Financial Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {Array.from({ length: 3 }).map((_, i) => (
-          <Card key={i} className="border border-slate-200 shadow-xs bg-white">
+          <Card key={i} className="border-0 shadow-xs bg-white">
             <CardContent className="p-4 flex items-center justify-between">
               <div className="space-y-2">
                 <Skeleton className="h-3.5 w-28" />
@@ -221,7 +221,7 @@ export function VendorDetailSkeleton() {
       </div>
 
       {/* Tabs Bar */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+      <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
         <Skeleton className="h-9 w-36 rounded-lg" />
         <Skeleton className="h-9 w-32 rounded-lg" />
         <Skeleton className="h-9 w-28 rounded-lg" />
@@ -239,7 +239,7 @@ export function CustomerDetailSkeleton() {
   return (
     <div className="space-y-6">
       {/* Header Profile Card */}
-      <Card className="border border-slate-200 shadow-sm bg-white">
+      <Card className="border-0 shadow-xs bg-white">
         <CardContent className="p-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div className="flex items-start gap-4">
@@ -263,7 +263,7 @@ export function CustomerDetailSkeleton() {
       {/* Balance & Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i} className="border border-slate-200 shadow-xs bg-white">
+          <Card key={i} className="border-0 shadow-xs bg-white">
             <CardContent className="p-4 space-y-2">
               <Skeleton className="h-3.5 w-24" />
               <Skeleton className="h-6 w-32" />
@@ -297,7 +297,7 @@ export function ReportsSkeleton() {
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i} className="border border-slate-200 shadow-xs bg-white">
+          <Card key={i} className="border-0 shadow-xs bg-white">
             <CardContent className="p-4 space-y-2">
               <Skeleton className="h-3.5 w-24" />
               <Skeleton className="h-7 w-32" />
@@ -333,7 +333,7 @@ export function DashboardSkeleton() {
 
       {/* 2 Analytics Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="border border-slate-200 shadow-xs bg-white">
+        <Card className="border-0 shadow-xs bg-white">
           <CardContent className="p-6 space-y-4">
             <div className="flex items-center justify-between">
               <Skeleton className="h-5 w-44" />
@@ -342,7 +342,7 @@ export function DashboardSkeleton() {
             <Skeleton className="h-64 w-full rounded-xl" />
           </CardContent>
         </Card>
-        <Card className="border border-slate-200 shadow-xs bg-white">
+        <Card className="border-0 shadow-xs bg-white">
           <CardContent className="p-6 space-y-4">
             <div className="flex items-center justify-between">
               <Skeleton className="h-5 w-44" />
@@ -409,7 +409,7 @@ export function SettingsSkeleton() {
       {/* 2-column card grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Company Information */}
-        <Card className="border border-slate-200 shadow-xs bg-white">
+        <Card className="border-0 shadow-xs bg-white">
           <CardContent className="p-6 space-y-4">
             <Skeleton className="h-5 w-44" />
             <div className="space-y-3 pt-2">
@@ -424,7 +424,7 @@ export function SettingsSkeleton() {
         </Card>
 
         {/* Financial & Operational */}
-        <Card className="border border-slate-200 shadow-xs bg-white">
+        <Card className="border-0 shadow-xs bg-white">
           <CardContent className="p-6 space-y-4">
             <Skeleton className="h-5 w-48" />
             <div className="space-y-3 pt-2">
@@ -439,7 +439,7 @@ export function SettingsSkeleton() {
         </Card>
 
         {/* Maintenance & Safety */}
-        <Card className="border border-slate-200 shadow-xs bg-white">
+        <Card className="border-0 shadow-xs bg-white">
           <CardContent className="p-6 space-y-4">
             <Skeleton className="h-5 w-44" />
             <div className="space-y-3 pt-2">
@@ -454,7 +454,7 @@ export function SettingsSkeleton() {
         </Card>
 
         {/* Quick Statistics */}
-        <Card className="border border-slate-200 shadow-xs bg-white">
+        <Card className="border-0 shadow-xs bg-white">
           <CardContent className="p-6 space-y-4">
             <Skeleton className="h-5 w-36" />
             <div className="grid grid-cols-3 gap-3 pt-2">
@@ -488,7 +488,7 @@ export function PricingSkeleton() {
       </div>
 
       {/* Plant Price Setting Card */}
-      <Card className="border border-slate-200 shadow-xs bg-white">
+      <Card className="border-0 shadow-xs bg-white">
         <CardContent className="p-6 space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div className="space-y-1">
@@ -515,7 +515,7 @@ export function PricingSkeleton() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {Array.from({ length: 3 }).map((_, i) => (
-              <Card key={i} className="border border-slate-200 shadow-xs bg-white">
+              <Card key={i} className="border-0 shadow-xs bg-white">
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <Skeleton className="h-5 w-32" />
@@ -540,7 +540,7 @@ export function PricingSkeleton() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {Array.from({ length: 3 }).map((_, i) => (
-              <Card key={i} className="border border-slate-200 shadow-xs bg-white">
+              <Card key={i} className="border-0 shadow-xs bg-white">
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <Skeleton className="h-5 w-32" />
@@ -571,7 +571,7 @@ export function SiteSettingsSkeleton() {
       </div>
 
       <div className="space-y-6">
-        <Card className="border border-slate-200 shadow-xs bg-white">
+        <Card className="border-0 shadow-xs bg-white">
           <CardContent className="p-6 space-y-4">
             <Skeleton className="h-5 w-44" />
             <div className="space-y-3">
@@ -581,7 +581,7 @@ export function SiteSettingsSkeleton() {
             </div>
           </CardContent>
         </Card>
-        <Card className="border border-slate-200 shadow-xs bg-white">
+        <Card className="border-0 shadow-xs bg-white">
           <CardContent className="p-6 space-y-4">
             <Skeleton className="h-5 w-44" />
             <div className="space-y-3">
@@ -606,7 +606,7 @@ export function WebsiteInquiriesSkeleton() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="bg-white border border-gray-200 rounded-lg p-4 space-y-2">
+          <div key={i} className="bg-white border-0 shadow-xs rounded-xl p-4 space-y-2">
             <Skeleton className="h-3 w-20" />
             <Skeleton className="h-7 w-12" />
           </div>
