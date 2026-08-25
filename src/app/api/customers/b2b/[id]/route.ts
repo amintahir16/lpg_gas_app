@@ -290,13 +290,19 @@ export async function DELETE(
           id: customerRecord.id,
           name: customerRecord.name,
           isActive: false,
+          isArchived: true,
         },
       });
     }
 
     const customer = await prisma.customer.update({
       where: { id: customerId },
-      data: { isActive: false, updatedBy: session.user.id },
+      data: {
+        isActive: false,
+        isArchived: true,
+        archivedAt: new Date(),
+        updatedBy: session.user.id,
+      },
     });
 
     try {

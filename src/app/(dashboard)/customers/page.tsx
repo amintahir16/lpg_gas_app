@@ -74,23 +74,34 @@ export default function CustomersPage() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Reset pagination when search or filters change
-  useEffect(() => {
-    setPagination(prev => ({ ...prev, page: 1 }));
-  }, [debouncedSearchTerm, filterStatus, filterType]);
+  const prevFiltersRef = useRef({ debouncedSearchTerm, filterStatus, filterType });
 
+  // Single effect to fetch data and cleanly reset page on filter change without oscillation
   useEffect(() => {
-    fetchCustomers();
+    const prev = prevFiltersRef.current;
+    const filterChanged =
+      prev.debouncedSearchTerm !== debouncedSearchTerm ||
+      prev.filterStatus !== filterStatus ||
+      prev.filterType !== filterType;
+
+    prevFiltersRef.current = { debouncedSearchTerm, filterStatus, filterType };
+
+    if (filterChanged && pagination.page !== 1) {
+      setPagination(p => ({ ...p, page: 1 }));
+      return;
+    }
+
+    fetchCustomers(pagination.page);
   }, [debouncedSearchTerm, pagination.page, filterStatus, filterType]);
 
-  const fetchCustomers = async () => {
+  const fetchCustomers = async (targetPage: number = pagination.page) => {
     try {
       setLoading(true);
       const params = new URLSearchParams({
         search: debouncedSearchTerm,
         status: filterStatus,
         type: filterType,
-        page: pagination.page.toString(),
+        page: targetPage.toString(),
         limit: pagination.limit.toString()
       });
 
@@ -103,7 +114,13 @@ export default function CustomersPage() {
       const data: CustomersResponse = await response.json();
       setCustomers(data.customers);
       setSummary(data.summary);
-      setPagination(data.pagination);
+      setPagination(prev => ({
+        ...prev,
+        page: targetPage,
+        limit: data.pagination?.limit || prev.limit,
+        total: data.pagination?.total || 0,
+        pages: data.pagination?.pages || 0,
+      }));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -219,11 +236,6 @@ export default function CustomersPage() {
         </Card>
       )}
 
-      {/* Loading State */}
-      {loading && customers.length === 0 && !error && (
-        <TableSkeleton rows={6} cols={6} />
-      )}
-
       {/* Search and Filters */}
       <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
         <CardContent className="p-4 space-y-4">
@@ -250,7 +262,7 @@ export default function CustomersPage() {
                   <button
                     key={status}
                     onClick={() => setFilterStatus(status)}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${filterStatus === status
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${filterStatus === status
                       ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200'
                       : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
                       }`}
@@ -267,7 +279,7 @@ export default function CustomersPage() {
                   <button
                     key={type}
                     onClick={() => setFilterType(type)}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${filterType === type
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${filterType === type
                       ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200'
                       : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
                       }`}
@@ -306,57 +318,71 @@ export default function CustomersPage() {
       {/* Customers Table */}
       <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm overflow-hidden">
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="font-semibold text-gray-700">Name</TableHead>
-
-                <TableHead className="font-semibold text-gray-700">Phone</TableHead>
-                <TableHead className="font-semibold text-gray-700">Type</TableHead>
-                <TableHead className="font-semibold text-gray-700">Credit Limit</TableHead>
-                <TableHead className="font-semibold text-gray-700 text-center">Status</TableHead>
-
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {customers.map((customer) => (
-                <TableRow
-                  key={customer.id}
-                  className="cursor-pointer hover:bg-gray-50"
-                  onClick={() => {
-                    if (customer.type === 'B2B') {
-                      router.push(`/customers/b2b/${customer.id}`);
-                    } else {
-                      router.push(`/customers/b2c/${customer.id}`);
-                    }
-                  }}
-                >
-                  <TableCell className="font-semibold text-gray-900">{customer.name}</TableCell>
-
-                  <TableCell className="text-gray-700">{customer.phone}</TableCell>
-                  <TableCell>
-                    <Badge variant={getCustomerTypeColor(customer.type) as any} className="font-semibold">
-                      {getCustomerTypeDisplay(customer)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="font-semibold text-gray-900">
-                    Rs {(Number(customer.creditLimit) || 0).toFixed(2)}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${customer.isActive ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${customer.isActive ? 'bg-green-500' : 'bg-gray-400'}`}></span>
-                      {customer.isActive ? 'Active' : 'Inactive'}
-                    </div>
-                  </TableCell>
-
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          {loading && customers.length === 0 ? (
+            <div className="p-4">
+              <TableSkeleton rows={6} cols={5} hasSearch={false} />
+            </div>
+          ) : customers.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-3">
+                <UserGroupIcon className="w-6 h-6 text-gray-400" />
+              </div>
+              <p className="text-sm font-semibold text-gray-900">No customers found</p>
+              <p className="text-xs text-gray-500 mt-1 max-w-sm">
+                No active records match your selected filter or search term.
+              </p>
+            </div>
+          ) : (
+            <div className={`transition-opacity duration-150 ${loading ? 'opacity-50' : 'opacity-100'}`}>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="font-semibold text-gray-700">Name</TableHead>
+                    <TableHead className="font-semibold text-gray-700">Phone</TableHead>
+                    <TableHead className="font-semibold text-gray-700">Type</TableHead>
+                    <TableHead className="font-semibold text-gray-700">Credit Limit</TableHead>
+                    <TableHead className="font-semibold text-gray-700 text-center">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {customers.map((customer) => (
+                    <TableRow
+                      key={customer.id}
+                      className="cursor-pointer hover:bg-gray-50 transition-colors"
+                      onClick={() => {
+                        if (customer.type === 'B2B') {
+                          router.push(`/customers/b2b/${customer.id}`);
+                        } else {
+                          router.push(`/customers/b2c/${customer.id}`);
+                        }
+                      }}
+                    >
+                      <TableCell className="font-semibold text-gray-900">{customer.name}</TableCell>
+                      <TableCell className="text-gray-700">{customer.phone}</TableCell>
+                      <TableCell>
+                        <Badge variant={getCustomerTypeColor(customer.type) as any} className="font-semibold">
+                          {getCustomerTypeDisplay(customer)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-semibold text-gray-900">
+                        Rs {(Number(customer.creditLimit) || 0).toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${customer.isActive ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${customer.isActive ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+                          {customer.isActive ? 'Active' : 'Inactive'}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
 
           {/* Pagination */}
           {pagination.pages > 1 && (
-            <div className="flex items-center justify-between p-4 border-t border-gray-100">
+            <div className="flex items-center justify-between p-4 border-t border-gray-100 bg-gray-50/50">
               <p className="text-sm text-gray-700">
                 Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
                 {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
@@ -366,7 +392,7 @@ export default function CustomersPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={pagination.page === 1}
+                  disabled={pagination.page === 1 || loading}
                   onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
                 >
                   Previous
@@ -374,7 +400,7 @@ export default function CustomersPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={pagination.page === pagination.pages}
+                  disabled={pagination.page === pagination.pages || loading}
                   onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
                 >
                   Next

@@ -64,6 +64,8 @@ model Customer {
   billSequence       Int              @default(0) // Per-customer bill sequence number
   notes              String?
   isActive           Boolean          @default(true)
+  isArchived         Boolean          @default(false)
+  archivedAt         DateTime?
   createdBy          String
   createdAt          DateTime         @default(now())
   updatedBy          String?
@@ -95,6 +97,8 @@ model B2CCustomer {
   city             String               @default("Hayatabad")
   totalProfit      Decimal              @default(0) @db.Decimal(10, 2)
   isActive         Boolean              @default(true)
+  isArchived       Boolean              @default(false)
+  archivedAt       DateTime?
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
   marginCategoryId String?

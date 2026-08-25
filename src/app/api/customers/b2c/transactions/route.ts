@@ -195,6 +195,29 @@ export async function POST(request: NextRequest) {
     // Note: actualProfit will be updated inside transaction to include security return deductions
     const actualProfit = gasProfit + accessoryProfit + deliveryProfit;
 
+    // Parse transaction date and time
+    const txDate = new Date(date);
+    let txTime: Date;
+    if (time) {
+      const parsedTime = new Date(time);
+      if (!isNaN(parsedTime.getTime())) {
+        if (parsedTime.getFullYear() < 2020 && txDate.getFullYear() >= 2020) {
+          txTime = new Date(txDate);
+          txTime.setHours(parsedTime.getHours(), parsedTime.getMinutes(), parsedTime.getSeconds(), parsedTime.getMilliseconds());
+        } else {
+          txTime = parsedTime;
+        }
+      } else if (typeof time === 'string' && time.match(/^\d{1,2}:\d{2}/)) {
+        const [hours, minutes] = time.split(':');
+        txTime = new Date(txDate);
+        txTime.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+      } else {
+        txTime = new Date(txDate);
+      }
+    } else {
+      txTime = new Date(txDate);
+    }
+
     // Create transaction with all items in a transaction
     let calculatedSecurityReturnProfit = 0;
     const transaction = await prisma.$transaction(async (tx) => {
@@ -203,8 +226,8 @@ export async function POST(request: NextRequest) {
         data: {
           billSno,
           customerId,
-          date: new Date(date),
-          time: new Date(time),
+          date: txDate,
+          time: txTime,
           totalAmount,
           deliveryCharges: Number(deliveryCharges),
           finalAmount,

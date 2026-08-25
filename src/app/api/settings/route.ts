@@ -25,8 +25,12 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Get some basic statistics to inform settings
-    const totalCustomers = await prisma.customer.count();
+    // Get some basic statistics to inform settings (active non-archived only)
+    const [b2bCount, b2cCount] = await Promise.all([
+      prisma.customer.count({ where: { isActive: true, isArchived: false } }),
+      prisma.b2CCustomer.count({ where: { isActive: true, isArchived: false } }),
+    ]);
+    const totalCustomers = b2bCount + b2cCount;
     const totalVendors = await prisma.vendor.count();
     const totalCylinders = await prisma.cylinder.count();
 

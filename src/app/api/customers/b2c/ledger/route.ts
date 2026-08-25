@@ -15,10 +15,16 @@ export async function GET(request: NextRequest) {
     const regionId = getActiveRegionId(request);
     const regionScope = regionScopedWhere(regionId);
 
-    // Get all B2C customers with their profit data (region-scoped)
+    const whereCondition = {
+      isActive: true,
+      isArchived: false,
+      ...regionScope,
+    };
+
+    // Get all active B2C customers with their profit data (region-scoped)
     const [customers, profitSummary, totalCustomers] = await Promise.all([
       prisma.b2CCustomer.findMany({
-        where: regionScope,
+        where: whereCondition,
         select: {
           id: true,
           name: true,
@@ -38,7 +44,7 @@ export async function GET(request: NextRequest) {
         where: regionScope,
         _sum: { totalProfit: true }
       }),
-      prisma.b2CCustomer.count({ where: regionScope })
+      prisma.b2CCustomer.count({ where: whereCondition })
     ]);
 
     const response = {

@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
 
     const where: Prisma.CustomerWhereInput = {
       isActive: true,
+      isArchived: false,
       ...regionScopedWhere(regionId),
       OR: search ? [
         { name: { contains: search, mode: 'insensitive' as Prisma.QueryMode } },

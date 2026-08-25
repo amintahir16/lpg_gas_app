@@ -613,7 +613,7 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
             const transactionData = {
                 customerId,
                 date: new Date(date),
-                time: new Date(`2000-01-01T${time}`),
+                time: time ? new Date(`${date}T${time}`) : new Date(date),
                 deliveryCharges: Number(deliveryCharges),
                 deliveryCost: Number(deliveryCost),
                 paymentMethod,

@@ -57,6 +57,7 @@ export async function GET(request: NextRequest) {
     // 1. Fetch matching customers and get daily cached active customer IDs (runs at most ONCE a day)
     // Only active (non-archived) customers are included
     whereClause.isActive = true;
+    whereClause.isArchived = false;
 
     const [allCustomers, activeCustomerIds] = await Promise.all([
       prisma.customer.findMany({
@@ -78,6 +79,7 @@ export async function GET(request: NextRequest) {
           marginCategoryId: true,
           createdAt: true,
           isActive: true,
+          isArchived: true,
         },
         orderBy: { createdAt: 'desc' },
       }),

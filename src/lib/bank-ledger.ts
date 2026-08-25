@@ -107,7 +107,7 @@ export function formatLedgerDateParts(input: Date | string) {
   };
 }
 
-/** Prefer transaction `time` when present; otherwise fall back to `date` / createdAt. */
+/** Prefer transaction `time` combined with transaction `date` when present; otherwise fall back to `date` / createdAt. */
 export function coalesceEventDate(
   primary: Date | string | null | undefined,
   fallback?: Date | string | null | undefined
@@ -117,7 +117,26 @@ export function coalesceEventDate(
     const d = value instanceof Date ? value : new Date(value);
     return Number.isNaN(d.getTime()) ? null : d;
   };
-  return tryParse(primary) || tryParse(fallback) || new Date();
+
+  const prim = tryParse(primary);
+  const fall = tryParse(fallback);
+
+  if (prim && fall) {
+    // If primary has a dummy year (< 2020) while fallback has a real transaction year (>= 2020)
+    if (prim.getFullYear() < 2020 && fall.getFullYear() >= 2020) {
+      const combined = new Date(fall);
+      combined.setHours(
+        prim.getHours(),
+        prim.getMinutes(),
+        prim.getSeconds(),
+        prim.getMilliseconds()
+      );
+      return combined;
+    }
+    return prim;
+  }
+
+  return prim || fall || new Date();
 }
 
 export function summarizeLineItems(

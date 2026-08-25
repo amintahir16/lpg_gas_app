@@ -50,7 +50,12 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    // Apply Status Filter
+    // Always exclude archived customers
+    b2bWhere.isArchived = false;
+    b2bWhere.isActive = true;
+    b2cWhere.isArchived = false;
+
+    // Apply Status Filter for B2C
     if (filterStatus === 'ACTIVE') {
       b2cWhere.isActive = true;
     } else if (filterStatus === 'INACTIVE') {
@@ -180,28 +185,22 @@ export async function GET(request: NextRequest) {
     const totalSecurityHoldings = Number(b2cSecurity._sum?.securityAmount || 0);
     const b2cCylindersHeld = Number(b2cSecurity._sum?.quantity || 0);
 
-    let b2bCylindersHeld = 0;
-    if ((filterType === 'ALL' || filterType === 'B2B') && b2bCustomers.length > 0) {
-      const b2bIds = b2bCustomers.map(c => c.id);
-      const locMatches = b2bIds.map(id => ({ location: { contains: id } }));
-      const nameMatches = b2bCustomers.map(c => ({ location: { contains: c.name, mode: 'insensitive' as const } }));
-
-      const assignedCylinders = await prisma.cylinder.findMany({
+    let totalCylindersCount = 0;
+    if (filterType === 'B2C') {
+      totalCylindersCount = b2cCylindersHeld;
+    } else {
+      const totalWithCustomers = await prisma.cylinder.count({
         where: {
           currentStatus: 'WITH_CUSTOMER',
           ...regionScopedWhere(regionId),
-          OR: [
-            { cylinderRentals: { some: { customerId: { in: b2bIds }, status: 'ACTIVE' } } },
-            ...locMatches,
-            ...nameMatches
-          ]
-        },
-        select: { id: true }
+        }
       });
-      b2bCylindersHeld = assignedCylinders.length;
+      if (filterType === 'B2B') {
+        totalCylindersCount = Math.max(0, totalWithCustomers - b2cCylindersHeld);
+      } else {
+        totalCylindersCount = totalWithCustomers;
+      }
     }
-
-    const totalCylindersCount = b2cCylindersHeld + b2bCylindersHeld;
 
     const summary = {
       totalCustomers,

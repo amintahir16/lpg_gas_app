@@ -158,24 +158,34 @@ export default function B2CCustomersPage() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Reset pagination when search changes
-  useEffect(() => {
-    setPagination(prev => ({ ...prev, page: 1 }));
-  }, [debouncedSearchTerm, filterStatus, sortBy, sortOrder]);
+  const prevFiltersRef = useRef({ debouncedSearchTerm, filterStatus, sortBy, sortOrder });
 
+  // Single effect to fetch data and cleanly reset page on filter change without oscillation
   useEffect(() => {
-    fetchCustomers();
+    const prev = prevFiltersRef.current;
+    const filterChanged =
+      prev.debouncedSearchTerm !== debouncedSearchTerm ||
+      prev.filterStatus !== filterStatus ||
+      prev.sortBy !== sortBy ||
+      prev.sortOrder !== sortOrder;
+
+    prevFiltersRef.current = { debouncedSearchTerm, filterStatus, sortBy, sortOrder };
+
+    if (filterChanged && pagination.page !== 1) {
+      setPagination(p => ({ ...p, page: 1 }));
+      return;
+    }
+
+    fetchCustomers(pagination.page);
   }, [debouncedSearchTerm, pagination.page, filterStatus, sortBy, sortOrder]);
 
-  const fetchCustomers = async () => {
+  const fetchCustomers = async (targetPage: number = pagination.page) => {
     try {
       setLoading(true);
       const params = new URLSearchParams({
         search: debouncedSearchTerm,
-        page: pagination.page.toString(),
+        page: targetPage.toString(),
         limit: pagination.limit.toString(),
-        // Note: Currently API might not support all these sorts/filters perfectly
-        // but adding params for future consistency
         status: filterStatus,
         sortBy,
         sortOrder
@@ -189,7 +199,13 @@ export default function B2CCustomersPage() {
 
       const data: B2CCustomersResponse = await response.json();
       setCustomers(data.customers);
-      setPagination(data.pagination);
+      setPagination(prev => ({
+        ...prev,
+        page: targetPage,
+        limit: data.pagination?.limit || prev.limit,
+        total: data.pagination?.total || 0,
+        pages: data.pagination?.pages || 0,
+      }));
       setSummary(data.summary);
       setCylinderTypes(data.cylinderTypes || []);
       setTypeDefinitions(data.typeDefinitions || {});

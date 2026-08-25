@@ -123,11 +123,13 @@ export async function DELETE(
       return NextResponse.json({ error: 'Customer not found in current region' }, { status: 404 });
     }
 
-    // Soft delete by setting isActive to false
+    // Soft delete by setting isActive to false and isArchived to true
     const customer = await prisma.customer.update({
       where: { id },
       data: {
         isActive: false,
+        isArchived: true,
+        archivedAt: new Date(),
         updatedBy: userId,
       },
     });

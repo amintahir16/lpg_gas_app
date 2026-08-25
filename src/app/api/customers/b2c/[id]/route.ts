@@ -121,26 +121,6 @@ export async function PUT(
       return NextResponse.json({ error: 'Customer not found in current region' }, { status: 404 });
     }
 
-    // Check if another customer with same phone already exists in the same region (only if phone changed)
-    const newPhone = phone ? String(phone).trim() : '';
-    const oldPhone = customerScopeCheck.phone ? String(customerScopeCheck.phone).trim() : '';
-    if (newPhone && newPhone !== oldPhone) {
-      const existingCustomer = await prisma.b2CCustomer.findFirst({
-        where: {
-          phone: newPhone,
-          id: { not: customerId },
-          ...regionScopedWhere(regionId),
-        }
-      });
-
-      if (existingCustomer) {
-        return NextResponse.json(
-          { error: 'Another customer with this phone number already exists' },
-          { status: 400 }
-        );
-      }
-    }
-
     // B2C always keeps the single All Homes category.
     const allHomes = await getOrCreateB2cAllHomesCategory();
 
@@ -258,7 +238,11 @@ export async function DELETE(
 
     await prisma.b2CCustomer.update({
       where: { id: customerId },
-      data: { isActive: false },
+      data: {
+        isActive: false,
+        isArchived: true,
+        archivedAt: new Date(),
+      } as any,
     });
 
     try {

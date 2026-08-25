@@ -147,8 +147,8 @@ export async function GET(request: NextRequest) {
 
     const [totalB2b, totalB2c, cylinderStatusGroups, b2cTransInRange, b2bTransInRange, b2cTransChart, b2bTransChart] =
       await Promise.all([
-        prisma.customer.count({ where: { isActive: true, ...regionScope } }),
-        prisma.b2CCustomer.count({ where: { isActive: true, ...regionScope } }),
+        prisma.customer.count({ where: { isActive: true, isArchived: false, ...regionScope } }),
+        prisma.b2CCustomer.count({ where: { isActive: true, isArchived: false, ...regionScope } }),
         prisma.cylinder.groupBy({
           by: ['currentStatus'],
           where: { ...regionScope },

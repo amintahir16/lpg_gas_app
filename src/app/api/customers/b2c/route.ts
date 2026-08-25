@@ -55,6 +55,9 @@ export async function GET(request: NextRequest) {
       ...regionScopedWhere(regionId),
     } : { ...regionScopedWhere(regionId) };
 
+    // Always exclude archived customers
+    whereClause.isArchived = false;
+
     if (filterStatus === 'ACTIVE') {
       whereClause.isActive = true;
     } else if (filterStatus === 'INACTIVE') {
@@ -91,17 +94,17 @@ export async function GET(request: NextRequest) {
       prisma.b2CCustomer.count({ where: whereClause })
     ]);
 
-    // Calculate summary data
+    // Calculate summary data: Total Customers counts active/non-archived; financial stat cards preserve all regional transaction totals
     const [totalCustomers, profitSummary, cylinderSummary] = await Promise.all([
-      prisma.b2CCustomer.count({ where: whereClause }), // Total Customers should respect filters
+      prisma.b2CCustomer.count({ where: whereClause }), // Total Customers stat card excludes archived
       prisma.b2CCustomer.aggregate({
-        where: whereClause, // Profit should respect filters
+        where: regionScopedWhere(regionId), // Total Profit preserves all historical profits
         _sum: { totalProfit: true }
       }),
       prisma.b2CCylinderHolding.aggregate({
         where: {
           isReturned: false,
-          customer: whereClause // Only include holdings for filtered customers
+          customer: regionScopedWhere(regionId) // Total Security preserves all active holdings in region
         },
         _sum: { quantity: true, securityAmount: true }
       })
@@ -209,18 +212,6 @@ export async function POST(request: NextRequest) {
     if (!name || !phone || !address) {
       return NextResponse.json(
         { error: 'Name, phone, and address are required' },
-        { status: 400 }
-      );
-    }
-
-    // Check if customer with same phone already exists in this region
-    const existingCustomer = await prisma.b2CCustomer.findFirst({
-      where: { phone, ...regionScopedWhere(regionId) }
-    });
-
-    if (existingCustomer) {
-      return NextResponse.json(
-        { error: 'Customer with this phone number already exists in this branch' },
         { status: 400 }
       );
     }

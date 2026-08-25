@@ -155,26 +155,39 @@ export default function B2BCustomersPage() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Reset pagination when filters change
-  useEffect(() => {
-    setPagination(prev => ({ ...prev, page: 1 }));
-  }, [debouncedSearchTerm, filterStatus, filterType, sortBy, sortOrder]);
+  const prevFiltersRef = useRef({ debouncedSearchTerm, filterStatus, filterType, sortBy, sortOrder });
 
+  // Single effect to fetch data and cleanly reset page on filter change without oscillation
   useEffect(() => {
-    fetchB2BCustomers();
+    const prev = prevFiltersRef.current;
+    const filterChanged =
+      prev.debouncedSearchTerm !== debouncedSearchTerm ||
+      prev.filterStatus !== filterStatus ||
+      prev.filterType !== filterType ||
+      prev.sortBy !== sortBy ||
+      prev.sortOrder !== sortOrder;
+
+    prevFiltersRef.current = { debouncedSearchTerm, filterStatus, filterType, sortBy, sortOrder };
+
+    if (filterChanged && pagination.page !== 1) {
+      setPagination(p => ({ ...p, page: 1 }));
+      return;
+    }
+
+    fetchB2BCustomers(pagination.page);
   }, [debouncedSearchTerm, pagination.page, filterStatus, filterType, sortBy, sortOrder]);
 
-  // Refresh data when page becomes visible
+  // Refresh data when page becomes visible (single run on focus, not unmount/remount loop)
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        fetchB2BCustomers();
+        fetchB2BCustomers(pagination.page);
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, []);
+  }, [pagination.page]);
 
   // Fetch margin categories for B2B customers
   useEffect(() => {
@@ -195,14 +208,14 @@ export default function B2BCustomersPage() {
     fetchMarginCategories();
   }, []);
 
-  const fetchB2BCustomers = async () => {
+  const fetchB2BCustomers = async (targetPage: number = pagination.page) => {
     try {
       setLoading(true);
       setError(null);
 
       const params = new URLSearchParams({
         search: debouncedSearchTerm,
-        page: pagination.page.toString(),
+        page: targetPage.toString(),
         limit: pagination.limit.toString(),
         type: 'B2B',
         status: filterStatus,
@@ -211,7 +224,6 @@ export default function B2BCustomersPage() {
         sortOrder
       });
 
-      console.log('Fetching B2B customers with params:', params.toString());
       const response = await fetch(`/api/customers/b2b?${params}`);
 
       if (!response.ok) {
@@ -219,10 +231,16 @@ export default function B2BCustomersPage() {
         throw new Error(`Failed to fetch B2B customers: ${response.status} ${text}`);
       }
 
-      const data: any = await response.json(); // Use any temporarily to handle extended response
+      const data: any = await response.json();
 
       setCustomers(data.customers || []);
-      setPagination(data.pagination || { page: 1, limit: 10, total: 0, pages: 0 });
+      setPagination(prev => ({
+        ...prev,
+        page: targetPage,
+        limit: data.pagination?.limit || prev.limit,
+        total: data.pagination?.total || 0,
+        pages: data.pagination?.pages || 0,
+      }));
       setSummary(data.summary || {
         totalCylinders: 0,
         cylinderBreakdown: {},
@@ -407,7 +425,7 @@ export default function B2BCustomersPage() {
         </div>
         <div className="flex space-x-3">
           <Button
-            onClick={fetchB2BCustomers}
+            onClick={() => fetchB2BCustomers()}
             variant="outline"
             size="sm"
             disabled={loading}
