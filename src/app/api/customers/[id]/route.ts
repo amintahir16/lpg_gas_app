@@ -18,7 +18,7 @@ export async function GET(
     const customer = await prisma.customer.findFirst({
       where: { id, ...regionScopedWhere(regionId) },
       include: {
-        transactions: {
+        b2bTransactions: {
           include: {
             items: true,
           },
@@ -31,7 +31,10 @@ export async function GET(
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }
 
-    return NextResponse.json(customer);
+    return NextResponse.json({
+      ...customer,
+      transactions: customer.b2bTransactions,
+    });
   } catch (error) {
     console.error('Error fetching customer:', error);
     return NextResponse.json(
