@@ -1244,21 +1244,14 @@ export default function B2BCustomerDetailPage() {
     if (hasSaleCharges) {
       return Math.max(0, Math.round(txnSummary.netAmount));
     }
-    // Returns/buyback-only: credit comes from buyback, not cash overpayment
-    if (txnSummary.hasReturns) {
-      return 0;
-    }
-    // For payment-only transactions this is the outstanding amount used by the
-    // quick-pay button. Manual payment may exceed it and create customer credit.
+    // For payment-only transactions or returns, this is the outstanding amount used by the quick-pay button.
     return getCustomerOutstandingOwed();
   };
 
   const isPaymentOnlyTransaction = (txnSummary = getUnifiedTransactionSummary()) =>
     !txnSummary.hasDelivery && !txnSummary.hasAccessories && !txnSummary.hasReturns;
 
-  const isPaymentOverLimit = (txnSummary = getUnifiedTransactionSummary()) =>
-    !isPaymentOnlyTransaction(txnSummary) &&
-    salePaymentAmount > getMaxAllowedPayment(txnSummary);
+  const isPaymentOverLimit = (_txnSummary = getUnifiedTransactionSummary()) => false;
 
   // Auto-sync payment amount when transaction details change (if enabled)
   useEffect(() => {
@@ -1313,19 +1306,8 @@ export default function B2BCustomerDetailPage() {
         return;
       }
 
-      // Item-based transactions cannot be overpaid. A payment-only transaction
-      // may exceed the outstanding balance and the excess becomes customer credit.
-      const maxAllowedPayment = getMaxAllowedPayment(summary);
-      if (isPaymentOverLimit(summary)) {
-        setPaymentExpanded(true);
-        const hasSaleCharges = summary.hasDelivery || summary.hasAccessories;
-        setError(
-          hasSaleCharges
-            ? `Payment cannot exceed this transaction's net amount (${formatCurrency(maxAllowedPayment)}). Credit is only given via buyback.`
-            : maxAllowedPayment > 0
-              ? `Payment cannot exceed what the customer owes (${formatCurrency(maxAllowedPayment)}).`
-              : 'Customer has no outstanding balance to collect. Credit is only given via buyback.'
-        );
+      if (salePaymentAmount < 0) {
+        setError('Payment amount cannot be negative.');
         return;
       }
 
@@ -2998,11 +2980,27 @@ export default function B2BCustomerDetailPage() {
                       const maxAllowedPayment = getMaxAllowedPayment(txnSummary);
                       const hasSaleCharges = txnSummary.hasDelivery || txnSummary.hasAccessories;
                       const isPaymentOnly = !hasSaleCharges && !txnSummary.hasReturns;
-                      const paymentExceedsMax = !isPaymentOnly && salePaymentAmount > maxAllowedPayment;
                       const outstandingOwed = getCustomerOutstandingOwed();
-                      const creditCreated = isPaymentOnly
-                        ? Math.max(0, salePaymentAmount - outstandingOwed)
-                        : 0;
+
+                      // Calculate excess payment and customer credit
+                      let creditCreated = 0;
+                      let excessAppliedToOutstanding = 0;
+
+                      if (hasSaleCharges) {
+                        if (salePaymentAmount > txnSummary.netAmount) {
+                          const excess = salePaymentAmount - txnSummary.netAmount;
+                          if (outstandingOwed > 0) {
+                            excessAppliedToOutstanding = Math.min(excess, outstandingOwed);
+                            creditCreated = Math.max(0, excess - outstandingOwed);
+                          } else {
+                            creditCreated = excess;
+                          }
+                        }
+                      } else if (isPaymentOnly || txnSummary.hasReturns) {
+                        if (salePaymentAmount > outstandingOwed) {
+                          creditCreated = Math.max(0, salePaymentAmount - outstandingOwed);
+                        }
+                      }
 
                       return (
                         <>
@@ -3012,7 +3010,6 @@ export default function B2BCustomerDetailPage() {
                         <Input
                           type="number"
                           min="0"
-                          max={isPaymentOnly ? undefined : maxAllowedPayment}
                           step="1"
                           value={salePaymentAmount || ''}
                           onChange={(e) => {
@@ -3020,37 +3017,42 @@ export default function B2BCustomerDetailPage() {
                             setSalePaymentAmount(Math.round(parseFloat(e.target.value) || 0));
                           }}
                           placeholder="0"
-                          aria-invalid={paymentExceedsMax}
                           className={`w-full px-3 py-1 text-sm border rounded-md focus:outline-none focus:ring-2 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield] h-9 ${
-                            paymentExceedsMax
-                              ? 'border-red-500 bg-red-50 focus:ring-red-500 focus:border-red-500'
-                              : isAutoPayment
-                                ? 'border-blue-400 bg-blue-50 ring-2 ring-blue-100 focus:ring-blue-500 focus:border-blue-500'
-                                : 'border-gray-300 bg-white focus:ring-blue-500 focus:border-blue-500'
+                            isAutoPayment
+                              ? 'border-blue-400 bg-blue-50 ring-2 ring-blue-100 focus:ring-blue-500 focus:border-blue-500'
+                              : 'border-gray-300 bg-white focus:ring-blue-500 focus:border-blue-500'
                           }`}
                           onWheel={(e) => e.currentTarget.blur()}
                         />
-                        {paymentExceedsMax ? (
-                          <p className="mt-1.5 text-xs font-medium text-red-600">
-                            {hasSaleCharges
-                              ? `Amount exceeds this transaction's net amount (${formatCurrency(maxAllowedPayment)}). Credit is only given via buyback.`
-                              : maxAllowedPayment > 0
-                                ? `Amount exceeds what the customer owes (${formatCurrency(maxAllowedPayment)}).`
-                                : 'Customer has no outstanding balance. Credit is only given via buyback.'}
+                        {hasSaleCharges && salePaymentAmount > txnSummary.netAmount ? (
+                          <p className="mt-1.5 text-xs font-medium text-green-600">
+                            {creditCreated > 0 && excessAppliedToOutstanding > 0
+                              ? `${formatCurrency(creditCreated)} will be added as customer credit (${formatCurrency(excessAppliedToOutstanding)} applied to previous outstanding).`
+                              : creditCreated > 0
+                                ? `${formatCurrency(creditCreated)} will be added as customer credit.`
+                                : `${formatCurrency(excessAppliedToOutstanding)} will be applied towards previous outstanding balance.`}
                           </p>
-                        ) : creditCreated > 0 ? (
+                        ) : hasSaleCharges && salePaymentAmount === txnSummary.netAmount && salePaymentAmount > 0 ? (
+                          <p className="mt-1.5 text-xs text-gray-500">
+                            This transaction will be fully paid.
+                          </p>
+                        ) : hasSaleCharges && salePaymentAmount > 0 && salePaymentAmount < txnSummary.netAmount ? (
+                          <p className="mt-1.5 text-xs text-gray-500">
+                            Remaining {formatCurrency(txnSummary.netAmount - salePaymentAmount)} will be added to customer&apos;s outstanding balance.
+                          </p>
+                        ) : isPaymentOnly && creditCreated > 0 ? (
                           <p className="mt-1.5 text-xs font-medium text-green-600">
                             {formatCurrency(creditCreated)} will be added as customer credit.
                           </p>
                         ) : (
                           <p className="mt-1.5 text-xs text-gray-500">
                             {hasSaleCharges
-                              ? `Max for this transaction: ${formatCurrency(maxAllowedPayment)}`
+                              ? `Net amount for this transaction: ${formatCurrency(txnSummary.netAmount)}`
                               : isPaymentOnly
                                 ? outstandingOwed > 0
                                   ? `Outstanding owed: ${formatCurrency(outstandingOwed)}. Any excess will become customer credit.`
                                   : 'This payment will be added as customer credit.'
-                                : 'Payment not applicable for returns-only (credit via buyback)'}
+                                : 'Payment will be applied to customer account balance.'}
                           </p>
                         )}
                       </div>
@@ -3207,8 +3209,7 @@ export default function B2BCustomerDetailPage() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={isPaymentOverLimit()}
-                  className="px-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 h-9 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 h-9 text-sm"
                 >
                   Create Transaction
                 </Button>
@@ -4149,13 +4150,26 @@ export default function B2BCustomerDetailPage() {
                             const paid = Number(selectedTransaction.paidAmount || 0);
                             const unpaid = selectedTransaction.unpaidAmount !== null && selectedTransaction.unpaidAmount !== undefined
                               ? Number(selectedTransaction.unpaidAmount)
-                              : selectedTransaction.totalAmount - paid;
+                              : Math.max(0, selectedTransaction.totalAmount - paid);
+                            const credit = paid > selectedTransaction.totalAmount
+                              ? paid - selectedTransaction.totalAmount
+                              : 0;
 
-                            return unpaid > 0 && (
-                              <div>
-                                <p className="text-sm text-gray-600">Unpaid Amount</p>
-                                <p className="font-semibold text-red-600">{formatCurrency(unpaid)}</p>
-                              </div>
+                            return (
+                              <>
+                                {unpaid > 0 && (
+                                  <div>
+                                    <p className="text-sm text-gray-600">Unpaid Amount</p>
+                                    <p className="font-semibold text-red-600">{formatCurrency(unpaid)}</p>
+                                  </div>
+                                )}
+                                {credit > 0 && (
+                                  <div>
+                                    <p className="text-sm text-gray-600">Credit Added</p>
+                                    <p className="font-semibold text-green-600">+{formatCurrency(credit)}</p>
+                                  </div>
+                                )}
+                              </>
                             );
                           })()}
                           {selectedTransaction.paymentMethod && (

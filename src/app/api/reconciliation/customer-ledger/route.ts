@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
       
       switch (transaction.transactionType) {
         case 'SALE':
-          transactionAmount = transaction.totalAmount.toNumber();
+          transactionAmount = transaction.totalAmount.toNumber() - (transaction.paidAmount ? transaction.paidAmount.toNumber() : 0);
           runningBalance += transactionAmount;
           break;
         case 'PAYMENT':

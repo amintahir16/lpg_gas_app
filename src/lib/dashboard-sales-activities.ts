@@ -398,17 +398,29 @@ export function allocateB2bPaymentsOntoSales(
 ): DashboardSalesActivityRow[] {
   const rows = activities.map((a) => ({ ...a }));
 
-  // Pool all direct B2B payments first (they may land after the sale bill).
+  // Pool all direct B2B payments and overpayment excesses from B2B sales
   const creditByCustomer = new Map<string, number>();
   for (const row of rows) {
-    if (row.channel !== 'b2b' || row.type !== 'b2b_payment' || !row.customerId) {
+    if (row.channel !== 'b2b' || !row.customerId) {
       continue;
     }
-    const credit = Math.max(0, Number(row.totalAmount) || 0);
-    creditByCustomer.set(
-      row.customerId,
-      (creditByCustomer.get(row.customerId) || 0) + credit
-    );
+    if (row.type === 'b2b_payment') {
+      const credit = Math.max(0, Number(row.totalAmount) || 0);
+      creditByCustomer.set(
+        row.customerId,
+        (creditByCustomer.get(row.customerId) || 0) + credit
+      );
+    } else if (row.type === 'b2b_sale') {
+      const total = Math.max(0, Number(row.totalAmount) || 0);
+      const rawPaid = Math.max(0, Number(row.paidAmount) || 0);
+      if (rawPaid > total) {
+        const excess = rawPaid - total;
+        creditByCustomer.set(
+          row.customerId,
+          (creditByCustomer.get(row.customerId) || 0) + excess
+        );
+      }
+    }
   }
 
   // Apply credits to open B2B sales oldest-first (FIFO) within this activity set.
@@ -423,29 +435,45 @@ export function allocateB2bPaymentsOntoSales(
   for (const { row, index } of saleIndices) {
     const customerId = row.customerId!;
     const total = Math.max(0, Number(row.totalAmount) || 0);
-    const paidAtSale = Math.min(total, Math.max(0, Number(row.paidAmount) || 0));
-    let unpaid = Math.max(0, total - paidAtSale);
-    const credit = creditByCustomer.get(customerId) || 0;
-    const applied = Math.min(unpaid, credit);
+    const rawPaid = Math.max(0, Number(row.paidAmount) || 0);
 
-    if (applied > 0) {
-      creditByCustomer.set(customerId, credit - applied);
-      unpaid -= applied;
+    if (rawPaid > total) {
+      // Sale itself was overpaid: show exact paid amount, 0 unpaid, fully paid
+      rows[index] = {
+        ...row,
+        amount: total,
+        paidAmount: rawPaid,
+        unpaidAmount: 0,
+        paymentStatus: 'FULLY_PAID',
+      };
+    } else {
+      let unpaid = Math.max(0, total - rawPaid);
+      let paid = rawPaid;
+
+      if (unpaid > 0) {
+        const credit = creditByCustomer.get(customerId) || 0;
+        const applied = Math.min(unpaid, credit);
+
+        if (applied > 0) {
+          creditByCustomer.set(customerId, credit - applied);
+          unpaid -= applied;
+          paid += applied;
+        }
+      }
+
+      rows[index] = {
+        ...row,
+        amount: total,
+        paidAmount: paid,
+        unpaidAmount: unpaid,
+        paymentStatus:
+          unpaid <= 0.0001
+            ? 'FULLY_PAID'
+            : paid > 0.0001
+              ? 'PARTIAL'
+              : 'UNPAID',
+      };
     }
-
-    const paid = Math.max(0, total - unpaid);
-    rows[index] = {
-      ...row,
-      amount: total,
-      paidAmount: paid,
-      unpaidAmount: unpaid,
-      paymentStatus:
-        unpaid <= 0.0001
-          ? 'FULLY_PAID'
-          : paid > 0.0001
-            ? 'PARTIAL'
-            : 'UNPAID',
-    };
   }
 
   return rows;

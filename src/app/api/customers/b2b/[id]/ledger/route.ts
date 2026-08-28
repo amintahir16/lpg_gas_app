@@ -13,9 +13,14 @@ function saleBalanceImpact(transaction: {
   paymentStatus: string | null;
   unpaidAmount: { toString(): string } | null;
   totalAmount: { toString(): string };
+  paidAmount?: { toString(): string } | null;
 }): number {
-  const totalAmount = parseFloat(transaction.totalAmount.toString());
   if (transaction.voided) return 0;
+  const totalAmount = parseFloat(transaction.totalAmount.toString());
+  if (transaction.paidAmount !== null && transaction.paidAmount !== undefined) {
+    const paid = parseFloat(transaction.paidAmount.toString());
+    return totalAmount - paid;
+  }
   if (transaction.paymentStatus === 'FULLY_PAID') return 0;
   if (transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined) {
     return parseFloat(transaction.unpaidAmount.toString());

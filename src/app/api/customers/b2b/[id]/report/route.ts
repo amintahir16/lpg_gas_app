@@ -810,7 +810,9 @@ export async function GET(
       let balanceImpact = 0;
       switch (transaction.transactionType) {
         case 'SALE':
-          if (transaction.paymentStatus === 'FULLY_PAID') {
+          if (transaction.paidAmount !== null && transaction.paidAmount !== undefined) {
+            balanceImpact = totalAmount - parseFloat(transaction.paidAmount.toString());
+          } else if (transaction.paymentStatus === 'FULLY_PAID') {
             balanceImpact = 0;
           } else if (transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined) {
             balanceImpact = parseFloat(transaction.unpaidAmount.toString());
@@ -847,7 +849,9 @@ export async function GET(
         let balanceImpact = 0;
         switch (transaction.transactionType) {
           case 'SALE':
-            if (transaction.paymentStatus === 'FULLY_PAID') {
+            if (transaction.paidAmount !== null && transaction.paidAmount !== undefined) {
+              balanceImpact = totalAmount - parseFloat(transaction.paidAmount.toString());
+            } else if (transaction.paymentStatus === 'FULLY_PAID') {
               balanceImpact = 0;
             } else if (transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined) {
               balanceImpact = parseFloat(transaction.unpaidAmount.toString());
@@ -875,7 +879,9 @@ export async function GET(
       let balanceImpact = 0;
       switch (transaction.transactionType) {
         case 'SALE':
-          if (transaction.paymentStatus === 'FULLY_PAID') {
+          if (transaction.paidAmount !== null && transaction.paidAmount !== undefined) {
+            balanceImpact = totalAmount - parseFloat(transaction.paidAmount.toString());
+          } else if (transaction.paymentStatus === 'FULLY_PAID') {
             balanceImpact = 0;
           } else if (transaction.unpaidAmount !== null && transaction.unpaidAmount !== undefined) {
             balanceImpact = parseFloat(transaction.unpaidAmount.toString());

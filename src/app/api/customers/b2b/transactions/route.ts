@@ -115,24 +115,16 @@ export async function POST(request: NextRequest) {
 
     await adoptLegacyB2bCustomerIfNeeded(customerId, regionId);
 
-    // Item-based SALE transactions cannot be overpaid. PAYMENT transactions
-    // contain no sale items, so any amount above the outstanding balance is
-    // intentionally stored as customer credit (negative ledger balance).
     const paidCheck = paidAmount !== undefined && paidAmount !== null ? parseFloat(paidAmount) || 0 : 0;
     const amountCheck = parseFloat(totalAmount) || 0;
     const isUnifiedTransaction = body.isUnifiedTransaction === true;
     const unifiedSummary = body.unifiedSummary;
 
-    if (transactionType === 'SALE' && paidCheck > 0) {
-      const maxPaid = isUnifiedTransaction && unifiedSummary?.netAmount != null
-        ? Math.max(0, Math.round(Number(unifiedSummary.netAmount)))
-        : Math.max(0, Math.round(amountCheck));
-      if (paidCheck > maxPaid + 0.01) {
-        return NextResponse.json(
-          { error: `Payment cannot exceed this transaction's net amount (Rs ${maxPaid.toLocaleString()}). Credit is only given via buyback.` },
-          { status: 400 }
-        );
-      }
+    if (paidCheck < 0) {
+      return NextResponse.json(
+        { error: 'Payment amount cannot be negative.' },
+        { status: 400 }
+      );
     }
 
     if (transactionType === 'PAYMENT') {
@@ -321,7 +313,8 @@ export async function POST(request: NextRequest) {
             newLedgerBalance += unifiedSummary.balanceImpact;
             console.log(`Using unified balance impact: ${unifiedSummary.balanceImpact}`);
           } else {
-            newLedgerBalance += unpaid;
+            const netImpact = Math.round(netSaleAmount) - (paidAmountValue || 0);
+            newLedgerBalance += netImpact;
           }
 
           console.log(`New ledger balance after calculation: ${newLedgerBalance}`);
