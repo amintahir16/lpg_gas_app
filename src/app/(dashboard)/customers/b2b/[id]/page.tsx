@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
@@ -178,6 +178,8 @@ export default function B2BCustomerDetailPage() {
 
   // Transaction form states
   const [showTransactionForm, setShowTransactionForm] = useState(false);
+  const [submittingTransaction, setSubmittingTransaction] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [transactionType, setTransactionType] = useState<'SALE' | 'PAYMENT' | 'BUYBACK' | 'RETURN_EMPTY' | 'UNIFIED'>('UNIFIED');
   const [transactionDate, setTransactionDate] = useState(todayLocalDate);
   const [transactionTime, setTransactionTime] = useState(new Date().toTimeString().slice(0, 5));
@@ -1282,6 +1284,12 @@ export default function B2BCustomerDetailPage() {
   const handleTransactionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (isSubmittingRef.current || submittingTransaction) {
+      return;
+    }
+    isSubmittingRef.current = true;
+    setSubmittingTransaction(true);
+
     try {
       // Check for cylinder validation errors and scroll to first invalid item
       if (firstInvalidCylinderIndex !== null) {
@@ -1528,6 +1536,9 @@ export default function B2BCustomerDetailPage() {
       alert('Transaction created successfully!');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create transaction');
+    } finally {
+      isSubmittingRef.current = false;
+      setSubmittingTransaction(false);
     }
   };
 
@@ -2538,8 +2549,9 @@ export default function B2BCustomerDetailPage() {
               </div>
               <button
                 type="button"
+                disabled={submittingTransaction}
                 onClick={() => setShowTransactionForm(false)}
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <XMarkIcon className="w-6 h-6" />
               </button>
@@ -3202,16 +3214,25 @@ export default function B2BCustomerDetailPage() {
                 <Button
                   type="button"
                   variant="outline"
+                  disabled={submittingTransaction}
                   onClick={() => setShowTransactionForm(false)}
-                  className="px-6 h-9 text-sm"
+                  className="px-6 h-9 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
-                  className="px-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 h-9 text-sm"
+                  disabled={submittingTransaction}
+                  className="px-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 h-9 text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  Create Transaction
+                  {submittingTransaction ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-1" />
+                      <span>Creating Transaction...</span>
+                    </>
+                  ) : (
+                    'Create Transaction'
+                  )}
                 </Button>
               </div>
             </form>

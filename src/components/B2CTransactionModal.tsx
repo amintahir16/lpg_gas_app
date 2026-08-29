@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -60,6 +60,7 @@ function b2cModalHoldingKey(h: { cylinderType: string; cylinderVariantKey?: stri
 export function B2CTransactionModal({ customerId, customerName, customer, onClose, onSuccess }: B2CTransactionModalProps) {
     const { options: paymentOptions } = usePaymentWallets();
     const [submitting, setSubmitting] = useState(false);
+    const isSubmittingRef = useRef(false);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
@@ -574,40 +575,45 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        const validGasItems = gasItems.filter(item => item.cylinderType && item.cylinderVariantKey && Number(item.quantity) > 0);
-        const validSecurityItems = securityItems.filter(item => item.cylinderType && item.cylinderVariantKey && Number(item.quantity) > 0);
-        const validAccessoryItems = accessoryItems.filter(item => item.quantity > 0);
-
-        if (validGasItems.length === 0 && validSecurityItems.length === 0 && validAccessoryItems.length === 0) {
-            setError('Please add at least one item before creating a transaction');
+        if (isSubmittingRef.current || submitting) {
             return;
         }
-
-        // Check for security return errors and scroll to first invalid item
-        if (hasSecurityReturnErrors) {
-            scrollToInvalidSecurityItem();
-            return;
-        }
-
-        // Check for inventory errors and scroll to first invalid item
-        if (hasInventoryErrors) {
-            scrollToInvalidInventoryItem();
-            return;
-        }
-
-        // Check for accessory errors
-        if (hasAccessoryErrors) {
-            // Error is already displayed by the component
-            return;
-        }
-
-        // Validate security returns (additional backend validation)
-        if (!validateSecurityReturns()) {
-            return;
-        }
+        isSubmittingRef.current = true;
+        setSubmitting(true);
 
         try {
-            setSubmitting(true);
+            const validGasItems = gasItems.filter(item => item.cylinderType && item.cylinderVariantKey && Number(item.quantity) > 0);
+            const validSecurityItems = securityItems.filter(item => item.cylinderType && item.cylinderVariantKey && Number(item.quantity) > 0);
+            const validAccessoryItems = accessoryItems.filter(item => item.quantity > 0);
+
+            if (validGasItems.length === 0 && validSecurityItems.length === 0 && validAccessoryItems.length === 0) {
+                setError('Please add at least one item before creating a transaction');
+                return;
+            }
+
+            // Check for security return errors and scroll to first invalid item
+            if (hasSecurityReturnErrors) {
+                scrollToInvalidSecurityItem();
+                return;
+            }
+
+            // Check for inventory errors and scroll to first invalid item
+            if (hasInventoryErrors) {
+                scrollToInvalidInventoryItem();
+                return;
+            }
+
+            // Check for accessory errors
+            if (hasAccessoryErrors) {
+                // Error is already displayed by the component
+                return;
+            }
+
+            // Validate security returns (additional backend validation)
+            if (!validateSecurityReturns()) {
+                return;
+            }
+
             setError(null);
 
             const transactionData = {
@@ -667,6 +673,7 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
         } catch (err) {
             setError(err instanceof Error ? err.message : 'An error occurred');
         } finally {
+            isSubmittingRef.current = false;
             setSubmitting(false);
         }
     };
@@ -682,8 +689,9 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                     </div>
                     <button
                         type="button"
+                        disabled={submitting}
                         onClick={onClose}
-                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <XMarkIcon className="w-6 h-6" />
                     </button>
@@ -1136,9 +1144,16 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                                     <Button
                                         type="submit"
                                         disabled={submitting}
-                                        className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-md h-9"
+                                        className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-md h-9 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                     >
-                                        {submitting ? 'Creating...' : 'Create Transaction'}
+                                        {submitting ? (
+                                            <>
+                                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-1" />
+                                                <span>Creating Transaction...</span>
+                                            </>
+                                        ) : (
+                                            'Create Transaction'
+                                        )}
                                     </Button>
                                 </div>
                             </div>
