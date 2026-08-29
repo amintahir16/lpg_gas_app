@@ -6,6 +6,7 @@ import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { sortTransactionsNewestFirst } from '@/lib/transaction-display-sort';
 import { formatPaymentMethodLabel } from '@/lib/payment-methods';
+import { logoBase64 } from '@/lib/logoBase64';
 
 // Helper function to format currency
 function formatCurrency(amount: number): string {
@@ -126,16 +127,14 @@ async function generatePDF(
   const pageHeight = doc.internal.pageSize.getHeight();
 
   // Professional Header with Company Branding
-  doc.setFillColor(41, 128, 185);
+  doc.setFillColor(243, 101, 35);
   doc.rect(0, 0, pageWidth, 35, 'F');
 
   // Company Logo Area
   doc.setFillColor(255, 255, 255);
-  doc.circle(25, 18, 8, 'F');
-  doc.setFontSize(9);
-  doc.setTextColor(41, 128, 185);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Flamora', 25, 20, { align: 'center' });
+  doc.circle(25, 17.5, 12, 'F');
+  const imgData = logoBase64.startsWith('data:') ? logoBase64 : `data:image/png;base64,${logoBase64}`;
+  doc.addImage(imgData, 'PNG', 15.5, 12.75, 19, 9.5);
 
   // Report Title
   doc.setTextColor(255, 255, 255);
@@ -276,7 +275,7 @@ async function generatePDF(
       overflow: 'linebreak'
     },
     headStyles: {
-      fillColor: [41, 128, 185],
+      fillColor: [243, 101, 35],
       textColor: [255, 255, 255],
       fontStyle: 'bold',
       fontSize: 9

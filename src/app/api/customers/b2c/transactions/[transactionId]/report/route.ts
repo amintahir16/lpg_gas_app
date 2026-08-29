@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { logoBase64 } from '@/lib/logoBase64';
 
 // Helper function to format currency
 function formatCurrency(amount: number): string {
@@ -60,16 +61,14 @@ async function generatePDF(transaction: any, customer: any, cylinderTypeMap: Map
   const contentWidth = pageWidth - (margin * 2);
 
   // Professional Header with Company Branding
-  doc.setFillColor(41, 128, 185);
+  doc.setFillColor(243, 101, 35);
   doc.rect(0, 0, pageWidth, 35, 'F');
 
   // Company Logo Area
   doc.setFillColor(255, 255, 255);
-  doc.circle(25, 18, 8, 'F');
-  doc.setFontSize(9);
-  doc.setTextColor(41, 128, 185);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Flamora', 25, 20, { align: 'center' });
+  doc.circle(25, 17.5, 12, 'F');
+  const imgData = logoBase64.startsWith('data:') ? logoBase64 : `data:image/png;base64,${logoBase64}`;
+  doc.addImage(imgData, 'PNG', 15.5, 12.75, 19, 9.5);
 
   // Report Title
   doc.setTextColor(255, 255, 255);
