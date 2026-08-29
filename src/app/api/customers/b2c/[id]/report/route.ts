@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { sortTransactionsNewestFirst } from '@/lib/transaction-display-sort';
+import { formatPaymentMethodLabel } from '@/lib/payment-methods';
 
 // Helper function to format currency
 function formatCurrency(amount: number): string {
@@ -194,16 +195,24 @@ async function generatePDF(
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   doc.text(`Name: ${customer.name}`, 20, yPosition);
-  doc.text(`Phone: ${customer.phone}`, 20, yPosition + 7);
-  if (customer.email) {
-    doc.text(`Email: ${customer.email}`, 20, yPosition + 14);
+  yPosition += 7;
+
+  if (customer.phone) {
+    doc.text(`Phone: ${customer.phone}`, 20, yPosition);
     yPosition += 7;
   }
-  if (customer.address) {
-    doc.text(`Address: ${customer.address}${customer.city ? `, ${customer.city}` : ''}`, 20, yPosition + (customer.email ? 14 : 7));
+
+  if (customer.email) {
+    doc.text(`Email: ${customer.email}`, 20, yPosition);
+    yPosition += 7;
   }
 
-  yPosition += (customer.email ? 25 : 18);
+  if (customer.address) {
+    doc.text(`Address: ${customer.address}${customer.city ? `, ${customer.city}` : ''}`, 20, yPosition);
+    yPosition += 7;
+  }
+
+  yPosition += 7;
 
   // Transaction History Section
   if (yPosition > pageHeight - 120) {
@@ -223,10 +232,7 @@ async function generatePDF(
   // Prepare table data
   const tableData = transactions.map((transaction, index) => {
     const date = formatDate(transaction.date);
-    const time = new Date(transaction.time).toLocaleTimeString('en-PK', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    const method = formatPaymentMethodLabel(transaction.paymentMethod);
 
     // Build items description
     const itemsText = buildItemsDescription(transaction, cylinderTypeMap);
@@ -236,7 +242,7 @@ async function generatePDF(
     return [
       index + 1,
       date,
-      time,
+      method,
       transaction.billSno,
       typeText,
       itemsText,
@@ -258,7 +264,7 @@ async function generatePDF(
 
   // Add table - use autoTable as a function
   autoTable(doc, {
-    head: [['#', 'Date', 'Time', 'Bill No.', 'Type', 'Details', 'Amount']],
+    head: [['#', 'Date', 'Method', 'Bill No.', 'Type', 'Details', 'Amount']],
     body: tableData,
     startY: yPosition,
     tableWidth: pageWidth - 30,
@@ -281,9 +287,9 @@ async function generatePDF(
     columnStyles: {
       0: { halign: 'center', cellWidth: 10 },    // #
       1: { cellWidth: 20 },                       // Date
-      2: { cellWidth: 15 },                       // Time
-      3: { cellWidth: 25 },                       // Bill No.
-      4: { cellWidth: 25 },                       // Type
+      2: { cellWidth: 20 },                       // Method
+      3: { cellWidth: 22 },                       // Bill No.
+      4: { cellWidth: 23 },                       // Type
       5: { cellWidth: 60 },                       // Details
       6: { halign: 'right', cellWidth: 25 }       // Amount
     },

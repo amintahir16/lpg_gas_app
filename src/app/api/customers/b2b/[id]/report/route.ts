@@ -14,6 +14,7 @@ import {
   isOpeningDuesTransaction,
 } from '@/lib/b2b-opening-entries';
 import { sortTransactionsNewestFirst } from '@/lib/transaction-display-sort';
+import { formatPaymentMethodLabel } from '@/lib/payment-methods';
 // Helper function to format currency
 function formatCurrency(amount: number): string {
   return `PKR ${amount.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -380,10 +381,7 @@ async function generatePDF(
 
   const tableData = sortedTransactions.map((transaction, index) => {
     const date = formatDate(transaction.date);
-    const time = transaction.time ? new Date(transaction.time).toLocaleTimeString('en-PK', {
-      hour: '2-digit',
-      minute: '2-digit'
-    }) : '-';
+    const method = formatPaymentMethodLabel(transaction.paymentMethod);
 
     // Build items description with categorization
     const itemsText = buildItemsDescription(transaction, cylinderTypeMap);
@@ -437,7 +435,7 @@ async function generatePDF(
     return [
       index + 1,
       date,
-      time,
+      method,
       transaction.billSno || '-',
       transactionTypeText,
       itemsText,
@@ -493,7 +491,7 @@ async function generatePDF(
 
   // Add table
   autoTable(doc, {
-    head: [['#', 'Date', 'Time', 'Bill No.', 'Type', 'Details', 'Out (-)', 'In (+)', 'Balance']],
+    head: [['#', 'Date', 'Method', 'Bill No.', 'Type', 'Details', 'Out (-)', 'In (+)', 'Balance']],
     body: tableData,
     startY: yPosition,
     tableWidth: pageWidth - 30,
@@ -516,9 +514,9 @@ async function generatePDF(
     columnStyles: {
       0: { halign: 'center', cellWidth: 8 },       // #
       1: { cellWidth: 16 },                         // Date
-      2: { cellWidth: 12 },                         // Time
-      3: { cellWidth: 20 },                         // Bill No.
-      4: { cellWidth: 22 },                         // Type
+      2: { cellWidth: 18 },                         // Method
+      3: { cellWidth: 16 },                         // Bill No.
+      4: { cellWidth: 20 },                         // Type
       5: { cellWidth: 52 },                         // Details (wider for categorized items)
       6: { halign: 'right', cellWidth: 16 },        // Out (-)
       7: { halign: 'right', cellWidth: 16 },        // In (+)
