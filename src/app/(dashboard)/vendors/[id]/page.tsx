@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
@@ -198,6 +198,8 @@ export default function VendorDetailPage() {
 
   // Purchase form state
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
+  const [submittingPurchase, setSubmittingPurchase] = useState(false);
+  const isSubmittingPurchaseRef = useRef(false);
 
   // Gas purchase state
   // Dynamic cylinder types - handles any cylinder type from the database
@@ -1347,51 +1349,57 @@ export default function VendorDetailPage() {
   const handleSubmitPurchase = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // For gas purchase, validate quantity doesn't exceed available cylinders
-    if (isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
-      for (const item of purchaseItems) {
-        if (item.itemName.trim() && item.quantity > 0) {
-          const maxQty = getMaxQuantity(item.itemName);
-          if (maxQty !== null && maxQty !== undefined && item.quantity > maxQty) {
-            alert(`Quantity for "${item.itemName}" exceeds available empty cylinders. Maximum available: ${maxQty}`);
-            return;
-          }
+    if (isSubmittingPurchaseRef.current || submittingPurchase) {
+      return;
+    }
+    isSubmittingPurchaseRef.current = true;
+    setSubmittingPurchase(true);
 
-          // Check if cylinder type exists in inventory
-          const variantKey = getCylinderVariantKeyFromItemName(item.itemName);
-          if (variantKey && (!emptyCylinders[variantKey] || emptyCylinders[variantKey].length === 0)) {
-            alert(`No empty cylinders available for "${item.itemName}". Please ensure cylinders of this type exist in inventory.`);
-            return;
+    try {
+      // For gas purchase, validate quantity doesn't exceed available cylinders
+      if (isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
+        for (const item of purchaseItems) {
+          if (item.itemName.trim() && item.quantity > 0) {
+            const maxQty = getMaxQuantity(item.itemName);
+            if (maxQty !== null && maxQty !== undefined && item.quantity > maxQty) {
+              alert(`Quantity for "${item.itemName}" exceeds available empty cylinders. Maximum available: ${maxQty}`);
+              return;
+            }
+
+            // Check if cylinder type exists in inventory
+            const variantKey = getCylinderVariantKeyFromItemName(item.itemName);
+            if (variantKey && (!emptyCylinders[variantKey] || emptyCylinders[variantKey].length === 0)) {
+              alert(`No empty cylinders available for "${item.itemName}". Please ensure cylinders of this type exist in inventory.`);
+              return;
+            }
           }
         }
       }
-    }
 
-    // Filter items that have quantity > 0
-    const validItems = purchaseItems.filter(item =>
-      item.itemName.trim() && item.quantity > 0 && item.unitPrice > 0
-    );
+      // Filter items that have quantity > 0
+      const validItems = purchaseItems.filter(item =>
+        item.itemName.trim() && item.quantity > 0 && item.unitPrice > 0
+      );
 
-    if (validItems.length === 0) {
-      alert('Please add at least one item with quantity and price');
-      return;
-    }
+      if (validItems.length === 0) {
+        alert('Please add at least one item with quantity and price');
+        return;
+      }
 
 
-    console.log('Submitting purchase with invoice number:', purchaseFormData.invoiceNumber);
-    const purchaseDateTime = combineLocalDateAndTime(
-      purchaseFormData.date,
-      purchaseFormData.time
-    ).toISOString();
-    console.log('Purchase data:', {
-      items: validItems,
-      invoiceNumber: purchaseFormData.invoiceNumber,
-      notes: purchaseFormData.notes,
-      purchaseDate: purchaseDateTime,
-      paidAmount: purchaseFormData.paidAmount
-    });
+      console.log('Submitting purchase with invoice number:', purchaseFormData.invoiceNumber);
+      const purchaseDateTime = combineLocalDateAndTime(
+        purchaseFormData.date,
+        purchaseFormData.time
+      ).toISOString();
+      console.log('Purchase data:', {
+        items: validItems,
+        invoiceNumber: purchaseFormData.invoiceNumber,
+        notes: purchaseFormData.notes,
+        purchaseDate: purchaseDateTime,
+        paidAmount: purchaseFormData.paidAmount
+      });
 
-    try {
       const response = await fetch(`/api/vendors/${vendorId}/purchases`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1450,6 +1458,9 @@ export default function VendorDetailPage() {
     } catch (error) {
       console.error('Error creating purchase:', error);
       alert('Failed to create purchase');
+    } finally {
+      isSubmittingPurchaseRef.current = false;
+      setSubmittingPurchase(false);
     }
   };
 
@@ -1808,6 +1819,7 @@ export default function VendorDetailPage() {
               </div>
               <Button
                 size="sm"
+                disabled={submittingPurchase}
                 onClick={showPurchaseForm ? () => {
                   setShowPurchaseForm(false);
                   // Reset price per 11.8kg when canceling
@@ -1815,7 +1827,7 @@ export default function VendorDetailPage() {
                     setPricePer11_8kg(0);
                   }
                 } : handleOpenPurchaseForm}
-                className="flex items-center gap-2 h-9 text-xs"
+                className="flex items-center gap-2 h-9 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <PlusIcon className="w-4 h-4" />
                 {showPurchaseForm ? 'Cancel' : 'Add Purchase Entry'}
@@ -2678,11 +2690,25 @@ export default function VendorDetailPage() {
                   </div>
 
                   <div className="flex gap-3">
-                    <Button type="submit" className="h-9 text-xs">Create Purchase Entry</Button>
+                    <Button
+                      type="submit"
+                      disabled={submittingPurchase}
+                      className="h-9 text-xs disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {submittingPurchase ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-1" />
+                          <span>Creating Purchase Entry...</span>
+                        </>
+                      ) : (
+                        'Create Purchase Entry'
+                      )}
+                    </Button>
                     <Button
                       type="button"
                       variant="outline"
-                      className="h-9 text-xs"
+                      disabled={submittingPurchase}
+                      className="h-9 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={() => {
                         setShowPurchaseForm(false);
 

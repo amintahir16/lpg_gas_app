@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,6 +45,7 @@ export default function VendorPaymentModal({
   const [reference, setReference] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [error, setError] = useState('');
 
   // Always refresh to today's local date/time (and clear form) whenever the modal opens
@@ -61,6 +62,11 @@ export default function VendorPaymentModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isSubmittingRef.current || loading) {
+      return;
+    }
+
     setError('');
 
     const paymentAmount = parseFloat(amount);
@@ -83,6 +89,7 @@ export default function VendorPaymentModal({
       if (!confirmOverpay) return;
     }
 
+    isSubmittingRef.current = true;
     setLoading(true);
 
     try {
@@ -119,6 +126,7 @@ export default function VendorPaymentModal({
     } catch (err: any) {
       setError(err.message || 'Failed to record payment');
     } finally {
+      isSubmittingRef.current = false;
       setLoading(false);
     }
   };
