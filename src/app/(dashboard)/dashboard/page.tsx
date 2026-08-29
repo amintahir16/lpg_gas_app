@@ -97,7 +97,7 @@ interface DashboardStats {
 }
 
 export default function DashboardPage() {
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const isSuperAdmin = session?.user?.role === 'SUPER_ADMIN';
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -132,13 +132,21 @@ export default function DashboardPage() {
   }, [stats?.recentActivities]);
 
   useEffect(() => {
+    // Wait until auth session status is determined before fetching to prevent 401 cold-start race conditions
+    if (sessionStatus === 'loading') return;
+    if (sessionStatus === 'unauthenticated') {
+      setLoading(false);
+      return;
+    }
     fetchDashboardStats();
-  }, [period, date, month, year]);
+  }, [period, date, month, year, sessionStatus]);
 
-  const fetchDashboardStats = async () => {
+  const fetchDashboardStats = async (retryCount = 0) => {
     try {
-      setLoading(true);
-      setError(null);
+      if (retryCount === 0) {
+        setLoading(true);
+        setError(null);
+      }
 
       const params = new URLSearchParams(
         buildFinancialPeriodQuery({ period, date, month, year })
@@ -147,15 +155,27 @@ export default function DashboardPage() {
       const response = await fetch(`/api/dashboard/stats?${params.toString()}`);
 
       if (!response.ok) {
+        // Silently retry on cold-start or initial session lag (up to 2 retries)
+        if (retryCount < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 1000 * (retryCount + 1)));
+          return await fetchDashboardStats(retryCount + 1);
+        }
         throw new Error('Failed to fetch dashboard statistics');
       }
 
       const data = await response.json();
       setStats(data);
+      setError(null);
     } catch (err) {
+      if (retryCount < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 1000 * (retryCount + 1)));
+        return await fetchDashboardStats(retryCount + 1);
+      }
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
-      setLoading(false);
+      if (retryCount === 0 || retryCount >= 2) {
+        setLoading(false);
+      }
     }
   };
 
