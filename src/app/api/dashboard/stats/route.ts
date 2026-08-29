@@ -345,8 +345,14 @@ export async function GET(request: NextRequest) {
     }
     const rentMonthConditions = monthsCovered.map(m => ({ type: 'RENT' as const, month: m.month, year: m.year }));
 
-    const [expensesSum, personalExpensesSum, purchasesSum, paymentsSum, vendorCategories] =
-      await Promise.all([
+    const [
+      expensesSum,
+      personalExpensesSum,
+      paymentsSum,
+      vendorCategories,
+      allPurchasesSum,
+      allPaymentsSum,
+    ] = await Promise.all([
       prisma.officeExpense.aggregate({
         where: {
           ...regionScope,
@@ -364,14 +370,6 @@ export async function GET(request: NextRequest) {
         },
         _sum: { amount: true },
       }),
-      prisma.purchaseEntry.aggregate({
-        where: {
-          purchaseDate: { gte: startDate, lte: endDate },
-          status: { not: 'CANCELLED' },
-          ...regionScope,
-        },
-        _sum: { totalPrice: true }
-      }),
       prisma.vendorPayment.aggregate({
         where: {
           paymentDate: { gte: startDate, lte: endDate },
@@ -384,16 +382,34 @@ export async function GET(request: NextRequest) {
         where: regionScope,
         select: { id: true, slug: true, name: true },
       }),
+      // Cumulative active vendor balance across region up to period endDate
+      prisma.purchaseEntry.aggregate({
+        where: {
+          purchaseDate: { lte: endDate },
+          status: { not: 'CANCELLED' },
+          ...regionScope,
+        },
+        _sum: { totalPrice: true }
+      }),
+      prisma.vendorPayment.aggregate({
+        where: {
+          paymentDate: { lte: endDate },
+          status: 'COMPLETED',
+          ...regionScope,
+        },
+        _sum: { amount: true }
+      }),
     ]);
 
     const rangeExpenses =
       Number(expensesSum._sum.amount || 0) + Number(personalExpensesSum._sum.amount || 0);
-    const rangePurchases = Number(purchasesSum._sum.totalPrice || 0);
     const rangePayments = Number(paymentsSum._sum.amount || 0);
-    const vendorBalance = rangePurchases - rangePayments;
+    const vendorBalance = Math.round(
+      Number(allPurchasesSum._sum.totalPrice || 0) - Number(allPaymentsSum._sum.amount || 0)
+    );
 
     // Cylinder-purchase vendor payments are asset CAPEX — exclude from Actual Profit only.
-    // Vendor Payments KPI and Vendor Balance continue to use full rangePayments (unchanged).
+    // Vendor Payments KPI continues to use full rangePayments (unchanged).
     const cylinderPurchaseCategoryIds = vendorCategories
       .filter((c) => isCylinderPurchaseCategory(c.slug, c.name))
       .map((c) => c.id);

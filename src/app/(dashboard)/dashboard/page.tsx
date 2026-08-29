@@ -516,7 +516,7 @@ export default function DashboardPage() {
           <CardContent className="p-3 relative z-10 min-w-0">
             <p className="text-xs font-medium text-cyan-100 mb-1 truncate">Vendor Balance</p>
             <h3 className="text-xl font-bold text-white truncate md:overflow-visible md:whitespace-normal md:text-clip 2xl:text-sm leading-tight tabular-nums">{formatCurrency(stats.kpis.vendorBalance)}</h3>
-            <p className="text-[10px] text-cyan-200 mt-1 truncate">Owed in period</p>
+            <p className="text-[10px] text-cyan-200 mt-1 truncate">Total owed</p>
           </CardContent>
         </Card>
 
