@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { CustomSelect } from '@/components/ui/select-custom';
 import {
   PlusIcon,
   ShoppingBagIcon,
@@ -34,6 +35,14 @@ interface VendorCategory {
   vendorCount: number;
   sortOrder: number;
 }
+
+const VENDOR_CATEGORY_OPTIONS = [
+  { value: 'Cylinders Purchase', label: 'Cylinders Purchase', description: 'Purchase of LPG cylinders' },
+  { value: 'Gas Purchase', label: 'Gas Purchase', description: 'Refelling or Bulk LPG gas purchase' },
+  { value: 'Vaporizer Purchase', label: 'Vaporizer Purchase', description: 'Purchasing of LPG vaporizers' },
+  { value: 'Accessories Purchase', label: 'Accessories Purchase', description: 'Regulators, pipes, stoves and accessories' },
+  { value: 'Valves Purchase', label: 'Valves Purchase', description: 'Safety, check, and control valves' },
+];
 
 export default function VendorsPage() {
   const { data: session, status } = useSession();
@@ -95,7 +104,7 @@ export default function VendorsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: newCategoryName,
+          name: newCategoryName.trim(),
           description: newCategoryDescription
         })
       });
@@ -132,7 +141,7 @@ export default function VendorsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: editingCategory.id,
-          name: editCategoryName,
+          name: editCategoryName.trim(),
           description: editCategoryDescription
         })
       });
@@ -195,6 +204,7 @@ export default function VendorsPage() {
   const getCategoryIcon = (slug: string) => {
     const iconMap: { [key: string]: any } = {
       'cylinder_purchase': ArchiveBoxIcon,      // Professional cylinder/container representation
+      'cylinders_purchase': ArchiveBoxIcon,
       'gas_purchase': BoltIcon,                 // Energy/power symbol for gas
       'vaporizer_purchase': CpuChipIcon,        // Technology/electronic equipment
       'accessories_purchase': WrenchScrewdriverIcon, // Tools and accessories
@@ -206,6 +216,7 @@ export default function VendorsPage() {
   const getCategoryColor = (slug: string) => {
     const colorMap: { [key: string]: string } = {
       'cylinder_purchase': 'bg-blue-500',      // Blue for cylinders (trust, reliability)
+      'cylinders_purchase': 'bg-blue-500',
       'gas_purchase': 'bg-green-500',          // Green for gas (natural, clean)
       'vaporizer_purchase': 'bg-purple-500',   // Purple for machinery (innovation, tech)
       'accessories_purchase': 'bg-orange-500', // Orange for accessories (energy, tools)
@@ -298,15 +309,19 @@ export default function VendorsPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Category Name *
                   </label>
-                  <Input
+                  <CustomSelect
                     value={newCategoryName}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setNewCategoryName(val.charAt(0).toUpperCase() + val.slice(1));
+                    onChange={(val) => {
+                      setNewCategoryName(val);
+                      const found = VENDOR_CATEGORY_OPTIONS.find((c) => c.value === val);
+                      if (found) {
+                        setNewCategoryDescription(found.description);
+                      }
                     }}
-                    placeholder="e.g., Cylinder Purchase, Gas Purchase, Vaporizer Purchase, Accessories Purchase"
-                    required
-                    className="h-9 text-sm"
+                    options={VENDOR_CATEGORY_OPTIONS}
+                    placeholder="Select category name..."
+                    className="w-full"
+                    buttonClassName="h-9 text-sm"
                   />
                 </div>
                 <div>
@@ -324,7 +339,9 @@ export default function VendorsPage() {
                   />
                 </div>
                 <div className="flex gap-3">
-                  <Button type="submit" size="sm" className="h-9">Create Category</Button>
+                  <Button type="submit" size="sm" className="h-9" disabled={!newCategoryName.trim()}>
+                    Create Category
+                  </Button>
                   <Button
                     type="button"
                     variant="outline"
@@ -474,15 +491,23 @@ export default function VendorsPage() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Category Name *
                     </label>
-                    <Input
+                    <CustomSelect
                       value={editCategoryName}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setEditCategoryName(val.charAt(0).toUpperCase() + val.slice(1));
+                      onChange={(val) => {
+                        setEditCategoryName(val);
+                        const found = VENDOR_CATEGORY_OPTIONS.find((c) => c.value === val);
+                        if (found) {
+                          setEditCategoryDescription(found.description);
+                        }
                       }}
-                      placeholder="e.g., Cylinder Purchase, Gas Purchase, Vaporizer Purchase, Accessories Purchase"
-                      required
-                      className="h-9 text-sm"
+                      options={
+                        VENDOR_CATEGORY_OPTIONS.some((o) => o.value === editCategoryName) || !editCategoryName
+                          ? VENDOR_CATEGORY_OPTIONS
+                          : [...VENDOR_CATEGORY_OPTIONS, { value: editCategoryName, label: editCategoryName, description: '' }]
+                      }
+                      placeholder="Select category name..."
+                      className="w-full"
+                      buttonClassName="h-9 text-sm"
                     />
                   </div>
                   <div>
@@ -500,7 +525,9 @@ export default function VendorsPage() {
                     />
                   </div>
                   <div className="flex gap-3">
-                    <Button type="submit" size="sm" className="h-9">Update Category</Button>
+                    <Button type="submit" size="sm" className="h-9" disabled={!editCategoryName.trim()}>
+                      Update Category
+                    </Button>
                     <Button
                       type="button"
                       variant="outline"
