@@ -61,6 +61,7 @@ const adminNavigation: NavigationItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, roles: ['ADMIN'] },
   { name: 'Customers', href: '/customers', icon: UsersIcon, roles: ['ADMIN'] },
   { name: 'Inventory', href: '/inventory', icon: CubeIcon, roles: ['ADMIN'] },
+  { name: 'Vendors', href: '/vendors', icon: BuildingOfficeIcon, roles: ['ADMIN'] },
   { name: 'Expenses', href: '/financial/expenses', icon: CurrencyDollarIcon, roles: ['ADMIN'] },
   { name: 'Wallets & Bank Accounts', href: '/financial/wallets', icon: BuildingLibraryIcon, roles: ['ADMIN'] },
   { name: 'Reports', href: '/reports', icon: ChartBarIcon, roles: ['ADMIN'] },

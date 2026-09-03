@@ -37,7 +37,7 @@ const rolePermissions: Record<Role, Permission[]> = {
     { resource: 'inventory', action: 'manage' },
     { resource: 'financial', action: 'manage' },
     { resource: 'reports', action: 'manage' },
-    { resource: 'vendor', action: 'read' },
+    { resource: 'vendor', action: 'manage' },
     { resource: 'user', action: 'read' },
   ],
   SUPER_ADMIN: [
@@ -232,6 +232,13 @@ export function canManageInventory(userRole: Role): boolean {
  */
 export function canViewFinancial(userRole: Role): boolean {
   return canAccessResource(userRole, 'financial', 'read');
+}
+
+/**
+ * Check if user can manage vendors
+ */
+export function canManageVendors(userRole: Role): boolean {
+  return canAccessResource(userRole, 'vendor', 'manage');
 }
 
 /**

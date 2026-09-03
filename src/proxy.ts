@@ -31,6 +31,7 @@ const routePermissions = {
         '/dashboard',
         '/customers',
         '/inventory',
+        '/vendors',
         '/reports',
         '/admin',
         '/financial',
@@ -43,9 +44,6 @@ const routePermissions = {
     // list. ADMIN can access the main Financial hub, Wallets, and Expenses,
     // but Revenue, Profit, and Salaries drilldowns/APIs remain SUPER_ADMIN-only.
     superAdminOnly: [
-        '/vendors',
-        '/api/vendors',
-        '/api/vendor-categories',
         '/financial/revenue',
         '/api/financial/revenue',
         '/financial/profit',
