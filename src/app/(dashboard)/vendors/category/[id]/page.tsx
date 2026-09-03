@@ -472,22 +472,22 @@ export default function CategoryVendorsPage() {
         const vendorName = vendorToDelete.name || vendorToDelete.companyName || 'Unnamed Vendor';
 
         return (
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
-              <div className="mt-3">
-                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+          <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+            <div className="relative mx-auto p-6 border border-gray-100 w-full max-w-md shadow-2xl rounded-xl bg-white animate-in fade-in zoom-in-95 duration-150">
+              <div>
+                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-3">
                   <TrashIcon className="h-6 w-6 text-red-600" />
                 </div>
-                <div className="mt-3 text-center">
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                <div className="text-center">
+                  <h3 className="text-lg font-bold text-gray-900 mb-1">
                     Delete Vendor
                   </h3>
-                  <p className="text-sm text-gray-500 mb-4">
+                  <p className="text-xs text-gray-500 mb-4">
                     This action cannot be undone. This will permanently delete the vendor and all associated data.
                   </p>
                   <div className="mb-4 text-left">
-                    <p className="text-sm font-medium text-gray-700 mb-2">
-                      To confirm, please type <span className="font-bold text-gray-900">"{vendorName}"</span> to proceed:
+                    <p className="text-xs font-medium text-gray-700 mb-1.5">
+                      To confirm, please type <span className="font-bold text-gray-900 font-mono bg-gray-100 px-1 py-0.5 rounded select-all">"{vendorName}"</span> to proceed:
                     </p>
                     <Input
                       type="text"
@@ -499,16 +499,16 @@ export default function CategoryVendorsPage() {
                     />
                     {deleteConfirmationName.trim() !== '' &&
                       deleteConfirmationName.trim() !== vendorName.trim() && (
-                        <p className="mt-2 text-sm text-red-600">
+                        <p className="mt-1.5 text-xs text-red-600">
                           The name does not match. Please type the exact vendor name.
                         </p>
                       )}
                   </div>
-                  <div className="flex justify-center space-x-3">
+                  <div className="flex justify-center space-x-3 pt-2 border-t border-gray-100">
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-9"
+                      className="h-9 px-4 text-xs font-medium"
                       onClick={cancelDeleteVendor}
                     >
                       Cancel
@@ -516,7 +516,7 @@ export default function CategoryVendorsPage() {
                     <Button
                       variant="destructive"
                       size="sm"
-                      className="h-9 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="h-9 px-4 text-xs font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={() => handleDeleteVendor(deletingVendor)}
                       disabled={deleteConfirmationName.trim() !== vendorName.trim()}
                     >

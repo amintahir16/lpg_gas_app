@@ -480,8 +480,8 @@ export default function VendorsPage() {
       {/* Edit Category Modal */}
       {
         editingCategory && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <Card className="w-full max-w-md mx-4">
+          <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-md mx-auto shadow-2xl border border-gray-100 bg-white">
               <CardHeader>
                 <CardTitle>Edit Category</CardTitle>
               </CardHeader>
@@ -548,8 +548,8 @@ export default function VendorsPage() {
       {/* Delete Confirmation Modal */}
       {
         showDeleteConfirm && deletingCategory && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <Card className="w-full max-w-md mx-4">
+          <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-md mx-auto shadow-2xl border border-gray-100 bg-white">
               <CardHeader>
                 <CardTitle className="text-red-600">Delete Category</CardTitle>
               </CardHeader>
