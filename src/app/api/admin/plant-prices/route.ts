@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { clampLimit } from '@/lib/apiAuth';
 
-// GET /api/admin/plant-prices - Get plant prices (with optional date filter)
+// GET /api/admin/plant-prices - Get plant prices for active region (with optional date filter)
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -40,9 +40,22 @@ export async function GET(request: NextRequest) {
         });
       }
 
+      // Backward-compatibility fallback for legacy un-scoped rows (pre-region migration)
+      if (!price && regionId) {
+        price = await prisma.dailyPlantPrice.findFirst({
+          where: { date: today, regionId: null }
+        });
+        if (!price) {
+          price = await prisma.dailyPlantPrice.findFirst({
+            where: { regionId: null },
+            orderBy: { date: 'desc' }
+          });
+        }
+      }
+
       return NextResponse.json({
         current: price,
-        isToday: price?.date.toDateString() === today.toDateString()
+        isToday: price ? price.date.toDateString() === today.toDateString() : false
       });
     }
 
@@ -50,9 +63,15 @@ export async function GET(request: NextRequest) {
       const date = new Date(dateParam);
       date.setHours(0, 0, 0, 0);
 
-      const price = await prisma.dailyPlantPrice.findFirst({
+      let price = await prisma.dailyPlantPrice.findFirst({
         where: { date, ...regionScope }
       });
+
+      if (!price && regionId) {
+        price = await prisma.dailyPlantPrice.findFirst({
+          where: { date, regionId: null }
+        });
+      }
 
       if (!price) {
         return NextResponse.json(
@@ -64,7 +83,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(price);
     }
 
-    const prices = await prisma.dailyPlantPrice.findMany({
+    let prices = await prisma.dailyPlantPrice.findMany({
       where: regionScope,
       orderBy: { date: 'desc' },
       take: limit,
@@ -74,6 +93,20 @@ export async function GET(request: NextRequest) {
         }
       }
     });
+
+    if (prices.length === 0 && regionId) {
+      // Fallback for legacy un-scoped rows if region has no entries yet
+      prices = await prisma.dailyPlantPrice.findMany({
+        where: { regionId: null },
+        orderBy: { date: 'desc' },
+        take: limit,
+        include: {
+          createdByUser: {
+            select: { name: true, email: true }
+          }
+        }
+      });
+    }
 
     return NextResponse.json(prices);
   } catch (error) {
@@ -85,7 +118,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/admin/plant-prices - Set/update today's plant price
+// POST /api/admin/plant-prices - Set/update today's plant price for the active region
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -112,78 +145,32 @@ export async function POST(request: NextRequest) {
     const targetDate = date ? new Date(date) : new Date();
     targetDate.setHours(0, 0, 0, 0);
 
-    // Identify if propagation is needed (SUPER_ADMIN in Default Region)
-    let shouldPropagate = false;
-    if (session.user.role === 'SUPER_ADMIN' && regionId) {
-      const currentRegion = await prisma.region.findUnique({
-        where: { id: regionId },
-        select: { isDefault: true }
-      });
-      if (currentRegion?.isDefault) {
-        shouldPropagate = true;
-      }
-    }
+    // Strictly region-scoped: Only update or create for the active branch (regionId).
+    // Never propagate or overwrite other branches.
+    const existingPrice = await prisma.dailyPlantPrice.findFirst({
+      where: { date: targetDate, ...regionScopedWhere(regionId) }
+    });
 
     let price;
-    if (shouldPropagate) {
-      // Propagate to ALL active regions
-      const allActiveRegions = await prisma.region.findMany({
-        where: { isActive: true },
-        select: { id: true }
+    if (existingPrice) {
+      price = await prisma.dailyPlantPrice.update({
+        where: { id: existingPrice.id },
+        data: {
+          plantPrice118kg: parseFloat(plantPrice118kg),
+          notes: notes || null,
+          updatedAt: new Date(),
+        }
       });
-
-      const upsertOps = allActiveRegions.map((r) => {
-        return prisma.dailyPlantPrice.upsert({
-          where: {
-            regionId_date: {
-              regionId: r.id,
-              date: targetDate
-            }
-          },
-          update: {
-            plantPrice118kg: parseFloat(plantPrice118kg),
-            notes: notes || null
-          },
-          create: {
-            regionId: r.id,
-            date: targetDate,
-            plantPrice118kg: parseFloat(plantPrice118kg),
-            notes: notes || null,
-            createdBy: session.user.id
-          }
-        });
-      });
-
-      const results = await prisma.$transaction(upsertOps);
-      // Return the result for the current region (or first one)
-      price = results.find(p => p.regionId === regionId) || results[0];
-      
-      console.log(`[PlantPrice] Propagated price to ${results.length} active regions`);
     } else {
-      // Standard local-only update
-      const existingPrice = await prisma.dailyPlantPrice.findFirst({
-        where: { date: targetDate, ...regionScopedWhere(regionId) }
+      price = await prisma.dailyPlantPrice.create({
+        data: {
+          date: targetDate,
+          plantPrice118kg: parseFloat(plantPrice118kg),
+          notes: notes || null,
+          createdBy: session.user.id,
+          regionId: regionId || null,
+        }
       });
-
-      if (existingPrice) {
-        price = await prisma.dailyPlantPrice.update({
-          where: { id: existingPrice.id },
-          data: {
-            plantPrice118kg: parseFloat(plantPrice118kg),
-            notes: notes || null
-          }
-        });
-      } else {
-        price = await prisma.dailyPlantPrice.create({
-          data: {
-            date: targetDate,
-            plantPrice118kg: parseFloat(plantPrice118kg),
-            notes: notes || null,
-            createdBy: session.user.id,
-            ...(regionId ? { regionId } : {}),
-          }
-        });
-      }
     }
 
     // Refresh createdByUser info for the response
@@ -205,3 +192,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

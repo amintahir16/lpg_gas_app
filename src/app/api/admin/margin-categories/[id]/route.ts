@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+
 // GET /api/admin/margin-categories/[id] - Get single margin category
 export async function GET(
   request: NextRequest,
@@ -19,13 +21,26 @@ export async function GET(
       );
     }
 
+    const regionId = getActiveRegionId(request);
+    const regionScope = regionScopedWhere(regionId);
+
     const category = await prisma.marginCategory.findUnique({
       where: { id },
       include: {
         _count: {
           select: {
-            b2cCustomers: true,
-            b2bCustomers: true
+            b2cCustomers: {
+              where: {
+                ...regionScope,
+                isArchived: false,
+              }
+            },
+            b2bCustomers: {
+              where: {
+                ...regionScope,
+                isArchived: false,
+              }
+            }
           }
         }
       }
@@ -125,14 +140,27 @@ export async function PUT(
     if (description !== undefined) updateData.description = description;
     if (isActive !== undefined) updateData.isActive = isActive;
 
+    const regionId = getActiveRegionId(request);
+    const regionScope = regionScopedWhere(regionId);
+
     const category = await prisma.marginCategory.update({
       where: { id },
       data: updateData,
       include: {
         _count: {
           select: {
-            b2cCustomers: true,
-            b2bCustomers: true
+            b2cCustomers: {
+              where: {
+                ...regionScope,
+                isArchived: false,
+              }
+            },
+            b2bCustomers: {
+              where: {
+                ...regionScope,
+                isArchived: false,
+              }
+            }
           }
         }
       }

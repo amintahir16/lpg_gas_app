@@ -374,11 +374,22 @@ export default function PricingManagementPage() {
       {/* Daily Plant Price Input */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CalendarIcon className="w-6 h-6" />
-            Daily Plant Price Input
-          </CardTitle>
-          <CardDescription>Set today's plant price for 11.8kg cylinder</CardDescription>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <CalendarIcon className="w-6 h-6" />
+                Daily Plant Price Input
+              </CardTitle>
+              <CardDescription>
+                Set today's plant price for 11.8kg cylinder for this branch
+              </CardDescription>
+            </div>
+            {plantPrices.length > 0 && (
+              <Badge variant="outline" className="text-xs px-3 py-1 font-medium bg-green-50 text-green-700 border-green-200">
+                Current: Rs {plantPrices[0].plantPrice118kg} ({new Date(plantPrices[0].date).toLocaleDateString()})
+              </Badge>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSetPlantPrice} className="space-y-4">
@@ -391,7 +402,7 @@ export default function PricingManagementPage() {
                   value={newPriceForm.plantPrice118kg}
                   onChange={(e) => setNewPriceForm({ ...newPriceForm, plantPrice118kg: e.target.value })}
                   className="h-8 px-3 py-1 text-sm mt-1"
-                  placeholder="2750"
+                  placeholder={plantPrices.length > 0 ? String(plantPrices[0].plantPrice118kg) : "2750"}
                   required
                 />
               </div>

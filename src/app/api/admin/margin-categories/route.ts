@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { ensureDefaultCategoriesExist } from '@/lib/margin-categories';
 
+import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
+
 // GET /api/admin/margin-categories - Get all margin categories
 export async function GET(request: NextRequest) {
   try {
@@ -15,6 +17,9 @@ export async function GET(request: NextRequest) {
         { status: 401 }
       );
     }
+
+    const regionId = getActiveRegionId(request);
+    const regionScope = regionScopedWhere(regionId);
 
     const { searchParams } = new URL(request.url);
     const customerType = searchParams.get('customerType') as 'B2C' | 'B2B' | null;
@@ -34,8 +39,18 @@ export async function GET(request: NextRequest) {
       include: {
         _count: {
           select: {
-            b2cCustomers: true,
-            b2bCustomers: true
+            b2cCustomers: {
+              where: {
+                ...regionScope,
+                isArchived: false,
+              }
+            },
+            b2bCustomers: {
+              where: {
+                ...regionScope,
+                isArchived: false,
+              }
+            }
           }
         }
       }
