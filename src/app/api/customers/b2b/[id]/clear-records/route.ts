@@ -4,6 +4,7 @@ import { requireSuperAdmin } from '@/lib/apiAuth';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { CylinderStatus } from '@prisma/client';
 import { regionScopedWhere } from '@/lib/region';
+import { prismaB2bCustomerHeldCylinderWhere, b2bReleaseHeldCylinderData } from '@/lib/b2b-customer-cylinder-location';
 
 export async function POST(
   request: NextRequest,
@@ -75,12 +76,15 @@ export async function POST(
       const reclaimedCylinders = await tx.cylinder.updateMany({
         where: {
           currentStatus: CylinderStatus.WITH_CUSTOMER,
-          location: { contains: customer.name, mode: 'insensitive' },
+          ...prismaB2bCustomerHeldCylinderWhere({
+            customerId,
+            customerName: customer.name,
+          }),
           ...(customer.regionId ? regionScopedWhere(customer.regionId) : {}),
         },
         data: {
           currentStatus: CylinderStatus.EMPTY,
-          location: 'Main Store',
+          ...b2bReleaseHeldCylinderData('Main Store'),
         },
       });
 

@@ -11,6 +11,10 @@ import { isOpeningDuesSaleItem, isOpeningDuesTransaction } from '@/lib/b2b-openi
 import { calculateGasLineProfit } from '@/lib/gas-profit';
 import { getCapacityFromTypeString } from '@/lib/cylinder-utils';
 import { getDailyActiveB2BCustomerIds } from '@/lib/b2b-activity-cache';
+import {
+  locationBelongsToB2bCustomer,
+  prismaB2bCustomerExactLocationClauses,
+} from '@/lib/b2b-customer-cylinder-location';
 
 export async function GET(request: NextRequest) {
   try {
@@ -114,9 +118,9 @@ export async function GET(request: NextRequest) {
 
       // Optimization: constructing OR clause for names might be heavy if list is huge, 
       // but for PAGINATED (limit=10), it's fine.
-      const locationMatches = targetCustomers.map(c => ({
-        location: { contains: c.name, mode: 'insensitive' as const }
-      }));
+      const locationMatches = targetCustomers.flatMap((c) =>
+        prismaB2bCustomerExactLocationClauses(c.name),
+      );
       const idMatches = customerIds.map(id => ({
         location: { contains: id }
       }));
@@ -127,6 +131,7 @@ export async function GET(request: NextRequest) {
           ...regionScopedWhere(regionId),
           OR: [
             { cylinderRentals: { some: { customerId: { in: customerIds }, status: 'ACTIVE' } } },
+            { heldByCustomerId: { in: customerIds } },
             ...idMatches,
             ...locationMatches
           ]
@@ -135,6 +140,7 @@ export async function GET(request: NextRequest) {
           cylinderType: true,
           typeName: true,
           capacity: true,
+          heldByCustomerId: true,
           cylinderRentals: { where: { status: 'ACTIVE' }, select: { customerId: true } },
           location: true
         }
@@ -145,13 +151,14 @@ export async function GET(request: NextRequest) {
 
       assignedCylinders.forEach(cyl => {
         // Determine Holder
-        let holderId = cyl.cylinderRentals[0]?.customerId;
+        let holderId =
+          cyl.heldByCustomerId && customerIds.includes(cyl.heldByCustomerId)
+            ? cyl.heldByCustomerId
+            : cyl.cylinderRentals.find((r) => customerIds.includes(r.customerId))?.customerId;
 
         if (!holderId) {
-          // Fallback to location matching
-          const foundCustomer = targetCustomers.find(c =>
-            (cyl.location && cyl.location.includes(c.id)) ||
-            (cyl.location && c.name && cyl.location.toLowerCase().includes(c.name.toLowerCase()))
+          const foundCustomer = targetCustomers.find((c) =>
+            locationBelongsToB2bCustomer(cyl.location, c),
           );
           if (foundCustomer) holderId = foundCustomer.id;
         }

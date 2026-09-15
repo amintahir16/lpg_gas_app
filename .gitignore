@@ -51,6 +51,7 @@ local_db_dump*
 debug_*.js
 debug_*.ts
 scratch/
+/tmp/
 
 # local / one-off scripts (often contain secrets; do not commit)
 /scripts/

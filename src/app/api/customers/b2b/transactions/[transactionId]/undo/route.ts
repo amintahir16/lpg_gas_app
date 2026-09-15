@@ -11,6 +11,11 @@ import {
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { buildPrismaCylinderVariantWhere } from '@/lib/cylinder-variant-key';
 import { getB2bCustomerCylinderDueAggregatesFromPhysicalStock } from '@/lib/b2b-customer-cylinder-dues-from-stock';
+import {
+  b2bAssignHeldCylinderData,
+  b2bReleaseHeldCylinderData,
+  prismaB2bCustomerHeldCylinderWhere,
+} from '@/lib/b2b-customer-cylinder-location';
 import { buildCylinderVariantSummary } from '@/lib/cylinder-variant-summary';
 import {
   canUndoTransaction,
@@ -149,7 +154,10 @@ export async function POST(
             where: {
               ...variantWhere,
               currentStatus: CylinderStatus.WITH_CUSTOMER,
-              location: { contains: customer.name },
+              ...prismaB2bCustomerHeldCylinderWhere({
+                customerId: customer.id,
+                customerName: customer.name,
+              }),
               ...regionScopedWhere(inventoryRegionId),
             },
             orderBy: { updatedAt: 'desc' },
@@ -164,7 +172,7 @@ export async function POST(
               },
               data: {
                 currentStatus: CylinderStatus.FULL,
-                location: 'Store - Ready for Sale'
+                ...b2bReleaseHeldCylinderData('Store - Ready for Sale'),
               }
             });
             console.log(`✅ Returned ${quantity} ${cylinderType} cylinders to inventory (FULL status)`);
@@ -209,7 +217,7 @@ export async function POST(
               },
               data: {
                 currentStatus: CylinderStatus.WITH_CUSTOMER,
-                location: `Customer: ${customer.name}`
+                ...b2bAssignHeldCylinderData(customer),
               }
             });
             console.log(`✅ Reversed return: ${quantity} ${cylinderType} cylinders back to WITH_CUSTOMER`);
@@ -336,7 +344,7 @@ export async function POST(
               },
               data: {
                 currentStatus: CylinderStatus.WITH_CUSTOMER,
-                location: `Customer: ${customer.name}`
+                ...b2bAssignHeldCylinderData(customer),
               }
             });
             console.log(`✅ Reversed return: ${quantity} ${cylinderType} cylinders back to WITH_CUSTOMER`);
@@ -348,7 +356,7 @@ export async function POST(
               },
               data: {
                 currentStatus: CylinderStatus.WITH_CUSTOMER,
-                location: `Customer: ${customer.name}`
+                ...b2bAssignHeldCylinderData(customer),
               }
             });
             console.warn(`⚠️ Warning: Only found ${emptyCylinders.length} of ${quantity} ${cylinderType} empty cylinders to reverse. Some may have been newly created during the transaction.`);
@@ -359,6 +367,7 @@ export async function POST(
       }
 
       const cylinderDues = await getB2bCustomerCylinderDueAggregatesFromPhysicalStock(tx, {
+        customerId: customer.id,
         customerName: customer.name || '',
         regionId: inventoryRegionId,
       });

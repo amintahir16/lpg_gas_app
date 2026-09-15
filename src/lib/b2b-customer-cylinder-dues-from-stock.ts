@@ -1,22 +1,22 @@
 import type { Prisma } from '@prisma/client';
 import { CylinderStatus } from '@prisma/client';
+import { prismaB2bCustomerHeldCylinderWhere } from '@/lib/b2b-customer-cylinder-location';
 
 /**
  * Derive the three legacy B2B customer cylinder-due counters from physical stock:
- * cylinders WITH_CUSTOMER whose location contains the B2B customer name.
+ * cylinders WITH_CUSTOMER held by this customer (id first, exact location fallback).
  * Matches how `/api/customers/b2b/[id]/cylinder-dues` counts dues, and keeps POST/void
  * consistent with variant-aware inventory moves (Plastic vs Standard 15kg, etc.).
  */
 export async function getB2bCustomerCylinderDueAggregatesFromPhysicalStock(
   tx: Prisma.TransactionClient,
-  params: { customerName: string; regionId: string | null },
+  params: { customerId: string; customerName: string; regionId: string | null },
 ): Promise<{
   domestic118kgDue: number;
   standard15kgDue: number;
   commercial454kgDue: number;
 }> {
-  const name = params.customerName?.trim();
-  if (!name) {
+  if (!params.customerId) {
     return { domestic118kgDue: 0, standard15kgDue: 0, commercial454kgDue: 0 };
   }
 
@@ -24,7 +24,10 @@ export async function getB2bCustomerCylinderDueAggregatesFromPhysicalStock(
     by: ['cylinderType'],
     where: {
       currentStatus: CylinderStatus.WITH_CUSTOMER,
-      location: { contains: name },
+      ...prismaB2bCustomerHeldCylinderWhere({
+        customerId: params.customerId,
+        customerName: params.customerName,
+      }),
       ...(params.regionId ? { regionId: params.regionId } : {}),
     },
     _count: { id: true },

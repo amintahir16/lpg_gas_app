@@ -5,6 +5,9 @@ import { authOptions } from '@/lib/auth';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity } from '@/lib/superAdminNotifier';
 import { adoptLegacyB2bCustomerIfNeeded, getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import {
+  prismaB2bCustomerHeldCylinderOrClauses,
+} from '@/lib/b2b-customer-cylinder-location';
 
 export async function GET(
   request: NextRequest,
@@ -241,15 +244,17 @@ export async function DELETE(
     // can't permanently block deletion when payments are made in whole rupees.
     const hasOutstandingBalance = Math.abs(ledgerBalance) >= 0.5;
 
-    // Physical cylinder holdings (Rentals OR location match by ID/Name), region-scoped
+    // Physical cylinder holdings (rentals OR heldByCustomerId / exact location)
     const assignedCylindersCount = await prisma.cylinder.count({
       where: {
         currentStatus: 'WITH_CUSTOMER',
         ...regionScopedWhere(regionId),
         OR: [
           { cylinderRentals: { some: { customerId: customerId, status: 'ACTIVE' } } },
-          { location: { contains: customerId } },
-          { location: { contains: customerRecord.name, mode: 'insensitive' } }
+          ...prismaB2bCustomerHeldCylinderOrClauses({
+            customerId,
+            customerName: customerRecord.name,
+          }),
         ]
       }
     });

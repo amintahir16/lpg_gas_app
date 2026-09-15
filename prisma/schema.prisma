@@ -77,6 +77,7 @@ model Customer {
   ledger             CustomerLedger[]
   marginCategory     MarginCategory?  @relation(fields: [marginCategoryId], references: [id])
   cylinderRentals    CylinderRental[]
+  heldCylinders      Cylinder[]       @relation("CustomerHeldCylinders")
   supportRequests    SupportRequest[]
 
   @@index([regionId])
@@ -272,6 +273,7 @@ model Cylinder {
   purchasePrice       Decimal?          @db.Decimal(10, 2)
   currentStatus       CylinderStatus    @default(FULL)
   location            String?
+  heldByCustomerId    String?
   lastMaintenanceDate DateTime?
   nextMaintenanceDate DateTime?
   storeId             String?
@@ -280,12 +282,14 @@ model Cylinder {
   updatedAt           DateTime          @updatedAt
   regionId            String?
   region              Region?           @relation(fields: [regionId], references: [id])
+  heldByCustomer      Customer?         @relation("CustomerHeldCylinders", fields: [heldByCustomerId], references: [id], onDelete: SetNull)
   cylinderRentals     CylinderRental[]
   store               Store?            @relation(fields: [storeId], references: [id])
   vehicle             Vehicle?          @relation(fields: [vehicleId], references: [id])
   vendorInventories   VendorInventory[]
 
   @@index([regionId])
+  @@index([heldByCustomerId])
   @@map("cylinders")
 }
 

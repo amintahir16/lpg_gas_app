@@ -21,6 +21,15 @@ export async function GET(request: NextRequest) {
         { code: { contains: search, mode: 'insensitive' } },
         { location: { contains: search, mode: 'insensitive' } },
         {
+          heldByCustomer: {
+            OR: [
+              { name: { contains: search, mode: 'insensitive' } },
+              { contactPerson: { contains: search, mode: 'insensitive' } },
+              { phone: { contains: search, mode: 'insensitive' } }
+            ]
+          }
+        },
+        {
           cylinderRentals: {
             some: {
               customer: {
@@ -56,6 +65,16 @@ export async function GET(request: NextRequest) {
     const cylinders = await prisma.cylinder.findMany({
       where,
       include: {
+        heldByCustomer: {
+          select: {
+            id: true,
+            name: true,
+            contactPerson: true,
+            phone: true,
+            email: true,
+            address: true
+          }
+        },
         cylinderRentals: {
           where: {
             status: 'ACTIVE'
@@ -80,10 +99,12 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Extract unique customer names from B2C cylinders (no rentals)
-    const b2cCylinders = cylinders.filter(c => c.cylinderRentals.length === 0);
+    // Extract unique customer names from unlinked cylinders (no rentals and no heldByCustomer)
+    const unlinkedCylinders = cylinders.filter(
+      c => c.cylinderRentals.length === 0 && !c.heldByCustomer
+    );
     const customerNames = new Set<string>();
-    b2cCylinders.forEach(cyl => {
+    unlinkedCylinders.forEach(cyl => {
       const location = cyl.location || '';
       if (location.includes('Customer:')) {
         const customerName = location.split('Customer:')[1]?.trim();
@@ -150,7 +171,7 @@ export async function GET(request: NextRequest) {
 
     // Process the data to match the expected format
     const customerCylinders = cylinders.map((cylinder) => {
-      // Check if it has B2B rental
+      // 1. Check if it has active B2B rental
       if (cylinder.cylinderRentals.length > 0) {
         return {
           id: cylinder.id,
@@ -169,8 +190,27 @@ export async function GET(request: NextRequest) {
           },
           isB2B: true
         };
+      } else if (cylinder.heldByCustomer) {
+        // 2. Direct B2B held customer relation (source of truth)
+        return {
+          id: cylinder.id,
+          code: cylinder.code,
+          cylinderType: cylinder.cylinderType,
+          typeName: cylinder.typeName,
+          currentStatus: cylinder.currentStatus,
+          customer: cylinder.heldByCustomer,
+          rental: {
+            id: '',
+            rentalDate: null,
+            expectedReturnDate: null,
+            rentalAmount: 0,
+            depositAmount: 0,
+            status: 'ACTIVE'
+          },
+          isB2B: true
+        };
       } else {
-        // B2C cylinder - parse customer name from location
+        // 3. Fallback: Parse customer name from location string
         const location = cylinder.location || '';
         let customerName = '';
 

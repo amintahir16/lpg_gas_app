@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { getCylinderTypeDisplayName, normalizeTypeName } from '@/lib/cylinder-utils';
 import { buildCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { adoptLegacyB2bCustomerIfNeeded, getActiveRegionId, regionScopedWhere } from '@/lib/region';
+import { prismaB2bCustomerHeldCylinderWhere } from '@/lib/b2b-customer-cylinder-location';
 
 export async function GET(
   request: NextRequest,
@@ -42,9 +43,10 @@ export async function GET(
       by: ['cylinderType', 'typeName', 'capacity'],
       where: {
         currentStatus: 'WITH_CUSTOMER',
-        location: {
-          contains: customer.name
-        },
+        ...prismaB2bCustomerHeldCylinderWhere({
+          customerId,
+          customerName: customer.name,
+        }),
         ...regionScopedWhere(regionId),
       },
       _count: {

@@ -14,6 +14,11 @@ import {
 } from '@/lib/superAdminNotifier';
 import { adoptLegacyB2bCustomerIfNeeded, getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { getB2bCustomerCylinderDueAggregatesFromPhysicalStock } from '@/lib/b2b-customer-cylinder-dues-from-stock';
+import {
+  b2bAssignHeldCylinderData,
+  b2bReleaseHeldCylinderData,
+  prismaB2bCustomerHeldCylinderWhere,
+} from '@/lib/b2b-customer-cylinder-location';
 import { buildCylinderVariantSummary } from '@/lib/cylinder-variant-summary';
 import { recordB2BCustomerActivity } from '@/lib/b2b-activity-cache';
 
@@ -368,7 +373,7 @@ export async function POST(request: NextRequest) {
               },
               data: {
                 currentStatus: CylinderStatus.WITH_CUSTOMER,
-                location: `Customer: ${customer.name || 'Unknown'}`
+                ...b2bAssignHeldCylinderData(customer),
               }
             });
 
@@ -443,7 +448,10 @@ export async function POST(request: NextRequest) {
               where: {
                 ...variantWhere,
                 currentStatus: CylinderStatus.WITH_CUSTOMER,
-                location: { contains: customer.name },
+                ...prismaB2bCustomerHeldCylinderWhere({
+                  customerId: customer.id,
+                  customerName: customer.name,
+                }),
                 ...regionScopedWhere(regionId),
               },
               take: quantity
@@ -457,7 +465,7 @@ export async function POST(request: NextRequest) {
                   },
                   data: {
                     currentStatus: CylinderStatus.EMPTY,
-                    location: 'Store - Ready for Refill'
+                    ...b2bReleaseHeldCylinderData('Store - Ready for Refill'),
                   }
                 });
                 console.log(`✅ Updated ${quantity} ${cylinderType} cylinders to EMPTY status in inventory`);
@@ -471,7 +479,7 @@ export async function POST(request: NextRequest) {
                     },
                     data: {
                       currentStatus: CylinderStatus.EMPTY,
-                      location: 'Store - Ready for Refill'
+                      ...b2bReleaseHeldCylinderData('Store - Ready for Refill'),
                     }
                   });
                 }
@@ -512,6 +520,7 @@ export async function POST(request: NextRequest) {
 
       const inventoryRegionId = transaction.regionId ?? regionId ?? null;
       const cylinderDues = await getB2bCustomerCylinderDueAggregatesFromPhysicalStock(tx, {
+        customerId: customer.id,
         customerName: customer.name || '',
         regionId: inventoryRegionId,
       });
