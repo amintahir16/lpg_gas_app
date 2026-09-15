@@ -19,6 +19,7 @@ import {
   ArrowPathIcon,
   ArrowUpIcon,
   DocumentArrowDownIcon,
+  ShareIcon,
 } from '@heroicons/react/24/outline';
 import {
   buildFinancialPeriodQuery,
@@ -258,11 +259,17 @@ export default function ReportsPage() {
             type="button"
             variant="outline"
             size="sm"
-            className="h-9"
+            className="h-9 px-3"
             onClick={handleSharePdf}
             disabled={!report || loading || !!pdfBusy}
+            title="Share report PDF (WhatsApp, Email, ...)"
+            aria-label="Share report PDF"
           >
-            {pdfBusy === 'share' ? 'Sharing…' : 'Share'}
+            {pdfBusy === 'share' ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600" />
+            ) : (
+              <ShareIcon className="w-4 h-4" />
+            )}
           </Button>
           <Button
             type="button"

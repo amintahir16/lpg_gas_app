@@ -1,11 +1,23 @@
 import { forwardRef } from 'react';
 import { cn } from '@/lib/utils';
+import { DateInput } from './date-input';
 
 export interface InputProps
   extends React.InputHTMLAttributes<HTMLInputElement> {}
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, style, ...props }, ref) => {
+    if (type === 'date') {
+      return (
+        <DateInput
+          className={className}
+          style={style}
+          {...(props as any)}
+          ref={ref}
+        />
+      );
+    }
+
     return (
       <input
         type={type}

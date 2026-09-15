@@ -744,12 +744,17 @@ export default function DashboardPage() {
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-8 text-xs"
+                className="h-8 px-2.5 text-xs"
                 onClick={handleShareActivities}
                 disabled={!!pdfBusy || loading}
+                title="Share activities PDF (WhatsApp, Email, ...)"
+                aria-label="Share activities PDF"
               >
-                <ShareIcon className="w-3.5 h-3.5 mr-1" />
-                {pdfBusy === 'share' ? 'Sharing…' : 'Share'}
+                {pdfBusy === 'share' ? (
+                  <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-gray-600" />
+                ) : (
+                  <ShareIcon className="w-4 h-4" />
+                )}
               </Button>
               <Button
                 type="button"
