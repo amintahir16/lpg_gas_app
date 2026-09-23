@@ -83,8 +83,8 @@ export default function VendorExportModal({
   const formatCurrencyForPDF = (value: number) => {
     return new Intl.NumberFormat('en-PK', {
       minimumFractionDigits: 0,
-      maximumFractionDigits: 2
-    }).format(value);
+      maximumFractionDigits: 0
+    }).format(Math.round(value || 0));
   };
 
   const formatDate = (date: string | Date) => {
@@ -369,7 +369,7 @@ export default function VendorExportModal({
               formatDate(purchase.purchaseDate),
               purchase.itemName || 'N/A',
               purchase.quantity || 0,
-              purchase.unitPrice || '0',
+              typeof purchase.unitPrice === 'number' ? formatCurrencyForPDF(purchase.unitPrice) : (purchase.unitPrice || '0'),
               formatCurrencyForPDF(Number(purchase.totalPrice)),
               purchase.status || 'PENDING'
             ];

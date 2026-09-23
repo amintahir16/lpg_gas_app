@@ -81,6 +81,7 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [inquiriesCount, setInquiriesCount] = useState<number>(0);
   const pathname = usePathname();
   const router = useRouter();
   const { data: session, status } = useSession();
@@ -92,7 +93,55 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     }
   }, [status, router]);
 
+  const userRole = session?.user?.role || 'USER';
+  const isCustomer = userRole === 'USER';
+  const isAdmin = userRole === 'ADMIN';
+  const isSuperAdmin = userRole === 'SUPER_ADMIN';
 
+  // Live inquiry count for super admin
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+
+    let isMounted = true;
+
+    const fetchInquiryCount = async () => {
+      try {
+        const res = await fetch('/api/admin/website-inquiries/count');
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          setInquiriesCount(data.count ?? 0);
+        }
+      } catch (err) {
+        console.error('Failed to fetch inquiry count:', err);
+      }
+    };
+
+    fetchInquiryCount();
+
+    const handleInquiryUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<{ count?: number }>;
+      if (typeof customEvent.detail?.count === 'number') {
+        setInquiriesCount(customEvent.detail.count);
+      } else {
+        fetchInquiryCount();
+      }
+    };
+
+    window.addEventListener('website-inquiry-updated', handleInquiryUpdate);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchInquiryCount();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('website-inquiry-updated', handleInquiryUpdate);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isSuperAdmin]);
 
   // Show layout skeleton while checking authentication
   if (status === 'loading') {
@@ -104,12 +153,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     return null;
   }
 
-  const userRole = session?.user?.role || 'USER';
-  const isCustomer = userRole === 'USER';
-  const isAdmin = userRole === 'ADMIN';
-  const isSuperAdmin = userRole === 'SUPER_ADMIN';
-
-  let currentNavigation;
+  let currentNavigation: NavigationItem[];
   if (isCustomer) {
     currentNavigation = customerNavigation;
   } else if (isAdmin) {
@@ -119,6 +163,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   } else {
     currentNavigation = customerNavigation; // fallback
   }
+
+  const navigationItems = currentNavigation.map((item) => {
+    if (item.href === '/admin/website-inquiries' && inquiriesCount > 0) {
+      return {
+        ...item,
+        badge: inquiriesCount > 99 ? '99+' : `${inquiriesCount}`,
+      };
+    }
+    return item;
+  });
 
   const handleLogout = () => {
     signOut({ callbackUrl: '/login' });
@@ -159,7 +213,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Navigation */}
         <nav className="flex-1 mt-6 px-4 overflow-y-auto">
           <div className="space-y-1 pb-4">
-            {currentNavigation.map((item) => {
+            {navigationItems.map((item) => {
               const isActive = pathname === item.href;
               return (
                 <Link
@@ -180,7 +234,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   )} />
                   {item.name}
                   {item.badge && (
-                    <Badge variant="secondary" className="ml-auto">
+                    <Badge
+                      variant={item.href === '/admin/website-inquiries' ? 'destructive' : 'secondary'}
+                      className={cn(
+                        "ml-auto",
+                        item.href === '/admin/website-inquiries' && "bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold px-2 py-0.5 rounded-full border-none shadow-sm"
+                      )}
+                    >
                       {item.badge}
                     </Badge>
                   )}

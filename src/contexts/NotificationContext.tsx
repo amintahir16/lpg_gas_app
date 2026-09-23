@@ -58,8 +58,8 @@ const initialState: NotificationState = {
   lastUpdate: null,
 };
 
-/** Tab-focus refresh only if badge data is older than this. */
-const STALE_MS = 15 * 60 * 1000;
+/** Tab-focus refresh only if badge data is older than this (quota-friendly). */
+const STALE_MS = 5 * 60 * 1000; // 5 minutes
 
 function notificationReducer(state: NotificationState, action: NotificationAction): NotificationState {
   switch (action.type) {
@@ -437,17 +437,19 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       return;
     }
 
-    void refresh();
+    // Load initial bell summary (stats + notifications) once on mount
+    void refreshBell();
 
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
+    // Action-driven: only refresh when returning to tab after at least 5 minutes of inactivity
     const onVisibility = () => {
       if (document.visibilityState !== 'visible') return;
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         const last = lastUpdateRef.current;
         if (last && Date.now() - last.getTime() < STALE_MS) return;
-        void refresh();
+        void fetchStats();
       }, 400);
     };
 
@@ -456,7 +458,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       document.removeEventListener('visibilitychange', onVisibility);
       if (debounceTimer) clearTimeout(debounceTimer);
     };
-  }, [session?.user, refresh]);
+  }, [session?.user, refreshBell, fetchStats]);
 
   const contextValue: NotificationContextType = {
     state,

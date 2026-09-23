@@ -193,7 +193,7 @@ export default function PurchaseEntryForm({
   };
 
   const calculateTotal = (quantity: number, unitPrice: number) => {
-    return quantity * unitPrice;
+    return Math.round(quantity * unitPrice);
   };
 
   const handleInputChange = (field: keyof PurchaseEntryData, value: string | number) => {

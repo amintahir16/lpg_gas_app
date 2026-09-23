@@ -28,8 +28,17 @@ export function NotificationBell({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const notifications = filteredNotifications;
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
-  const urgentCount = notifications.filter((n) => !n.isRead && n.priority === 'URGENT').length;
+  const filteredUnread = notifications.filter((n) => !n.isRead).length;
+  const filteredUrgent = notifications.filter((n) => !n.isRead && n.priority === 'URGENT').length;
+
+  // Use state.stats unread/urgent counts directly (populated from server summary)
+  // so the bell badge displays immediately without requiring the user to click the bell first.
+  const unreadCount = state.stats.unread > 0 
+    ? Math.max(state.stats.unread, filteredUnread) 
+    : filteredUnread;
+  const urgentCount = state.stats.urgent > 0 
+    ? Math.max(state.stats.urgent, filteredUrgent) 
+    : filteredUrgent;
 
   // Handle click outside to close
   useEffect(() => {

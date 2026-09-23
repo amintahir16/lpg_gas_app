@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { notifySuperAdmins } from '@/lib/superAdminNotifier';
 import {
-  buildInquiryNotificationCopy,
   computeCartTotal,
   isValidEmail,
   normalizeCartItems,
@@ -59,16 +57,6 @@ export async function POST(request: NextRequest) {
         cartItems: items,
         totalAmount,
       },
-    });
-
-    const copy = buildInquiryNotificationCopy('SHOP_ORDER', { name, totalAmount });
-    await notifySuperAdmins({
-      type: 'SYSTEM_ALERT',
-      title: copy.title,
-      message: copy.message,
-      link: '/admin/website-inquiries',
-      priority: 'HIGH',
-      metadata: { inquiryId: inquiry.id, inquiryType: 'SHOP_ORDER' },
     });
 
     return NextResponse.json({ success: true, id: inquiry.id }, { status: 201 });

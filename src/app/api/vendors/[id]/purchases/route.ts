@@ -118,9 +118,11 @@ export async function POST(
     }
 
     // Calculate total
-    const totalAmount = items.reduce(
-      (sum: number, item: any) => sum + Number(item.totalPrice),
-      0
+    const totalAmount = Math.round(
+      items.reduce(
+        (sum: number, item: any) => sum + Number(item.totalPrice),
+        0
+      )
     );
 
     const paid = Number(paidAmount || 0);

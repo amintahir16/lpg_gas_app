@@ -72,7 +72,11 @@ export default function WebsiteInquiriesPage() {
       if (res.ok) {
         const data = await res.json();
         setInquiries(data.inquiries || []);
-        setNewCount(data.summary?.newCount ?? 0);
+        const count = data.summary?.newCount ?? 0;
+        setNewCount(count);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('website-inquiry-updated', { detail: { count } }));
+        }
       }
     } catch (error) {
       console.error('Failed to fetch website inquiries', error);

@@ -341,8 +341,8 @@ export default function VendorDetailPage() {
     if (capacity > 0) {
       // Calculate proportional price: (capacity / 11.8) * basePrice
       const calculatedPrice = (capacity / 11.8) * basePrice;
-      // Round off decimals to whole number
-      return Math.round(calculatedPrice);
+      // Retain 2-decimal precision (e.g. 5783.90) so multiplying by quantity does not accumulate rounding error
+      return Math.round(calculatedPrice * 100) / 100;
     }
 
     return 0;
@@ -357,8 +357,7 @@ export default function VendorDetailPage() {
     const updatedItems = purchaseItems.map(item => {
       if (item.itemName && item.itemName.trim()) {
         const calculatedPrice = calculateUnitPriceFromBase(item.itemName, basePrice);
-        const capacity = getCapacityFromItemName(item.itemName);
-        // For gas purchase, price per item = (quantity * unitPrice) - unitPrice already includes capacity factor
+        // For gas purchase, price per item = (quantity * unitPrice) rounded to nearest whole rupee
         const totalPrice = Math.round(Number(item.quantity) * calculatedPrice);
 
         return {
@@ -398,7 +397,7 @@ export default function VendorDetailPage() {
 
   // Auto-update paid amount to match grand total when purchase items change
   useEffect(() => {
-    const grandTotal = purchaseItems.reduce((sum, item) => sum + Number(item.totalPrice), 0);
+    const grandTotal = Math.round(purchaseItems.reduce((sum, item) => sum + Number(item.totalPrice || 0), 0));
     setPurchaseFormData(prev => ({
       ...prev,
       paidAmount: grandTotal
@@ -1343,7 +1342,7 @@ export default function VendorDetailPage() {
   };
 
   const calculatePurchaseTotal = () => {
-    return purchaseItems.reduce((sum, item) => sum + Number(item.totalPrice), 0);
+    return Math.round(purchaseItems.reduce((sum, item) => sum + Number(item.totalPrice || 0), 0));
   };
 
   const handleSubmitPurchase = async (e: React.FormEvent) => {

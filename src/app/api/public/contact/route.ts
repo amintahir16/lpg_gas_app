@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { notifySuperAdmins } from '@/lib/superAdminNotifier';
 import {
-  buildInquiryNotificationCopy,
   isValidEmail,
   sanitizeWebsiteField,
 } from '@/lib/website-inquiry';
@@ -39,16 +37,6 @@ export async function POST(request: NextRequest) {
         subject,
         message,
       },
-    });
-
-    const copy = buildInquiryNotificationCopy('CONTACT', { name, subject });
-    await notifySuperAdmins({
-      type: 'SYSTEM_ALERT',
-      title: copy.title,
-      message: copy.message,
-      link: '/admin/website-inquiries',
-      priority: 'HIGH',
-      metadata: { inquiryId: inquiry.id, inquiryType: 'CONTACT' },
     });
 
     return NextResponse.json({ success: true, id: inquiry.id }, { status: 201 });
