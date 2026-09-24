@@ -175,7 +175,8 @@ export async function POST(
 
           // Determine new status for all entries in this invoice
           let newStatus: 'PAID' | 'PARTIAL' | 'PENDING' = 'PENDING';
-          if (totalPaid >= invoiceTotal) {
+          const invoicePending = Math.max(0, invoiceTotal - totalPaid);
+          if (invoicePending <= 10) {
             newStatus = 'PAID';
           } else if (totalPaid > 0) {
             newStatus = 'PARTIAL';
@@ -220,14 +221,14 @@ export async function POST(
         for (const [inv, entries] of groupedInvoices) {
           if (remainingPaymentToAllocate <= 0) break;
           const invoiceTotal = entries.reduce((s, e) => s + Number(e.totalPrice), 0);
-          if (remainingPaymentToAllocate >= invoiceTotal) {
+          if (remainingPaymentToAllocate >= invoiceTotal || (invoiceTotal - remainingPaymentToAllocate <= 10)) {
             await tx.purchaseEntry.updateMany({
               where: {
                 id: { in: entries.map(e => e.id) },
               },
               data: { status: 'PAID' },
             });
-            remainingPaymentToAllocate -= invoiceTotal;
+            remainingPaymentToAllocate = Math.max(0, remainingPaymentToAllocate - invoiceTotal);
           } else {
             await tx.purchaseEntry.updateMany({
               where: {

@@ -112,7 +112,11 @@ const getCategoryColor = (slug?: string | null) => {
 };
 
 const formatPrice = (amount: number) => {
-  return `Rs ${Math.round(amount || 0).toLocaleString('en-PK')}`;
+  const num = Number(amount || 0);
+  return `Rs ${num.toLocaleString('en-PK', {
+    minimumFractionDigits: Math.abs(num) % 1 !== 0 ? 2 : 0,
+    maximumFractionDigits: 2,
+  })}`;
 };
 
 const formatDate = (isoString: string) => {
@@ -356,7 +360,7 @@ export default function RecentVendorPurchases() {
                           {formatPrice(purchase.totalAmount)}
                         </div>
                         <div className="flex items-center gap-1.5 mt-0.5 justify-start lg:justify-end">
-                          {purchase.paymentStatus === 'PAID' ? (
+                          {purchase.paymentStatus === 'PAID' || (purchase.balanceAmount !== undefined && purchase.balanceAmount <= 10) ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                               <CheckCircleIcon className="w-3 h-3 text-emerald-600" />
                               PAID
@@ -495,7 +499,7 @@ export default function RecentVendorPurchases() {
                   </span>
                 </div>
                 <div>
-                  {selectedPurchase.paymentStatus === 'PAID' ? (
+                  {selectedPurchase.paymentStatus === 'PAID' || (selectedPurchase.balanceAmount !== undefined && selectedPurchase.balanceAmount <= 10) ? (
                     <Badge className="bg-emerald-600 text-white">Fully Paid</Badge>
                   ) : selectedPurchase.paymentStatus === 'PARTIAL' ? (
                     <Badge className="bg-amber-600 text-white">Partially Paid</Badge>

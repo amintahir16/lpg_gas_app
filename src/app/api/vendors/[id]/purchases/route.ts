@@ -93,7 +93,7 @@ export async function POST(
     const regionId = getActiveRegionId(request);
     const { id } = await params;
     const body = await request.json();
-    const { items, invoiceNumber, notes, purchaseDate, paidAmount, paymentMethod } = body;
+    const { items, invoiceNumber, notes, purchaseDate, paidAmount, paymentMethod, totalAmount: requestTotalAmount } = body;
 
     console.log('Received purchase data:', {
       vendorId: id,
@@ -102,7 +102,8 @@ export async function POST(
       notes,
       purchaseDate,
       paidAmount,
-      paymentMethod
+      paymentMethod,
+      requestTotalAmount
     });
 
     if (!items || items.length === 0) {
@@ -117,21 +118,71 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid purchase date/time' }, { status: 400 });
     }
 
-    // Calculate total
-    const totalAmount = Math.round(
+    // Calculate total from items with 2-decimal precision (no roundoff)
+    const calculatedItemsTotal = Math.round(
       items.reduce(
-        (sum: number, item: any) => sum + Number(item.totalPrice),
+        (sum: number, item: any) => sum + Number(item.totalPrice || 0),
         0
-      )
-    );
+      ) * 100
+    ) / 100;
+
+    // Use requested totalAmount if provided, otherwise calculatedItemsTotal
+    const totalAmount = (requestTotalAmount !== undefined && requestTotalAmount !== null && !isNaN(Number(requestTotalAmount)))
+      ? Math.round(Number(requestTotalAmount) * 100) / 100
+      : calculatedItemsTotal;
+
+    // If totalAmount was adjusted relative to items, adjust items' totalPrice proportionally
+    // so sum(items.totalPrice) identically equals totalAmount (ensuring reports, balances, and entries match 100%)
+    let processedItems = items;
+    if (Math.abs(totalAmount - calculatedItemsTotal) > 0.001 && items.length > 0) {
+      if (items.length === 1) {
+        const single = items[0];
+        const unitPrice = Number(single.quantity) > 0
+          ? Math.round((totalAmount / Number(single.quantity)) * 100) / 100
+          : Number(single.unitPrice);
+        processedItems = [{
+          ...single,
+          totalPrice: totalAmount,
+          unitPrice
+        }];
+      } else if (calculatedItemsTotal > 0) {
+        const ratio = totalAmount / calculatedItemsTotal;
+        let runningTotal = 0;
+        processedItems = items.map((it: any, idx: number) => {
+          if (idx === items.length - 1) {
+            const lastTotal = Math.round((totalAmount - runningTotal) * 100) / 100;
+            const unitPrice = Number(it.quantity) > 0
+              ? Math.round((lastTotal / Number(it.quantity)) * 100) / 100
+              : Number(it.unitPrice);
+            return {
+              ...it,
+              totalPrice: lastTotal,
+              unitPrice
+            };
+          }
+          const itTotal = Math.round(Number(it.totalPrice) * ratio * 100) / 100;
+          runningTotal += itTotal;
+          const unitPrice = Number(it.quantity) > 0
+            ? Math.round((itTotal / Number(it.quantity)) * 100) / 100
+            : Number(it.unitPrice);
+          return {
+            ...it,
+            totalPrice: itTotal,
+            unitPrice
+          };
+        });
+      }
+    }
 
     const paid = Number(paidAmount || 0);
     const balance = totalAmount - paid;
+    const pendingAmount = Math.max(0, totalAmount - paid);
 
-    // Determine individual purchase entry status
+    // Determine individual purchase entry status: if pending amount <= 10, considered PAID
     let entryStatus: 'PENDING' | 'PAID' | 'PARTIAL' = 'PENDING';
-    if (paid >= totalAmount) entryStatus = 'PAID';
+    if (pendingAmount <= 10) entryStatus = 'PAID';
     else if (paid > 0) entryStatus = 'PARTIAL';
+    else entryStatus = 'PENDING';
 
     console.log('Creating purchase with invoice number:', invoiceNumber);
 
@@ -181,7 +232,7 @@ export async function POST(
       });
 
       const purchaseEntries = await Promise.all(
-        items.map((item: any) => {
+        processedItems.map((item: any) => {
           let itemDescription = item.itemDescription || null;
           if (categoryEnum === 'ACCESSORIES_PURCHASE') {
             if (item.category) {

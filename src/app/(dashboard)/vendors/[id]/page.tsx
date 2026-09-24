@@ -323,6 +323,19 @@ export default function VendorDetailPage() {
   });
   // Price per 11.8kg for gas purchase - used to calculate unit prices for all cylinder types
   const [pricePer11_8kg, setPricePer11_8kg] = useState<number>(0);
+  // State for user-adjusted grand total (null = auto-calculated from items)
+  const [grandTotalInput, setGrandTotalInput] = useState<string | null>(null);
+
+  // Helper to calculate total purchase amount with 2-decimal precision (no whole-rupee roundoff)
+  const calculatePurchaseTotal = (): number => {
+    const sum = purchaseItems.reduce((acc, item) => acc + Number(item.totalPrice || 0), 0);
+    return Math.round(sum * 100) / 100;
+  };
+
+  // Effective grand total reflects manual user adjustment if provided, otherwise sum of items
+  const effectiveGrandTotal = grandTotalInput !== null && grandTotalInput !== ''
+    ? (parseFloat(grandTotalInput) || 0)
+    : calculatePurchaseTotal();
 
   // Calculate unit price based on price per 11.8kg and cylinder capacity
   // Helper to extract capacity from item name
@@ -354,11 +367,14 @@ export default function VendorDetailPage() {
       return;
     }
 
+    // Reset custom grand total override when base price changes
+    setGrandTotalInput(null);
+
     const updatedItems = purchaseItems.map(item => {
       if (item.itemName && item.itemName.trim()) {
         const calculatedPrice = calculateUnitPriceFromBase(item.itemName, basePrice);
-        // For gas purchase, price per item = (quantity * unitPrice) rounded to nearest whole rupee
-        const totalPrice = Math.round(Number(item.quantity) * calculatedPrice);
+        // For gas purchase, price per item = (quantity * unitPrice) retaining 2-decimal precision (no whole-rupee roundoff)
+        const totalPrice = Math.round(Number(item.quantity) * calculatedPrice * 100) / 100;
 
         return {
           ...item,
@@ -395,14 +411,13 @@ export default function VendorDetailPage() {
     }
   }, [activeTab, reportPeriod]);
 
-  // Auto-update paid amount to match grand total when purchase items change
+  // Auto-update paid amount to match grand total when purchase items or grand total change
   useEffect(() => {
-    const grandTotal = Math.round(purchaseItems.reduce((sum, item) => sum + Number(item.totalPrice || 0), 0));
     setPurchaseFormData(prev => ({
       ...prev,
-      paidAmount: grandTotal
+      paidAmount: effectiveGrandTotal
     }));
-  }, [purchaseItems]);
+  }, [effectiveGrandTotal]);
 
   // Initialize purchase items based on vendor category
   useEffect(() => {
@@ -685,7 +700,7 @@ export default function VendorDetailPage() {
     purchaseList.forEach((purchase) => {
       purchase.amountDue = Math.max(0, purchase.totalPrice - purchase.totalPaid);
       if (purchase.status !== 'CANCELLED') {
-        if (purchase.totalPaid >= purchase.totalPrice && purchase.totalPrice > 0) {
+        if (purchase.amountDue <= 10) {
           purchase.status = 'PAID';
         } else if (purchase.totalPaid > 0) {
           purchase.status = 'PARTIAL';
@@ -861,7 +876,7 @@ export default function VendorDetailPage() {
   };
 
   const handleDeleteVendor = async () => {
-    const netBalance = Math.round(vendor?.financialSummary?.netBalance || 0);
+    const netBalance = Math.round(Number(vendor?.financialSummary?.netBalance || 0) * 100) / 100;
     if (netBalance !== 0) {
       alert(`Cannot delete vendor with an unsettled balance of ${formatCurrency(netBalance)}. Please settle all balances or clear test records first.`);
       return;
@@ -1054,6 +1069,7 @@ export default function VendorDetailPage() {
       paymentMethod: 'CASH'
     });
     setUsedCodes(new Set()); // Reset used codes for new form
+    setGrandTotalInput(null); // Reset custom grand total
 
     // Initialize with one empty item for gas purchase, or reset to trigger auto-population for others
     if (vendor?.category?.slug === 'gas_purchase') {
@@ -1073,6 +1089,7 @@ export default function VendorDetailPage() {
   };
 
   const handleAddPurchaseItem = () => {
+    setGrandTotalInput(null);
     // Allow adding items to all vendor categories
     if (vendor?.category?.slug === 'gas_purchase') {
       setPurchaseItems([
@@ -1088,6 +1105,7 @@ export default function VendorDetailPage() {
   };
 
   const handleRemovePurchaseItem = (index: number) => {
+    setGrandTotalInput(null);
     // Allow removing items, but keep at least one item
     if (purchaseItems.length > 1) {
       setPurchaseItems(purchaseItems.filter((_, i) => i !== index));
@@ -1097,6 +1115,9 @@ export default function VendorDetailPage() {
 
   const handlePurchaseItemChange = (index: number, field: string, value: any) => {
     const newItems = [...purchaseItems];
+
+    // Reset custom grand total override when item details change
+    setGrandTotalInput(null);
 
     // Note: Quantity validation for gas purchases is handled after fetchEmptyCylinders()
 
@@ -1128,19 +1149,10 @@ export default function VendorDetailPage() {
       newItems[index].itemName = '';
     }
 
-    // Auto-calculate total price
+    // Auto-calculate total price with 2-decimal precision (no whole-rupee roundoff)
     if (field === 'quantity' || field === 'unitPrice') {
       let totalPrice = Number(newItems[index].quantity) * Number(newItems[index].unitPrice);
-
-      // For gas purchase, valid unit price is already per cylinder
-      // if (isGasPurchaseCategory(vendor?.category?.slug || '', vendor?.category?.name || '')) {
-      //   const capacity = getCapacityFromItemName(newItems[index].itemName);
-      //   if (capacity > 0) {
-      //     totalPrice = Number(newItems[index].quantity) * Number(newItems[index].unitPrice);
-      //   }
-      // }
-
-      newItems[index].totalPrice = Math.round(totalPrice);
+      newItems[index].totalPrice = Math.round(totalPrice * 100) / 100;
     }
 
     // For gas purchase, fetch empty cylinders when item is selected or quantity changes
@@ -1154,7 +1166,7 @@ export default function VendorDetailPage() {
               const calculatedPrice = calculateUnitPriceFromBase(value, pricePer11_8kg);
               newItems[index].unitPrice = calculatedPrice;
               const capacity = getCapacityFromItemName(value);
-              newItems[index].totalPrice = Math.round(Number(newItems[index].quantity) * calculatedPrice);
+              newItems[index].totalPrice = Math.round(Number(newItems[index].quantity) * calculatedPrice * 100) / 100;
             }
           }
           // Update items to trigger re-render and show max quantity
@@ -1180,7 +1192,7 @@ export default function VendorDetailPage() {
             if (maxQuantity > 0 && Number(value) > maxQuantity) {
               newItems[index].quantity = maxQuantity;
               const capacity = getCapacityFromItemName(newItems[index].itemName);
-              newItems[index].totalPrice = Math.round(maxQuantity * Number(newItems[index].unitPrice));
+              newItems[index].totalPrice = Math.round(maxQuantity * Number(newItems[index].unitPrice) * 100) / 100;
             }
             setPurchaseItems([...newItems]);
           }
@@ -1341,10 +1353,6 @@ export default function VendorDetailPage() {
     });
   };
 
-  const calculatePurchaseTotal = () => {
-    return Math.round(purchaseItems.reduce((sum, item) => sum + Number(item.totalPrice || 0), 0));
-  };
-
   const handleSubmitPurchase = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -1385,6 +1393,54 @@ export default function VendorDetailPage() {
         return;
       }
 
+      if (effectiveGrandTotal <= 0) {
+        alert('Please enter a valid grand total greater than 0');
+        return;
+      }
+
+      // If grand total was adjusted, adjust items proportionally so that sum(items.totalPrice) === effectiveGrandTotal
+      let itemsToSubmit = [...validItems];
+      const baseTotal = calculatePurchaseTotal();
+      if (Math.abs(effectiveGrandTotal - baseTotal) > 0.001 && itemsToSubmit.length > 0) {
+        if (itemsToSubmit.length === 1) {
+          const item = itemsToSubmit[0];
+          const newTotalPrice = effectiveGrandTotal;
+          const newUnitPrice = item.quantity > 0
+            ? Math.round((newTotalPrice / item.quantity) * 100) / 100
+            : item.unitPrice;
+          itemsToSubmit = [{
+            ...item,
+            totalPrice: newTotalPrice,
+            unitPrice: newUnitPrice
+          }];
+        } else if (baseTotal > 0) {
+          const ratio = effectiveGrandTotal / baseTotal;
+          let runningTotal = 0;
+          itemsToSubmit = itemsToSubmit.map((item, idx) => {
+            if (idx === itemsToSubmit.length - 1) {
+              const lastItemTotal = Math.round((effectiveGrandTotal - runningTotal) * 100) / 100;
+              const lastUnitPrice = item.quantity > 0
+                ? Math.round((lastItemTotal / item.quantity) * 100) / 100
+                : item.unitPrice;
+              return {
+                ...item,
+                totalPrice: lastItemTotal,
+                unitPrice: lastUnitPrice
+              };
+            }
+            const itemTotal = Math.round(Number(item.totalPrice) * ratio * 100) / 100;
+            runningTotal += itemTotal;
+            const unitPrice = item.quantity > 0
+              ? Math.round((itemTotal / item.quantity) * 100) / 100
+              : item.unitPrice;
+            return {
+              ...item,
+              totalPrice: itemTotal,
+              unitPrice: unitPrice
+            };
+          });
+        }
+      }
 
       console.log('Submitting purchase with invoice number:', purchaseFormData.invoiceNumber);
       const purchaseDateTime = combineLocalDateAndTime(
@@ -1392,23 +1448,25 @@ export default function VendorDetailPage() {
         purchaseFormData.time
       ).toISOString();
       console.log('Purchase data:', {
-        items: validItems,
+        items: itemsToSubmit,
         invoiceNumber: purchaseFormData.invoiceNumber,
         notes: purchaseFormData.notes,
         purchaseDate: purchaseDateTime,
-        paidAmount: purchaseFormData.paidAmount
+        paidAmount: purchaseFormData.paidAmount,
+        totalAmount: effectiveGrandTotal
       });
 
       const response = await fetch(`/api/vendors/${vendorId}/purchases`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          items: validItems,
+          items: itemsToSubmit,
           invoiceNumber: purchaseFormData.invoiceNumber,
           notes: purchaseFormData.notes,
           purchaseDate: purchaseDateTime,
           paidAmount: purchaseFormData.paidAmount,
-          paymentMethod: purchaseFormData.paymentMethod
+          paymentMethod: purchaseFormData.paymentMethod,
+          totalAmount: effectiveGrandTotal
         })
       });
 
@@ -1424,6 +1482,7 @@ export default function VendorDetailPage() {
 
       // Reset form
       setShowPurchaseForm(false);
+      setGrandTotalInput(null);
 
       // Reset to initial state based on category
       if (vendor?.category?.slug === 'gas_purchase') {
@@ -1491,11 +1550,13 @@ export default function VendorDetailPage() {
   };
 
   const formatCurrency = (amount: number) => {
+    const num = Number(amount || 0);
     return new Intl.NumberFormat('en-PK', {
       style: 'currency',
       currency: 'PKR',
-      minimumFractionDigits: 0
-    }).format(amount);
+      minimumFractionDigits: Math.abs(num) % 1 !== 0 ? 2 : 0,
+      maximumFractionDigits: 2
+    }).format(num);
   };
 
   const formatDate = (dateString: string) => {
@@ -1683,7 +1744,7 @@ export default function VendorDetailPage() {
               <div>
                 <p className="text-xs text-gray-500 font-medium mb-0.5 uppercase tracking-wide">Cash Out (Purchases)</p>
                 <p className="text-lg font-bold text-red-600">
-                  {formatCurrency(Math.round(vendor.financialSummary.cashOut))}
+                  {formatCurrency(vendor.financialSummary.cashOut)}
                 </p>
               </div>
               <div className="p-2 bg-red-50 rounded-md">
@@ -1699,7 +1760,7 @@ export default function VendorDetailPage() {
               <div>
                 <p className="text-xs text-gray-500 font-medium mb-0.5 uppercase tracking-wide">Cash In (Payments)</p>
                 <p className="text-lg font-bold text-green-600">
-                  {formatCurrency(Math.round(vendor.financialSummary.cashIn))}
+                  {formatCurrency(vendor.financialSummary.cashIn)}
                 </p>
               </div>
               <div className="p-2 bg-green-50 rounded-md">
@@ -1716,7 +1777,7 @@ export default function VendorDetailPage() {
                 <p className="text-xs text-gray-500 font-medium mb-0.5 uppercase tracking-wide">Net Balance</p>
                 <div className="flex items-baseline flex-wrap gap-2">
                   <p className={`text-lg font-bold truncate ${vendor.financialSummary.netBalance < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    {formatCurrency(Math.round(vendor.financialSummary.netBalance))}
+                    {formatCurrency(vendor.financialSummary.netBalance)}
                   </p>
                   {(vendor.financialSummary.netBalance !== 0) && (
                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${vendor.financialSummary.netBalance < 0 ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
@@ -1825,6 +1886,7 @@ export default function VendorDetailPage() {
                   if (vendor?.category?.slug === 'gas_purchase') {
                     setPricePer11_8kg(0);
                   }
+                  setGrandTotalInput(null);
                 } : handleOpenPurchaseForm}
                 className="flex items-center gap-2 h-9 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -2226,8 +2288,40 @@ export default function VendorDetailPage() {
                                 <td colSpan={3} className="border border-gray-300 px-2 py-2 text-right font-semibold text-gray-700 text-sm">
                                   Grand Total:
                                 </td>
-                                <td className="border border-gray-300 px-2 py-2 text-center font-semibold text-gray-900 text-sm">
-                                  {formatCurrency(calculatePurchaseTotal())}
+                                <td className="border border-gray-300 px-2 py-1 text-center font-semibold text-gray-900 text-sm">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <span className="text-xs font-semibold text-gray-600">Rs</span>
+                                    <Input
+                                      type="number"
+                                      value={grandTotalInput !== null ? grandTotalInput : (effectiveGrandTotal === 0 ? '' : effectiveGrandTotal)}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val === '') {
+                                          setGrandTotalInput(null);
+                                        } else {
+                                          const parsed = parseFloat(val);
+                                          setGrandTotalInput(parsed < 0 ? '0' : val);
+                                        }
+                                      }}
+                                      placeholder="0"
+                                      min="0"
+                                      step="0.01"
+                                      className="text-center font-semibold text-gray-900 border-0 focus:ring-1 bg-white/80 h-8 text-sm w-32 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
+                                    />
+                                  </div>
+                                  {grandTotalInput !== null && Math.abs(parseFloat(grandTotalInput || '0') - calculatePurchaseTotal()) > 0.001 && (
+                                    <div className="text-[10px] text-gray-500 mt-0.5 text-center">
+                                      <span>Auto: Rs {calculatePurchaseTotal().toLocaleString('en-PK', { minimumFractionDigits: (calculatePurchaseTotal() % 1 !== 0) ? 2 : 0, maximumFractionDigits: 2 })}</span>
+                                      {' · '}
+                                      <button
+                                        type="button"
+                                        onClick={() => setGrandTotalInput(null)}
+                                        className="text-blue-600 hover:underline font-medium"
+                                      >
+                                        Reset
+                                      </button>
+                                    </div>
+                                  )}
                                 </td>
                                 <td className="border border-gray-300 px-2 py-2"></td>
                               </tr>
@@ -2737,6 +2831,7 @@ export default function VendorDetailPage() {
                           paymentMethod: 'CASH'
                         });
                         setUsedCodes(new Set()); // Reset used codes
+                        setGrandTotalInput(null);
                       }}
                     >
                       Cancel
@@ -2899,11 +2994,11 @@ export default function VendorDetailPage() {
                                   <td className="px-4 py-1">{item.itemName}</td>
                                   <td className="px-4 py-1 text-right">{item.quantity}</td>
                                   <td className="px-4 py-1 text-right">
-                                    {formatCurrency(Math.round(Number(item.unitPrice)))}
+                                    {formatCurrency(Number(item.unitPrice))}
                                   </td>
 
                                   <td className="px-4 py-1 text-right font-medium">
-                                    {formatCurrency(Math.round(Number(item.totalPrice)))}
+                                    {formatCurrency(Number(item.totalPrice))}
                                   </td>
                                 </tr>
                               );
@@ -2917,7 +3012,7 @@ export default function VendorDetailPage() {
                         <div>
                           <div className="text-xs text-gray-500 mb-1">Total Amount</div>
                           <div className="text-lg font-semibold text-gray-900">
-                            {formatCurrency(Math.round(Number(purchase.totalPrice || purchase.items?.reduce((sum: number, item: any) => sum + Number(item.totalPrice), 0) || 0)))}
+                            {formatCurrency(Number(purchase.totalPrice || purchase.items?.reduce((sum: number, item: any) => sum + Number(item.totalPrice), 0) || 0))}
                           </div>
                         </div>
 
@@ -2925,7 +3020,7 @@ export default function VendorDetailPage() {
                         <div>
                           <div className="text-xs text-gray-500 mb-1">{hasMostRecentPayment ? 'Recent Payment Total' : 'Payment Total'}</div>
                           <div className="text-lg font-semibold text-green-600">
-                            {formatCurrency(Math.round(Number(purchase.totalPaid !== undefined ? purchase.totalPaid : 0)))}
+                            {formatCurrency(Number(purchase.totalPaid !== undefined ? purchase.totalPaid : 0))}
                           </div>
                         </div>
 
@@ -2978,7 +3073,7 @@ export default function VendorDetailPage() {
                                       {formatDateTime(payment.paymentDate)} - {formatWalletLabel(payment.method)}
                                     </span>
                                     <span className={isEntryUndone ? 'font-normal text-gray-400 line-through' : 'font-medium text-green-600'}>
-                                      {formatCurrency(Math.round(paymentDisplayAmount))}
+                                      {formatCurrency(paymentDisplayAmount)}
                                     </span>
                                   </div>
                                 );
@@ -3237,7 +3332,7 @@ export default function VendorDetailPage() {
                                         isUndone ? 'text-gray-400 line-through' : 'text-gray-900'
                                       }`}
                                     >
-                                      {formatCurrency(Math.round(Number(payment.amount)))}
+                                      {formatCurrency(Number(payment.amount))}
                                     </h4>
                                     <span
                                       className={`px-3 py-1 text-xs font-semibold rounded-full ${
@@ -3543,7 +3638,7 @@ export default function VendorDetailPage() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && vendor && (() => {
-        const vendorNetBalance = Math.round(vendor.financialSummary?.netBalance || 0);
+        const vendorNetBalance = Math.round(Number(vendor.financialSummary?.netBalance || 0) * 100) / 100;
         const hasUnsettledBalance = vendorNetBalance !== 0;
         const vendorName = vendor.name || vendor.companyName || '';
 
@@ -3788,7 +3883,7 @@ export default function VendorDetailPage() {
                   <div className="flex justify-between gap-3">
                     <span className="text-gray-500">Amount</span>
                     <span className="font-semibold text-gray-900">
-                      {formatCurrency(Math.round(Number(undoTarget.totalPrice || 0)))}
+                      {formatCurrency(Number(undoTarget.totalPrice || 0))}
                     </span>
                   </div>
                   <div className="flex justify-between gap-3">

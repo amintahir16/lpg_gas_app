@@ -167,7 +167,7 @@ export async function GET(request: NextRequest) {
       const balanceAmount = Math.max(0, calculatedTotal - paidAmount);
 
       let paymentStatus: 'PAID' | 'PARTIAL' | 'PENDING' = 'PENDING';
-      if (paidAmount >= calculatedTotal && calculatedTotal > 0) {
+      if (balanceAmount <= 10) {
         paymentStatus = 'PAID';
       } else if (allEntriesPaid) {
         paymentStatus = 'PAID';
@@ -288,7 +288,7 @@ export async function GET(request: NextRequest) {
           totalAmount,
           paidAmount: 0,
           balanceAmount: totalAmount,
-          paymentStatus: first.status === 'PAID' ? 'PAID' : first.status === 'PARTIAL' ? 'PARTIAL' : 'PENDING',
+          paymentStatus: totalAmount <= 10 ? 'PAID' : (first.status === 'PAID' ? 'PAID' : first.status === 'PARTIAL' ? 'PARTIAL' : 'PENDING'),
           status: 'ACTIVE',
           category: String(first.category),
           categoryName: first.vendors?.category?.name,

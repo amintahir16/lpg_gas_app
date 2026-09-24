@@ -153,11 +153,13 @@ export default function CategoryVendorsPage() {
   };
 
   const formatCurrency = (amount: number) => {
+    const num = Number(amount || 0);
     return new Intl.NumberFormat('en-PK', {
       style: 'currency',
       currency: 'PKR',
-      minimumFractionDigits: 0
-    }).format(amount);
+      minimumFractionDigits: Math.abs(num) % 1 !== 0 ? 2 : 0,
+      maximumFractionDigits: 2
+    }).format(num);
   };
 
   const handleDeleteVendor = async (vendorId: string) => {
@@ -441,19 +443,19 @@ export default function CategoryVendorsPage() {
                     <div>
                       <div className="text-[10px] text-gray-500 font-medium uppercase tracking-tight mb-0.5">Purchases</div>
                       <div className="text-sm font-bold text-gray-900">
-                        {formatCurrency(Math.round(vendor.totalPurchases))}
+                        {formatCurrency(vendor.totalPurchases)}
                       </div>
                     </div>
                     <div>
                       <div className="text-[10px] text-gray-500 font-medium uppercase tracking-tight mb-0.5">Paid</div>
                       <div className="text-sm font-bold text-green-600">
-                        {formatCurrency(Math.round(vendor.totalPaid))}
+                        {formatCurrency(vendor.totalPaid)}
                       </div>
                     </div>
                     <div>
                       <div className="text-[10px] text-gray-500 font-medium uppercase tracking-tight mb-0.5">Balance</div>
                       <div className={`text-sm font-bold ${vendor.totalBalance > 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                        {vendor.totalBalance > 0 ? '-' : ''}{formatCurrency(Math.round(Math.abs(vendor.totalBalance)))}
+                        {vendor.totalBalance > 0 ? '-' : ''}{formatCurrency(Math.abs(vendor.totalBalance))}
                       </div>
                     </div>
                   </div>
