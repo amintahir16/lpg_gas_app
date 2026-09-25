@@ -39,7 +39,7 @@ export function FinancialPeriodFilter({
     'border-none focus:ring-0 shadow-none h-7 text-xs sm:text-sm pl-1.5 pr-6 sm:pl-2.5 sm:pr-8';
 
   return (
-    <div className="flex flex-nowrap items-center gap-1 sm:gap-1.5 bg-white border border-gray-200 rounded-lg h-9 px-1.5 sm:px-2 shadow-sm w-full sm:w-auto max-w-full overflow-hidden">
+    <div className="relative z-30 flex flex-nowrap items-center gap-1 sm:gap-1.5 bg-white border border-gray-200 rounded-lg h-9 px-1.5 sm:px-2 shadow-sm w-full sm:w-auto max-w-full">
       <CalendarIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 shrink-0" />
       <CustomSelect
         value={period}
@@ -51,12 +51,15 @@ export function FinancialPeriodFilter({
       <div className="w-[1px] h-3.5 bg-gray-200 shrink-0" />
 
       {period === 'day' && (
-        <Input
-          type="date"
-          value={date}
-          onChange={(e) => onDateChange(e.target.value || todayLocalDate())}
-          className="h-7 w-[130px] sm:w-[150px] border-0 shadow-none focus:ring-0 px-1 py-0 text-xs sm:text-sm min-w-0"
-        />
+        <div className="relative w-[130px] sm:w-[145px] shrink-0">
+          <Input
+            type="date"
+            value={date}
+            align="right"
+            onChange={(e) => onDateChange(e.target.value || todayLocalDate())}
+            className="h-7 w-full border-0 shadow-none focus:ring-0 pl-1 pr-7 py-0 text-xs sm:text-sm font-medium"
+          />
+        </div>
       )}
 
       {period === 'month' && (

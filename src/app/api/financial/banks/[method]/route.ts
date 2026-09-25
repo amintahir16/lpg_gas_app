@@ -6,6 +6,7 @@ import { resolveFinancialPeriod } from '@/lib/financial-period';
 import { parseBankMethodParam } from '@/lib/bank-ledger';
 import {
   buildBankLedgerEntries,
+  getBankLedgerOpeningNet,
   summarizeLedgerEntries,
 } from '@/lib/bank-ledger-query';
 import { getWalletStyle } from '@/lib/payment-methods';
@@ -34,7 +35,7 @@ export async function GET(
     });
     const { startDate, endDate, period, month, year, date, label } = resolved;
 
-    const [entries, walletDoc] = await Promise.all([
+    const [entries, walletDoc, opening] = await Promise.all([
       buildBankLedgerEntries({
         method,
         regionId,
@@ -49,9 +50,19 @@ export async function GET(
           ],
         },
       }),
+      getBankLedgerOpeningNet({
+        method,
+        regionId,
+        beforeDate: startDate,
+      }),
     ]);
 
-    const summary = summarizeLedgerEntries(entries);
+    const baseSummary = summarizeLedgerEntries(entries);
+    const summary = {
+      ...baseSummary,
+      opening,
+      closing: opening + baseSummary.net,
+    };
     const style = getWalletStyle(method, walletDoc);
 
     const wallet = {

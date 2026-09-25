@@ -3,15 +3,22 @@ import { cn } from '@/lib/utils';
 import { DateInput } from './date-input';
 
 export interface InputProps
-  extends React.InputHTMLAttributes<HTMLInputElement> {}
+  extends React.InputHTMLAttributes<HTMLInputElement> {
+  align?: 'left' | 'right';
+  minDate?: string;
+  maxDate?: string;
+}
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, style, ...props }, ref) => {
+  ({ className, type, style, align, minDate, maxDate, ...props }, ref) => {
     if (type === 'date') {
       return (
         <DateInput
           className={className}
           style={style}
+          align={align}
+          minDate={minDate}
+          maxDate={maxDate}
           {...(props as any)}
           ref={ref}
         />

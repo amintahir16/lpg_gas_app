@@ -12,6 +12,7 @@ export interface DateInputProps
   onChange?: (e: ChangeEvent<HTMLInputElement> | { target: { name?: string; value: string }; currentTarget: { name?: string; value: string } }) => void;
   minDate?: string;
   maxDate?: string;
+  align?: 'left' | 'right';
 }
 
 const MONTH_NAMES = [
@@ -119,6 +120,7 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
       max,
       minDate,
       maxDate,
+      align = 'left',
       style,
       ...props
     },
@@ -404,24 +406,30 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
             type="button"
             disabled={disabled}
             tabIndex={-1}
+            onMouseDown={(e) => {
+              // Prevent input blur / focus conflict on button click
+              e.preventDefault();
+            }}
             onClick={() => {
               if (!disabled) {
                 setIsOpen((prev) => !prev);
-                textInputRef.current?.focus();
               }
             }}
             title="Open Calendar (D/M/Y)"
             aria-label="Open Calendar"
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-blue-600 focus:outline-none transition-colors rounded-md hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-blue-600 focus:outline-none transition-colors rounded-md hover:bg-gray-100 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <CalendarIcon className="w-5 h-5 text-gray-500" />
+            <CalendarIcon className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-gray-500" />
           </button>
         </div>
 
         {/* Custom D/M/Y Calendar Popover */}
         {isOpen && !disabled && (
           <div
-            className="absolute left-0 top-full mt-1.5 w-72 bg-white rounded-xl border border-gray-200 shadow-2xl p-3.5 z-[70] animate-in fade-in zoom-in-95 duration-100 select-none"
+            className={cn(
+              "absolute top-full mt-1.5 w-72 max-w-[calc(100vw-2rem)] bg-white rounded-xl border border-gray-200 shadow-2xl p-3.5 z-[70] animate-in fade-in zoom-in-95 duration-100 select-none",
+              align === 'right' ? 'right-0' : 'left-0'
+            )}
             role="dialog"
             aria-label="Date Picker (Day/Month/Year)"
           >

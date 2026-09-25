@@ -215,9 +215,19 @@ export function buildPaymentMethodTotals(params: {
   collections: PaymentMethodAmountEntry[];
   deductions?: PaymentMethodAmountEntry[];
   wallets?: BankWalletOption[];
+  openingBalances?: Record<string, number> | PaymentMethodAmountEntry[];
 }): Record<string, number> {
   const customKeys = params.wallets ? params.wallets.map((w) => w.code) : undefined;
   const totals = emptyPaymentMethodTotals(customKeys);
+  if (Array.isArray(params.openingBalances)) {
+    for (const entry of params.openingBalances) {
+      adjustPaymentMethodAmount(totals, entry.method, entry.amount);
+    }
+  } else if (params.openingBalances) {
+    for (const [method, amount] of Object.entries(params.openingBalances)) {
+      adjustPaymentMethodAmount(totals, method, amount);
+    }
+  }
   for (const entry of params.collections) {
     adjustPaymentMethodAmount(totals, entry.method, entry.amount);
   }

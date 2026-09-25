@@ -3,10 +3,11 @@ import { prisma } from '@/lib/db';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { requireAdmin } from '@/lib/apiAuth';
 import { resolveFinancialPeriod } from '@/lib/financial-period';
-import { buildPaymentMethodTotals } from '@/lib/payment-methods';
+import { DEFAULT_WALLETS, buildPaymentMethodTotals, type BankWalletOption } from '@/lib/payment-methods';
 import { isOpeningDuesSaleItem } from '@/lib/b2b-opening-entries';
 import { calculateGasLineProfit } from '@/lib/gas-profit';
 import { getCapacityFromTypeString } from '@/lib/cylinder-utils';
+import { getBankLedgerOpeningNet } from '@/lib/bank-ledger-query';
 
 export async function GET(request: NextRequest) {
     try {
@@ -187,8 +188,9 @@ export async function GET(request: NextRequest) {
 
         const totalSalaries = Number(salariesSum._sum.amount || 0);
 
-        // 5. Net balance by payment method — groupBy / lean selects (same coalesce rules)
+        // 5. Net balance by payment method — include opening balances up to startDate so wallet cards reflect actual closing balance
         const [
+            activeWalletsDoc,
             b2bPaidSales,
             b2bPaymentTxs,
             b2cPayments,
@@ -198,6 +200,10 @@ export async function GET(request: NextRequest) {
             salaryPaymentsByMethod,
             bankMovements,
         ] = await Promise.all([
+            prisma.bankWallet.findMany({
+                where: { isActive: true },
+                orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+            }),
             prisma.b2BTransaction.groupBy({
                 by: ['paymentMethod'],
                 where: {
@@ -289,12 +295,22 @@ export async function GET(request: NextRequest) {
             }
         }
 
-        const activeWallets = await prisma.bankWallet.findMany({
-            where: { isActive: true },
-            orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-        });
+        const activeWallets: BankWalletOption[] =
+            activeWalletsDoc.length > 0 ? (activeWalletsDoc as any) : (DEFAULT_WALLETS as any);
+
+        const openingEntries = await Promise.all(
+            activeWallets.map(async (w) => ({
+                method: w.code,
+                amount: await getBankLedgerOpeningNet({
+                    method: w.code,
+                    regionId,
+                    beforeDate: startDate,
+                }),
+            }))
+        );
 
         const byPaymentMethod = buildPaymentMethodTotals({
+            openingBalances: openingEntries,
             collections: [
                 ...b2bPaidSales.map((row) => ({
                     method: row.paymentMethod,

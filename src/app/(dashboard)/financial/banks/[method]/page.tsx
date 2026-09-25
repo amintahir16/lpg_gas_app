@@ -58,6 +58,8 @@ interface BankLedgerResponse {
     recordCount: number;
     inflowCount: number;
     outflowCount: number;
+    opening?: number;
+    closing?: number;
   };
   label?: string;
 }
@@ -279,15 +281,21 @@ export default function BankMethodDetailPage() {
 
         <Card className={`border-0 shadow-sm bg-gradient-to-br ${styles.gradient}`}>
           <CardContent className="p-4">
-            <p className={`text-sm font-medium ${styles.labelTone}`}>Net Balance</p>
+            <p className={`text-sm font-medium ${styles.labelTone}`}>Closing Balance</p>
             {loading ? (
               <div className="h-7 w-32 bg-white/30 rounded-md animate-pulse my-1" />
             ) : (
               <p className="text-2xl font-bold text-white">
-                {formatCurrency(summary.net)}
+                {formatCurrency(summary.closing !== undefined ? summary.closing : summary.net)}
               </p>
             )}
-            <p className={`text-xs mt-0.5 ${styles.labelTone}`}>{displayLabel}</p>
+            <p className={`text-xs mt-0.5 ${styles.labelTone}`}>
+              {summary.opening !== undefined && summary.opening !== 0 ? (
+                <>Opening: {formatCurrency(summary.opening)} · Net: {formatCurrency(summary.net)}</>
+              ) : (
+                <>{displayLabel} · Net: {formatCurrency(summary.net)}</>
+              )}
+            </p>
           </CardContent>
         </Card>
 
