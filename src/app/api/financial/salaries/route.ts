@@ -26,9 +26,11 @@ export async function GET(request: NextRequest) {
         const { startDate, endDate, period, month, year, date, label } = resolved;
 
         // Period filter for salary records:
-        // day → paidDate range; month → month+year fields; year → year field only
+        // day → paidDate range; month → month+year fields; year → year field only; all → all records
         const salaryWhere =
-            period === 'day'
+            period === 'all'
+                ? { ...regionScope }
+                : period === 'day'
                 ? { paidDate: { gte: startDate, lte: endDate }, ...regionScope }
                 : period === 'year'
                     ? { year, ...regionScope }

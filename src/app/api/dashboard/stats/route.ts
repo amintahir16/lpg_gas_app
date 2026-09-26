@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import {
   startOfMonth,
@@ -14,7 +15,7 @@ import { requireAdmin } from '@/lib/apiAuth';
 import { parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { getCapacityFromTypeString, getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
 import { isOpeningDuesSaleItem, isOpeningDuesTransaction } from '@/lib/b2b-opening-entries';
-import { resolveFinancialPeriod } from '@/lib/financial-period';
+import { resolveFinancialPeriod, type FinancialPeriodMode } from '@/lib/financial-period';
 import { calculateGasLineProfit } from '@/lib/gas-profit';
 import {
   allocateB2bPaymentsOntoSales,
@@ -62,7 +63,7 @@ export async function GET(request: NextRequest) {
 
     let startDate: Date;
     let endDate: Date;
-    let period: 'day' | 'month' | 'year' = 'month';
+    let period: FinancialPeriodMode = 'month';
     let periodLabel = '';
 
     if (hasPeriodParams) {
@@ -91,6 +92,7 @@ export async function GET(request: NextRequest) {
 
     // Chart window (same rules as before) — computed early so KPI+chart share one fetch
     let chartStartDate: Date;
+    let chartEndDate: Date = endDate;
     let isDaily: boolean;
     if (period === 'day') {
       chartStartDate = startOfDay(new Date(endDate));
@@ -99,6 +101,11 @@ export async function GET(request: NextRequest) {
     } else if (period === 'month' || rangeDays <= 35) {
       chartStartDate = startOfDay(startDate);
       isDaily = true;
+    } else if (period === 'all') {
+      const now = new Date();
+      chartStartDate = startOfMonth(new Date(now.getFullYear(), now.getMonth() - 11, 1));
+      chartEndDate = endOfDay(now);
+      isDaily = false;
     } else {
       chartStartDate = startOfMonth(startDate);
       isDaily = false;
@@ -106,9 +113,9 @@ export async function GET(request: NextRequest) {
 
     const kpiStartMs = startDate.getTime();
     const kpiEndMs = endDate.getTime();
-    const chartWiderThanKpi = chartStartDate.getTime() < kpiStartMs;
+    const differentKpiAndChartRange = period === 'day' || period === 'all';
 
-    // When chart window is wider than the KPI period (day mode = last 7 days),
+    // When chart window differs from the KPI period (day mode = last 7 days, all mode = last 12 months),
     // load KPI txs (with items for profit) separately from lean chart rows.
     // Month/year keep a single fetch — same numbers, no extra round-trips.
     const b2cKpiSelect = {
@@ -154,7 +161,7 @@ export async function GET(request: NextRequest) {
           where: { ...regionScope },
           _count: { id: true },
         }),
-        chartWiderThanKpi
+        differentKpiAndChartRange
           ? prisma.b2CTransaction.findMany({
               where: {
                 date: { gte: startDate, lte: endDate },
@@ -164,7 +171,7 @@ export async function GET(request: NextRequest) {
               select: b2cKpiSelect,
             })
           : Promise.resolve(null as null),
-        chartWiderThanKpi
+        differentKpiAndChartRange
           ? prisma.b2BTransaction.findMany({
               where: {
                 date: { gte: startDate, lte: endDate },
@@ -177,20 +184,20 @@ export async function GET(request: NextRequest) {
           : Promise.resolve(null as null),
         prisma.b2CTransaction.findMany({
           where: {
-            date: { gte: chartStartDate, lte: endDate },
+            date: { gte: chartStartDate, lte: chartEndDate },
             voided: false,
             ...txRegionScope,
           },
-          select: chartWiderThanKpi ? b2cChartLeanSelect : b2cKpiSelect,
+          select: differentKpiAndChartRange ? b2cChartLeanSelect : b2cKpiSelect,
         }),
         prisma.b2BTransaction.findMany({
           where: {
-            date: { gte: chartStartDate, lte: endDate },
+            date: { gte: chartStartDate, lte: chartEndDate },
             voided: false,
             transactionType: 'SALE',
             ...txRegionScope,
           },
-          select: chartWiderThanKpi ? b2bChartLeanSelect : b2bKpiSelect,
+          select: differentKpiAndChartRange ? b2bChartLeanSelect : b2bKpiSelect,
         }),
       ]);
 
@@ -209,9 +216,9 @@ export async function GET(request: NextRequest) {
     ];
 
     const b2cKpiRows = (
-      chartWiderThanKpi ? b2cTransInRange! : b2cTransChart
+      differentKpiAndChartRange ? b2cTransInRange! : b2cTransChart
     ).filter((t) => {
-      if (chartWiderThanKpi) return true;
+      if (differentKpiAndChartRange) return true;
       const ms = new Date(t.date).getTime();
       return ms >= kpiStartMs && ms <= kpiEndMs;
     }) as Array<{
@@ -238,7 +245,7 @@ export async function GET(request: NextRequest) {
     };
 
     let b2bKpiRows: B2bKpiRow[];
-    if (chartWiderThanKpi) {
+    if (differentKpiAndChartRange) {
       b2bKpiRows = b2bTransInRange as unknown as B2bKpiRow[];
     } else {
       b2bKpiRows = (b2bTransChart as unknown as Array<B2bKpiRow & { date: Date }>).filter(
@@ -338,12 +345,25 @@ export async function GET(request: NextRequest) {
     // RENT expenses use expenseDate=15th of month which can be in the future,
     // so we also match RENT by month/year for any month that overlaps the range.
     const monthsCovered: Array<{ month: number; year: number }> = [];
-    const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-    while (cursor <= endDate) {
-      monthsCovered.push({ month: cursor.getMonth() + 1, year: cursor.getFullYear() });
-      cursor.setMonth(cursor.getMonth() + 1);
+    if (period !== 'all') {
+      const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+      while (cursor <= endDate) {
+        monthsCovered.push({ month: cursor.getMonth() + 1, year: cursor.getFullYear() });
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
     }
     const rentMonthConditions = monthsCovered.map(m => ({ type: 'RENT' as const, month: m.month, year: m.year }));
+
+    const officeExpenseWhere: Prisma.OfficeExpenseWhereInput =
+      period === 'all'
+        ? { ...regionScope }
+        : {
+            ...regionScope,
+            OR: [
+              { expenseDate: { gte: startDate, lte: endDate }, type: { in: ['DAILY', 'VEHICLE'] as const } },
+              ...rentMonthConditions,
+            ],
+          };
 
     const [
       expensesSum,
@@ -354,13 +374,7 @@ export async function GET(request: NextRequest) {
       allPaymentsSum,
     ] = await Promise.all([
       prisma.officeExpense.aggregate({
-        where: {
-          ...regionScope,
-          OR: [
-            { expenseDate: { gte: startDate, lte: endDate }, type: { in: ['DAILY', 'VEHICLE'] } },
-            ...rentMonthConditions,
-          ],
-        },
+        where: officeExpenseWhere,
         _sum: { amount: true }
       }),
       prisma.personalExpense.aggregate({
@@ -402,10 +416,10 @@ export async function GET(request: NextRequest) {
     ]);
 
     const rangeExpenses =
-      Number(expensesSum._sum.amount || 0) + Number(personalExpensesSum._sum.amount || 0);
-    const rangePayments = Number(paymentsSum._sum.amount || 0);
+      Number(expensesSum._sum?.amount || 0) + Number(personalExpensesSum._sum?.amount || 0);
+    const rangePayments = Number(paymentsSum._sum?.amount || 0);
     const vendorBalance = Math.round(
-      Number(allPurchasesSum._sum.totalPrice || 0) - Number(allPaymentsSum._sum.amount || 0)
+      Number(allPurchasesSum._sum?.totalPrice || 0) - Number(allPaymentsSum._sum?.amount || 0)
     );
 
     // Cylinder-purchase vendor payments are asset CAPEX — exclude from Actual Profit only.
@@ -466,7 +480,7 @@ export async function GET(request: NextRequest) {
       prisma.officeExpense.findMany({
         where: {
           ...regionScope,
-          expenseDate: { gte: chartStartDate, lte: endDate },
+          expenseDate: { gte: chartStartDate, lte: chartEndDate },
           type: { in: ['DAILY', 'VEHICLE'] },
         },
         select: { expenseDate: true, amount: true, type: true }
@@ -474,7 +488,7 @@ export async function GET(request: NextRequest) {
       prisma.personalExpense.findMany({
         where: {
           ...regionScope,
-          expenseDate: { gte: chartStartDate, lte: endDate },
+          expenseDate: { gte: chartStartDate, lte: chartEndDate },
         },
         select: { expenseDate: true, amount: true }
       }),
@@ -519,7 +533,7 @@ export async function GET(request: NextRequest) {
         return { name: dateStr, officeExpenses, vehicleExpenses, personalExpenses };
       });
     } else {
-      const months = eachMonthOfInterval({ start: chartStartDate, end: endDate });
+      const months = eachMonthOfInterval({ start: chartStartDate, end: chartEndDate });
       revenueChartData = months.map(m => {
         const monthStr = format(m, 'MMM yyyy');
         const b2cV = b2cTransChart

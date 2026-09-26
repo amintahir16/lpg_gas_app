@@ -3,7 +3,7 @@
  * Default period is Month to preserve existing monthly reporting behavior.
  */
 
-export type FinancialPeriodMode = 'day' | 'month' | 'year';
+export type FinancialPeriodMode = 'day' | 'month' | 'year' | 'all';
 
 export interface FinancialPeriodInput {
   period?: string | null;
@@ -114,7 +114,7 @@ function parseLocalDate(isoDate: string): Date | null {
 export function normalizeFinancialPeriodMode(
   value: string | null | undefined
 ): FinancialPeriodMode {
-  if (value === 'day' || value === 'year') return value;
+  if (value === 'day' || value === 'year' || value === 'all') return value;
   return 'month';
 }
 
@@ -143,6 +143,20 @@ export function resolveFinancialPeriod(
         month: 'long',
         year: 'numeric',
       }),
+    };
+  }
+
+  if (period === 'all') {
+    const startDate = new Date(0);
+    const endDate = new Date(2100, 11, 31, 23, 59, 59, 999);
+    return {
+      period: 'all',
+      startDate,
+      endDate,
+      date: null,
+      month: null,
+      year: now.getFullYear(),
+      label: 'All Time',
     };
   }
 
@@ -179,6 +193,7 @@ export const FINANCIAL_PERIOD_OPTIONS = [
   { value: 'day', label: 'Day' },
   { value: 'month', label: 'Month' },
   { value: 'year', label: 'Year' },
+  { value: 'all', label: 'All Time' },
 ] as const;
 
 export const FINANCIAL_MONTH_OPTIONS = MONTH_NAMES.map((name, i) => ({
@@ -218,6 +233,22 @@ export function getFinancialChartBuckets(
       const endDate = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
       buckets.push({
         name: startDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+        startDate,
+        endDate,
+      });
+    }
+    return buckets;
+  }
+
+  if (resolved.period === 'all') {
+    const currentYear = new Date().getFullYear();
+    const buckets: FinancialChartBucket[] = [];
+    for (let i = 4; i >= 0; i--) {
+      const y = currentYear - i;
+      const startDate = new Date(y, 0, 1, 0, 0, 0, 0);
+      const endDate = new Date(y, 11, 31, 23, 59, 59, 999);
+      buckets.push({
+        name: String(y),
         startDate,
         endDate,
       });
@@ -287,6 +318,7 @@ export function findChartBucketIndex(
 export function chartDescriptionForPeriod(period: FinancialPeriodMode): string {
   if (period === 'day') return 'Last 7 days ending on selected day';
   if (period === 'year') return 'All months in the selected year';
+  if (period === 'all') return 'Yearly breakdown for the last 5 years';
   return 'Last 6 months ending on selected month';
 }
 
@@ -302,7 +334,7 @@ export function buildFinancialPeriodQuery(params: {
   } else if (params.period === 'month') {
     q.set('month', String(params.month));
     q.set('year', String(params.year));
-  } else {
+  } else if (params.period === 'year') {
     q.set('year', String(params.year));
   }
   return q.toString();
@@ -310,6 +342,10 @@ export function buildFinancialPeriodQuery(params: {
 
 /** Month/year to use when recording a salary against the current filter. */
 export function salaryPayTarget(resolved: ResolvedFinancialPeriod): { month: number; year: number } {
+  if (resolved.period === 'all') {
+    const now = new Date();
+    return { month: now.getMonth() + 1, year: now.getFullYear() };
+  }
   if (resolved.period === 'year') {
     const now = new Date();
     const month = resolved.year === now.getFullYear() ? now.getMonth() + 1 : 1;

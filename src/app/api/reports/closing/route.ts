@@ -10,13 +10,14 @@ import {
 } from '@/lib/bank-ledger';
 import {
   buildBankLedgerEntries,
-  getBankLedgerOpeningNet,
-  sumBankLedgerInOut,
+  getAllWalletsOpeningNets,
+  summarizeLedgerEntries,
 } from '@/lib/bank-ledger-query';
 import {
   DEFAULT_WALLETS,
   formatPaymentMethodLabel,
   getWalletStyle,
+  normalizePaymentMethodKey,
   type BankWalletOption,
 } from '@/lib/payment-methods';
 
@@ -61,58 +62,64 @@ export async function GET(request: NextRequest) {
     });
     const { startDate, endDate, period, month, year, date, label } = resolved;
 
-    let activeWallets = await prisma.bankWallet.findMany({
-      where: { isActive: true },
+    let allWallets = await prisma.bankWallet.findMany({
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
     });
 
-    if (activeWallets.length === 0) {
-      activeWallets = DEFAULT_WALLETS as any;
+    if (allWallets.length === 0) {
+      allWallets = DEFAULT_WALLETS as any;
     }
 
-    // Period detail rows + SQL opening nets (region-scoped).
-    const walletResults: Array<{
-      wallet: BankWalletOption;
-      entries: Awaited<ReturnType<typeof buildBankLedgerEntries>>;
-      opening: number;
-      periodTotals: Awaited<ReturnType<typeof sumBankLedgerInOut>>;
-    }> = [];
+    const queryEndDate = period === 'all' ? new Date() : endDate;
 
-    for (const w of activeWallets) {
-      const method = w.code;
-      const [entries, opening, periodTotals] = await Promise.all([
-        buildBankLedgerEntries({
+    const openingMap =
+      period === 'all'
+        ? {}
+        : await getAllWalletsOpeningNets({
+            regionId,
+            beforeDate: startDate,
+            wallets: allWallets,
+          });
+
+    const rawWalletResults = await Promise.all(
+      allWallets.map(async (w) => {
+        const method = w.code;
+        const entries = await buildBankLedgerEntries({
           method,
           regionId,
           startDate,
-          endDate,
-        }),
-        getBankLedgerOpeningNet({
-          method,
-          regionId,
-          beforeDate: startDate,
-        }),
-        sumBankLedgerInOut({
-          method,
-          regionId,
-          startDate,
-          endDate,
-        }),
-      ]);
-      walletResults.push({
-        wallet: w,
-        entries,
-        opening,
-        periodTotals,
-      });
-    }
+          endDate: queryEndDate,
+        });
+        const normKey = normalizePaymentMethodKey(method);
+        const opening =
+          (normKey ? openingMap[normKey] : undefined) ?? openingMap[method] ?? 0;
+        const periodTotals = summarizeLedgerEntries(entries);
+        return {
+          wallet: w,
+          entries,
+          opening,
+          periodTotals,
+        };
+      })
+    );
+
+    // Active wallets are always displayed. Inactive/deactivated wallets only appear
+    // when they have transaction activity (entries > 0) within the selected filter dates.
+    const walletResults = rawWalletResults.filter(
+      ({ wallet, entries }) => {
+        if (wallet.isActive) return true;
+        return entries.length > 0;
+      }
+    );
 
     const byWallet: WalletClosingRow[] = walletResults.map(
       ({ wallet, opening, entries, periodTotals }) => {
         const style = getWalletStyle(wallet.code, wallet);
+        const baseLabel = wallet.name || formatPaymentMethodLabel(wallet.code, allWallets);
+        const walletLabel = wallet.isActive ? baseLabel : `${baseLabel} (Inactive)`;
         return {
           wallet: wallet.code,
-          walletLabel: wallet.name || formatPaymentMethodLabel(wallet.code, activeWallets),
+          walletLabel,
           type: wallet.type || 'BANK',
           gradient: style.gradient,
           labelTone: style.labelTone,
@@ -132,7 +139,7 @@ export async function GET(request: NextRequest) {
           // Prefix id with wallet so transfer in/out on different wallets stay unique when merged
           id: `${wallet.code}:${entry.id}`,
           wallet: wallet.code,
-          walletLabel: wallet.name || formatPaymentMethodLabel(wallet.code, activeWallets),
+          walletLabel: wallet.name || formatPaymentMethodLabel(wallet.code, allWallets),
         }))
       )
       .sort(

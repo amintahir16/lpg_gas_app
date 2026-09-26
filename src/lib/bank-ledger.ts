@@ -12,6 +12,8 @@ export type BankLedgerSource =
   | 'B2C_SALE'
   | 'VENDOR_PAYMENT'
   | 'OFFICE_EXPENSE'
+  | 'VEHICLE_EXPENSE'
+  | 'OFFICE_RENT'
   | 'PERSONAL_EXPENSE'
   | 'SALARY_PAYMENT'
   | 'BANK_DEPOSIT'
@@ -30,9 +32,9 @@ export interface BankLedgerEntry {
   dayName: string;
   dateLabel: string;
   timeLabel: string;
-  /** Customer / vendor / office / bank / employee */
+  /** Customer / vendor / office / vehicle / bank / employee */
   partyName: string;
-  partyType: 'B2B Customer' | 'B2C Customer' | 'Vendor' | 'Office' | 'Personal' | 'Bank' | 'Employee';
+  partyType: 'B2B Customer' | 'B2C Customer' | 'Vendor' | 'Office' | 'Vehicle' | 'Personal' | 'Bank' | 'Employee';
   /** Staff who recorded the entry */
   recordedBy: string | null;
   /** Region / branch where the event took place */
@@ -51,6 +53,8 @@ export const BANK_LEDGER_SOURCE_LABELS: Record<BankLedgerSource, string> = {
   B2C_SALE: 'B2C Sale',
   VENDOR_PAYMENT: 'Vendor Payment',
   OFFICE_EXPENSE: 'Office Expense',
+  VEHICLE_EXPENSE: 'Vehicle Expense',
+  OFFICE_RENT: 'Office Rent',
   PERSONAL_EXPENSE: 'Personal Expense',
   SALARY_PAYMENT: 'Salary Payment',
   BANK_DEPOSIT: 'Bank Deposit',

@@ -1,8 +1,11 @@
 import { prisma } from '@/lib/db';
 import { regionScopedWhere } from '@/lib/region';
 import {
+  buildPaymentMethodTotals,
+  emptyPaymentMethodTotals,
   formatPaymentMethodLabel,
   normalizePaymentMethodKey,
+  type BankWalletOption,
   type PaymentMethodValue,
 } from '@/lib/payment-methods';
 import {
@@ -12,6 +15,7 @@ import {
   summarizeLineItems,
   userDisplayName,
   type BankLedgerEntry,
+  type BankLedgerSource,
 } from '@/lib/bank-ledger';
 import { formatB2bItemCylinderLabel } from '@/lib/b2b-transaction-item-variant';
 
@@ -546,21 +550,31 @@ export async function buildBankLedgerEntries(
     if (!amount) continue;
     const when = coalesceEventDate(expense.expenseDate, expense.createdAt);
     const parts = formatLedgerDateParts(when);
+    const isVehicle = expense.type === 'VEHICLE';
+    const isRent = expense.type === 'RENT';
+    const source: BankLedgerSource = isVehicle
+      ? 'VEHICLE_EXPENSE'
+      : isRent
+        ? 'OFFICE_RENT'
+        : 'OFFICE_EXPENSE';
+    const sourceLabel = BANK_LEDGER_SOURCE_LABELS[source];
     const typeLabel =
-      expense.type === 'RENT'
+      isRent
         ? 'Office Rent'
-        : expense.type === 'VEHICLE'
+        : isVehicle
           ? 'Vehicle Expense'
           : 'Daily Expense';
+    const partyName = isVehicle ? 'Vehicle' : isRent ? 'Office Rent' : 'Office';
+    const partyType: BankLedgerEntry['partyType'] = isVehicle ? 'Vehicle' : 'Office';
     entries.push({
       id: `expense-${expense.id}`,
-      source: 'OFFICE_EXPENSE',
-      sourceLabel: BANK_LEDGER_SOURCE_LABELS.OFFICE_EXPENSE,
+      source,
+      sourceLabel,
       direction: 'OUT',
       amount,
       ...parts,
-      partyName: 'Office',
-      partyType: 'Office',
+      partyName,
+      partyType,
       recordedBy: userNameById.get(expense.createdBy) || null,
       regionId: expense.regionId || null,
       regionName: expense.region?.name || null,
@@ -746,6 +760,212 @@ export function summarizeLedgerEntries(entries: BankLedgerEntry[]) {
     inflowCount: entries.filter((e) => e.direction === 'IN').length,
     outflowCount: entries.filter((e) => e.direction === 'OUT').length,
   };
+}
+
+/**
+ * Compute opening net balance before `beforeDate` across ALL active wallets simultaneously
+ * in a single parallel batch of aggregate queries, rather than querying wallet-by-wallet.
+ * This reduces database queries by ~85% to protect free DB quota.
+ */
+export async function getAllWalletsOpeningNets(params: {
+  regionId: string | null | undefined;
+  beforeDate: Date;
+  wallets?: BankWalletOption[];
+}): Promise<Record<string, number>> {
+  const earliest = new Date(2000, 0, 1);
+  const { regionId, beforeDate, wallets } = params;
+  if (beforeDate.getTime() <= earliest.getTime()) {
+    return emptyPaymentMethodTotals(wallets ? wallets.map((w) => w.code) : undefined);
+  }
+
+  const regionScope = regionScopedWhere(regionId);
+  const txRegionScope = regionId ? { regionId } : {};
+  const dateFilter = { gte: earliest, lt: beforeDate };
+
+  const [
+    b2bPaidSales,
+    b2bPaymentWithPaid,
+    b2bPaymentFallback,
+    b2cPayments,
+    vendorPayments,
+    officeExpensesByMethod,
+    personalExpensesByMethod,
+    salaryPaymentsByMethod,
+    bankMovements,
+  ] = await Promise.all([
+    prisma.b2BTransaction.groupBy({
+      by: ['paymentMethod'],
+      where: {
+        date: dateFilter,
+        voided: false,
+        transactionType: 'SALE',
+        paidAmount: { gt: 0 },
+        paymentMethod: { not: null },
+        ...txRegionScope,
+      },
+      _sum: { paidAmount: true },
+    }),
+    prisma.b2BTransaction.groupBy({
+      by: ['paymentMethod'],
+      where: {
+        date: dateFilter,
+        voided: false,
+        transactionType: 'PAYMENT',
+        paymentMethod: { not: null },
+        paidAmount: { not: null },
+        ...txRegionScope,
+      },
+      _sum: { paidAmount: true },
+    }),
+    prisma.b2BTransaction.groupBy({
+      by: ['paymentMethod'],
+      where: {
+        date: dateFilter,
+        voided: false,
+        transactionType: 'PAYMENT',
+        paymentMethod: { not: null },
+        paidAmount: null,
+        ...txRegionScope,
+      },
+      _sum: { totalAmount: true },
+    }),
+    safeLedgerQuery(
+      'b2c_transactions.groupedTotals',
+      () =>
+        prisma.$queryRaw<Array<{ method: string | null; amount: unknown }>>`
+          SELECT
+            "paymentMethod" AS method,
+            COALESCE(SUM(
+              CASE
+                WHEN "finalAmount" IS NOT NULL AND "finalAmount" <> 0 THEN "finalAmount"
+                ELSE "totalAmount"
+              END
+            ), 0) AS amount
+          FROM b2c_transactions
+          WHERE voided = false
+            AND date >= ${earliest}
+            AND date < ${beforeDate}
+            AND (${regionId ?? null}::text IS NULL OR "regionId" = ${regionId ?? null})
+            AND "paymentMethod" IS NOT NULL
+          GROUP BY "paymentMethod"
+        `,
+      []
+    ),
+    prisma.vendorPayment.groupBy({
+      by: ['method'],
+      where: {
+        paymentDate: dateFilter,
+        status: 'COMPLETED',
+        ...txRegionScope,
+      },
+      _sum: { amount: true },
+    }),
+    prisma.officeExpense.groupBy({
+      by: ['paymentMethod'],
+      where: {
+        expenseDate: dateFilter,
+        ...regionScope,
+      },
+      _sum: { amount: true },
+    }),
+    prisma.personalExpense.groupBy({
+      by: ['paymentMethod'],
+      where: {
+        expenseDate: dateFilter,
+        ...regionScope,
+      },
+      _sum: { amount: true },
+    }),
+    safeLedgerQuery(
+      'salary_records.groupBy',
+      async (): Promise<Array<{ paymentMethod: string; _sum: { amount: number | null } }>> => {
+        const res = await prisma.salaryRecord.groupBy({
+          by: ['paymentMethod'],
+          where: {
+            paidDate: dateFilter,
+            ...regionScope,
+          },
+          _sum: { amount: true },
+        });
+        return res as Array<{ paymentMethod: string; _sum: { amount: number | null } }>;
+      },
+      []
+    ),
+    safeLedgerQuery(
+      'bank_movements.findMany',
+      () =>
+        prisma.bankMovement.findMany({
+          where: {
+            movementDate: dateFilter,
+            ...regionScope,
+          },
+          select: {
+            type: true,
+            fromMethod: true,
+            toMethod: true,
+            amount: true,
+          },
+        }),
+      [] as Array<{ type: string; fromMethod: string | null; toMethod: string | null; amount: unknown }>
+    ),
+  ]);
+
+  const movementCollections: { method: string | null; amount: number }[] = [];
+  const movementDeductions: { method: string | null; amount: number }[] = [];
+  for (const movement of bankMovements) {
+    const amount = Number(movement.amount || 0);
+    if (!amount) continue;
+    if (movement.type === 'DEPOSIT') {
+      movementCollections.push({ method: movement.toMethod, amount });
+    } else if (movement.type === 'TRANSFER') {
+      movementDeductions.push({ method: movement.fromMethod, amount });
+      movementCollections.push({ method: movement.toMethod, amount });
+    } else if (movement.type === 'WITHDRAWAL') {
+      movementDeductions.push({ method: movement.fromMethod, amount });
+    }
+  }
+
+  return buildPaymentMethodTotals({
+    collections: [
+      ...b2bPaidSales.map((row) => ({
+        method: row.paymentMethod,
+        amount: Number(row._sum?.paidAmount || 0),
+      })),
+      ...b2bPaymentWithPaid.map((row) => ({
+        method: row.paymentMethod,
+        amount: Number(row._sum?.paidAmount || 0),
+      })),
+      ...b2bPaymentFallback.map((row) => ({
+        method: row.paymentMethod,
+        amount: Number(row._sum?.totalAmount || 0),
+      })),
+      ...b2cPayments.map((row) => ({
+        method: row.method,
+        amount: Number(row.amount || 0),
+      })),
+      ...movementCollections,
+    ],
+    deductions: [
+      ...vendorPayments.map((row) => ({
+        method: row.method,
+        amount: Number(row._sum?.amount || 0),
+      })),
+      ...officeExpensesByMethod.map((row) => ({
+        method: row.paymentMethod,
+        amount: Number(row._sum?.amount || 0),
+      })),
+      ...personalExpensesByMethod.map((row) => ({
+        method: row.paymentMethod,
+        amount: Number(row._sum?.amount || 0),
+      })),
+      ...salaryPaymentsByMethod.map((row) => ({
+        method: row.paymentMethod,
+        amount: Number(row._sum?.amount || 0),
+      })),
+      ...movementDeductions,
+    ],
+    wallets,
+  });
 }
 
 /** Net wallet balance for all activity strictly before `beforeDate`. */

@@ -23,6 +23,7 @@ import {
 } from '@heroicons/react/24/outline';
 import {
   buildFinancialPeriodQuery,
+  normalizeFinancialPeriodMode,
   resolveFinancialPeriod,
   todayLocalDate,
   type FinancialPeriodMode,
@@ -72,8 +73,7 @@ function readPeriodFromSearch(searchParams: URLSearchParams): {
 } {
   const now = new Date();
   const periodParam = searchParams.get('period');
-  const period: FinancialPeriodMode =
-    periodParam === 'day' || periodParam === 'year' ? periodParam : 'month';
+  const period: FinancialPeriodMode = normalizeFinancialPeriodMode(periodParam);
   return {
     period,
     date: searchParams.get('date') || todayLocalDate(),

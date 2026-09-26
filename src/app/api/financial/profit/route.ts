@@ -45,12 +45,14 @@ export async function GET(request: NextRequest) {
         // One chart-range hydrate — period product maps filter in memory (avoids double fetch).
         const chartBuckets = getFinancialChartBuckets(resolved);
         const chartRange = getFinancialChartRange(chartBuckets);
+        const fetchStartDate = period === 'all' ? startDate : chartRange.startDate;
+        const fetchEndDate = period === 'all' ? new Date() : chartRange.endDate;
 
         const [chartB2cGas, chartB2cAcc, chartB2bItems, chartRetentions] = await Promise.all([
             prisma.b2CTransactionGasItem.findMany({
                 where: {
                     transaction: {
-                        date: { gte: chartRange.startDate, lte: chartRange.endDate },
+                        date: { gte: fetchStartDate, lte: fetchEndDate },
                         voided: false,
                         ...txRegionScope,
                     },
@@ -67,7 +69,7 @@ export async function GET(request: NextRequest) {
             prisma.b2CTransactionAccessoryItem.findMany({
                 where: {
                     transaction: {
-                        date: { gte: chartRange.startDate, lte: chartRange.endDate },
+                        date: { gte: fetchStartDate, lte: fetchEndDate },
                         voided: false,
                         ...txRegionScope,
                     },
@@ -84,7 +86,7 @@ export async function GET(request: NextRequest) {
             prisma.b2BTransactionItem.findMany({
                 where: {
                     transaction: {
-                        date: { gte: chartRange.startDate, lte: chartRange.endDate },
+                        date: { gte: fetchStartDate, lte: fetchEndDate },
                         voided: false,
                         transactionType: 'SALE',
                         ...txRegionScope,
@@ -113,7 +115,7 @@ export async function GET(request: NextRequest) {
             prisma.b2CCylinderHolding.findMany({
                 where: {
                     isReturned: true,
-                    returnDate: { gte: chartRange.startDate, lte: chartRange.endDate },
+                    returnDate: { gte: fetchStartDate, lte: fetchEndDate },
                     returnDeduction: { gt: 0 },
                     customer: regionScope,
                 },

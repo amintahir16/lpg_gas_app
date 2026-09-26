@@ -45,10 +45,10 @@ export function FinancialPeriodFilter({
         value={period}
         onChange={(val) => onPeriodChange(val as FinancialPeriodMode)}
         options={[...FINANCIAL_PERIOD_OPTIONS]}
-        className="w-[72px] sm:w-[100px] shrink-0"
+        className="w-[82px] sm:w-[105px] shrink-0"
         buttonClassName={selectBtn}
       />
-      <div className="w-[1px] h-3.5 bg-gray-200 shrink-0" />
+      {period !== 'all' && <div className="w-[1px] h-3.5 bg-gray-200 shrink-0" />}
 
       {period === 'day' && (
         <div className="relative w-[130px] sm:w-[145px] shrink-0">

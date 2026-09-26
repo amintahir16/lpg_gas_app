@@ -7,7 +7,7 @@ import { DEFAULT_WALLETS, buildPaymentMethodTotals, type BankWalletOption } from
 import { isOpeningDuesSaleItem } from '@/lib/b2b-opening-entries';
 import { calculateGasLineProfit } from '@/lib/gas-profit';
 import { getCapacityFromTypeString } from '@/lib/cylinder-utils';
-import { getBankLedgerOpeningNet } from '@/lib/bank-ledger-query';
+import { getAllWalletsOpeningNets } from '@/lib/bank-ledger-query';
 
 export async function GET(request: NextRequest) {
     try {
@@ -175,7 +175,9 @@ export async function GET(request: NextRequest) {
 
         // 4. Salaries
         const salaryWhere =
-            period === 'day'
+            period === 'all'
+                ? { ...regionScope }
+                : period === 'day'
                 ? { paidDate: { gte: startDate, lte: endDate }, ...regionScope }
                 : period === 'year'
                     ? { year, ...regionScope }
@@ -298,19 +300,17 @@ export async function GET(request: NextRequest) {
         const activeWallets: BankWalletOption[] =
             activeWalletsDoc.length > 0 ? (activeWalletsDoc as any) : (DEFAULT_WALLETS as any);
 
-        const openingEntries = await Promise.all(
-            activeWallets.map(async (w) => ({
-                method: w.code,
-                amount: await getBankLedgerOpeningNet({
-                    method: w.code,
-                    regionId,
-                    beforeDate: startDate,
-                }),
-            }))
-        );
+        const openingBalances =
+            period === 'all'
+                ? undefined
+                : await getAllWalletsOpeningNets({
+                      regionId,
+                      beforeDate: startDate,
+                      wallets: activeWallets,
+                  });
 
         const byPaymentMethod = buildPaymentMethodTotals({
-            openingBalances: openingEntries,
+            openingBalances,
             collections: [
                 ...b2bPaidSales.map((row) => ({
                     method: row.paymentMethod,

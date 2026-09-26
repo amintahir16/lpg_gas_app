@@ -50,11 +50,13 @@ export async function GET(
           ],
         },
       }),
-      getBankLedgerOpeningNet({
-        method,
-        regionId,
-        beforeDate: startDate,
-      }),
+      period === 'all'
+        ? Promise.resolve(0)
+        : getBankLedgerOpeningNet({
+            method,
+            regionId,
+            beforeDate: startDate,
+          }),
     ]);
 
     const baseSummary = summarizeLedgerEntries(entries);
