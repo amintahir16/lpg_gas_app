@@ -27,9 +27,9 @@ export default function Footer() {
   ];
 
   const socialLinks = [
-    { name: 'Facebook', href: '#', icon: Facebook },
-    { name: 'Instagram', href: '#', icon: Instagram },
-    { name: 'LinkedIn', href: '#', icon: Linkedin },
+    { name: 'Facebook', href: 'https://www.facebook.com/share/1BeJASGTBQ/', icon: Facebook },
+    { name: 'Instagram', href: 'https://www.instagram.com/flamora.pk?stkn=YTBnNmUyczJ1eHZm', icon: Instagram },
+    { name: 'LinkedIn', href: 'https://www.linkedin.com/company/flamora-pk/home/', icon: Linkedin },
   ];
 
   const scrollToTop = () => {
@@ -61,6 +61,8 @@ export default function Footer() {
                 <a
                   key={social.name}
                   href={social.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="w-10 h-10 bg-white/5 border border-white/8 rounded-xl flex items-center justify-center hover:bg-[#f36523]/15 hover:border-[#f36523]/30 hover:text-[#f8a11b] transition-all duration-300 text-white/40"
                   aria-label={social.name}
                 >
