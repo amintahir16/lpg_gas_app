@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { requireSuperAdmin } from '@/lib/apiAuth';
+import { requireAdmin } from '@/lib/apiAuth';
 
 export async function GET(_request: NextRequest) {
   try {
-    const auth = await requireSuperAdmin();
+    const auth = await requireAdmin();
     if (!auth.ok) return auth.response;
 
     const count = await prisma.websiteInquiry.count({

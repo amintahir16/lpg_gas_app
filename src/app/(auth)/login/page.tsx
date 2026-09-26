@@ -19,6 +19,7 @@ import {
   ShieldCheckIcon,
   ArrowLeftIcon
 } from '@heroicons/react/24/outline';
+import { openLegalModal } from '@/components/legal/LegalModal';
 
 function LoginForm() {
   const [email, setEmail] = useState('');
@@ -204,11 +205,25 @@ function LoginForm() {
         <div className="text-center">
           <p className="text-xs text-gray-500">
             By signing in, you agree to our{' '}
-            <Link href="/terms" className="text-blue-600 hover:text-blue-700 font-medium">
+            <Link 
+              href="/terms" 
+              onClick={(e) => {
+                e.preventDefault();
+                openLegalModal('terms');
+              }}
+              className="text-blue-600 hover:text-blue-700 font-medium underline-offset-2 hover:underline"
+            >
               Terms of Service
             </Link>{' '}
             and{' '}
-            <Link href="/privacy" className="text-blue-600 hover:text-blue-700 font-medium">
+            <Link 
+              href="/privacy" 
+              onClick={(e) => {
+                e.preventDefault();
+                openLegalModal('privacy');
+              }}
+              className="text-blue-600 hover:text-blue-700 font-medium underline-offset-2 hover:underline"
+            >
               Privacy Policy
             </Link>
           </p>

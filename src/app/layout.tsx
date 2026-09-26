@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Inter, Space_Grotesk } from "next/font/google";
 import SessionProvider from "@/components/providers/SessionProvider";
 import { NotificationProvider } from "@/components/providers/NotificationProvider";
 import LandingLayout from "@/components/layouts/LandingLayout";
+import LegalModal from "@/components/legal/LegalModal";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -152,6 +153,7 @@ export default function RootLayout({
             <LandingLayout>
               {children}
             </LandingLayout>
+            <LegalModal />
           </NotificationProvider>
         </SessionProvider>
       </body>

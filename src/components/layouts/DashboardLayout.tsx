@@ -65,6 +65,7 @@ const adminNavigation: NavigationItem[] = [
   { name: 'Expenses', href: '/financial/expenses', icon: CurrencyDollarIcon, roles: ['ADMIN'] },
   { name: 'Wallets & Bank Accounts', href: '/financial/wallets', icon: BuildingLibraryIcon, roles: ['ADMIN'] },
   { name: 'Reports', href: '/reports', icon: ChartBarIcon, roles: ['ADMIN'] },
+  { name: 'Website Inquiries', href: '/admin/website-inquiries', icon: EnvelopeIcon, roles: ['ADMIN'] },
 ];
 
 const customerNavigation: NavigationItem[] = [
@@ -98,9 +99,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const isAdmin = userRole === 'ADMIN';
   const isSuperAdmin = userRole === 'SUPER_ADMIN';
 
-  // Live inquiry count for super admin
+  // Live inquiry count for staff (super admin & admin)
   useEffect(() => {
-    if (!isSuperAdmin) return;
+    if (!isSuperAdmin && !isAdmin) return;
 
     let isMounted = true;
 
@@ -141,7 +142,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       window.removeEventListener('website-inquiry-updated', handleInquiryUpdate);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [isSuperAdmin]);
+  }, [isSuperAdmin, isAdmin]);
 
   // Show layout skeleton while checking authentication
   if (status === 'loading') {

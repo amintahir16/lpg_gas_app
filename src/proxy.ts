@@ -15,6 +15,8 @@ const routePermissions = {
         '/shop',
         '/blog',
         '/contact',
+        '/privacy',
+        '/terms',
         '/api/public',
         '/api/admin/cron',
         '/robots.txt',

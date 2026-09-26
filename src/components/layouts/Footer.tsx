@@ -5,6 +5,7 @@ import { Facebook, Instagram, Linkedin, Mail, Phone, MapPin, Flame, ArrowUp } fr
 import FlamoraAnimatedLogo from '@/components/ui/FlamoraAnimatedLogo';
 import { usePublicSiteSettings } from '@/components/providers/PublicSiteSettingsProvider';
 import { phoneToTelHref } from '@/lib/public-site-settings';
+import { openLegalModal } from '@/components/legal/LegalModal';
 
 export default function Footer() {
   const { settings } = usePublicSiteSettings();
@@ -150,10 +151,24 @@ export default function Footer() {
               © {currentYear} {settings.companyName}. All rights reserved.
             </p>
             <div className="flex items-center gap-6">
-              <Link href="/privacy" className="text-white/25 hover:text-white/50 text-sm transition-colors">
+              <Link
+                href="/privacy"
+                onClick={(e) => {
+                  e.preventDefault();
+                  openLegalModal('privacy');
+                }}
+                className="text-white/25 hover:text-white/50 text-sm transition-colors"
+              >
                 Privacy
               </Link>
-              <Link href="/terms" className="text-white/25 hover:text-white/50 text-sm transition-colors">
+              <Link
+                href="/terms"
+                onClick={(e) => {
+                  e.preventDefault();
+                  openLegalModal('terms');
+                }}
+                className="text-white/25 hover:text-white/50 text-sm transition-colors"
+              >
                 Terms
               </Link>
               <button
