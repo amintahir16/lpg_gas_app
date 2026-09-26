@@ -21,6 +21,7 @@ import {
   canUndoTransaction,
   TRANSACTION_UNDO_WINDOW_MESSAGE,
 } from '@/lib/transaction-undo-window';
+import { invalidateB2BCustomerCache } from '@/lib/b2b-activity-cache';
 
 export async function POST(
   request: NextRequest,
@@ -384,6 +385,9 @@ export async function POST(
       });
     });
     const activityRegionId = inventoryRegionId ?? regionId;
+
+    // Invalidate activity cache so status updates immediately
+    invalidateB2BCustomerCache(activityRegionId);
 
     // ---- Post-commit side effects ----
     try {

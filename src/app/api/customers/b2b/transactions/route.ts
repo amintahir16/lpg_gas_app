@@ -20,7 +20,7 @@ import {
   prismaB2bCustomerHeldCylinderWhere,
 } from '@/lib/b2b-customer-cylinder-location';
 import { buildCylinderVariantSummary } from '@/lib/cylinder-variant-summary';
-import { recordB2BCustomerActivity } from '@/lib/b2b-activity-cache';
+import { recordB2BCustomerActivity, recordB2BCustomerCylinderReturn } from '@/lib/b2b-activity-cache';
 
 export async function POST(request: NextRequest) {
   try {
@@ -543,6 +543,18 @@ export async function POST(request: NextRequest) {
       return transaction;
     });
 
+    // Optimistically update daily active cache immediately after commit (synchronous & reliable)
+    if (customerId) {
+      const hasReturns =
+        Array.isArray(gasItems) &&
+        gasItems.some((item: any) => (item.emptyReturned || 0) > 0 || (item.buybackQuantity || 0) > 0 || item.isBuyback);
+      if (transactionType === 'RETURN_EMPTY' || transactionType === 'BUYBACK' || hasReturns) {
+        recordB2BCustomerCylinderReturn(customerId, regionId);
+      } else {
+        recordB2BCustomerActivity(customerId, regionId);
+      }
+    }
+
     // ---- Post-commit side effects: activity log + super-admin notifications ----
     try {
       const customerForLog = await prisma.customer.findFirst({
@@ -632,11 +644,6 @@ export async function POST(request: NextRequest) {
         if (accessoriesForCheck.length > 0) {
           await checkAccessoriesForLowStock(accessoriesForCheck, regionId);
         }
-      }
-
-      // Optimistically update daily active cache
-      if (customerId) {
-        recordB2BCustomerActivity(customerId, regionId);
       }
     } catch (sideEffectError) {
       console.error('B2B transaction post-commit side effects failed:', sideEffectError);

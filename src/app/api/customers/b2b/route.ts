@@ -10,7 +10,7 @@ import { buildCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { isOpeningDuesSaleItem, isOpeningDuesTransaction } from '@/lib/b2b-opening-entries';
 import { calculateGasLineProfit } from '@/lib/gas-profit';
 import { getCapacityFromTypeString } from '@/lib/cylinder-utils';
-import { getDailyActiveB2BCustomerIds } from '@/lib/b2b-activity-cache';
+import { getDailyB2BCustomerActivityAndReturns } from '@/lib/b2b-activity-cache';
 import {
   locationBelongsToB2bCustomer,
   prismaB2bCustomerExactLocationClauses,
@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
     whereClause.isActive = true;
     whereClause.isArchived = false;
 
-    const [allCustomers, activeCustomerIds] = await Promise.all([
+    const [allCustomers, { activeCustomerIds, cylinderReturnCustomerIds }] = await Promise.all([
       prisma.customer.findMany({
         where: whereClause,
         select: {
@@ -87,37 +87,15 @@ export async function GET(request: NextRequest) {
         },
         orderBy: { createdAt: 'desc' },
       }),
-      getDailyActiveB2BCustomerIds(regionId),
+      getDailyB2BCustomerActivityAndReturns(regionId),
     ]);
 
-    // 2. Filter by status: Active = transaction in last 7 days; Inactive = no transaction in 7 days; Stagnant = debt + no transaction in 7 days
-    let filteredCustomers = allCustomers;
-    if (filterStatus === 'ACTIVE') {
-      filteredCustomers = allCustomers.filter((c) => c.isActive && activeCustomerIds.has(c.id));
-    } else if (filterStatus === 'INACTIVE') {
-      filteredCustomers = allCustomers.filter((c) => !c.isActive || !activeCustomerIds.has(c.id));
-    } else if (filterStatus === 'STAGNANT') {
-      filteredCustomers = allCustomers.filter(
-        (c) => Number(c.ledgerBalance) > 0 && (!c.isActive || !activeCustomerIds.has(c.id))
-      );
-    }
-
-    // 4. Calculate Summary Statistics (On Filtered Data)
-    const totalCustomers = filteredCustomers.length;
-
-    const totalReceivables = filteredCustomers.reduce((sum, c) => {
-      // Only count positive balance (Customer owes us)
-      return sum + (Number(c.ledgerBalance) > 0 ? Number(c.ledgerBalance) : 0);
-    }, 0);
-
-    // --- Helper for Holdings Calculation (Hoisted for Sorting) ---
+    // --- Helper for Holdings Calculation ---
     const getHoldings = async (targetCustomers: { id: string, name: string }[]) => {
       if (targetCustomers.length === 0) return { map: {}, types: new Set<string>() };
 
       const customerIds = targetCustomers.map(c => c.id);
 
-      // Optimization: constructing OR clause for names might be heavy if list is huge, 
-      // but for PAGINATED (limit=10), it's fine.
       const locationMatches = targetCustomers.flatMap((c) =>
         prismaB2bCustomerExactLocationClauses(c.name),
       );
@@ -150,7 +128,6 @@ export async function GET(request: NextRequest) {
       const types = new Set<string>();
 
       assignedCylinders.forEach(cyl => {
-        // Determine Holder
         let holderId =
           cyl.heldByCustomerId && customerIds.includes(cyl.heldByCustomerId)
             ? cyl.heldByCustomerId
@@ -178,6 +155,36 @@ export async function GET(request: NextRequest) {
       });
       return { map, types };
     };
+
+    // 2. Filter by status: Active = transaction in last 7 days; Inactive = no transaction in 7 days; Stagnant = debt + no transaction in 7 days; No Return = cylinder dues + no return in 7 days
+    let filteredCustomers = allCustomers;
+    let precomputedHoldings: Awaited<ReturnType<typeof getHoldings>> | null = null;
+
+    if (filterStatus === 'ACTIVE') {
+      filteredCustomers = allCustomers.filter((c) => c.isActive && activeCustomerIds.has(c.id));
+    } else if (filterStatus === 'INACTIVE') {
+      filteredCustomers = allCustomers.filter((c) => !c.isActive || !activeCustomerIds.has(c.id));
+    } else if (filterStatus === 'STAGNANT') {
+      filteredCustomers = allCustomers.filter(
+        (c) => Number(c.ledgerBalance) > 0 && (!c.isActive || !activeCustomerIds.has(c.id))
+      );
+    } else if (filterStatus === 'NO_RETURN') {
+      precomputedHoldings = await getHoldings(allCustomers.map((c) => ({ id: c.id, name: c.name })));
+      filteredCustomers = allCustomers.filter((c) => {
+        const holdings = precomputedHoldings!.map[c.id] || {};
+        const total = Object.values(holdings).reduce((sum, count) => sum + count, 0);
+        const dues = total > 0 ? total : (c.domestic118kgDue || 0) + (c.standard15kgDue || 0) + (c.commercial454kgDue || 0);
+        return dues > 0 && !cylinderReturnCustomerIds.has(c.id);
+      });
+    }
+
+    // 4. Calculate Summary Statistics (On Filtered Data)
+    const totalCustomers = filteredCustomers.length;
+
+    const totalReceivables = filteredCustomers.reduce((sum, c) => {
+      // Only count positive balance (Customer owes us)
+      return sum + (Number(c.ledgerBalance) > 0 ? Number(c.ledgerBalance) : 0);
+    }, 0);
 
     // Calculate Total Profit for ALL filtered customers
     // This is an expensive operation so we try to be efficient by fetching only necessary fields
@@ -291,9 +298,9 @@ export async function GET(request: NextRequest) {
 
 
     // One holdings scan for sort (if needed), page rows, and summary cards
-    const allHoldingsData = await getHoldings(
-      filteredCustomers.map((c) => ({ id: c.id, name: c.name }))
-    );
+    const allHoldingsData =
+      precomputedHoldings ||
+      (await getHoldings(filteredCustomers.map((c) => ({ id: c.id, name: c.name }))));
 
     // 5. Apply Manual Sorting
     if (sortBy === 'RECEIVABLES') {
@@ -386,10 +393,19 @@ export async function GET(request: NextRequest) {
       const physicalHoldings = pageHoldings.map[c.id] || {};
       const mergedHoldings: Record<string, number> = { ...physicalHoldings };
       const isActiveStatus = c.isActive && activeCustomerIds.has(c.id);
+      const totalHoldings = Object.values(mergedHoldings).reduce((sum, count) => sum + count, 0);
+      const totalCylindersDue =
+        totalHoldings > 0
+          ? totalHoldings
+          : (c.domestic118kgDue || 0) + (c.standard15kgDue || 0) + (c.commercial454kgDue || 0);
+
+      const hasStagnantCylinders = totalCylindersDue > 0 && !cylinderReturnCustomerIds.has(c.id);
+
       return {
         ...c,
         isActive: isActiveStatus,
         isStagnant: Number(c.ledgerBalance) > 0 && !isActiveStatus,
+        hasStagnantCylinders,
         holdings: mergedHoldings
       };
     });
