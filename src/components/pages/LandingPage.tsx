@@ -386,7 +386,7 @@ export default function LandingPage() {
               <div className="mt-6 flex flex-col items-center gap-4 sm:flex-row lg:flex-row">
                 <Link
                   href="/shop"
-                  className="group relative inline-flex w-[220px] items-center justify-center px-8 py-4 text-lg font-bold text-white flame-gradient animated-gradient-x rounded-2xl shadow-[0_0_30px_rgba(243,101,35,0.3)] hover:shadow-[0_0_50px_rgba(243,101,35,0.5)] transform hover:-translate-y-1 transition-all duration-300 sm:w-auto lg:min-w-[180px]"
+                  className="group relative inline-flex w-[220px] items-center justify-center px-8 py-4 text-lg font-bold text-white flame-gradient animated-gradient-x rounded-2xl shadow-[0_0_30px_rgba(243,101,35,0.3)] hover:shadow-[0_0_50px_rgba(243,101,35,0.5)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 cursor-pointer sm:w-auto lg:min-w-[180px]"
                 >
                   <span className="flex items-center gap-3 whitespace-nowrap">
                     <Flame className="w-5 h-5" />
@@ -397,7 +397,7 @@ export default function LandingPage() {
 
                 <Link
                   href="/contact"
-                  className="group inline-flex w-[190px] items-center justify-center px-8 py-4 text-lg font-semibold text-white bg-white/5 border border-white/15 hover:bg-white/10 hover:border-white/25 rounded-2xl backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 sm:w-auto lg:min-w-[180px]"
+                  className="group inline-flex w-[190px] items-center justify-center px-8 py-4 text-lg font-semibold text-white bg-white/5 border border-white/15 hover:bg-white/10 hover:border-white/25 rounded-2xl backdrop-blur-sm transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] cursor-pointer sm:w-auto lg:min-w-[180px]"
                 >
                   <span className="flex items-center gap-3 whitespace-nowrap">
                     <Phone className="w-5 h-5 text-[#f8a11b]" />
@@ -635,7 +635,7 @@ export default function LandingPage() {
                       <Link
                         href="/shop"
                         onClick={(event) => event.stopPropagation()}
-                        className="group relative z-10 inline-flex w-full cursor-pointer items-center justify-center rounded-xl px-6 py-3 font-bold text-white animated-gradient-x transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_24px_rgba(243,101,35,0.3)]"
+                        className="group relative z-10 inline-flex w-full cursor-pointer items-center justify-center rounded-xl px-6 py-3 font-bold text-white animated-gradient-x transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] hover:shadow-[0_0_24px_rgba(243,101,35,0.3)]"
                         style={{
                           backgroundImage: `linear-gradient(90deg, ${cyl.color} 0%, ${cyl.color}cc 25%, #f8a11b 50%, ${cyl.color} 75%, ${cyl.color}cc 100%)`,
                         }}
@@ -754,7 +754,7 @@ export default function LandingPage() {
                   <p className="text-white/40 mb-6">11.8 KG & 15 KG options available</p>
                   <Link
                     href="/shop"
-                    className="inline-flex items-center gap-2 px-6 py-3 flame-gradient animated-gradient-x text-white font-bold rounded-xl hover:-translate-y-1 transition-all duration-300"
+                    className="inline-flex items-center gap-2 px-6 py-3 flame-gradient animated-gradient-x text-white font-bold rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 cursor-pointer"
                   >
                     Order for Home <ArrowRight className="w-4 h-4" />
                   </Link>
@@ -794,7 +794,7 @@ export default function LandingPage() {
                   <p className="text-white/40 mb-6">44.5 KG & bulk supply available</p>
                   <Link
                     href="/contact"
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#e1382b] to-[#f36523] text-white font-bold rounded-xl hover:-translate-y-1 transition-all duration-300"
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#e1382b] to-[#f36523] text-white font-bold rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 cursor-pointer"
                   >
                     Get Business Quote <ArrowRight className="w-4 h-4" />
                   </Link>
@@ -1011,7 +1011,7 @@ export default function LandingPage() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link
                 href="/shop"
-                className="group inline-flex items-center justify-center px-10 py-5 text-lg font-bold bg-white text-[#e1382b] rounded-2xl shadow-2xl hover:-translate-y-1 transition-all duration-300"
+                className="group inline-flex items-center justify-center px-10 py-5 text-lg font-bold bg-white text-[#e1382b] rounded-2xl shadow-2xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 cursor-pointer"
               >
                 <span className="flex items-center gap-3">
                   <Flame className="w-5 h-5" />
@@ -1021,7 +1021,7 @@ export default function LandingPage() {
               </Link>
               <Link
                 href="/contact"
-                className="group inline-flex items-center justify-center px-10 py-5 text-lg font-bold text-white bg-black/20 border-2 border-white/30 hover:bg-black/30 rounded-2xl backdrop-blur-sm transition-all duration-300 hover:-translate-y-1"
+                className="group inline-flex items-center justify-center px-10 py-5 text-lg font-bold text-white bg-black/20 border-2 border-white/30 hover:bg-black/30 rounded-2xl backdrop-blur-sm transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
               >
                 <span className="flex items-center gap-3">
                   <MessageCircle className="w-5 h-5" />

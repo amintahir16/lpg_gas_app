@@ -277,14 +277,14 @@ export default function ContactPage() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <a
                 href={phoneToTelHref(settings.phonePrimary)}
-                className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-[#e1382b] text-white font-bold rounded-xl hover:-translate-y-1 hover:shadow-[0_0_25px_rgba(225,56,43,0.3)] transition-all duration-300"
+                className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-[#e1382b] text-white font-bold rounded-xl hover:scale-[1.02] active:scale-[0.98] hover:shadow-[0_0_25px_rgba(225,56,43,0.3)] transition-all duration-300 cursor-pointer"
               >
                 <Phone className="w-5 h-5" /> Emergency: {settings.phonePrimary}
               </a>
               {settings.emailEmergency && (
                 <a
                   href={`mailto:${settings.emailEmergency}`}
-                  className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-transparent text-[#e1382b] font-bold border-2 border-[#e1382b]/30 rounded-xl hover:bg-[#e1382b]/10 transition-all duration-300"
+                  className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-transparent text-[#e1382b] font-bold border-2 border-[#e1382b]/30 rounded-xl hover:bg-[#e1382b]/10 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 cursor-pointer"
                 >
                   <Mail className="w-5 h-5" /> Emergency Email
                 </a>

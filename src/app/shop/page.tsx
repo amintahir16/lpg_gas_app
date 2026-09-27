@@ -90,7 +90,7 @@ function ProductCard({ product, index, onAdd }: { product: PublicShopProduct; in
         <button
           onClick={() => onAdd(product)}
           disabled={!product.inStock}
-          className="w-full py-3 rounded-xl font-bold text-white disabled:opacity-30 flex items-center justify-center gap-2 transition-all duration-300 hover:-translate-y-0.5"
+          className="w-full py-3 rounded-xl font-bold text-white disabled:opacity-30 flex items-center justify-center gap-2 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] cursor-pointer disabled:cursor-not-allowed disabled:hover:scale-100"
           style={{ background: product.inStock ? `linear-gradient(135deg, ${product.accentColor}, ${product.accentColor}cc)` : undefined }}
         >
           <ShoppingCart className="w-5 h-5" />
@@ -462,7 +462,7 @@ function ShopContent() {
               </div>
               <Link
                 href="/contact"
-                className="inline-flex items-center gap-2 px-8 py-4 flame-gradient font-bold text-white rounded-xl hover:-translate-y-1 hover:shadow-[0_0_20px_rgba(243,101,35,0.3)] transition-all duration-300"
+                className="inline-flex items-center gap-2 px-8 py-4 flame-gradient font-bold text-white rounded-xl hover:scale-[1.02] active:scale-[0.98] hover:shadow-[0_0_20px_rgba(243,101,35,0.3)] transition-all duration-300 cursor-pointer"
               >
                 Get Bulk Quote <ChevronRight className="w-5 h-5" />
               </Link>

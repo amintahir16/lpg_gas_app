@@ -66,9 +66,6 @@
   }
 }
 
-* {
-  border-color: #e2e8f0;
-}
 
 html,
 body {
@@ -132,15 +129,17 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
-/* Better link colors */
-a {
-  color: var(--primary);
-  text-decoration: none;
-}
+/* Better link colors - inside base layer so utility classes (text-white, etc.) take precedence */
+@layer base {
+  a {
+    color: var(--primary);
+    text-decoration: none;
+  }
 
-a:hover {
-  color: var(--primary);
-  text-decoration: underline;
+  a:hover {
+    color: var(--primary);
+    text-decoration: underline;
+  }
 }
 
 /* Specific input styling overrides */
@@ -315,7 +314,21 @@ select::-ms-expand {
   background-clip: text;
 }
 
-/* Public site typography: keep sizes/layout, only swap font families. */
+/* Public site typography & button interactions */
+.public-site a {
+  text-decoration: none;
+}
+
+.public-site a,
+.public-site button {
+  cursor: pointer;
+}
+
+.public-site a svg,
+.public-site button svg {
+  pointer-events: none;
+}
+
 .public-site :is(p, li, input, textarea, select) {
   font-family: var(--font-inter), system-ui, sans-serif;
   font-weight: 400;
