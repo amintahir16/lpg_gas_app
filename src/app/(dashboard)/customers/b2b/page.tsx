@@ -696,7 +696,7 @@ export default function B2BCustomersPage() {
                           {customer.hasStagnantCylinders && (
                             <span
                               className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200/70 shrink-0 mt-0.5"
-                              title="Stagnant Cylinders: Customer has cylinder dues with no cylinder returned in over 7 days"
+                              title="Cylinders have been out for more than 7 days and none were returned in that time"
                             >
                               <ClockIcon className="w-2.5 h-2.5 text-purple-500 shrink-0" />
                               7d+ No Return

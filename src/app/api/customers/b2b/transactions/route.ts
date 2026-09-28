@@ -20,7 +20,7 @@ import {
   prismaB2bCustomerHeldCylinderWhere,
 } from '@/lib/b2b-customer-cylinder-location';
 import { buildCylinderVariantSummary } from '@/lib/cylinder-variant-summary';
-import { recordB2BCustomerActivity, recordB2BCustomerCylinderReturn } from '@/lib/b2b-activity-cache';
+import { recordB2BCustomerActivity, recordB2BCustomerCylinderIssue, recordB2BCustomerCylinderReturn } from '@/lib/b2b-activity-cache';
 
 export async function POST(request: NextRequest) {
   try {
@@ -552,6 +552,18 @@ export async function POST(request: NextRequest) {
         recordB2BCustomerCylinderReturn(customerId, regionId);
       } else {
         recordB2BCustomerActivity(customerId, regionId);
+        const deliveredCylinders =
+          transactionType === 'SALE' &&
+          Array.isArray(gasItems) &&
+          gasItems.some(
+            (item: any) =>
+              !!item.cylinderType &&
+              Number(item.delivered || item.quantity || 0) > 0 &&
+              !(Number(item.emptyReturned || 0) > 0),
+          );
+        if (deliveredCylinders) {
+          recordB2BCustomerCylinderIssue(customerId, regionId);
+        }
       }
     }
 

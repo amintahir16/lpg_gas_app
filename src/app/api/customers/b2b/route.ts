@@ -10,7 +10,7 @@ import { buildCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { isOpeningDuesSaleItem, isOpeningDuesTransaction } from '@/lib/b2b-opening-entries';
 import { calculateGasLineProfit } from '@/lib/gas-profit';
 import { getCapacityFromTypeString } from '@/lib/cylinder-utils';
-import { getDailyB2BCustomerActivityAndReturns } from '@/lib/b2b-activity-cache';
+import { getDailyB2BCustomerActivityAndReturns, hasStagnantCylinderHoldings } from '@/lib/b2b-activity-cache';
 import {
   locationBelongsToB2bCustomer,
   prismaB2bCustomerExactLocationClauses,
@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
     whereClause.isActive = true;
     whereClause.isArchived = false;
 
-    const [allCustomers, { activeCustomerIds, cylinderReturnCustomerIds }] = await Promise.all([
+    const [allCustomers, activitySets] = await Promise.all([
       prisma.customer.findMany({
         where: whereClause,
         select: {
@@ -89,6 +89,7 @@ export async function GET(request: NextRequest) {
       }),
       getDailyB2BCustomerActivityAndReturns(regionId),
     ]);
+    const { activeCustomerIds } = activitySets;
 
     // --- Helper for Holdings Calculation ---
     const getHoldings = async (targetCustomers: { id: string, name: string }[]) => {
@@ -156,7 +157,7 @@ export async function GET(request: NextRequest) {
       return { map, types };
     };
 
-    // 2. Filter by status: Active = transaction in last 7 days; Inactive = no transaction in 7 days; Stagnant = debt + no transaction in 7 days; No Return = cylinder dues + no return in 7 days
+    // 2. Filter by status: Active = transaction in last 7 days; Inactive = no transaction in 7 days; Stagnant = debt + no transaction in 7 days; No Return = dues older than 7 days with no return in that window
     let filteredCustomers = allCustomers;
     let precomputedHoldings: Awaited<ReturnType<typeof getHoldings>> | null = null;
 
@@ -174,7 +175,7 @@ export async function GET(request: NextRequest) {
         const holdings = precomputedHoldings!.map[c.id] || {};
         const total = Object.values(holdings).reduce((sum, count) => sum + count, 0);
         const dues = total > 0 ? total : (c.domestic118kgDue || 0) + (c.standard15kgDue || 0) + (c.commercial454kgDue || 0);
-        return dues > 0 && !cylinderReturnCustomerIds.has(c.id);
+        return hasStagnantCylinderHoldings(c.id, dues > 0, activitySets);
       });
     }
 
@@ -399,7 +400,11 @@ export async function GET(request: NextRequest) {
           ? totalHoldings
           : (c.domestic118kgDue || 0) + (c.standard15kgDue || 0) + (c.commercial454kgDue || 0);
 
-      const hasStagnantCylinders = totalCylindersDue > 0 && !cylinderReturnCustomerIds.has(c.id);
+      const hasStagnantCylinders = hasStagnantCylinderHoldings(
+        c.id,
+        totalCylindersDue > 0,
+        activitySets,
+      );
 
       return {
         ...c,

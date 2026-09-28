@@ -4,7 +4,7 @@ import { B2BTransactionType } from '@prisma/client';
 import { generateCylinderTypeFromCapacity, getCapacityFromTypeString } from '@/lib/cylinder-utils';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { requireAdmin, clampLimit } from '@/lib/apiAuth';
-import { recordB2BCustomerActivity, recordB2BCustomerCylinderReturn } from '@/lib/b2b-activity-cache';
+import { recordB2BCustomerActivity, recordB2BCustomerCylinderIssue, recordB2BCustomerCylinderReturn } from '@/lib/b2b-activity-cache';
 
 export async function GET(request: NextRequest) {
   try {
@@ -354,6 +354,18 @@ export async function POST(request: NextRequest) {
         recordB2BCustomerCylinderReturn(customerId, regionId);
       } else {
         recordB2BCustomerActivity(customerId, regionId);
+        const deliveredCylinders =
+          transactionType === 'SALE' &&
+          Array.isArray(items) &&
+          items.some(
+            (item: any) =>
+              !!item.cylinderType &&
+              !item.returnedCondition &&
+              Number(item.quantity || item.delivered || 0) > 0,
+          );
+        if (deliveredCylinders) {
+          recordB2BCustomerCylinderIssue(customerId, regionId);
+        }
       }
     }
 
