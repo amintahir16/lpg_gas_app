@@ -157,7 +157,7 @@ export async function GET(request: NextRequest) {
       return { map, types };
     };
 
-    // 2. Filter by status: Active = transaction in last 7 days; Inactive = no transaction in 7 days; Unpaid = customer still owes a balance; No Return = dues older than 7 days with no return in that window
+    // 2. Filter by status: Active = transaction in last 7 days; Inactive = no transaction in 7 days; Stagnant = debt + no transaction in 7 days; No Return = dues older than 7 days with no return in that window
     let filteredCustomers = allCustomers;
     let precomputedHoldings: Awaited<ReturnType<typeof getHoldings>> | null = null;
 
@@ -166,7 +166,9 @@ export async function GET(request: NextRequest) {
     } else if (filterStatus === 'INACTIVE') {
       filteredCustomers = allCustomers.filter((c) => !c.isActive || !activeCustomerIds.has(c.id));
     } else if (filterStatus === 'STAGNANT') {
-      filteredCustomers = allCustomers.filter((c) => Number(c.ledgerBalance) > 0);
+      filteredCustomers = allCustomers.filter(
+        (c) => Number(c.ledgerBalance) > 0 && (!c.isActive || !activeCustomerIds.has(c.id))
+      );
     } else if (filterStatus === 'NO_RETURN') {
       precomputedHoldings = await getHoldings(allCustomers.map((c) => ({ id: c.id, name: c.name })));
       filteredCustomers = allCustomers.filter((c) => {
@@ -407,7 +409,7 @@ export async function GET(request: NextRequest) {
       return {
         ...c,
         isActive: isActiveStatus,
-        isStagnant: Number(c.ledgerBalance) > 0,
+        isStagnant: Number(c.ledgerBalance) > 0 && !isActiveStatus,
         hasStagnantCylinders,
         holdings: mergedHoldings
       };
