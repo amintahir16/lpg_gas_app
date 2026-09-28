@@ -710,10 +710,10 @@ export default function B2BCustomersPage() {
                           <span className={`font-semibold ${-customer.ledgerBalance < 0 ? 'text-red-600' : -customer.ledgerBalance > 0 ? 'text-green-600' : 'text-gray-400'}`}>
                             {formatCurrency(-customer.ledgerBalance)}
                           </span>
-                          {(customer.isStagnant ?? (Number(customer.ledgerBalance) > 0 && !customer.isActive)) && (
+                          {customer.isStagnant && (
                             <span
                               className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/70 shrink-0 mt-0.5"
-                              title="Stagnant AR: Customer has unpaid balance with no payment in over 7 days"
+                              title="Stagnant AR: Customer has owed balance with no reduction in over 7 days"
                             >
                               <ClockIcon className="w-2.5 h-2.5 text-amber-500 shrink-0" />
                               7d+ Unpaid

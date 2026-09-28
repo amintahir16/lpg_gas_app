@@ -4,7 +4,12 @@ import { B2BTransactionType } from '@prisma/client';
 import { generateCylinderTypeFromCapacity, getCapacityFromTypeString } from '@/lib/cylinder-utils';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { requireAdmin, clampLimit } from '@/lib/apiAuth';
-import { recordB2BCustomerActivity, recordB2BCustomerCylinderIssue, recordB2BCustomerCylinderReturn } from '@/lib/b2b-activity-cache';
+import {
+  recordB2BCustomerActivity,
+  recordB2BCustomerBalanceReduction,
+  recordB2BCustomerCylinderIssue,
+  recordB2BCustomerCylinderReturn,
+} from '@/lib/b2b-activity-cache';
 
 export async function GET(request: NextRequest) {
   try {
@@ -352,8 +357,16 @@ export async function POST(request: NextRequest) {
       const hasReturns = Array.isArray(items) && items.some((item: any) => (item.emptyReturned && item.emptyReturned > 0) || item.returnedCondition);
       if (transactionType === 'RETURN_EMPTY' || transactionType === 'BUYBACK' || hasReturns) {
         recordB2BCustomerCylinderReturn(customerId, regionId);
+        if (transactionType === 'BUYBACK') {
+          recordB2BCustomerBalanceReduction(customerId, regionId);
+        }
+      } else if (transactionType === 'PAYMENT' || transactionType === 'ADJUSTMENT' || transactionType === 'CREDIT_NOTE') {
+        recordB2BCustomerBalanceReduction(customerId, regionId);
       } else {
         recordB2BCustomerActivity(customerId, regionId);
+        if (transactionType === 'SALE' && body.paidAmount && Number(body.paidAmount) > Number(totalAmount)) {
+          recordB2BCustomerBalanceReduction(customerId, regionId);
+        }
         const deliveredCylinders =
           transactionType === 'SALE' &&
           Array.isArray(items) &&

@@ -9,6 +9,8 @@ interface CacheEntry {
   customersWithCylinderIssues: Set<string>;
   /** Customers who still hold a cylinder that was issued more than 7 days ago. */
   agedOutstandingCustomerIds: Set<string>;
+  customerRecentNetBalanceImpactMap: Map<string, number>;
+  customersWithRecentBalanceReduction: Set<string>;
 }
 
 export interface B2BActivityStatusSets {
@@ -16,6 +18,8 @@ export interface B2BActivityStatusSets {
   cylinderReturnCustomerIds: Set<string>;
   customersWithCylinderIssues: Set<string>;
   agedOutstandingCustomerIds: Set<string>;
+  customerRecentNetBalanceImpactMap: Map<string, number>;
+  customersWithRecentBalanceReduction: Set<string>;
 }
 
 export interface CylinderMovement {
@@ -54,13 +58,17 @@ export async function getDailyB2BCustomerActivityAndReturns(
     cached &&
     cached.dateKey === todayKey &&
     cached.customersWithCylinderIssues &&
-    cached.agedOutstandingCustomerIds
+    cached.agedOutstandingCustomerIds &&
+    cached.customerRecentNetBalanceImpactMap &&
+    cached.customersWithRecentBalanceReduction
   ) {
     return {
       activeCustomerIds: cached.activeCustomerIds,
       cylinderReturnCustomerIds: cached.cylinderReturnCustomerIds,
       customersWithCylinderIssues: cached.customersWithCylinderIssues,
       agedOutstandingCustomerIds: cached.agedOutstandingCustomerIds,
+      customerRecentNetBalanceImpactMap: cached.customerRecentNetBalanceImpactMap,
+      customersWithRecentBalanceReduction: cached.customersWithRecentBalanceReduction,
     };
   }
 
@@ -76,8 +84,14 @@ export async function getDailyB2BCustomerActivityAndReturns(
         voided: false,
         ...regionScopedWhere(regionId),
       },
-      select: { customerId: true },
-      distinct: ['customerId'],
+      select: {
+        customerId: true,
+        transactionType: true,
+        totalAmount: true,
+        paidAmount: true,
+        unpaidAmount: true,
+        paymentStatus: true,
+      },
     }),
     prisma.b2BTransaction.findMany({
       where: {
@@ -121,12 +135,63 @@ export async function getDailyB2BCustomerActivityAndReturns(
     sevenDaysAgo.getTime(),
   );
 
+  const customerRecentNetBalanceImpactMap = new Map<string, number>();
+  const customersWithRecentBalanceReduction = new Set<string>();
+
+  for (const tx of recentTransactions) {
+    const total = Number(tx.totalAmount ?? 0);
+    let impact = 0;
+
+    switch (tx.transactionType) {
+      case 'SALE': {
+        if (tx.paidAmount !== null && tx.paidAmount !== undefined) {
+          const paid = Number(tx.paidAmount);
+          impact = total - paid;
+          if (paid > total) {
+            customersWithRecentBalanceReduction.add(tx.customerId);
+          }
+        } else if (tx.paymentStatus === 'FULLY_PAID') {
+          impact = 0;
+        } else if (tx.unpaidAmount !== null && tx.unpaidAmount !== undefined) {
+          impact = Number(tx.unpaidAmount);
+        } else {
+          impact = total;
+        }
+        break;
+      }
+      case 'PAYMENT':
+      case 'BUYBACK':
+      case 'ADJUSTMENT':
+      case 'CREDIT_NOTE':
+        impact = -total;
+        if (total > 0) {
+          customersWithRecentBalanceReduction.add(tx.customerId);
+        }
+        break;
+      case 'RETURN_EMPTY':
+      default:
+        impact = 0;
+        break;
+    }
+
+    const currentNet = customerRecentNetBalanceImpactMap.get(tx.customerId) || 0;
+    customerRecentNetBalanceImpactMap.set(tx.customerId, currentNet + impact);
+  }
+
+  for (const [custId, netImpact] of customerRecentNetBalanceImpactMap.entries()) {
+    if (netImpact < 0) {
+      customersWithRecentBalanceReduction.add(custId);
+    }
+  }
+
   dailyActiveCustomerCache.set(cacheKey, {
     dateKey: todayKey,
     activeCustomerIds,
     cylinderReturnCustomerIds,
     customersWithCylinderIssues,
     agedOutstandingCustomerIds,
+    customerRecentNetBalanceImpactMap,
+    customersWithRecentBalanceReduction,
   });
 
   return {
@@ -134,7 +199,47 @@ export async function getDailyB2BCustomerActivityAndReturns(
     cylinderReturnCustomerIds,
     customersWithCylinderIssues,
     agedOutstandingCustomerIds,
+    customerRecentNetBalanceImpactMap,
+    customersWithRecentBalanceReduction,
   };
+}
+
+/**
+ * Determines whether a B2B customer has stagnant Accounts Receivable (AR) / "7d+ Unpaid" debt.
+ *
+ * Rules:
+ * 1. Customer must have an outstanding owed balance (ledgerBalance > 0).
+ * 2. If customer owed 0 or was in credit 7 days ago (i.e. their current debt was incurred
+ *    within the last 7 days), it is NOT yet 7+ days old -> false.
+ * 3. If customer owed balance 7 days ago, but that owed balance was reduced during the 7-day
+ *    window (e.g. via payment, buyback, credit adjustment, or net balance reduction) -> false.
+ * 4. If customer had an owed balance 7 days ago and it was NOT reduced in that week -> true.
+ */
+export function hasStagnantUnpaidBalance(
+  customerId: string,
+  ledgerBalance: unknown,
+  sets: Pick<
+    B2BActivityStatusSets,
+    'customerRecentNetBalanceImpactMap' | 'customersWithRecentBalanceReduction'
+  >,
+): boolean {
+  const currentBalance = Number(ledgerBalance ?? 0);
+  if (!(currentBalance > 0)) return false;
+
+  const netImpact7Days = sets.customerRecentNetBalanceImpactMap?.get(customerId) || 0;
+  const balance7DaysAgo = currentBalance - netImpact7Days;
+
+  // If they didn't owe money 7 days ago, the debt was incurred within the last 7 days (<7d old)
+  if (balance7DaysAgo <= 0) return false;
+
+  // If their balance was reduced in the 7 days period
+  if (currentBalance < balance7DaysAgo) return false;
+
+  // If they made any payment / credit transaction that reduced balance in the last 7 days
+  if (sets.customersWithRecentBalanceReduction?.has(customerId)) return false;
+
+  // Otherwise, their 7d+ debt has not been reduced in the week
+  return true;
 }
 
 /**
@@ -344,6 +449,28 @@ export function recordB2BCustomerCylinderReturn(customerId: string, regionId?: s
       e.activeCustomerIds.add(customerId);
       e.cylinderReturnCustomerIds.add(customerId);
     }
+  }
+}
+
+/**
+ * Optimistically records a balance reduction (e.g. payment received, buyback, credit note)
+ * in the daily cache so the "7d+ Unpaid" badge updates immediately.
+ */
+export function recordB2BCustomerBalanceReduction(customerId: string, regionId?: string | null) {
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const mark = (entry: CacheEntry | undefined) => {
+    if (!entry || entry.dateKey !== todayKey) return;
+    entry.activeCustomerIds.add(customerId);
+    if (!entry.customersWithRecentBalanceReduction) {
+      entry.customersWithRecentBalanceReduction = new Set();
+    }
+    entry.customersWithRecentBalanceReduction.add(customerId);
+  };
+
+  mark(dailyActiveCustomerCache.get(regionId || '__ALL__'));
+  if (regionId) mark(dailyActiveCustomerCache.get('__ALL__'));
+  for (const entry of dailyActiveCustomerCache.values()) {
+    mark(entry);
   }
 }
 

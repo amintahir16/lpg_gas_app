@@ -10,7 +10,11 @@ import { buildCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { isOpeningDuesSaleItem, isOpeningDuesTransaction } from '@/lib/b2b-opening-entries';
 import { calculateGasLineProfit } from '@/lib/gas-profit';
 import { getCapacityFromTypeString } from '@/lib/cylinder-utils';
-import { getDailyB2BCustomerActivityAndReturns, hasStagnantCylinderHoldings } from '@/lib/b2b-activity-cache';
+import {
+  getDailyB2BCustomerActivityAndReturns,
+  hasStagnantCylinderHoldings,
+  hasStagnantUnpaidBalance,
+} from '@/lib/b2b-activity-cache';
 import {
   locationBelongsToB2bCustomer,
   prismaB2bCustomerExactLocationClauses,
@@ -166,8 +170,8 @@ export async function GET(request: NextRequest) {
     } else if (filterStatus === 'INACTIVE') {
       filteredCustomers = allCustomers.filter((c) => !c.isActive || !activeCustomerIds.has(c.id));
     } else if (filterStatus === 'STAGNANT') {
-      filteredCustomers = allCustomers.filter(
-        (c) => Number(c.ledgerBalance) > 0 && (!c.isActive || !activeCustomerIds.has(c.id))
+      filteredCustomers = allCustomers.filter((c) =>
+        hasStagnantUnpaidBalance(c.id, c.ledgerBalance, activitySets)
       );
     } else if (filterStatus === 'NO_RETURN') {
       precomputedHoldings = await getHoldings(allCustomers.map((c) => ({ id: c.id, name: c.name })));
@@ -409,7 +413,7 @@ export async function GET(request: NextRequest) {
       return {
         ...c,
         isActive: isActiveStatus,
-        isStagnant: Number(c.ledgerBalance) > 0 && !isActiveStatus,
+        isStagnant: hasStagnantUnpaidBalance(c.id, c.ledgerBalance, activitySets),
         hasStagnantCylinders,
         holdings: mergedHoldings
       };

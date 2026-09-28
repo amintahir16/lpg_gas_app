@@ -20,7 +20,12 @@ import {
   prismaB2bCustomerHeldCylinderWhere,
 } from '@/lib/b2b-customer-cylinder-location';
 import { buildCylinderVariantSummary } from '@/lib/cylinder-variant-summary';
-import { recordB2BCustomerActivity, recordB2BCustomerCylinderIssue, recordB2BCustomerCylinderReturn } from '@/lib/b2b-activity-cache';
+import {
+  recordB2BCustomerActivity,
+  recordB2BCustomerBalanceReduction,
+  recordB2BCustomerCylinderIssue,
+  recordB2BCustomerCylinderReturn,
+} from '@/lib/b2b-activity-cache';
 
 export async function POST(request: NextRequest) {
   try {
@@ -550,8 +555,16 @@ export async function POST(request: NextRequest) {
         gasItems.some((item: any) => (item.emptyReturned || 0) > 0 || (item.buybackQuantity || 0) > 0 || item.isBuyback);
       if (transactionType === 'RETURN_EMPTY' || transactionType === 'BUYBACK' || hasReturns) {
         recordB2BCustomerCylinderReturn(customerId, regionId);
+        if (transactionType === 'BUYBACK') {
+          recordB2BCustomerBalanceReduction(customerId, regionId);
+        }
+      } else if (transactionType === 'PAYMENT' || transactionType === 'ADJUSTMENT' || transactionType === 'CREDIT_NOTE') {
+        recordB2BCustomerBalanceReduction(customerId, regionId);
       } else {
         recordB2BCustomerActivity(customerId, regionId);
+        if (transactionType === 'SALE' && paidAmount && Number(paidAmount) > Number(totalAmount)) {
+          recordB2BCustomerBalanceReduction(customerId, regionId);
+        }
         const deliveredCylinders =
           transactionType === 'SALE' &&
           Array.isArray(gasItems) &&
