@@ -5,7 +5,9 @@ import { generateCylinderTypeFromCapacity, getCapacityFromTypeString } from '@/l
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { requireAdmin, clampLimit } from '@/lib/apiAuth';
 import {
+  invalidateB2BCustomerCache,
   recordB2BCustomerActivity,
+  recordB2BCustomerBalanceImpact,
   recordB2BCustomerBalanceReduction,
   recordB2BCustomerCylinderIssue,
   recordB2BCustomerCylinderReturn,
@@ -354,16 +356,23 @@ export async function POST(request: NextRequest) {
     });
 
     if (customerId) {
+      const totalNum = parseFloat(totalAmount) || 0;
+      const paidNum = body.paidAmount ? (parseFloat(body.paidAmount) || 0) : 0;
+
       const hasReturns = Array.isArray(items) && items.some((item: any) => (item.emptyReturned && item.emptyReturned > 0) || item.returnedCondition);
       if (transactionType === 'RETURN_EMPTY' || transactionType === 'BUYBACK' || hasReturns) {
         recordB2BCustomerCylinderReturn(customerId, regionId);
         if (transactionType === 'BUYBACK') {
           recordB2BCustomerBalanceReduction(customerId, regionId);
+          recordB2BCustomerBalanceImpact(customerId, -totalNum, regionId);
         }
       } else if (transactionType === 'PAYMENT' || transactionType === 'ADJUSTMENT' || transactionType === 'CREDIT_NOTE') {
         recordB2BCustomerBalanceReduction(customerId, regionId);
+        recordB2BCustomerBalanceImpact(customerId, -totalNum, regionId);
       } else {
         recordB2BCustomerActivity(customerId, regionId);
+        const saleImpact = totalNum - paidNum;
+        recordB2BCustomerBalanceImpact(customerId, saleImpact, regionId);
         if (transactionType === 'SALE' && body.paidAmount && Number(body.paidAmount) > Number(totalAmount)) {
           recordB2BCustomerBalanceReduction(customerId, regionId);
         }
@@ -380,6 +389,7 @@ export async function POST(request: NextRequest) {
           recordB2BCustomerCylinderIssue(customerId, regionId);
         }
       }
+      invalidateB2BCustomerCache(regionId);
     }
 
     return NextResponse.json(result, { status: 201 });

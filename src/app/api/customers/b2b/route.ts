@@ -59,6 +59,7 @@ export async function GET(request: NextRequest) {
     if (filterType !== 'ALL') {
       whereClause.notes = {
         contains: `Customer Type: ${filterType}`,
+        mode: 'insensitive',
       };
     }
 
@@ -171,7 +172,7 @@ export async function GET(request: NextRequest) {
       filteredCustomers = allCustomers.filter((c) => !c.isActive || !activeCustomerIds.has(c.id));
     } else if (filterStatus === 'STAGNANT') {
       filteredCustomers = allCustomers.filter((c) =>
-        hasStagnantUnpaidBalance(c.id, c.ledgerBalance, activitySets)
+        hasStagnantUnpaidBalance(c.id, c.ledgerBalance, activitySets, c.createdAt)
       );
     } else if (filterStatus === 'NO_RETURN') {
       precomputedHoldings = await getHoldings(allCustomers.map((c) => ({ id: c.id, name: c.name })));
@@ -413,7 +414,7 @@ export async function GET(request: NextRequest) {
       return {
         ...c,
         isActive: isActiveStatus,
-        isStagnant: hasStagnantUnpaidBalance(c.id, c.ledgerBalance, activitySets),
+        isStagnant: hasStagnantUnpaidBalance(c.id, c.ledgerBalance, activitySets, c.createdAt),
         hasStagnantCylinders,
         holdings: mergedHoldings
       };

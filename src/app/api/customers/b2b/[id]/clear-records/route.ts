@@ -5,6 +5,7 @@ import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { CylinderStatus } from '@prisma/client';
 import { regionScopedWhere } from '@/lib/region';
 import { prismaB2bCustomerHeldCylinderWhere, b2bReleaseHeldCylinderData } from '@/lib/b2b-customer-cylinder-location';
+import { invalidateB2BCustomerCache } from '@/lib/b2b-activity-cache';
 
 export async function POST(
   request: NextRequest,
@@ -131,6 +132,8 @@ export async function POST(
       },
       regionId: customer.regionId || undefined,
     });
+
+    invalidateB2BCustomerCache(customer.regionId);
 
     return NextResponse.json({
       success: true,

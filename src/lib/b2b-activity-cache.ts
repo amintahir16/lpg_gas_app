@@ -209,11 +209,12 @@ export async function getDailyB2BCustomerActivityAndReturns(
  *
  * Rules:
  * 1. Customer must have an outstanding owed balance (ledgerBalance > 0).
- * 2. If customer owed 0 or was in credit 7 days ago (i.e. their current debt was incurred
+ * 2. If customer was registered within the last 7 days, they cannot have 7d+ debt -> false.
+ * 3. If customer owed 0 or was in credit 7 days ago (i.e. their current debt was incurred
  *    within the last 7 days), it is NOT yet 7+ days old -> false.
- * 3. If customer owed balance 7 days ago, but that owed balance was reduced during the 7-day
+ * 4. If customer owed balance 7 days ago, but that owed balance was reduced during the 7-day
  *    window (e.g. via payment, buyback, credit adjustment, or net balance reduction) -> false.
- * 4. If customer had an owed balance 7 days ago and it was NOT reduced in that week -> true.
+ * 5. If customer had an owed balance 7 days ago and it was NOT reduced in that week -> true.
  */
 export function hasStagnantUnpaidBalance(
   customerId: string,
@@ -222,9 +223,21 @@ export function hasStagnantUnpaidBalance(
     B2BActivityStatusSets,
     'customerRecentNetBalanceImpactMap' | 'customersWithRecentBalanceReduction'
   >,
+  customerCreatedAt?: Date | string | null,
 ): boolean {
   const currentBalance = Number(ledgerBalance ?? 0);
   if (!(currentBalance > 0)) return false;
+
+  // A customer account created within the last 7 days cannot have debt older than 7 days
+  if (customerCreatedAt) {
+    const createdTime = new Date(customerCreatedAt).getTime();
+    if (!isNaN(createdTime)) {
+      const sevenDaysAgoMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      if (createdTime >= sevenDaysAgoMs) {
+        return false;
+      }
+    }
+  }
 
   const netImpact7Days = sets.customerRecentNetBalanceImpactMap?.get(customerId) || 0;
   const balance7DaysAgo = currentBalance - netImpact7Days;
@@ -465,6 +478,39 @@ export function recordB2BCustomerBalanceReduction(customerId: string, regionId?:
       entry.customersWithRecentBalanceReduction = new Set();
     }
     entry.customersWithRecentBalanceReduction.add(customerId);
+  };
+
+  mark(dailyActiveCustomerCache.get(regionId || '__ALL__'));
+  if (regionId) mark(dailyActiveCustomerCache.get('__ALL__'));
+  for (const entry of dailyActiveCustomerCache.values()) {
+    mark(entry);
+  }
+}
+
+/**
+ * Optimistically records a balance impact in the daily cache when a transaction occurs.
+ * Positive impact increases AR (e.g. unpaid SALE), negative impact decreases AR (e.g. PAYMENT, BUYBACK).
+ */
+export function recordB2BCustomerBalanceImpact(
+  customerId: string,
+  impact: number,
+  regionId?: string | null,
+) {
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const mark = (entry: CacheEntry | undefined) => {
+    if (!entry || entry.dateKey !== todayKey) return;
+    entry.activeCustomerIds.add(customerId);
+    if (!entry.customerRecentNetBalanceImpactMap) {
+      entry.customerRecentNetBalanceImpactMap = new Map();
+    }
+    const prev = entry.customerRecentNetBalanceImpactMap.get(customerId) || 0;
+    entry.customerRecentNetBalanceImpactMap.set(customerId, prev + impact);
+    if (impact < 0) {
+      if (!entry.customersWithRecentBalanceReduction) {
+        entry.customersWithRecentBalanceReduction = new Set();
+      }
+      entry.customersWithRecentBalanceReduction.add(customerId);
+    }
   };
 
   mark(dailyActiveCustomerCache.get(regionId || '__ALL__'));
