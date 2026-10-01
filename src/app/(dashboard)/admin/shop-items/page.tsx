@@ -170,7 +170,7 @@ export default function ShopCatalogAdminPage() {
     setDeleteConfirm(item);
   };
 
-  if (!session?.user || session.user.role !== 'SUPER_ADMIN') {
+  if (!session?.user || (session.user.role !== 'SUPER_ADMIN' && session.user.role !== 'ADMIN')) {
     return <div className="p-8 text-center text-red-600">You do not have permission to view this page.</div>;
   }
 

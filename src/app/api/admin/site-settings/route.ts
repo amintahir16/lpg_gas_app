@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireSuperAdmin } from '@/lib/apiAuth';
+import { requireAdmin } from '@/lib/apiAuth';
 import {
   loadPublicSiteSettings,
   parsePublicSitePayload,
@@ -8,7 +8,7 @@ import {
 
 export async function GET() {
   try {
-    const auth = await requireSuperAdmin();
+    const auth = await requireAdmin();
     if (!auth.ok) return auth.response;
     const settings = await loadPublicSiteSettings();
     return NextResponse.json(settings);
@@ -20,7 +20,7 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
-    const auth = await requireSuperAdmin();
+    const auth = await requireAdmin();
     if (!auth.ok) return auth.response;
 
     const body = await request.json();

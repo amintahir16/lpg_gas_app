@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { requireSuperAdmin } from '@/lib/apiAuth';
+import { requireAdmin } from '@/lib/apiAuth';
 import { databaseActionErrorMessage } from '@/lib/database-errors';
 import {
   parseShopCatalogPayload,
@@ -10,7 +10,7 @@ import {
 
 export async function GET() {
   try {
-    const auth = await requireSuperAdmin();
+    const auth = await requireAdmin();
     if (!auth.ok) return auth.response;
 
     await seedShopCatalogIfEmpty(
@@ -36,7 +36,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireSuperAdmin();
+    const auth = await requireAdmin();
     if (!auth.ok) return auth.response;
 
     const body = await request.json();
