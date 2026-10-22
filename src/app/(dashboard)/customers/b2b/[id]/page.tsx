@@ -17,7 +17,7 @@ import { calculateGasUnitCostFromPlant } from '@/lib/gas-profit';
 import { parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { formatB2bItemCylinderLabel } from '@/lib/b2b-transaction-item-variant';
 import { OPENING_BALANCE_NOTE, OPENING_DUES_NOTE, OPENING_DUES_REF } from '@/lib/b2b-opening-entries';
-import { nowLocalTime, todayLocalDate } from '@/lib/financial-period';
+import { combineLocalDateAndTime, nowLocalTime, todayLocalDate } from '@/lib/financial-period';
 import {
   ArrowLeftIcon,
   DocumentTextIcon,
@@ -1455,7 +1455,7 @@ export default function B2BCustomerDetailPage() {
         transactionType: effectiveTransactionType,
         customerId,
         date: transactionDate,
-        time: transactionTime,
+        time: combineLocalDateAndTime(transactionDate, transactionTime).toISOString(),
         totalAmount,
         // Payment info
         paidAmount: salePaymentAmount > 0 ? salePaymentAmount : undefined,
@@ -1589,7 +1589,7 @@ export default function B2BCustomerDetailPage() {
         transactionType: openingBalanceDirection === 'OWES' ? 'SALE' : 'CREDIT_NOTE',
         customerId,
         date: openingBalanceDate,
-        time: openingBalanceTime || new Date().toTimeString().slice(0, 5),
+        time: combineLocalDateAndTime(openingBalanceDate, openingBalanceTime).toISOString(),
         totalAmount: amount,
         ...(openingBalanceDirection === 'OWES' ? { paidAmount: 0, paymentMethod: 'CASH' } : {}),
         notes: OPENING_BALANCE_NOTE,
@@ -1665,7 +1665,7 @@ export default function B2BCustomerDetailPage() {
         transactionType: 'SALE',
         customerId,
         date: openingDuesDate,
-        time: openingDuesTime || new Date().toTimeString().slice(0, 5),
+        time: combineLocalDateAndTime(openingDuesDate, openingDuesTime).toISOString(),
         totalAmount: 0,
         notes: OPENING_DUES_NOTE,
         paymentReference: OPENING_DUES_REF,

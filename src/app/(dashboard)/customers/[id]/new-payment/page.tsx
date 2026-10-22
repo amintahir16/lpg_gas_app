@@ -11,7 +11,7 @@ import {
   CreditCardIcon,
   CheckIcon
 } from '@heroicons/react/24/outline';
-import { todayLocalDate } from '@/lib/financial-period';
+import { combineLocalDateAndTime, todayLocalDate } from '@/lib/financial-period';
 
 interface Customer {
   id: string;
@@ -80,7 +80,7 @@ export default function NewPaymentPage() {
         transactionType: 'PAYMENT',
         customerId,
         date: paymentData.date,
-        time: paymentData.time,
+        time: combineLocalDateAndTime(paymentData.date, paymentData.time).toISOString(),
         totalAmount: amount,
         paymentReference: paymentData.paymentReference,
         notes: paymentData.notes || 'Payment received',
