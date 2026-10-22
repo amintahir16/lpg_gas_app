@@ -1,6 +1,38 @@
 import { prisma } from '@/lib/prisma';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { getCylinderCodePrefix } from './cylinder-utils';
+
+type DbClient = Prisma.TransactionClient | typeof prisma;
+
+function formatCylinderCode(prefix: string, n: number): string {
+  const padding = n > 9999 ? 5 : 4;
+  return `${prefix}-${n.toString().padStart(padding, '0')}`;
+}
+
+/** Letters/digits only so the Postgres regex cannot be injected. */
+function safeCodePrefix(prefix: string): string {
+  const cleaned = prefix.replace(/[^A-Za-z0-9]/g, '');
+  return cleaned || 'CX';
+}
+
+/**
+ * Highest numeric suffix already used for this prefix (DM-0007 → 7).
+ * One aggregate query instead of loading every matching code.
+ */
+async function maxExistingCylinderNumber(
+  db: DbClient,
+  prefix: string
+): Promise<number> {
+  const escaped = safeCodePrefix(prefix);
+  const rows = await db.$queryRaw<Array<{ max: number | bigint | null }>>(
+    Prisma.sql`
+      SELECT MAX(CAST(SUBSTRING(code FROM '[0-9]+$') AS INTEGER)) AS max
+      FROM cylinders
+      WHERE code ~* ${'^' + escaped + '[-]?[0-9]+$'}
+    `
+  );
+  return Number(rows[0]?.max ?? 0);
+}
 
 /**
  * Generate unique cylinder code based on type name or cylinder type
@@ -21,40 +53,10 @@ export async function generateUniqueCylinderCode(
 ): Promise<string> {
   const db = tx || prisma;
   const prefix = getCylinderCodePrefix(input, isTypeName);
-  
-  // Find all existing cylinders with this prefix (case-insensitive)
-  const existingCylinders = await db.cylinder.findMany({
-    where: {
-      code: {
-        startsWith: prefix,
-        mode: 'insensitive'
-      }
-    },
-    select: {
-      code: true
-    },
-    orderBy: {
-      code: 'desc'
-    }
-  });
-  
-  // Extract numbers from existing codes and find the highest
-  let maxNumber = 0;
-  existingCylinders.forEach(cylinder => {
-    const match = cylinder.code.match(new RegExp(`^${prefix}[-]?(\\d+)`, 'i'));
-    if (match) {
-      const number = parseInt(match[1], 10);
-      if (Number.isFinite(number) && number > maxNumber) {
-        maxNumber = number;
-      }
-    }
-  });
-  
-  // Find the next available number that does not exist in DB or usedCodes
-  let candidateNumber = maxNumber + 1;
+
+  let candidateNumber = (await maxExistingCylinderNumber(db, prefix)) + 1;
   while (true) {
-    const padding = candidateNumber > 9999 ? 5 : 4;
-    const cylinderCode = `${prefix}-${candidateNumber.toString().padStart(padding, '0')}`;
+    const cylinderCode = formatCylinderCode(prefix, candidateNumber);
 
     if (usedCodes?.has(cylinderCode)) {
       candidateNumber++;
@@ -75,6 +77,28 @@ export async function generateUniqueCylinderCode(
 
     candidateNumber++;
   }
+}
+
+/**
+ * Generate `count` sequential unique codes in one pass — same prefix, numbering
+ * and padding rules as `generateUniqueCylinderCode`, but reads existing codes
+ * once instead of once per cylinder.
+ */
+export async function generateCylinderCodeBatch(
+  input: string,
+  count: number,
+  isTypeName: boolean = true,
+  tx?: Prisma.TransactionClient
+): Promise<string[]> {
+  const db = tx || prisma;
+  const prefix = getCylinderCodePrefix(input, isTypeName);
+  let candidateNumber = (await maxExistingCylinderNumber(db, prefix)) + 1;
+  const codes: string[] = [];
+  while (codes.length < count) {
+    codes.push(formatCylinderCode(prefix, candidateNumber));
+    candidateNumber++;
+  }
+  return codes;
 }
 
 

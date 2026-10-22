@@ -193,3 +193,6 @@ export function getCylinderCodePrefix(input: string, isTypeName: boolean = true)
   }
 }
 
+/** Shared cap for add / edit / delete in one request. Available inventory can exceed 1000. */
+export const MAX_BULK_CYLINDER_QUANTITY = 10_000;
+

@@ -8,6 +8,7 @@ import {
   buildPrismaCylinderVariantWhere,
   parseCylinderVariantKey,
 } from '@/lib/cylinder-variant-key';
+import { MAX_BULK_CYLINDER_QUANTITY } from '@/lib/cylinder-utils';
 
 const INVENTORY_STATUSES = new Set(['FULL', 'EMPTY']);
 
@@ -41,9 +42,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 1000) {
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_BULK_CYLINDER_QUANTITY) {
       return NextResponse.json(
-        { success: false, error: 'Quantity must be a whole number between 1 and 1000.' },
+        { success: false, error: `Quantity must be a whole number between 1 and ${MAX_BULK_CYLINDER_QUANTITY}.` },
         { status: 400 }
       );
     }
