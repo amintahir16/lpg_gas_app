@@ -15,7 +15,10 @@ export type DashboardSalesActivityRow = {
   type: string;
   title: string;
   description: string;
+  /** Record creation time — used for ordering and payment allocation. */
   time: string;
+  /** Operator-entered transaction time (same value the customer ledger shows). */
+  transactionTime?: string;
   amount: number;
   totalAmount: number;
   paidAmount: number;
@@ -141,6 +144,74 @@ export function groupCylinderLines(items: CylinderLine[]): string {
     .join(', ');
 }
 
+type B2bActivityItem = CylinderLine & {
+  returnedCondition?: string | null;
+  buybackRate?: MoneyLike;
+};
+
+/**
+ * Split B2B cylinder lines the same way the customer ledger does: a unified
+ * SALE can also carry empty returns (returnedCondition set) and buybacks
+ * (remainingKg / buybackRate set) — those are not sold cylinders.
+ */
+export function splitB2bCylinderItems<T extends B2bActivityItem>(items: T[]): {
+  sold: T[];
+  returned: T[];
+  boughtBack: T[];
+} {
+  const sold: T[] = [];
+  const returned: T[] = [];
+  const boughtBack: T[] = [];
+  for (const item of items) {
+    if (!item.cylinderType) continue;
+    const isBuyback =
+      Number(item.remainingKg || 0) > 0 ||
+      (item.buybackRate !== null && item.buybackRate !== undefined);
+    if (isBuyback) boughtBack.push(item);
+    else if (item.returnedCondition) returned.push(item);
+    else sold.push(item);
+  }
+  return { sold, returned, boughtBack };
+}
+
+/** Details text for a B2B SALE row (sold / returned / bought back). */
+export function describeB2bSaleActivity<T extends B2bActivityItem>(
+  items: T[],
+  customer: string,
+  groupCylinders: (lines: T[]) => string = groupCylinderLines
+): string {
+  const { sold, returned, boughtBack } = splitB2bCylinderItems(items);
+  const accessoryItems = items.filter((i) => !i.cylinderType);
+  const accCount = accessoryItems.reduce((s, i) => s + Number(i.quantity || 0), 0);
+
+  const soldParts: string[] = [];
+  const cylSummary = groupCylinders(sold);
+  if (cylSummary) soldParts.push(cylSummary);
+  if (accCount > 0) {
+    const accNames = Array.from(
+      new Set(accessoryItems.map((a) => a.productName?.trim()).filter(Boolean))
+    );
+    const accLabel =
+      accNames.length === 1 ? accNames[0]! : `accessor${accCount > 1 ? 'ies' : 'y'}`;
+    soldParts.push(`${accCount} ${accLabel}`);
+  }
+  const soldSummary = soldParts.join(' + ');
+
+  const extras: string[] = [];
+  const returnSummary = groupCylinders(returned);
+  if (returnSummary) extras.push(`${returnSummary} returned`);
+  const buybackSummary = groupCylinders(boughtBack);
+  if (buybackSummary) extras.push(`${buybackSummary} bought back`);
+
+  if (soldSummary) {
+    return [`${soldSummary} sold to ${customer}`, ...extras].join(' • ');
+  }
+  if (extras.length) {
+    return `${extras.join(' • ')} by ${customer}`;
+  }
+  return `Sale to ${customer}`;
+}
+
 export function userDisplayName(user: {
   name?: string | null;
   firstName?: string | null;
@@ -160,6 +231,7 @@ export function buildB2bActivityRow(t: {
   id: string;
   billSno: string | null;
   createdAt: Date;
+  time?: Date | null;
   createdBy?: string | null;
   voided?: boolean | null;
   transactionType: string;
@@ -169,7 +241,7 @@ export function buildB2bActivityRow(t: {
   paymentStatus?: string | null;
   customerId: string;
   customer?: { id: string; name: string } | null;
-  items?: Array<CylinderLine & { pricePerItem?: MoneyLike }>;
+  items?: Array<B2bActivityItem & { pricePerItem?: MoneyLike }>;
   users?: {
     name?: string | null;
     firstName?: string | null;
@@ -178,35 +250,17 @@ export function buildB2bActivityRow(t: {
   } | null;
 }): DashboardSalesActivityRow {
   const customer = t.customer?.name || 'Unknown';
-  const billTag = t.billSno ? `Bill ${t.billSno}` : 'Bill —';
   const items = t.items || [];
-  const cylinderItems = items.filter((i) => i.cylinderType);
-  const accessoryItems = items.filter((i) => !i.cylinderType);
-  const accCount = accessoryItems.reduce((s, i) => s + Number(i.quantity || 0), 0);
-  const cylSummary = groupCylinderLines(cylinderItems);
 
   let title = 'B2B Transaction';
-  let description = `${customer} • ${billTag}`;
+  let description = customer;
 
   if (t.transactionType === 'PAYMENT') {
     title = 'B2B Payment';
-    description = `Direct payment from ${customer} (applied to open sales) • ${billTag}`;
+    description = `Direct payment from ${customer} (applied to open sales)`;
   } else if (t.transactionType === 'SALE') {
     title = 'B2B Sale';
-    const parts: string[] = [];
-    if (cylSummary) parts.push(cylSummary);
-    if (accCount > 0) {
-      const accNames = Array.from(
-        new Set(accessoryItems.map((a) => a.productName?.trim()).filter(Boolean))
-      );
-      const accLabel =
-        accNames.length === 1 ? accNames[0]! : `accessor${accCount > 1 ? 'ies' : 'y'}`;
-      parts.push(`${accCount} ${accLabel}`);
-    }
-    const summary = parts.join(' + ');
-    description = summary
-      ? `${summary} sold to ${customer} • ${billTag}`
-      : `Sale to ${customer} • ${billTag}`;
+    description = describeB2bSaleActivity(items, customer);
   }
 
   const isPayment = t.transactionType === 'PAYMENT';
@@ -242,6 +296,7 @@ export function buildB2bActivityRow(t: {
     title,
     description,
     time: t.createdAt.toISOString(),
+    transactionTime: t.time?.toISOString(),
     amount: totalAmount,
     totalAmount,
     paidAmount,
@@ -307,6 +362,7 @@ export function buildB2cActivityRow(
     id: string;
     billSno: string | null;
     createdAt: Date;
+    time?: Date | null;
     createdBy?: string | null;
     voided?: boolean | null;
     finalAmount?: MoneyLike;
@@ -321,7 +377,6 @@ export function buildB2cActivityRow(
   recordedByName?: string | null
 ): DashboardSalesActivityRow {
   const customer = t.customer?.name || 'Unknown';
-  const billTag = t.billSno ? `Bill ${t.billSno}` : 'Bill —';
   const gasItems = t.gasItems || [];
   const accessoryItems = t.accessoryItems || [];
   const gasQty = gasItems.reduce((s, i) => s + Number(i.quantity || 0), 0);
@@ -347,8 +402,8 @@ export function buildB2cActivityRow(
   else title = 'B2C Sale';
 
   const description = parts.length
-    ? `${parts.join(' • ')} for ${customer} • ${billTag}`
-    : `Sale to ${customer} • ${billTag}`;
+    ? `${parts.join(' • ')} for ${customer}`
+    : `Sale to ${customer}`;
 
   const totalAmount = b2cSalesAmount(t);
 
@@ -361,6 +416,7 @@ export function buildB2cActivityRow(
     title,
     description,
     time: t.createdAt.toISOString(),
+    transactionTime: t.time?.toISOString(),
     amount: totalAmount,
     totalAmount,
     paidAmount: totalAmount,

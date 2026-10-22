@@ -21,6 +21,7 @@ import {
   allocateB2bPaymentsOntoSales,
   b2cSalesActivityWhere,
   b2cSalesAmount,
+  describeB2bSaleActivity,
   type DashboardSalesActivityRow,
 } from '@/lib/dashboard-sales-activities';
 
@@ -587,6 +588,7 @@ export async function GET(request: NextRequest) {
           paymentStatus: true,
           customerId: true,
           createdAt: true,
+          time: true,
           createdBy: true,
           voided: true,
           customer: { select: { id: true, name: true } },
@@ -600,6 +602,8 @@ export async function GET(request: NextRequest) {
               cylinderVariantKey: true,
               productName: true,
               remainingKg: true,
+              returnedCondition: true,
+              buybackRate: true,
             },
           },
         },
@@ -622,6 +626,7 @@ export async function GET(request: NextRequest) {
           deliveryCharges: true,
           customerId: true,
           createdAt: true,
+          time: true,
           createdBy: true,
           voided: true,
           customer: { select: { id: true, name: true } },
@@ -765,7 +770,6 @@ export async function GET(request: NextRequest) {
 
     const buildB2BTitleAndDescription = (t: typeof recentB2B[number]) => {
       const customer = t.customer?.name || 'Unknown';
-      const billTag = `Bill ${t.billSno}`;
       const cylinderItems = t.items.filter((i) => i.cylinderType);
       const accessoryItems = t.items.filter((i) => !i.cylinderType);
       const accCount = accessoryItems.reduce((s, i) => s + Number(i.quantity || 0), 0);
@@ -785,19 +789,15 @@ export async function GET(request: NextRequest) {
       };
 
       switch (t.transactionType) {
-        case 'SALE': {
-          const summary = buildSaleSummary();
+        case 'SALE':
           return {
             title: 'B2B Sale',
-            description: summary
-              ? `${summary} sold to ${customer} • ${billTag}`
-              : `Sale to ${customer} • ${billTag}`,
+            description: describeB2bSaleActivity(t.items, customer, groupCylinderItems),
           };
-        }
         case 'PAYMENT':
           return {
             title: 'B2B Payment',
-            description: `Direct payment from ${customer} (applied to open sales) • ${billTag}`,
+            description: `Direct payment from ${customer} (applied to open sales)`,
           };
         case 'BUYBACK': {
           // Buyback is gas-by-the-kg, not by cylinder count.
@@ -817,8 +817,8 @@ export async function GET(request: NextRequest) {
           return {
             title: 'B2B Buyback',
             description: kgLabel
-              ? `Bought back ${kgLabel} gas${typeStr} from ${customer} • ${billTag}`
-              : `Buyback from ${customer} • ${billTag}`,
+              ? `Bought back ${kgLabel} gas${typeStr} from ${customer}`
+              : `Buyback from ${customer}`,
           };
         }
         case 'RETURN_EMPTY': {
@@ -826,25 +826,25 @@ export async function GET(request: NextRequest) {
           return {
             title: 'B2B Empty Return',
             description: summary
-              ? `${summary} empty returned by ${customer} • ${billTag}`
-              : `Empty cylinders returned by ${customer} • ${billTag}`,
+              ? `${summary} empty returned by ${customer}`
+              : `Empty cylinders returned by ${customer}`,
           };
         }
         case 'ADJUSTMENT':
           return {
             title: 'B2B Adjustment',
-            description: `Ledger adjustment for ${customer} • ${billTag}`,
+            description: `Ledger adjustment for ${customer}`,
           };
         case 'CREDIT_NOTE':
           return {
             title: 'B2B Credit Note',
-            description: `Credit note issued to ${customer} • ${billTag}`,
+            description: `Credit note issued to ${customer}`,
           };
         default: {
           const summary = buildSaleSummary();
           return {
             title: 'B2B Transaction',
-            description: summary ? `${summary} • ${customer} • ${billTag}` : `${customer} • ${billTag}`,
+            description: summary ? `${summary} • ${customer}` : `${customer}`,
           };
         }
       }
@@ -867,7 +867,6 @@ export async function GET(request: NextRequest) {
 
     const buildB2CTitleAndDescription = (t: typeof recentB2C[number]) => {
       const customer = t.customer?.name || 'Unknown';
-      const billTag = `Bill ${t.billSno}`;
       const gasQty = t.gasItems?.reduce((s, i) => s + Number(i.quantity || 0), 0) || 0;
       const accQty = t.accessoryItems?.reduce((s, i) => s + Number(i.quantity || 0), 0) || 0;
 
@@ -891,8 +890,8 @@ export async function GET(request: NextRequest) {
       else if (accQty > 0) title = 'B2C Accessory Sale';
 
       const description = parts.length
-        ? `${parts.join(' • ')} for ${customer} • ${billTag}`
-        : `Delivery to ${customer} • ${billTag}`;
+        ? `${parts.join(' • ')} for ${customer}`
+        : `Delivery to ${customer}`;
 
       return { title, description };
     };
@@ -945,6 +944,7 @@ export async function GET(request: NextRequest) {
           title,
           description,
           time: t.createdAt.toISOString(),
+          transactionTime: t.time.toISOString(),
           amount: totalAmount,
           totalAmount,
           paidAmount,
@@ -976,6 +976,7 @@ export async function GET(request: NextRequest) {
           title,
           description,
           time: t.createdAt.toISOString(),
+          transactionTime: t.time.toISOString(),
           amount: totalAmount,
           totalAmount,
           paidAmount: totalAmount,

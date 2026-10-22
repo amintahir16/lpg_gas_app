@@ -17,7 +17,7 @@ import { calculateGasUnitCostFromPlant } from '@/lib/gas-profit';
 import { parseCylinderVariantKey } from '@/lib/cylinder-variant-key';
 import { formatB2bItemCylinderLabel } from '@/lib/b2b-transaction-item-variant';
 import { OPENING_BALANCE_NOTE, OPENING_DUES_NOTE, OPENING_DUES_REF } from '@/lib/b2b-opening-entries';
-import { todayLocalDate } from '@/lib/financial-period';
+import { nowLocalTime, todayLocalDate } from '@/lib/financial-period';
 import {
   ArrowLeftIcon,
   DocumentTextIcon,
@@ -2113,6 +2113,8 @@ export default function B2BCustomerDetailPage() {
                 onClick={() => {
                   setTransactionType('UNIFIED');
                   resetUnifiedForm();
+                  setTransactionDate(todayLocalDate());
+                  setTransactionTime(nowLocalTime());
                   setShowTransactionForm(true);
                 }}
                 className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-md h-9"

@@ -160,7 +160,7 @@ export function buildSalesActivitiesPdf(input: SalesActivitiesPdfInput): Blob {
             statusLabel(a.paymentStatus),
             a.recordedBy || '—',
             formatWhen(a.time),
-            (a.description || '—').slice(0, 60),
+            a.description || '—',
           ])
         : [['—', '—', '—', '—', '—', '—', '—', '—', '—', 'No activities']],
     foot:

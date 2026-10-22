@@ -60,6 +60,7 @@ interface RecentActivity {
   title: string;
   description: string;
   time: string;
+  transactionTime?: string;
   amount: number;
   status: 'success' | 'warning' | 'error';
   transactionId?: string;
@@ -194,13 +195,14 @@ export default function DashboardPage() {
 
   const formatTime = (timeString: string) => {
     const date = new Date(timeString);
-    const now = new Date();
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+    const clock = date.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
 
-    if (diffInHours < 1) return 'Just now';
-    if (diffInHours < 24) return `${diffInHours} hours ago`;
-    if (diffInHours < 48) return 'Yesterday';
-    return date.toLocaleDateString();
+    if (date.toDateString() === today.toDateString()) return { clock, day: 'Today' };
+    if (date.toDateString() === yesterday.toDateString()) return { clock, day: 'Yesterday' };
+    return { clock, day: date.toLocaleDateString() };
   };
 
   const formatCurrency = (amount: number) => {
@@ -256,6 +258,7 @@ export default function DashboardPage() {
         paymentStatus: string;
         recordedBy: string | null;
         time: string;
+        transactionTime?: string;
         description: string;
       }>;
     }>;
@@ -273,6 +276,7 @@ export default function DashboardPage() {
       paymentStatus: string;
       recordedBy: string | null;
       time: string;
+      transactionTime?: string;
       description: string;
     }>;
   }) => {
@@ -290,7 +294,7 @@ export default function DashboardPage() {
         unpaidAmount: a.unpaidAmount ?? 0,
         paymentStatus: a.paymentStatus || 'UNPAID',
         recordedBy: a.recordedBy || null,
-        time: a.time,
+        time: a.transactionTime || a.time,
         description: a.description,
       })),
     });
@@ -771,7 +775,7 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <Table className="min-w-[920px]">
+            <Table className="min-w-[880px] text-xs [&_th]:h-10 [&_th]:px-3 [&_td]:px-3 [&_td]:py-2.5">
               <TableHeader className="bg-gray-50/50">
                 <TableRow>
                   <TableHead className="font-semibold text-gray-700">Type</TableHead>
@@ -803,7 +807,7 @@ export default function DashboardPage() {
                         <TableCell>
                           <Badge
                             variant="outline"
-                            className={`font-semibold whitespace-nowrap ${typeBadgeClass(activity.type)}`}
+                            className={`px-2 text-[11px] font-semibold whitespace-nowrap ${typeBadgeClass(activity.type)}`}
                           >
                             {activity.title}
                           </Badge>
@@ -834,7 +838,7 @@ export default function DashboardPage() {
                         </TableCell>
                         <TableCell>
                           <span
-                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${pay.className}`}
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${pay.className}`}
                           >
                             {activity.paymentStatus === 'FULLY_PAID' ||
                             activity.paymentStatus === 'RECEIVED' ? (
@@ -845,14 +849,22 @@ export default function DashboardPage() {
                             {pay.label}
                           </span>
                         </TableCell>
-                        <TableCell className="text-sm text-gray-700">
+                        <TableCell className="text-gray-700">
                           {activity.recordedBy || '—'}
                         </TableCell>
-                        <TableCell className="text-gray-500 text-sm whitespace-nowrap">
-                          {formatTime(activity.time)}
+                        <TableCell className="text-gray-500 whitespace-nowrap">
+                          {(() => {
+                            const when = formatTime(activity.transactionTime || activity.time);
+                            return (
+                              <>
+                                <div className="text-gray-700">{when.clock}</div>
+                                <div className="text-[10px] text-gray-400 mt-0.5">{when.day}</div>
+                              </>
+                            );
+                          })()}
                         </TableCell>
-                        <TableCell className="text-sm text-gray-600 max-w-[220px]">
-                          <span className="line-clamp-2">{activity.description}</span>
+                        <TableCell className="text-gray-600 max-w-[260px]">
+                          <span className="line-clamp-3" title={activity.description}>{activity.description}</span>
                         </TableCell>
                       </TableRow>
                     );
