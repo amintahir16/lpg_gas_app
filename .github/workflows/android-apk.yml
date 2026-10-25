@@ -56,11 +56,11 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      # Default setup-android only installs tools + platform-tools; Gradle still needs
-      # the compile SDK platform + build-tools (see variables.gradle compileSdkVersion).
-      - uses: android-actions/setup-android@v3
+      # Google no longer serves the legacy `tools` package. cmdline-tools (sdkmanager)
+      # is installed by this action; Gradle still needs the compile SDK + build-tools.
+      - uses: android-actions/setup-android@v4
         with:
-          packages: 'tools platform-tools platforms;android-36 build-tools;35.0.0'
+          packages: 'platform-tools platforms;android-36 build-tools;35.0.0'
 
       - name: Make Gradle wrapper executable (Linux CI)
         run: chmod +x android/gradlew
