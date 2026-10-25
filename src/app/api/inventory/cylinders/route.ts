@@ -85,7 +85,9 @@ export async function GET(request: NextRequest) {
       allConditions.push({
         OR: [
           { code: { contains: search, mode: 'insensitive' } },
-          { location: { contains: search, mode: 'insensitive' } }
+          { location: { contains: search, mode: 'insensitive' } },
+          { typeName: { contains: search, mode: 'insensitive' } },
+          { cylinderType: { contains: search, mode: 'insensitive' } },
         ]
       });
     }
@@ -111,7 +113,12 @@ export async function GET(request: NextRequest) {
     // Region scoping is handled at the top-level `where` (regionScopedWhere) so
     // it applies regardless of which AND/OR branches are used.
 
-    // Get cylinders with pagination
+    // Get total first so a stale page (e.g. page 2 after a filter shrinks
+    // results to one page) cannot return an empty slice.
+    const total = await prisma.cylinder.count({ where });
+    const pages = Math.ceil(total / limit);
+    const safePage = pages > 0 ? Math.min(Math.max(1, page), pages) : 1;
+
     const cylinders = await prisma.cylinder.findMany({
       where,
       include: {
@@ -127,15 +134,16 @@ export async function GET(request: NextRequest) {
           }
         }
       },
-      skip: (page - 1) * limit,
+      skip: (safePage - 1) * limit,
       take: limit,
-      orderBy: {
-        createdAt: 'desc'
-      }
+      // Newest first. `code` is the tie-breaker so a bulk createMany batch
+      // (identical createdAt) still lists highest numbers first, same as the
+      // old one-by-one inserts. Bulk add/edit/delete are unchanged.
+      orderBy: [
+        { createdAt: 'desc' },
+        { code: 'desc' },
+      ]
     });
-
-    // Get total count
-    const total = await prisma.cylinder.count({ where });
 
     // Convert Decimal fields to numbers for JSON serialization
     const serializedCylinders = cylinders.map(cylinder => ({
@@ -149,10 +157,10 @@ export async function GET(request: NextRequest) {
       success: true,
       cylinders: serializedCylinders,
       pagination: {
-        page,
+        page: safePage,
         limit,
         total,
-        pages: Math.ceil(total / limit)
+        pages
       }
     });
   } catch (error) {

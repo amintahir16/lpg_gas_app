@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
-    const limit = clampLimit(searchParams.get('limit'), 10);
+    const limit = clampLimit(searchParams.get('limit'), 30);
     const filterStatus = searchParams.get('status') || 'ALL'; // 'ACTIVE' | 'INACTIVE' | 'ALL'
     const filterType = searchParams.get('type') || 'ALL'; // 'B2B' | 'B2C' | 'ALL'
     const skip = (page - 1) * limit;

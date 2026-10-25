@@ -20,6 +20,8 @@ export async function GET(request: NextRequest) {
       where.OR = [
         { code: { contains: search, mode: 'insensitive' } },
         { location: { contains: search, mode: 'insensitive' } },
+        { typeName: { contains: search, mode: 'insensitive' } },
+        { cylinderType: { contains: search, mode: 'insensitive' } },
         {
           heldByCustomer: {
             OR: [

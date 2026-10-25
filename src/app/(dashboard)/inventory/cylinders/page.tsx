@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -84,6 +84,7 @@ export default function CylindersInventoryPage() {
   const [totalCylinderCount, setTotalCylinderCount] = useState(0);
   const [activeBranchName, setActiveBranchName] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [typeFilter, setTypeFilter] = useState(initialTypeFilter);
   const [locationFilter, setLocationFilter] = useState('ALL');
@@ -118,48 +119,60 @@ export default function CylindersInventoryPage() {
     pages: 0
   });
 
-  useEffect(() => {
-    // Initial load - fetch stats and cylinders
-    fetchCylinderTypeStats();
-    fetchCylinders();
-  }, []);
+  const filterKey = `${debouncedSearch}|${statusFilter}|${typeFilter}|${locationFilter}`;
+  const prevFilterKeyRef = useRef(filterKey);
+  if (prevFilterKeyRef.current !== filterKey) {
+    prevFilterKeyRef.current = filterKey;
+    if (pagination.page !== 1) {
+      setPagination(prev => ({ ...prev, page: 1 }));
+    }
+  }
 
   useEffect(() => {
-    // Reset to page 1 when filters change
-    setPagination(prev => ({ ...prev, page: 1 }));
-    fetchCylinderTypeStats();
-  }, [searchTerm, statusFilter, typeFilter, locationFilter]);
+    const timer = window.setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => window.clearTimeout(timer);
+  }, [searchTerm]);
 
-  useEffect(() => {
-    fetchCylinders();
-  }, [pagination.page, searchTerm, statusFilter, typeFilter, locationFilter]);
-
-  const fetchCylinders = async () => {
+  const fetchCylinders = useCallback(async (signal?: AbortSignal) => {
     try {
       setLoading(true);
       const params = new URLSearchParams({
-        search: searchTerm,
-        status: statusFilter === 'ALL' ? 'ALL' : statusFilter, // Send 'ALL' explicitly
-        type: typeFilter === 'ALL' ? 'ALL' : typeFilter, // Send 'ALL' explicitly
+        search: debouncedSearch,
+        status: statusFilter === 'ALL' ? 'ALL' : statusFilter,
+        type: typeFilter === 'ALL' ? 'ALL' : typeFilter,
         location: locationFilter === 'ALL' ? '' : locationFilter,
         page: pagination.page.toString(),
         limit: pagination.limit.toString()
       });
 
       const response = await fetch(`/api/inventory/cylinders?${params}`, {
-        credentials: 'include'
+        credentials: 'include',
+        signal,
       });
+      if (signal?.aborted) return;
       if (response.ok) {
         const data = await response.json();
         setCylinders(data.cylinders);
-        setPagination(data.pagination);
+        setPagination(prev => {
+          const pages = data.pagination?.pages ?? prev.pages;
+          const total = data.pagination?.total ?? prev.total;
+          const page = pages > 0 ? Math.min(prev.page, pages) : 1;
+          return { ...prev, total, pages, page };
+        });
       }
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
       console.error('Failed to fetch cylinders:', error);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
-  };
+  }, [debouncedSearch, statusFilter, typeFilter, locationFilter, pagination.page, pagination.limit]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetchCylinders(controller.signal);
+    return () => controller.abort();
+  }, [fetchCylinders]);
 
   const fetchCylinderTypeStats = async () => {
     try {
@@ -227,6 +240,10 @@ export default function CylindersInventoryPage() {
       console.error('Failed to fetch cylinder type stats:', error);
     }
   };
+
+  useEffect(() => {
+    fetchCylinderTypeStats();
+  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {

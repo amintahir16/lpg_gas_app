@@ -115,7 +115,7 @@ export default function B2CCustomersPage() {
   const [error, setError] = useState<string | null>(null);
   const [pagination, setPagination] = useState({
     page: 1,
-    limit: 10,
+    limit: 30,
     total: 0,
     pages: 0
   });
