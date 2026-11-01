@@ -24,6 +24,7 @@ import {
   describeB2bSaleActivity,
   type DashboardSalesActivityRow,
 } from '@/lib/dashboard-sales-activities';
+import { getProductsSoldData } from '@/lib/products-sold';
 
 export const dynamic = 'force-dynamic';
 
@@ -1066,6 +1067,8 @@ export async function GET(request: NextRequest) {
       });
     });
 
+    const productsSold = await getProductsSoldData({ startDate, endDate, regionId });
+
     const stats = {
       kpis: {
         totalCustomers,
@@ -1084,6 +1087,7 @@ export async function GET(request: NextRequest) {
       expensesChartData,
       cylinderStatusData,
       accessoryInventoryData,
+      productsSold,
       recentActivities: activities
     };
 

@@ -23,6 +23,7 @@ import {
   CreditCardIcon,
   DocumentArrowDownIcon,
   ShareIcon,
+  ShoppingBagIcon,
 } from '@heroicons/react/24/outline';
 import {
   BarChart,
@@ -76,6 +77,14 @@ interface RecentActivity {
   recordedBy?: string | null;
 }
 
+interface ProductsSoldItem {
+  name: string;
+  type: string;
+  rawType?: string;
+  quantity: number;
+  revenue: number;
+}
+
 interface DashboardStats {
   kpis: {
     totalCustomers: number;
@@ -94,6 +103,7 @@ interface DashboardStats {
   expensesChartData: any[];
   cylinderStatusData: any[];
   accessoryInventoryData: any[];
+  productsSold?: ProductsSoldItem[];
   recentActivities: RecentActivity[];
 }
 
@@ -131,6 +141,28 @@ export default function DashboardPage() {
       { total: 0, paid: 0, unpaid: 0 }
     );
   }, [stats?.recentActivities]);
+
+  const productsSoldItems = useMemo(
+    () => (stats?.productsSold || []).filter((i) => !i.name.toLowerCase().includes('security return')),
+    [stats?.productsSold]
+  );
+  const productsSoldCylinders = useMemo(
+    () => productsSoldItems.filter((i) => i.type === 'Cylinder'),
+    [productsSoldItems]
+  );
+  const productsSoldAccessories = useMemo(
+    () => productsSoldItems.filter((i) => i.type === 'Accessory'),
+    [productsSoldItems]
+  );
+  const productsSoldTotals = useMemo(() => {
+    return productsSoldItems.reduce(
+      (acc, item) => {
+        acc.qty += item.quantity;
+        return acc;
+      },
+      { qty: 0 }
+    );
+  }, [productsSoldItems]);
 
   useEffect(() => {
     // Wait until auth session status is determined before fetching to prevent 401 cold-start race conditions
@@ -728,6 +760,97 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Products Sold Table */}
+      <Card className="border shadow-sm bg-white">
+        <CardHeader className="pb-2">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle className="text-base font-bold text-gray-900 flex items-center">
+                <ShoppingBagIcon className="w-4 h-4 mr-1.5 text-gray-500" />
+                Products Sold
+              </CardTitle>
+              <CardDescription className="text-xs">
+                {stats.label || periodLabel} — cylinders and accessories sold
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table className="min-w-[500px] text-xs [&_th]:h-10 [&_th]:px-3 [&_td]:px-3 [&_td]:py-2.5">
+              <TableHeader className="bg-gray-50/50">
+                <TableRow>
+                  <TableHead className="font-semibold text-gray-700">Product</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Type</TableHead>
+                  <TableHead className="font-semibold text-gray-700 text-right">Qty Sold</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {productsSoldItems.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-center py-8 text-gray-500">
+                      No sales data for this period.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  <>
+                    {productsSoldCylinders.length > 0 && (
+                      <>
+                        <TableRow className="bg-emerald-50/40 hover:bg-emerald-50/40">
+                          <TableCell colSpan={3} className="font-bold text-emerald-800 text-xs uppercase tracking-wider py-2">
+                            Gas Cylinders
+                          </TableCell>
+                        </TableRow>
+                        {productsSoldCylinders.map((item, idx) => (
+                          <TableRow key={`cyl-${idx}`} className="hover:bg-gray-50/50">
+                            <TableCell className="font-medium text-gray-900">{item.name}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="px-2 text-[11px] font-semibold text-emerald-700 border-emerald-200 bg-emerald-50 whitespace-nowrap">
+                                Cylinder
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-semibold text-gray-800">{item.quantity}</TableCell>
+                          </TableRow>
+                        ))}
+                      </>
+                    )}
+                    {productsSoldAccessories.length > 0 && (
+                      <>
+                        <TableRow className="bg-purple-50/40 hover:bg-purple-50/40">
+                          <TableCell colSpan={3} className="font-bold text-purple-800 text-xs uppercase tracking-wider py-2">
+                            Accessories
+                          </TableCell>
+                        </TableRow>
+                        {productsSoldAccessories.map((item, idx) => (
+                          <TableRow key={`acc-${idx}`} className="hover:bg-gray-50/50">
+                            <TableCell className="font-medium text-gray-900">{item.name}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="px-2 text-[11px] font-semibold text-purple-700 border-purple-200 bg-purple-50 whitespace-nowrap">
+                                Accessory
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-semibold text-gray-800">{item.quantity}</TableCell>
+                          </TableRow>
+                        ))}
+                      </>
+                    )}
+                  </>
+                )}
+              </TableBody>
+              {productsSoldItems.length > 0 && (
+                <TableFooter>
+                  <TableRow className="bg-slate-50 border-t-2 border-slate-200">
+                    <TableCell className="font-bold text-gray-900">Total</TableCell>
+                    <TableCell />
+                    <TableCell className="text-right font-bold text-gray-900">{productsSoldTotals.qty}</TableCell>
+                  </TableRow>
+                </TableFooter>
+              )}
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Recent Activities */}
       <Card className="border shadow-sm bg-white">
