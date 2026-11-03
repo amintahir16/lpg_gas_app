@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,7 @@ import { CustomSelect } from "@/components/ui/select-custom";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "react-hot-toast";
 import { SettingsSkeleton } from "@/components/skeletons";
+import DatabaseStorageCard from "@/components/DatabaseStorageCard";
 
 interface SystemSettings {
   companyName: string;
@@ -30,6 +32,8 @@ interface SystemSettings {
 
 export default function SettingsPage() {
   const router = useRouter();
+  const { data: session } = useSession();
+  const isSuperAdmin = session?.user?.role === 'SUPER_ADMIN';
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -167,6 +171,8 @@ export default function SettingsPage() {
           <p className="text-red-600">{error}</p>
         </div>
       )}
+
+      {isSuperAdmin && <DatabaseStorageCard />}
 
       {/* Main Settings Form */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
