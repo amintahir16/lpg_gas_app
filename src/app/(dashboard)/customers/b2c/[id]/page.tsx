@@ -1119,7 +1119,7 @@ export default function B2CCustomerDetailPage() {
 
                   {selectedTransaction.notes && (
                     <div className="col-span-2">
-                      <p className="text-sm text-gray-600">Notes</p>
+                      <p className="text-sm text-gray-600">Reference</p>
                       <p className="font-semibold text-gray-900">{selectedTransaction.notes}</p>
                     </div>
                   )}

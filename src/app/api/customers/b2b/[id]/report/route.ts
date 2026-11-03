@@ -12,6 +12,7 @@ import {
   isOpeningBalanceTransaction,
   isOpeningDuesSaleItem,
   isOpeningDuesTransaction,
+  OPENING_DUES_REF,
 } from '@/lib/b2b-opening-entries';
 import { sortTransactionsNewestFirst } from '@/lib/transaction-display-sort';
 import { formatPaymentMethodLabel } from '@/lib/payment-methods';
@@ -35,6 +36,12 @@ function formatDate(dateString: string | Date): string {
     month: 'short',
     day: 'numeric'
   });
+}
+
+function formatReportReference(ref?: string | null): string {
+  const t = (ref || '').trim();
+  if (!t || t === OPENING_DUES_REF || t === 'Payment') return '';
+  return t;
 }
 
 type CylinderStat = {
@@ -436,6 +443,7 @@ async function generatePDF(
       date,
       method,
       transaction.billSno || '-',
+      formatReportReference(transaction.paymentReference),
       transactionTypeText,
       itemsText,
       debit,
@@ -481,6 +489,7 @@ async function generatePDF(
     '',
     '',
     '',
+    '',
     'TOTAL:',
     '',
     formatCurrencyRsRounded(totalOut),
@@ -490,7 +499,7 @@ async function generatePDF(
 
   // Add table
   autoTable(doc, {
-    head: [['#', 'Date', 'Method', 'Bill No.', 'Type', 'Details', 'Out (-)', 'In (+)', 'Balance']],
+    head: [['#', 'Date', 'Method', 'Bill No.', 'Ref', 'Type', 'Details', 'Out (-)', 'In (+)', 'Balance']],
     body: tableData,
     startY: yPosition,
     tableWidth: pageWidth - 30,
@@ -513,13 +522,14 @@ async function generatePDF(
     columnStyles: {
       0: { halign: 'center', cellWidth: 8 },       // #
       1: { cellWidth: 16 },                         // Date
-      2: { cellWidth: 18 },                         // Method
-      3: { cellWidth: 16 },                         // Bill No.
-      4: { cellWidth: 20 },                         // Type
-      5: { cellWidth: 52 },                         // Details (wider for categorized items)
-      6: { halign: 'right', cellWidth: 16 },        // Out (-)
-      7: { halign: 'right', cellWidth: 16 },        // In (+)
-      8: { halign: 'right', cellWidth: 18 }         // Balance
+      2: { cellWidth: 16 },                         // Method
+      3: { cellWidth: 14 },                         // Bill No.
+      4: { cellWidth: 18 },                         // Ref (paper register / check #)
+      5: { cellWidth: 20 },                         // Type
+      6: { cellWidth: 38 },                         // Details
+      7: { halign: 'right', cellWidth: 16 },        // Out (-)
+      8: { halign: 'right', cellWidth: 16 },        // In (+)
+      9: { halign: 'right', cellWidth: 18 }         // Balance
     },
     margin: { left: 15, right: 15, bottom: 35 }
   });

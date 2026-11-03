@@ -517,7 +517,7 @@ export default function B2CTransactionDetailPage() {
             
             {transaction.notes && (
               <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600 mb-1">Notes:</p>
+                <p className="text-sm text-gray-600 mb-1">Reference:</p>
                 <p className="text-gray-900">{transaction.notes}</p>
               </div>
             )}

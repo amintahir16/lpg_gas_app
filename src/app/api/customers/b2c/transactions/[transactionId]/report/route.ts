@@ -318,13 +318,13 @@ async function generatePDF(transaction: any, customer: any, cylinderTypeMap: Map
     y += 5.5;
   }
 
-  // Notes
+  // Reference (stored on notes)
   if (transaction.notes) {
     y += 2;
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8.5);
     doc.setTextColor(100, 116, 139);
-    const notesLines = doc.splitTextToSize(`Note: ${transaction.notes}`, innerRight - innerLeft);
+    const notesLines = doc.splitTextToSize(`Reference: ${transaction.notes}`, innerRight - innerLeft);
     doc.text(notesLines, innerLeft, y);
     y += notesLines.length * 4.5;
   }

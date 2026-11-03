@@ -12,6 +12,7 @@ import {
   isOpeningBalanceTransaction,
   isOpeningDuesSaleItem,
   isOpeningDuesTransaction,
+  OPENING_DUES_REF,
 } from '@/lib/b2b-opening-entries';
 import { formatPaymentMethodLabel } from '@/lib/payment-methods';
 import { logoBase64 } from '@/lib/logoBase64';
@@ -449,6 +450,17 @@ async function generatePDF(
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 23, 42);
     doc.text(formatPaymentMethodLabel(transaction.paymentMethod), innerRight, y, { align: 'right' });
+    y += 5.5;
+  }
+
+  const saleReference = String(transaction.paymentReference || '').trim();
+  if (saleReference && saleReference !== OPENING_DUES_REF) {
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text('Reference:', innerLeft, y);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(saleReference, innerRight, y, { align: 'right' });
     y += 5.5;
   }
 

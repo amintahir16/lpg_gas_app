@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
 import {
     Table,
     TableBody,
@@ -1107,13 +1106,12 @@ export function B2CTransactionModal({ customerId, customerName, customer, onClos
                         {/* Summary & Footer */}
                         <div className="bg-gray-50 p-4 rounded-lg border flex flex-col md:flex-row gap-6">
                             <div className="flex-1">
-                                <label className="block text-xs font-semibold text-gray-600 mb-1">Notes</label>
-                                <Textarea
+                                <label className="block text-xs font-semibold text-gray-600 mb-1">Reference (Optional)</label>
+                                <Input
                                     value={notes}
                                     onChange={(e) => setNotes(e.target.value)}
-                                    placeholder="Add transaction notes..."
-                                    rows={2}
-                                    className="bg-white"
+                                    placeholder="Page #, Check #, Trans ID..."
+                                    className="bg-white h-9"
                                 />
                             </div>
                             <div className="md:w-1/3 flex flex-col justify-between">

@@ -243,6 +243,7 @@ async function generatePDF(
       date,
       method,
       transaction.billSno,
+      (transaction.notes || '').trim(),
       typeText,
       itemsText,
       formatCurrencyRsRounded(finalAmount)
@@ -257,13 +258,14 @@ async function generatePDF(
     '',
     '',
     '',
+    '',
     'TOTAL:',
     formatCurrencyRsRounded(totalAmount)
   ]);
 
   // Add table - use autoTable as a function
   autoTable(doc, {
-    head: [['#', 'Date', 'Method', 'Bill No.', 'Type', 'Details', 'Amount']],
+    head: [['#', 'Date', 'Method', 'Bill No.', 'Ref', 'Type', 'Details', 'Amount']],
     body: tableData,
     startY: yPosition,
     tableWidth: pageWidth - 30,
@@ -285,12 +287,13 @@ async function generatePDF(
     },
     columnStyles: {
       0: { halign: 'center', cellWidth: 10 },    // #
-      1: { cellWidth: 20 },                       // Date
-      2: { cellWidth: 20 },                       // Method
-      3: { cellWidth: 22 },                       // Bill No.
-      4: { cellWidth: 23 },                       // Type
-      5: { cellWidth: 60 },                       // Details
-      6: { halign: 'right', cellWidth: 25 }       // Amount
+      1: { cellWidth: 18 },                       // Date
+      2: { cellWidth: 18 },                       // Method
+      3: { cellWidth: 18 },                       // Bill No.
+      4: { cellWidth: 20 },                       // Ref
+      5: { cellWidth: 22 },                       // Type
+      6: { cellWidth: 50 },                       // Details
+      7: { halign: 'right', cellWidth: 24 }       // Amount
     },
     margin: { left: 15, right: 15, bottom: 35 }
   });

@@ -1451,6 +1451,14 @@ export default function B2BCustomerDetailPage() {
       if (summary.hasPayment) noteParts.push(`${formatCurrency(salePaymentAmount)} payment received via ${salePaymentMethod}`);
       notes = noteParts.join(' • ');
 
+      const trimmedRef = salePaymentReference.trim();
+      const saleReference =
+        trimmedRef && trimmedRef !== OPENING_DUES_REF
+          ? trimmedRef
+          : salePaymentAmount > 0
+            ? 'Payment'
+            : null;
+
       const transactionData = {
         transactionType: effectiveTransactionType,
         customerId,
@@ -1460,7 +1468,8 @@ export default function B2BCustomerDetailPage() {
         // Payment info
         paidAmount: salePaymentAmount > 0 ? salePaymentAmount : undefined,
         paymentMethod: salePaymentAmount > 0 ? salePaymentMethod : undefined,
-        paymentReference: salePaymentAmount > 0 ? (salePaymentReference || 'Payment') : null,
+        // Bill-level reference (paper register / check #). Keep even when unpaid.
+        paymentReference: saleReference,
         notes,
         // Combined gas items (delivery + returns)
         gasItems: effectiveTransactionType === 'PAYMENT' ? [] : allGasItems,
@@ -2585,8 +2594,8 @@ export default function B2BCustomerDetailPage() {
             )}
 
             <form onSubmit={handleTransactionSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-              {/* Date and Time Row */}
-              <div className="grid grid-cols-2 gap-4">
+              {/* Date, Time, and bill-level Reference (paid or unpaid) */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
                   <Input
@@ -2604,6 +2613,15 @@ export default function B2BCustomerDetailPage() {
                     value={transactionTime}
                     onChange={(e) => setTransactionTime(e.target.value)}
                     required
+                    className="bg-white h-9 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Reference (Optional)</label>
+                  <Input
+                    value={salePaymentReference}
+                    onChange={(e) => setSalePaymentReference(e.target.value)}
+                    placeholder="Page #, Check #, Trans ID..."
                     className="bg-white h-9 text-sm"
                   />
                 </div>
@@ -3086,7 +3104,7 @@ export default function B2BCustomerDetailPage() {
                         <Input
                           value={salePaymentReference}
                           onChange={(e) => setSalePaymentReference(e.target.value)}
-                          placeholder="Check #, Trans ID..."
+                          placeholder="Page #, Check #, Trans ID..."
                           className="w-full px-3 py-1 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-9"
                         />
                       </div>
@@ -4203,12 +4221,16 @@ export default function B2BCustomerDetailPage() {
                           )}
                         </>
                       )}
-                      {selectedTransaction.paymentReference && (
-                        <div>
-                          <p className="text-sm text-gray-600">Payment Reference</p>
-                          <p className="font-semibold text-gray-900">{selectedTransaction.paymentReference}</p>
-                        </div>
-                      )}
+                      {(() => {
+                        const ref = (selectedTransaction.paymentReference || '').trim();
+                        if (!ref || ref === OPENING_DUES_REF) return null;
+                        return (
+                          <div>
+                            <p className="text-sm text-gray-600">Reference</p>
+                            <p className="font-semibold text-gray-900">{ref}</p>
+                          </div>
+                        );
+                      })()}
                       {selectedTransaction.notes && (
                         <div className="col-span-2">
                           <p className="text-sm text-gray-600">Notes</p>
