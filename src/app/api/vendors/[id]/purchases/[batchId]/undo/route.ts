@@ -8,6 +8,7 @@ import {
   assertPurchaseEffectsReversible,
   reversePurchaseInventoryEffects,
   reverseHistoricalPurchaseInventoryFallback,
+  type CylinderSubstitution,
 } from '@/lib/purchase-undo';
 
 function isAdminRole(role?: string | null): boolean {
@@ -176,9 +177,11 @@ export async function POST(
         }
 
         let effectCount = batch.inventoryEffects?.length || 0;
+        let substitutions: CylinderSubstitution[] = [];
         if (batch.inventoryEffects && batch.inventoryEffects.length > 0) {
-          await assertPurchaseEffectsReversible(tx, batch.inventoryEffects);
-          await reversePurchaseInventoryEffects(tx, batch.inventoryEffects);
+          const plan = await assertPurchaseEffectsReversible(tx, batch.inventoryEffects);
+          await reversePurchaseInventoryEffects(tx, batch.inventoryEffects, plan);
+          substitutions = plan.substitutions;
         } else if (batch.purchaseEntries && batch.purchaseEntries.length > 0) {
           effectCount = await reverseHistoricalPurchaseInventoryFallback(
             tx,
@@ -224,6 +227,7 @@ export async function POST(
           paymentCount: batch.payments.length,
           entryCount: batch.purchaseEntries.length,
           effectCount,
+          substitutions,
         };
       });
     } catch (error) {
@@ -246,7 +250,11 @@ export async function POST(
       action: ActivityAction.VENDOR_PURCHASE_UNDONE,
       entityType: 'VENDOR_PURCHASE',
       entityId: result.batch.id,
-      details: `Undid purchase for "${vendor.companyName}" • Invoice: ${result.batch.invoiceNumber || 'N/A'} • Amount: Rs ${Number(result.batch.totalAmount).toLocaleString()} • Reason: ${reason}`,
+      details: `Undid purchase for "${vendor.companyName}" • Invoice: ${result.batch.invoiceNumber || 'N/A'} • Amount: Rs ${Number(result.batch.totalAmount).toLocaleString()} • Reason: ${reason}${
+        result.substitutions.length > 0
+          ? ` • Reverted in place of sold/moved cylinders: ${result.substitutions.map((s) => `${s.substituteCode} (for ${s.originalCode})`).join(', ')}`
+          : ''
+      }`,
       link: `/vendors/${vendorId}`,
       regionId,
       metadata: {
@@ -258,6 +266,7 @@ export async function POST(
         paymentCount: result.paymentCount,
         entryCount: result.entryCount,
         inventoryEffectCount: result.effectCount,
+        cylinderSubstitutions: result.substitutions,
       },
     });
 

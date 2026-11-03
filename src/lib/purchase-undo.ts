@@ -22,14 +22,133 @@ function str(value: unknown): string | null {
   return typeof value === 'string' ? value : value == null ? null : String(value);
 }
 
+export type CylinderSubstitution = {
+  originalCylinderId: string;
+  originalCode: string;
+  originalStatus: string;
+  substituteCylinderId: string;
+  substituteCode: string;
+};
+
+export interface PurchaseReversalPlan {
+  substitutions: CylinderSubstitution[];
+}
+
+type DriftedGasFill = {
+  id: string;
+  code: string;
+  currentStatus: string;
+  cylinderType: string;
+  typeName: string | null;
+  capacity: Prisma.Decimal | number;
+  regionId: string | null;
+};
+
+function isGasFillEffect(before: JsonRecord | null, after: JsonRecord | null): boolean {
+  return str(before?.currentStatus) === 'EMPTY' && str(after?.currentStatus) === 'FULL';
+}
+
 /**
- * Validates that every recorded inventory effect is still in the post-purchase state.
+ * Gas fills only flip EMPTY → FULL on whichever empties were picked, so cylinders of the
+ * same variant are interchangeable. When a filled cylinder has since been sold or moved,
+ * another FULL in-stock cylinder of the same variant/region is reverted instead.
+ * Customer-held and rented cylinders are never touched.
+ */
+async function planGasFillSubstitutions(
+  tx: PrismaTx,
+  drifted: DriftedGasFill[],
+  excludedIds: Set<string>,
+): Promise<CylinderSubstitution[]> {
+  const groups = new Map<string, DriftedGasFill[]>();
+  for (const cylinder of drifted) {
+    const key = `${cylinder.regionId ?? ''}#${buildCylinderVariantKey({
+      cylinderType: cylinder.cylinderType,
+      typeName: cylinder.typeName,
+      capacity: Number(cylinder.capacity),
+    })}`;
+    const list = groups.get(key) ?? [];
+    list.push(cylinder);
+    groups.set(key, list);
+  }
+
+  const substitutions: CylinderSubstitution[] = [];
+  for (const originals of groups.values()) {
+    const sample = originals[0];
+    const capacity = Number(sample.capacity);
+    const variantWhere = buildPrismaCylinderVariantWhere(
+      sample.cylinderType,
+      buildCylinderVariantKey({
+        cylinderType: sample.cylinderType,
+        typeName: sample.typeName,
+        capacity,
+      }),
+    );
+    const baseWhere: Prisma.CylinderWhereInput = {
+      ...variantWhere,
+      ...(sample.typeName?.trim() ? {} : { typeName: null }),
+      regionId: sample.regionId,
+      currentStatus: 'FULL',
+      heldByCustomerId: null,
+      cylinderRentals: { none: { status: 'ACTIVE' } },
+    };
+
+    const needed = originals.length;
+    const picked: Array<{ id: string; code: string }> = [];
+    // Store stock first; FULL cylinders loaded on vehicles only if the store runs short.
+    for (const vehicleFilter of [{ vehicleId: null }, { vehicleId: { not: null } }]) {
+      if (picked.length >= needed) break;
+      const rows = await tx.cylinder.findMany({
+        where: {
+          ...baseWhere,
+          ...vehicleFilter,
+          id: { notIn: [...excludedIds, ...picked.map((p) => p.id)] },
+        },
+        orderBy: [{ createdAt: 'asc' }, { code: 'asc' }],
+        take: needed - picked.length,
+        select: { id: true, code: true },
+      });
+      picked.push(...rows);
+    }
+
+    if (picked.length < needed) {
+      const label = `${sample.typeName?.trim() || sample.cylinderType.replace(/_/g, ' ')} (${capacity}kg)`;
+      const examples = originals
+        .slice(0, 3)
+        .map((c) => `${c.code} is now ${c.currentStatus}`)
+        .join(', ');
+      throw new Error(
+        `Cannot undo: ${needed} ${label} cylinder(s) filled by this purchase were already sold or moved (${examples}${originals.length > 3 ? ', …' : ''}), and only ${picked.length} full ${label} cylinder(s) are left in stock to reverse instead. Undo the related sales first.`,
+      );
+    }
+
+    originals.forEach((original, i) => {
+      const substitute = picked[i];
+      excludedIds.add(substitute.id);
+      substitutions.push({
+        originalCylinderId: original.id,
+        originalCode: original.code,
+        originalStatus: original.currentStatus,
+        substituteCylinderId: substitute.id,
+        substituteCode: substitute.code,
+      });
+    });
+  }
+
+  return substitutions;
+}
+
+/**
+ * Validates that every recorded inventory effect can be reversed and returns the plan
+ * (including any gas-fill substitutions) that `reversePurchaseInventoryEffects` must apply.
  * Throws an Error with a user-facing message when reversal is unsafe.
  */
 export async function assertPurchaseEffectsReversible(
   tx: PrismaTx,
   effects: PurchaseInventoryEffect[],
-): Promise<void> {
+): Promise<PurchaseReversalPlan> {
+  const driftedGasFills: DriftedGasFill[] = [];
+  const exactCylinderIds = new Set<string>();
+
   for (const effect of effects) {
     const after = asRecord(effect.afterState);
     const before = asRecord(effect.beforeState);
@@ -44,6 +163,19 @@ export async function assertPurchaseEffectsReversible(
           throw new Error(
             `Cannot undo: cylinder ${str(after?.code) || effect.entityId} no longer exists`,
           );
+        }
+        const unchangedSincePurchase =
+          cylinder.currentStatus === str(after?.currentStatus) &&
+          cylinder.location === str(after?.location) &&
+          cylinder.storeId === str(after?.storeId) &&
+          cylinder.vehicleId === str(after?.vehicleId);
+        if (unchangedSincePurchase) {
+          exactCylinderIds.add(cylinder.id);
+          break;
+        }
+        if (isGasFillEffect(before, after)) {
+          driftedGasFills.push(cylinder);
+          break;
         }
         if (cylinder.currentStatus !== str(after?.currentStatus)) {
           throw new Error(
@@ -197,15 +329,40 @@ export async function assertPurchaseEffectsReversible(
     // before may be unused for create effects; keep reference to avoid unused warnings in some builds
     void before;
   }
+
+  const substitutions =
+    driftedGasFills.length > 0
+      ? await planGasFillSubstitutions(tx, driftedGasFills, exactCylinderIds)
+      : [];
+  return { substitutions };
 }
 
 /**
- * Reverses previously validated inventory effects inside the caller's transaction.
+ * Reverses previously validated inventory effects inside the caller's transaction,
+ * using the plan returned by `assertPurchaseEffectsReversible`.
  */
 export async function reversePurchaseInventoryEffects(
   tx: PrismaTx,
   effects: PurchaseInventoryEffect[],
+  plan: PurchaseReversalPlan,
 ): Promise<void> {
+  const substitutedOriginalIds = new Set(plan.substitutions.map((s) => s.originalCylinderId));
+
+  if (plan.substitutions.length > 0) {
+    const substituteIds = plan.substitutions.map((s) => s.substituteCylinderId);
+    const reverted = await tx.cylinder.updateMany({
+      where: {
+        id: { in: substituteIds },
+        currentStatus: 'FULL',
+        heldByCustomerId: null,
+      },
+      data: { currentStatus: 'EMPTY' },
+    });
+    if (reverted.count !== substituteIds.length) {
+      throw new Error('Cannot undo: cylinder stock changed while undoing this purchase. Please try again.');
+    }
+  }
+
   // Reverse in reverse chronological order for safer nested updates.
   const ordered = [...effects].reverse();
 
@@ -218,6 +375,7 @@ export async function reversePurchaseInventoryEffects(
         if (!effect.entityId || !before) {
           throw new Error('Cannot reverse cylinder status change: incomplete effect data');
         }
+        if (substitutedOriginalIds.has(effect.entityId)) break;
         await tx.cylinder.update({
           where: { id: effect.entityId },
           data: {
