@@ -94,7 +94,6 @@ export function NotificationBell({
   };
 
   const getBadgeContent = () => {
-    if (urgentCount > 0) return urgentCount > 99 ? '99+' : urgentCount;
     if (unreadCount > 0) return unreadCount > 99 ? '99+' : unreadCount;
     return '';
   };
