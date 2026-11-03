@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkAndNotifyStagnantAR } from '@/lib/arNotifier';
-import { markExpiredNotificationsAsRead } from '@/lib/notification-auto-read';
+import {
+  deleteNotificationsPastRetention,
+  markExpiredNotificationsAsRead,
+} from '@/lib/notification-auto-read';
 
 /**
  * POST /api/admin/cron/check-stagnant-ar
@@ -29,10 +32,18 @@ export async function POST(request: NextRequest) {
       console.error('[AR-Cron] Auto-read notifications failed:', autoReadError);
     }
 
+    let notificationsDeleted = 0;
+    try {
+      notificationsDeleted = await deleteNotificationsPastRetention();
+    } catch (retentionError) {
+      console.error('[AR-Cron] Notification retention cleanup failed:', retentionError);
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Stagnant AR check completed successfully',
       autoReadMarked,
+      notificationsDeleted,
     });
   } catch (error) {
     console.error('[AR-Cron] Error:', error);

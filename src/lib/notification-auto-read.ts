@@ -44,3 +44,20 @@ export async function markExpiredNotificationsAsRead(
   });
   return result.count;
 }
+
+/**
+ * Bell notifications are deleted after this many days. The same events stay in
+ * activity_logs (Team → Activity), which is the permanent audit trail.
+ */
+export const NOTIFICATION_RETENTION_DAYS = 60;
+
+/** Deletes notifications older than the retention window. Called from the stagnant-AR cron. */
+export async function deleteNotificationsPastRetention(
+  now: Date = new Date()
+): Promise<number> {
+  const cutoff = new Date(now.getTime() - NOTIFICATION_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  const result = await prisma.notification.deleteMany({
+    where: { createdAt: { lt: cutoff } },
+  });
+  return result.count;
+}

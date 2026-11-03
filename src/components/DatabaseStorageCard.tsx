@@ -81,7 +81,7 @@ export default function DatabaseStorageCard() {
               </div>
             </div>
 
-            {storage.neonTotalStorageBytes !== null && (
+            {!!storage.neonTotalStorageBytes && (
               <p className="text-xs text-gray-500">
                 Neon total storage including change history: {formatBytes(storage.neonTotalStorageBytes)}
               </p>
