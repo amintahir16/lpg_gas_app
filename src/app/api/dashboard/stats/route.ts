@@ -25,6 +25,7 @@ import {
   type DashboardSalesActivityRow,
 } from '@/lib/dashboard-sales-activities';
 import { getProductsSoldData } from '@/lib/products-sold';
+import { getCylinderReturnsData } from '@/lib/cylinder-returns';
 
 export const dynamic = 'force-dynamic';
 
@@ -1067,7 +1068,10 @@ export async function GET(request: NextRequest) {
       });
     });
 
-    const productsSold = await getProductsSoldData({ startDate, endDate, regionId });
+    const [productsSold, cylinderReturns] = await Promise.all([
+      getProductsSoldData({ startDate, endDate, regionId }),
+      getCylinderReturnsData({ startDate, endDate, regionId }),
+    ]);
 
     const stats = {
       kpis: {
@@ -1088,6 +1092,7 @@ export async function GET(request: NextRequest) {
       cylinderStatusData,
       accessoryInventoryData,
       productsSold,
+      cylinderReturns,
       recentActivities: activities
     };
 

@@ -174,6 +174,16 @@ export function splitB2bCylinderItems<T extends B2bActivityItem>(items: T[]): {
   return { sold, returned, boughtBack };
 }
 
+/** True for a B2B cylinder line that is an empty return or buyback, not a sold cylinder. */
+export function isB2bReturnOrBuybackLine(item: B2bActivityItem): boolean {
+  if (!item.cylinderType) return false;
+  return (
+    Number(item.remainingKg || 0) > 0 ||
+    (item.buybackRate !== null && item.buybackRate !== undefined) ||
+    !!item.returnedCondition
+  );
+}
+
 /** Details text for a B2B SALE row (sold / returned / bought back). */
 export function describeB2bSaleActivity<T extends B2bActivityItem>(
   items: T[],

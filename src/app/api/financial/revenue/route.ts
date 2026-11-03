@@ -10,6 +10,7 @@ import {
     resolveFinancialPeriod,
 } from '@/lib/financial-period';
 import { isOpeningDuesSaleItem } from '@/lib/b2b-opening-entries';
+import { isB2bReturnOrBuybackLine } from '@/lib/dashboard-sales-activities';
 
 export async function GET(request: NextRequest) {
     try {
@@ -64,6 +65,9 @@ export async function GET(request: NextRequest) {
                     quantity: true,
                     pricePerItem: true,
                     totalPrice: true,
+                    returnedCondition: true,
+                    remainingKg: true,
+                    buybackRate: true,
                     transaction: {
                         select: {
                             notes: true,
@@ -127,6 +131,7 @@ export async function GET(request: NextRequest) {
         b2bItems.forEach((item) => {
             // Opening cylinder dues must not inflate sold qty / revenue
             if (isOpeningDuesSaleItem(item.transaction, item)) return;
+            if (isB2bReturnOrBuybackLine(item)) return;
 
             const qty = Number(item.quantity);
             const revenue = Number(item.totalPrice);
@@ -259,6 +264,9 @@ export async function GET(request: NextRequest) {
                 select: {
                     cylinderType: true,
                     totalPrice: true,
+                    returnedCondition: true,
+                    remainingKg: true,
+                    buybackRate: true,
                     transaction: {
                         select: {
                             date: true,
@@ -297,6 +305,7 @@ export async function GET(request: NextRequest) {
         }
         for (const item of chartB2bItems) {
             if (isOpeningDuesSaleItem(item.transaction, item)) continue;
+            if (isB2bReturnOrBuybackLine(item)) continue;
             const idx = findChartBucketIndex(chartBuckets, item.transaction.date);
             if (idx < 0) continue;
             const amount = Number(item.totalPrice || 0);

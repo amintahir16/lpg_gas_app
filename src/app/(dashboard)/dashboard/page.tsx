@@ -24,6 +24,7 @@ import {
   DocumentArrowDownIcon,
   ShareIcon,
   ShoppingBagIcon,
+  ArrowUturnLeftIcon,
 } from '@heroicons/react/24/outline';
 import {
   BarChart,
@@ -85,6 +86,13 @@ interface ProductsSoldItem {
   revenue: number;
 }
 
+interface CylinderReturnItem {
+  name: string;
+  kind: 'Empty' | 'Buyback';
+  rawType?: string;
+  quantity: number;
+}
+
 interface DashboardStats {
   kpis: {
     totalCustomers: number;
@@ -104,6 +112,7 @@ interface DashboardStats {
   cylinderStatusData: any[];
   accessoryInventoryData: any[];
   productsSold?: ProductsSoldItem[];
+  cylinderReturns?: CylinderReturnItem[];
   recentActivities: RecentActivity[];
 }
 
@@ -142,27 +151,23 @@ export default function DashboardPage() {
     );
   }, [stats?.recentActivities]);
 
-  const productsSoldItems = useMemo(
-    () => (stats?.productsSold || []).filter((i) => !i.name.toLowerCase().includes('security return')),
+  const cylindersSoldItems = useMemo(
+    () =>
+      (stats?.productsSold || []).filter(
+        (i) => i.type === 'Cylinder' && !i.name.toLowerCase().includes('security return')
+      ),
     [stats?.productsSold]
   );
-  const productsSoldCylinders = useMemo(
-    () => productsSoldItems.filter((i) => i.type === 'Cylinder'),
-    [productsSoldItems]
+  const cylindersSoldTotalQty = useMemo(
+    () => cylindersSoldItems.reduce((sum, item) => sum + item.quantity, 0),
+    [cylindersSoldItems]
   );
-  const productsSoldAccessories = useMemo(
-    () => productsSoldItems.filter((i) => i.type === 'Accessory'),
-    [productsSoldItems]
+
+  const cylinderReturnItems = stats?.cylinderReturns || [];
+  const cylinderReturnsTotalQty = useMemo(
+    () => (stats?.cylinderReturns || []).reduce((sum, item) => sum + item.quantity, 0),
+    [stats?.cylinderReturns]
   );
-  const productsSoldTotals = useMemo(() => {
-    return productsSoldItems.reduce(
-      (acc, item) => {
-        acc.qty += item.quantity;
-        return acc;
-      },
-      { qty: 0 }
-    );
-  }, [productsSoldItems]);
 
   useEffect(() => {
     // Wait until auth session status is determined before fetching to prevent 401 cold-start race conditions
@@ -761,89 +766,66 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Products Sold Table */}
-      <Card className="border shadow-sm bg-white">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Cylinders Sold Table */}
+      <Card className="border shadow-sm bg-white h-full">
         <CardHeader className="pb-2">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="text-base font-bold text-gray-900 flex items-center">
                 <ShoppingBagIcon className="w-4 h-4 mr-1.5 text-gray-500" />
-                Products Sold
+                Cylinders Sold
               </CardTitle>
               <CardDescription className="text-xs">
-                {stats.label || periodLabel} — cylinders and accessories sold
+                {stats.label || periodLabel} — gas cylinders sold to customers
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <Table className="min-w-[500px] text-xs [&_th]:h-10 [&_th]:px-3 [&_td]:px-3 [&_td]:py-2.5">
+            <Table className="min-w-[360px] text-xs [&_th]:h-10 [&_th]:px-3 [&_td]:px-3 [&_td]:py-2.5">
               <TableHeader className="bg-gray-50/50">
                 <TableRow>
-                  <TableHead className="font-semibold text-gray-700">Product</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Cylinder</TableHead>
                   <TableHead className="font-semibold text-gray-700">Type</TableHead>
                   <TableHead className="font-semibold text-gray-700 text-right">Qty Sold</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {productsSoldItems.length === 0 ? (
+                {cylindersSoldItems.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={3} className="text-center py-8 text-gray-500">
-                      No sales data for this period.
+                      No cylinders sold in this period.
                     </TableCell>
                   </TableRow>
                 ) : (
                   <>
-                    {productsSoldCylinders.length > 0 && (
-                      <>
-                        <TableRow className="bg-emerald-50/40 hover:bg-emerald-50/40">
-                          <TableCell colSpan={3} className="font-bold text-emerald-800 text-xs uppercase tracking-wider py-2">
-                            Gas Cylinders
-                          </TableCell>
-                        </TableRow>
-                        {productsSoldCylinders.map((item, idx) => (
-                          <TableRow key={`cyl-${idx}`} className="hover:bg-gray-50/50">
-                            <TableCell className="font-medium text-gray-900">{item.name}</TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="px-2 text-[11px] font-semibold text-emerald-700 border-emerald-200 bg-emerald-50 whitespace-nowrap">
-                                Cylinder
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-right font-semibold text-gray-800">{item.quantity}</TableCell>
-                          </TableRow>
-                        ))}
-                      </>
-                    )}
-                    {productsSoldAccessories.length > 0 && (
-                      <>
-                        <TableRow className="bg-purple-50/40 hover:bg-purple-50/40">
-                          <TableCell colSpan={3} className="font-bold text-purple-800 text-xs uppercase tracking-wider py-2">
-                            Accessories
-                          </TableCell>
-                        </TableRow>
-                        {productsSoldAccessories.map((item, idx) => (
-                          <TableRow key={`acc-${idx}`} className="hover:bg-gray-50/50">
-                            <TableCell className="font-medium text-gray-900">{item.name}</TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="px-2 text-[11px] font-semibold text-purple-700 border-purple-200 bg-purple-50 whitespace-nowrap">
-                                Accessory
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-right font-semibold text-gray-800">{item.quantity}</TableCell>
-                          </TableRow>
-                        ))}
-                      </>
-                    )}
+                    <TableRow className="bg-emerald-50/40 hover:bg-emerald-50/40">
+                      <TableCell colSpan={3} className="font-bold text-emerald-800 text-xs uppercase tracking-wider py-2">
+                        Gas Cylinders
+                      </TableCell>
+                    </TableRow>
+                    {cylindersSoldItems.map((item, idx) => (
+                      <TableRow key={`cyl-${idx}`} className="hover:bg-gray-50/50">
+                        <TableCell className="font-medium text-gray-900">{item.name}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="px-2 text-[11px] font-semibold text-emerald-700 border-emerald-200 bg-emerald-50 whitespace-nowrap">
+                            Cylinder
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-semibold text-gray-800">{item.quantity}</TableCell>
+                      </TableRow>
+                    ))}
                   </>
                 )}
               </TableBody>
-              {productsSoldItems.length > 0 && (
+              {cylindersSoldItems.length > 0 && (
                 <TableFooter>
                   <TableRow className="bg-slate-50 border-t-2 border-slate-200">
                     <TableCell className="font-bold text-gray-900">Total</TableCell>
                     <TableCell />
-                    <TableCell className="text-right font-bold text-gray-900">{productsSoldTotals.qty}</TableCell>
+                    <TableCell className="text-right font-bold text-gray-900">{cylindersSoldTotalQty}</TableCell>
                   </TableRow>
                 </TableFooter>
               )}
@@ -851,6 +833,78 @@ export default function DashboardPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Cylinders Returned Table */}
+      <Card className="border shadow-sm bg-white h-full">
+        <CardHeader className="pb-2">
+          <div>
+            <CardTitle className="text-base font-bold text-gray-900 flex items-center">
+              <ArrowUturnLeftIcon className="w-4 h-4 mr-1.5 text-gray-500" />
+              Cylinders Returned
+            </CardTitle>
+            <CardDescription className="text-xs">
+              {stats.label || periodLabel} — cylinders received back from customers
+            </CardDescription>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table className="min-w-[360px] text-xs [&_th]:h-10 [&_th]:px-3 [&_td]:px-3 [&_td]:py-2.5">
+              <TableHeader className="bg-gray-50/50">
+                <TableRow>
+                  <TableHead className="font-semibold text-gray-700">Cylinder</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Type</TableHead>
+                  <TableHead className="font-semibold text-gray-700 text-right">Qty Returned</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {cylinderReturnItems.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-center py-8 text-gray-500">
+                      No cylinder returns for this period.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  <>
+                    <TableRow className="bg-amber-50/40 hover:bg-amber-50/40">
+                      <TableCell colSpan={3} className="font-bold text-amber-800 text-xs uppercase tracking-wider py-2">
+                        Gas Cylinders
+                      </TableCell>
+                    </TableRow>
+                    {cylinderReturnItems.map((item, idx) => (
+                      <TableRow key={`ret-${idx}`} className="hover:bg-gray-50/50">
+                        <TableCell className="font-medium text-gray-900">{item.name}</TableCell>
+                        <TableCell>
+                          {item.kind === 'Buyback' ? (
+                            <Badge variant="outline" className="px-2 text-[11px] font-semibold text-blue-700 border-blue-200 bg-blue-50 whitespace-nowrap">
+                              Buyback
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="px-2 text-[11px] font-semibold text-amber-700 border-amber-200 bg-amber-50 whitespace-nowrap">
+                              Empty
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold text-gray-800">{item.quantity}</TableCell>
+                      </TableRow>
+                    ))}
+                  </>
+                )}
+              </TableBody>
+              {cylinderReturnItems.length > 0 && (
+                <TableFooter>
+                  <TableRow className="bg-slate-50 border-t-2 border-slate-200">
+                    <TableCell className="font-bold text-gray-900">Total</TableCell>
+                    <TableCell />
+                    <TableCell className="text-right font-bold text-gray-900">{cylinderReturnsTotalQty}</TableCell>
+                  </TableRow>
+                </TableFooter>
+              )}
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+      </div>
 
       {/* Recent Activities */}
       <Card className="border shadow-sm bg-white">

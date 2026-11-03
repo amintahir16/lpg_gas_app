@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db';
 import { regionScopedWhere } from '@/lib/region';
 import { isOpeningDuesSaleItem } from '@/lib/b2b-opening-entries';
+import { isB2bReturnOrBuybackLine } from '@/lib/dashboard-sales-activities';
 
 export interface ProductsSoldItem {
     name: string;
@@ -59,6 +60,9 @@ export async function getProductsSoldData({
                 quantity: true,
                 pricePerItem: true,
                 totalPrice: true,
+                returnedCondition: true,
+                remainingKg: true,
+                buybackRate: true,
                 transaction: {
                     select: {
                         notes: true,
@@ -97,6 +101,8 @@ export async function getProductsSoldData({
     b2bItems.forEach((item) => {
         // Opening cylinder dues must not inflate sold qty / revenue
         if (isOpeningDuesSaleItem(item.transaction, item)) return;
+        // A unified SALE also carries empty returns and buybacks — those are returns, not sales
+        if (isB2bReturnOrBuybackLine(item)) return;
 
         const qty = Number(item.quantity);
         const revenue = Number(item.totalPrice);

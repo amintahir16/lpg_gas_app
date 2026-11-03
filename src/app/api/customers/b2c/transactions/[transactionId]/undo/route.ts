@@ -11,6 +11,7 @@ import {
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
 import { buildPrismaCylinderVariantWhere } from '@/lib/cylinder-variant-key';
 import { buildCylinderVariantSummary } from '@/lib/cylinder-variant-summary';
+import { getCylinderTypeDisplayName } from '@/lib/cylinder-utils';
 import {
   canUndoTransaction,
   TRANSACTION_UNDO_WINDOW_MESSAGE,
@@ -130,7 +131,9 @@ export async function POST(
               });
               console.log(`✅ Reversed security deposit: Returned ${quantity} ${cylinderType} cylinders to inventory (FULL status)`);
             } else {
-              console.warn(`⚠️ Warning: Could not find ${quantity} ${cylinderType} cylinders with customer ${customer.name}. Found: ${cylindersWithCustomer.length}`);
+              throw new Error(
+                `Cannot undo: this bill gave ${quantity} × ${getCylinderTypeDisplayName(cylinderType)} on security, but ${customer.name.trim()} now holds only ${cylindersWithCustomer.length}. Undo the later bills that returned them first.`
+              );
             }
 
             // Delete cylinder holding records for this transaction
@@ -220,20 +223,10 @@ export async function POST(
                 }
               });
               console.log(`✅ Reversed security return: ${quantity} ${cylinderType} cylinders back to WITH_CUSTOMER`);
-            } else if (emptyCylinders.length > 0) {
-              // Update what we found and warn
-              await tx.cylinder.updateMany({
-                where: {
-                  id: { in: emptyCylinders.map(c => c.id) }
-                },
-                data: {
-                  currentStatus: CylinderStatus.WITH_CUSTOMER,
-                  location: `B2C Customer: ${customer.name}`
-                }
-              });
-              console.warn(`⚠️ Warning: Only found ${emptyCylinders.length} of ${quantity} empty ${cylinderType} cylinders to reverse. Some may have been newly created during the transaction.`);
             } else {
-              console.warn(`⚠️ Warning: Could not find any empty ${cylinderType} cylinders to reverse return for ${customer.name}`);
+              throw new Error(
+                `Cannot undo: this bill took back ${quantity} × ${getCylinderTypeDisplayName(cylinderType)}, but only ${emptyCylinders.length} empty in store can be given back (the rest were refilled or moved).`
+              );
             }
           }
         }
@@ -303,7 +296,9 @@ export async function POST(
               });
               console.log(`✅ Returned ${quantity} ${productName} to Product inventory`);
             } else {
-              console.warn(`⚠️ Could not find inventory item for ${productName} - manual adjustment may be needed`);
+              throw new Error(
+                `Cannot undo: inventory item "${productName}" no longer exists, so its ${quantity} unit(s) cannot be returned to stock.`
+              );
             }
           }
         }
@@ -390,6 +385,9 @@ export async function POST(
     });
   } catch (error) {
     console.error('Error undoing transaction:', error);
+    if (error instanceof Error && error.message.startsWith('Cannot undo:')) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     return NextResponse.json(
       { error: 'Failed to undo transaction', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
