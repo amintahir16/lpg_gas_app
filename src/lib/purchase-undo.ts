@@ -42,30 +42,172 @@ type DriftedGasFill = {
   typeName: string | null;
   capacity: Prisma.Decimal | number;
   regionId: string | null;
+  /** When the original row is gone, match substitutes the same way the fill did (type aliases). */
+  typeAliases?: string[];
 };
 
 function isGasFillEffect(before: JsonRecord | null, after: JsonRecord | null): boolean {
   return str(before?.currentStatus) === 'EMPTY' && str(after?.currentStatus) === 'FULL';
 }
 
+function parseGasItemVariant(itemName: string | null | undefined): {
+  capacity: number;
+  typeName: string | null;
+  candidates: string[];
+} | null {
+  if (!itemName?.trim()) return null;
+  const itemNameLower = itemName.toLowerCase();
+  const weightMatch = itemNameLower.match(/(\d+\.?\d*)\s*kg/i);
+  if (!weightMatch) return null;
+  const capacity = parseFloat(weightMatch[1]);
+  if (!Number.isFinite(capacity) || capacity <= 0) return null;
+
+  const m = itemName.match(/^\s*([^\d(]+?)\s*(?:\(|\b)\s*(\d+(?:\.\d+)?)\s*kg/i);
+  const rawTypeName = m?.[1]?.trim() || '';
+  const normalizedTypeName = normalizeTypeName(rawTypeName);
+  const typeName =
+    normalizedTypeName && !/cylinder|gas/i.test(normalizedTypeName) ? normalizedTypeName : null;
+  const generatedType = generateCylinderTypeFromCapacity(capacity);
+  const candidates: string[] = [];
+  if (Math.abs(capacity - 11.8) < 0.11 || itemNameLower.includes('domestic')) {
+    candidates.push('DOMESTIC_11_8KG', generatedType);
+  } else if (Math.abs(capacity - 15) < 0.11 || itemNameLower.includes('standard')) {
+    candidates.push('STANDARD_15KG', generatedType);
+  } else if (Math.abs(capacity - 45.4) < 0.11 || itemNameLower.includes('commercial')) {
+    candidates.push('COMMERCIAL_45_4KG', generatedType);
+  } else {
+    candidates.push(generatedType);
+  }
+
+  return {
+    capacity,
+    typeName,
+    candidates: Array.from(new Set(candidates.filter(Boolean))),
+  };
+}
+
+function reconstructDeletedGasFill(
+  effect: PurchaseInventoryEffect,
+  before: JsonRecord | null,
+  after: JsonRecord | null,
+  fallbackRegionId?: string | null,
+): DriftedGasFill {
+  const parsed = parseGasItemVariant(effect.itemName);
+  const snapshotType = str(after?.cylinderType) || str(before?.cylinderType);
+  const snapshotTypeName = str(after?.typeName) ?? str(before?.typeName);
+  const snapshotCapacity = num(after?.capacity, Number.NaN);
+  const snapshotRegion = str(after?.regionId) ?? str(before?.regionId);
+  const capacity =
+    Number.isFinite(snapshotCapacity) && snapshotCapacity > 0
+      ? snapshotCapacity
+      : parsed?.capacity;
+  const code = str(after?.code) || str(before?.code) || effect.entityId || 'unknown';
+
+  if (!capacity) {
+    throw new Error(
+      `Cannot undo: cylinder ${code} no longer exists, and its type cannot be determined to reverse the fill on another cylinder.`,
+    );
+  }
+
+  const candidates = parsed?.candidates?.length ? parsed.candidates : snapshotType ? [snapshotType] : [];
+  const cylinderType = snapshotType || candidates[0];
+  if (!cylinderType) {
+    throw new Error(
+      `Cannot undo: cylinder ${code} no longer exists, and its type cannot be determined to reverse the fill on another cylinder.`,
+    );
+  }
+
+  return {
+    id: effect.entityId || code,
+    code,
+    currentStatus: 'DELETED',
+    cylinderType,
+    typeName: snapshotTypeName ?? parsed?.typeName ?? null,
+    capacity,
+    regionId: snapshotRegion ?? fallbackRegionId ?? null,
+    typeAliases: snapshotType ? undefined : candidates,
+  };
+}
+
+function driftedGasFillGroupKey(cylinder: DriftedGasFill): string {
+  if (cylinder.typeAliases && cylinder.typeAliases.length > 0) {
+    return `alias#${cylinder.regionId ?? ''}#${cylinder.typeName ?? ''}#${Number(cylinder.capacity)}#${[...cylinder.typeAliases].sort().join(',')}`;
+  }
+  return `${cylinder.regionId ?? ''}#${buildCylinderVariantKey({
+    cylinderType: cylinder.cylinderType,
+    typeName: cylinder.typeName,
+    capacity: Number(cylinder.capacity),
+  })}`;
+}
+
+function driftedGasFillWhere(sample: DriftedGasFill, capacity: number): Prisma.CylinderWhereInput {
+  const variantWhere: Prisma.CylinderWhereInput =
+    sample.typeAliases && sample.typeAliases.length > 0
+      ? {
+          OR: sample.typeAliases.map((ct) =>
+            buildPrismaCylinderVariantWhere(
+              ct,
+              buildCylinderVariantKey({
+                cylinderType: ct,
+                typeName: sample.typeName,
+                capacity,
+              }),
+            ) as Prisma.CylinderWhereInput,
+          ),
+        }
+      : {
+          ...(buildPrismaCylinderVariantWhere(
+            sample.cylinderType,
+            buildCylinderVariantKey({
+              cylinderType: sample.cylinderType,
+              typeName: sample.typeName,
+              capacity,
+            }),
+          ) as Prisma.CylinderWhereInput),
+          ...(sample.typeName?.trim() ? {} : { typeName: null }),
+        };
+
+  return {
+    ...variantWhere,
+    regionId: sample.regionId,
+    currentStatus: 'FULL',
+    heldByCustomerId: null,
+    cylinderRentals: { none: { status: 'ACTIVE' } },
+  };
+}
+
 /**
  * Gas fills only flip EMPTY → FULL on whichever empties were picked, so cylinders of the
- * same variant are interchangeable. When a filled cylinder has since been sold or moved,
- * another FULL in-stock cylinder of the same variant/region is reverted instead.
+ * same variant are interchangeable. When a filled cylinder has since been sold, moved,
+ * or deleted, another FULL in-stock cylinder of the same variant/region is reverted instead.
  * Customer-held and rented cylinders are never touched.
  */
+function sameGasFillFamily(a: DriftedGasFill, b: DriftedGasFill): boolean {
+  if ((a.regionId ?? null) !== (b.regionId ?? null)) return false;
+  if (Number(a.capacity) !== Number(b.capacity)) return false;
+  const aTypes = new Set([a.cylinderType, ...(a.typeAliases || [])]);
+  const bTypes = new Set([b.cylinderType, ...(b.typeAliases || [])]);
+  for (const type of aTypes) {
+    if (bTypes.has(type)) return true;
+  }
+  const aName = (a.typeName || '').trim().toLowerCase();
+  const bName = (b.typeName || '').trim().toLowerCase();
+  return aName.length > 0 && aName === bName;
+}
+
+function gasFillStockLabel(sample: DriftedGasFill, capacity: number): string {
+  return `${sample.typeName?.trim() || sample.cylinderType.replace(/_/g, ' ')} (${capacity}kg)`;
+}
+
 async function planGasFillSubstitutions(
   tx: PrismaTx,
   drifted: DriftedGasFill[],
   excludedIds: Set<string>,
+  exactGasFills: DriftedGasFill[] = [],
 ): Promise<CylinderSubstitution[]> {
   const groups = new Map<string, DriftedGasFill[]>();
   for (const cylinder of drifted) {
-    const key = `${cylinder.regionId ?? ''}#${buildCylinderVariantKey({
-      cylinderType: cylinder.cylinderType,
-      typeName: cylinder.typeName,
-      capacity: Number(cylinder.capacity),
-    })}`;
+    const key = driftedGasFillGroupKey(cylinder);
     const list = groups.get(key) ?? [];
     list.push(cylinder);
     groups.set(key, list);
@@ -75,22 +217,7 @@ async function planGasFillSubstitutions(
   for (const originals of groups.values()) {
     const sample = originals[0];
     const capacity = Number(sample.capacity);
-    const variantWhere = buildPrismaCylinderVariantWhere(
-      sample.cylinderType,
-      buildCylinderVariantKey({
-        cylinderType: sample.cylinderType,
-        typeName: sample.typeName,
-        capacity,
-      }),
-    );
-    const baseWhere: Prisma.CylinderWhereInput = {
-      ...variantWhere,
-      ...(sample.typeName?.trim() ? {} : { typeName: null }),
-      regionId: sample.regionId,
-      currentStatus: 'FULL',
-      heldByCustomerId: null,
-      cylinderRentals: { none: { status: 'ACTIVE' } },
-    };
+    const baseWhere = driftedGasFillWhere(sample, capacity);
 
     const needed = originals.length;
     const picked: Array<{ id: string; code: string }> = [];
@@ -111,13 +238,12 @@ async function planGasFillSubstitutions(
     }
 
     if (picked.length < needed) {
-      const label = `${sample.typeName?.trim() || sample.cylinderType.replace(/_/g, ' ')} (${capacity}kg)`;
-      const examples = originals
-        .slice(0, 3)
-        .map((c) => `${c.code} is now ${c.currentStatus}`)
-        .join(', ');
+      const label = gasFillStockLabel(sample, capacity);
+      const purchaseQty =
+        originals.length + exactGasFills.filter((fill) => sameGasFillFamily(sample, fill)).length;
+      const availableFull = await tx.cylinder.count({ where: baseWhere });
       throw new Error(
-        `Cannot undo: ${needed} ${label} cylinder(s) filled by this purchase were already sold or moved (${examples}${originals.length > 3 ? ', …' : ''}), and only ${picked.length} full ${label} cylinder(s) are left in stock to reverse instead. Undo the related sales first.`,
+        `Cannot undo: this purchase filled ${purchaseQty} × ${label}, but only ${availableFull} FULL ${label} cylinder(s) are in stock. Need ${purchaseQty} FULL of this type and capacity to reverse the fill. Undo the related sales first.`,
       );
     }
 
@@ -145,8 +271,10 @@ async function planGasFillSubstitutions(
 export async function assertPurchaseEffectsReversible(
   tx: PrismaTx,
   effects: PurchaseInventoryEffect[],
+  options?: { regionId?: string | null },
 ): Promise<PurchaseReversalPlan> {
   const driftedGasFills: DriftedGasFill[] = [];
+  const exactGasFills: DriftedGasFill[] = [];
   const exactCylinderIds = new Set<string>();
 
   for (const effect of effects) {
@@ -160,6 +288,12 @@ export async function assertPurchaseEffectsReversible(
         }
         const cylinder = await tx.cylinder.findUnique({ where: { id: effect.entityId } });
         if (!cylinder) {
+          if (isGasFillEffect(before, after)) {
+            driftedGasFills.push(
+              reconstructDeletedGasFill(effect, before, after, options?.regionId),
+            );
+            break;
+          }
           throw new Error(
             `Cannot undo: cylinder ${str(after?.code) || effect.entityId} no longer exists`,
           );
@@ -171,6 +305,9 @@ export async function assertPurchaseEffectsReversible(
           cylinder.vehicleId === str(after?.vehicleId);
         if (unchangedSincePurchase) {
           exactCylinderIds.add(cylinder.id);
+          if (isGasFillEffect(before, after)) {
+            exactGasFills.push(cylinder);
+          }
           break;
         }
         if (isGasFillEffect(before, after)) {
@@ -332,7 +469,7 @@ export async function assertPurchaseEffectsReversible(
 
   const substitutions =
     driftedGasFills.length > 0
-      ? await planGasFillSubstitutions(tx, driftedGasFills, exactCylinderIds)
+      ? await planGasFillSubstitutions(tx, driftedGasFills, exactCylinderIds, exactGasFills)
       : [];
   return { substitutions };
 }
@@ -510,25 +647,28 @@ export async function reverseHistoricalPurchaseInventoryFallback(
       );
 
       const targetRegion = entry.regionId || regionId;
+      const fullWhere: Prisma.CylinderWhereInput = {
+        currentStatus: 'FULL',
+        heldByCustomerId: null,
+        cylinderRentals: { none: { status: 'ACTIVE' } },
+        ...(targetRegion ? regionScopedWhere(targetRegion) : {}),
+        OR: uniqueCandidates.map((ct, idx) => ({
+          ...buildPrismaCylinderVariantWhere(ct, variantKeys[idx]),
+        })),
+      };
 
-      // Find available FULL cylinders to revert back to EMPTY
+      const availableFull = await tx.cylinder.count({ where: fullWhere });
+      if (availableFull < qty) {
+        throw new Error(
+          `Cannot undo: this purchase filled ${qty} × ${entry.itemName}, but only ${availableFull} FULL ${entry.itemName} cylinder(s) are in stock. Need ${qty} FULL of this type and capacity to reverse the fill. Undo the related sales first.`,
+        );
+      }
+
       const fullCylinders = await tx.cylinder.findMany({
-        where: {
-          currentStatus: 'FULL',
-          ...(targetRegion ? regionScopedWhere(targetRegion) : {}),
-          OR: uniqueCandidates.map((ct, idx) => ({
-            ...buildPrismaCylinderVariantWhere(ct, variantKeys[idx]),
-          })),
-        },
+        where: fullWhere,
         take: qty,
         orderBy: { updatedAt: 'desc' },
       });
-
-      if (fullCylinders.length < qty) {
-        throw new Error(
-          `Cannot undo: Not enough FULL ${entry.itemName} cylinders available in inventory to revert to EMPTY (Found: ${fullCylinders.length}, Needed: ${qty}). Some cylinders may have already been sold or moved.`,
-        );
-      }
 
       await tx.cylinder.updateMany({
         where: { id: { in: fullCylinders.map((c) => c.id) } },

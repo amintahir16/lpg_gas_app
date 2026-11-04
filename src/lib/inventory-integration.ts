@@ -317,6 +317,10 @@ export class InventoryIntegrationService {
           location: cylinder.location,
           storeId: cylinder.storeId,
           vehicleId: cylinder.vehicleId,
+          cylinderType: cylinder.cylinderType,
+          typeName: cylinder.typeName,
+          capacity: Number(cylinder.capacity),
+          regionId: cylinder.regionId,
         },
         afterState: {
           id: updated.id,
@@ -325,6 +329,10 @@ export class InventoryIntegrationService {
           location: updated.location,
           storeId: updated.storeId,
           vehicleId: updated.vehicleId,
+          cylinderType: updated.cylinderType,
+          typeName: updated.typeName,
+          capacity: Number(updated.capacity),
+          regionId: updated.regionId,
         },
       });
     }

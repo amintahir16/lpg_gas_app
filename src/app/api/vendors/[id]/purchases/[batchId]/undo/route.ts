@@ -179,7 +179,9 @@ export async function POST(
         let effectCount = batch.inventoryEffects?.length || 0;
         let substitutions: CylinderSubstitution[] = [];
         if (batch.inventoryEffects && batch.inventoryEffects.length > 0) {
-          const plan = await assertPurchaseEffectsReversible(tx, batch.inventoryEffects);
+          const plan = await assertPurchaseEffectsReversible(tx, batch.inventoryEffects, {
+            regionId: batch.regionId || regionId,
+          });
           await reversePurchaseInventoryEffects(tx, batch.inventoryEffects, plan);
           substitutions = plan.substitutions;
         } else if (batch.purchaseEntries && batch.purchaseEntries.length > 0) {
