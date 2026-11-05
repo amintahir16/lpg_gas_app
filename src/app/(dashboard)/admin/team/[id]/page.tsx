@@ -78,6 +78,7 @@ const ACTIVITY_ICON_MAP: Record<string, React.ComponentType<{ className?: string
     OFFICE_EXPENSE_CREATED: BuildingOfficeIcon,
     PERSONAL_EXPENSE_CREATED: UserIcon,
     SALARY_PAID: CurrencyDollarIcon,
+    SALARY_UPDATED: PencilSquareIcon,
     VENDOR_CREATED: BuildingOfficeIcon,
     VENDOR_UPDATED: PencilSquareIcon,
     VENDOR_DELETED: TrashIcon,

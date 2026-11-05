@@ -9,12 +9,15 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
     ArrowLeftIcon, UserGroupIcon, CheckCircleIcon,
-    XCircleIcon, BanknotesIcon, TrashIcon
+    XCircleIcon, BanknotesIcon, TrashIcon, PencilIcon
 } from '@heroicons/react/24/outline';
 import { CustomSelect } from '@/components/ui/select-custom';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import {
     buildFinancialPeriodQuery,
+    combineLocalDateAndTime,
+    formatLocalDateInput,
+    formatLocalTimeInput,
     resolveFinancialPeriod,
     salaryPayTarget,
     todayLocalDate,
@@ -40,6 +43,8 @@ interface Employee {
         paidDate: string;
         paymentMethod: string;
         notes: string | null;
+        month: number;
+        year: number;
     } | null;
 }
 interface SalaryHistory {
@@ -53,6 +58,15 @@ interface SalaryHistory {
     paidDate: string;
     paymentMethod: string;
     notes: string | null;
+}
+interface EditingSalary {
+    id: string;
+    employeeName: string;
+    amount: number;
+    paidDate: string;
+    paymentMethod: string;
+    notes: string | null;
+    monthLabel: string;
 }
 const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -75,6 +89,7 @@ export default function SalariesPage() {
     const [periodLabel, setPeriodLabel] = useState('');
     const [showPayModal, setShowPayModal] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+    const [editingSalary, setEditingSalary] = useState<EditingSalary | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
 
@@ -129,6 +144,43 @@ export default function SalariesPage() {
             }
             setShowPayModal(false);
             setSelectedEmployee(null);
+            fetchData();
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setSubmitting(false);
+        }
+    };
+    const openEditSalary = (record: EditingSalary) => {
+        setError(null);
+        setShowPayModal(false);
+        setSelectedEmployee(null);
+        setEditingSalary(record);
+    };
+    const closeEditSalary = () => {
+        setEditingSalary(null);
+        setError(null);
+    };
+    const handleUpdateSalary = async (formData: { amount: FormDataEntryValue | null; paymentMethod: FormDataEntryValue | null; notes: FormDataEntryValue | null; paidDate: string }) => {
+        if (!editingSalary) return;
+        try {
+            setSubmitting(true);
+            setError(null);
+            const res = await fetch(`/api/financial/salaries/${editingSalary.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    amount: formData.amount,
+                    paymentMethod: formData.paymentMethod,
+                    notes: formData.notes || null,
+                    paidDate: formData.paidDate,
+                }),
+            });
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.error || 'Failed to update salary');
+            }
+            closeEditSalary();
             fetchData();
         } catch (err: any) {
             setError(err.message);
@@ -230,7 +282,7 @@ export default function SalariesPage() {
             <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
                 <CardHeader>
                     <CardTitle className="text-lg">Salary Status — {displayLabel}</CardTitle>
-                    <CardDescription>Click &quot;Pay Salary&quot; to record a payment</CardDescription>
+                    <CardDescription>Record a payment, or edit / delete an existing salary record</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {loading ? (
@@ -282,16 +334,35 @@ export default function SalariesPage() {
                                                 {emp.isPaid && emp.salaryRecord ? formatDate(emp.salaryRecord.paidDate) : '—'}
                                             </TableCell>
                                             <TableCell className="text-center">
-                                                {emp.isPaid ? (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => emp.salaryRecord && handleDeleteSalary(emp.salaryRecord.id)}
-                                                        className="text-red-600 hover:text-red-800"
-                                                        title="Delete salary record"
-                                                    >
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </Button>
+                                                {emp.isPaid && emp.salaryRecord ? (
+                                                    <div className="flex items-center justify-center gap-1">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => openEditSalary({
+                                                                id: emp.salaryRecord!.id,
+                                                                employeeName: emp.name,
+                                                                amount: emp.salaryRecord!.amount,
+                                                                paidDate: emp.salaryRecord!.paidDate,
+                                                                paymentMethod: emp.salaryRecord!.paymentMethod,
+                                                                notes: emp.salaryRecord!.notes,
+                                                                monthLabel: `${monthNames[emp.salaryRecord!.month - 1]} ${emp.salaryRecord!.year}`,
+                                                            })}
+                                                            className="text-blue-600 hover:text-blue-800"
+                                                            title="Edit salary record"
+                                                        >
+                                                            <PencilIcon className="w-4 h-4" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => handleDeleteSalary(emp.salaryRecord!.id)}
+                                                            className="text-red-600 hover:text-red-800"
+                                                            title="Delete salary record"
+                                                        >
+                                                            <TrashIcon className="w-4 h-4" />
+                                                        </Button>
+                                                    </div>
                                                 ) : (
                                                     <Button
                                                         size="sm"
@@ -321,7 +392,7 @@ export default function SalariesPage() {
                         <div className="py-6 text-center text-gray-500">No salary records yet</div>
                     ) : (
                         <div className="overflow-x-auto">
-                            <Table className="min-w-[600px]">
+                            <Table className="min-w-[680px]">
                                 <TableHeader>
                                     <TableRow className="bg-gray-50/50">
                                         <TableHead className="font-semibold">Employee</TableHead>
@@ -330,6 +401,7 @@ export default function SalariesPage() {
                                         <TableHead className="font-semibold">Payment Method</TableHead>
                                         <TableHead className="font-semibold">Paid Date</TableHead>
                                         <TableHead className="font-semibold">Notes</TableHead>
+                                        <TableHead className="font-semibold text-center">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -348,6 +420,36 @@ export default function SalariesPage() {
                                             </TableCell>
                                             <TableCell className="text-gray-600" suppressHydrationWarning>{formatDate(record.paidDate)}</TableCell>
                                             <TableCell className="text-gray-500 text-sm">{record.notes || '—'}</TableCell>
+                                            <TableCell className="text-center">
+                                                <div className="flex items-center justify-center gap-1">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => openEditSalary({
+                                                            id: record.id,
+                                                            employeeName: record.employeeName,
+                                                            amount: record.amount,
+                                                            paidDate: record.paidDate,
+                                                            paymentMethod: record.paymentMethod,
+                                                            notes: record.notes,
+                                                            monthLabel: record.monthLabel,
+                                                        })}
+                                                        className="text-blue-600 hover:text-blue-800"
+                                                        title="Edit salary record"
+                                                    >
+                                                        <PencilIcon className="w-4 h-4" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => handleDeleteSalary(record.id)}
+                                                        className="text-red-600 hover:text-red-800"
+                                                        title="Delete salary record"
+                                                    >
+                                                        <TrashIcon className="w-4 h-4" />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>
@@ -405,6 +507,77 @@ export default function SalariesPage() {
                                 <Button type="button" variant="ghost" onClick={() => { setShowPayModal(false); setSelectedEmployee(null); setError(null); }} className="h-9 text-xs font-semibold">Cancel</Button>
                                 <Button type="submit" disabled={submitting} className="bg-blue-600 hover:bg-blue-700 text-white h-9 px-6 text-xs font-bold shadow-md shadow-blue-200">
                                     {submitting ? 'Processing...' : 'Record Payment'}
+                                </Button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+            {editingSalary && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl p-5 w-full max-w-md shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-between mb-3">
+                            <div>
+                                <h2 className="text-lg font-bold text-gray-900">Edit Salary Record</h2>
+                                <p className="text-[10px] text-gray-500 font-medium">
+                                    Employee: <span className="text-blue-600 font-bold">{editingSalary.employeeName}</span> — {editingSalary.monthLabel}
+                                </p>
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={closeEditSalary} className="h-8 w-8 p-0 rounded-full">
+                                <span className="text-xl">×</span>
+                            </Button>
+                        </div>
+
+                        <form onSubmit={(e) => {
+                            e.preventDefault();
+                            const fd = new FormData(e.target as HTMLFormElement);
+                            handleUpdateSalary({
+                                amount: fd.get('amount'),
+                                paymentMethod: fd.get('paymentMethod'),
+                                notes: fd.get('notes') || null,
+                                paidDate: combineLocalDateAndTime(
+                                    String(fd.get('date') || formatLocalDateInput(editingSalary.paidDate)),
+                                    String(fd.get('time') || formatLocalTimeInput(editingSalary.paidDate))
+                                ).toISOString(),
+                            });
+                        }} className="space-y-3">
+                            {error && (
+                                <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">{error}</p>
+                            )}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Paid Date</label>
+                                    <Input name="date" type="date" defaultValue={formatLocalDateInput(editingSalary.paidDate)} required className="h-9" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Time</label>
+                                    <Input name="time" type="time" defaultValue={formatLocalTimeInput(editingSalary.paidDate)} required className="h-9" />
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Salary Amount (PKR)</label>
+                                <Input name="amount" type="number" defaultValue={Number(editingSalary.amount)} step="1" required className="h-9 font-bold text-emerald-700" />
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Payment Method (Wallet / Bank)</label>
+                                <CustomSelect
+                                    name="paymentMethod"
+                                    defaultValue={editingSalary.paymentMethod || 'CASH'}
+                                    options={paymentMethodOptions}
+                                />
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Notes (Optional)</label>
+                                <Input name="notes" type="text" defaultValue={editingSalary.notes || ''} placeholder="Any notes about this payment" className="h-9" />
+                            </div>
+
+                            <div className="flex justify-end gap-2 pt-2">
+                                <Button type="button" variant="ghost" onClick={closeEditSalary} className="h-9 text-xs font-semibold">Cancel</Button>
+                                <Button type="submit" disabled={submitting} className="bg-indigo-600 hover:bg-indigo-700 text-white h-9 px-6 text-xs font-bold shadow-md shadow-indigo-200">
+                                    {submitting ? 'Saving...' : 'Update Record'}
                                 </Button>
                             </div>
                         </form>

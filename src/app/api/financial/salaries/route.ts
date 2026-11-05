@@ -79,6 +79,8 @@ export async function GET(request: NextRequest) {
                         paidDate: salaryRecord.paidDate,
                         paymentMethod: salaryRecord.paymentMethod,
                         notes: salaryRecord.notes,
+                        month: salaryRecord.month,
+                        year: salaryRecord.year,
                     }
                     : null,
             };
