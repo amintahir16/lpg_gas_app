@@ -1,19 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { format } from 'date-fns';
 import { logActivity, ActivityAction } from '@/lib/activityLogger';
 import { notifyUserActivity } from '@/lib/superAdminNotifier';
 import { getActiveRegionId, regionScopedWhere } from '@/lib/region';
-import { requireSuperAdmin } from '@/lib/apiAuth';
+import { requireAdmin } from '@/lib/apiAuth';
 import { resolveFinancialPeriod } from '@/lib/financial-period';
 import { normalizePaymentMethodKey } from '@/lib/payment-methods';
 export async function GET(request: NextRequest) {
     try {
-        const auth = await requireSuperAdmin();
+        const auth = await requireAdmin();
         if (!auth.ok) return auth.response;
-        const session = auth.session;
         const regionId = getActiveRegionId(request);
         const regionScope = regionScopedWhere(regionId);
         const { searchParams } = new URL(request.url);
@@ -133,7 +130,7 @@ export async function GET(request: NextRequest) {
 }
 export async function POST(request: NextRequest) {
     try {
-        const auth = await requireSuperAdmin();
+        const auth = await requireAdmin();
         if (!auth.ok) return auth.response;
         const session = auth.session;
         const regionId = getActiveRegionId(request);

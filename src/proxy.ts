@@ -43,15 +43,13 @@ const routePermissions = {
     ],
 
     // Routes reserved for SUPER_ADMIN. These are checked BEFORE the `admin`
-    // list. ADMIN can access the main Financial hub, Wallets, and Expenses,
-    // but Revenue, Profit, and Salaries drilldowns/APIs remain SUPER_ADMIN-only.
+    // list. ADMIN can access the main Financial hub, Wallets, Expenses, and
+    // Salaries, but Revenue and Profit drilldowns/APIs remain SUPER_ADMIN-only.
     superAdminOnly: [
         '/financial/revenue',
         '/api/financial/revenue',
         '/financial/profit',
-        '/api/financial/profit',
-        '/financial/salaries',
-        '/api/financial/salaries'
+        '/api/financial/profit'
     ],
 
     // Carve-outs from `superAdminOnly` that ADMIN may still access (if any).

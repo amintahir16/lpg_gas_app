@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -61,6 +62,8 @@ export default function SalariesPage() {
     const { options: paymentMethodOptions, formatLabel: formatWalletLabel } = usePaymentWallets();
     const { confirm, dialog: confirmDialog } = useConfirmDialog();
     const router = useRouter();
+    const { data: session } = useSession();
+    const backHref = session?.user?.role === 'SUPER_ADMIN' ? '/financial' : '/dashboard';
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [history, setHistory] = useState<SalaryHistory[]>([]);
     const [summary, setSummary] = useState({ totalEmployees: 0, paidCount: 0, unpaidCount: 0, totalPaid: 0 });
@@ -168,7 +171,7 @@ export default function SalariesPage() {
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex items-center gap-4">
-                    <Button variant="outline" size="sm" onClick={() => router.push('/financial')} className="flex items-center justify-center h-9 w-9 p-0 shrink-0" aria-label="Back">
+                    <Button variant="outline" size="sm" onClick={() => router.push(backHref)} className="flex items-center justify-center h-9 w-9 p-0 shrink-0" aria-label="Back">
                         <ArrowLeftIcon className="w-4 h-4" />
                     </Button>
                     <div>

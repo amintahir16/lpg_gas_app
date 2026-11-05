@@ -63,6 +63,7 @@ const adminNavigation: NavigationItem[] = [
   { name: 'Inventory', href: '/inventory', icon: CubeIcon, roles: ['ADMIN'] },
   { name: 'Vendors', href: '/vendors', icon: BuildingOfficeIcon, roles: ['ADMIN'] },
   { name: 'Expenses', href: '/financial/expenses', icon: CurrencyDollarIcon, roles: ['ADMIN'] },
+  { name: 'Salaries', href: '/financial/salaries', icon: UserGroupIcon, roles: ['ADMIN'] },
   { name: 'Wallets & Bank Accounts', href: '/financial/wallets', icon: BuildingLibraryIcon, roles: ['ADMIN'] },
   { name: 'Website Inquiries', href: '/admin/website-inquiries', icon: EnvelopeIcon, roles: ['ADMIN'] },
   { name: 'Shop Catalogue', href: '/admin/shop-items', icon: ShoppingBagIcon, roles: ['ADMIN'] },
