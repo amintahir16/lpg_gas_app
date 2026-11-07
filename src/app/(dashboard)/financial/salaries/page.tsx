@@ -19,8 +19,8 @@ import {
     formatLocalDateInput,
     formatLocalTimeInput,
     resolveFinancialPeriod,
-    salaryPayTarget,
     todayLocalDate,
+    nowLocalTime,
     type FinancialPeriodMode,
 } from '@/lib/financial-period';
 import { FinancialPeriodFilter } from '@/components/FinancialPeriodFilter';
@@ -37,15 +37,9 @@ interface Employee {
     email: string;
     phone: string;
     isPaid: boolean;
-    salaryRecord: {
-        id: string;
-        amount: number;
-        paidDate: string;
-        paymentMethod: string;
-        notes: string | null;
-        month: number;
-        year: number;
-    } | null;
+    totalAmount: number;
+    paymentCount: number;
+    lastPaidDate: string | null;
 }
 interface SalaryHistory {
     id: string;
@@ -98,12 +92,75 @@ export default function SalariesPage() {
         [period, date, month, year]
     );
     const resolvedLabel = resolved.label;
-    const payTarget = useMemo(() => salaryPayTarget(resolved), [resolved]);
-    const payTargetLabel = `${monthNames[payTarget.month - 1]} ${payTarget.year}`;
+    const [payDate, setPayDate] = useState(todayLocalDate);
+    const [payTime, setPayTime] = useState(nowLocalTime);
+    const payDateMonthLabel = useMemo(() => {
+        const match = /^(\d{4})-(\d{2})/.exec(payDate);
+        if (!match) return '';
+        const monthIndex = parseInt(match[2], 10) - 1;
+        if (monthIndex < 0 || monthIndex > 11) return '';
+        return `${monthNames[monthIndex]} ${match[1]}`;
+    }, [payDate]);
+    const payDatePeriod = useMemo(() => {
+        const match = /^(\d{4})-(\d{2})/.exec(payDate);
+        if (!match) return null;
+        const nextMonth = parseInt(match[2], 10);
+        const nextYear = parseInt(match[1], 10);
+        if (!nextMonth || !nextYear) return null;
+        return { month: nextMonth, year: nextYear };
+    }, [payDate]);
+    const [payMonthTotals, setPayMonthTotals] = useState({ totalAmount: 0, paymentCount: 0 });
 
     useEffect(() => {
         fetchData();
     }, [period, date, month, year]);
+
+    useEffect(() => {
+        if (!showPayModal || !selectedEmployee || !payDatePeriod) {
+            setPayMonthTotals({ totalAmount: 0, paymentCount: 0 });
+            return;
+        }
+
+        const pageIsSameMonth =
+            period === 'month' && month === payDatePeriod.month && year === payDatePeriod.year;
+        if (pageIsSameMonth) {
+            setPayMonthTotals({
+                totalAmount: selectedEmployee.totalAmount || 0,
+                paymentCount: selectedEmployee.paymentCount || 0,
+            });
+            return;
+        }
+
+        let cancelled = false;
+        setPayMonthTotals({ totalAmount: 0, paymentCount: 0 });
+        const loadPayMonthTotals = async () => {
+            try {
+                const res = await fetch(
+                    `/api/financial/salaries?${buildFinancialPeriodQuery({
+                        period: 'month',
+                        date: payDate,
+                        month: payDatePeriod.month,
+                        year: payDatePeriod.year,
+                    })}`
+                );
+                if (!res.ok || cancelled) return;
+                const data = await res.json();
+                const emp = (data.employees || []).find((row: Employee) => row.id === selectedEmployee.id);
+                if (!cancelled) {
+                    setPayMonthTotals({
+                        totalAmount: emp?.totalAmount || 0,
+                        paymentCount: emp?.paymentCount || 0,
+                    });
+                }
+            } catch {
+                if (!cancelled) setPayMonthTotals({ totalAmount: 0, paymentCount: 0 });
+            }
+        };
+        void loadPayMonthTotals();
+        return () => {
+            cancelled = true;
+        };
+    }, [showPayModal, selectedEmployee, payDatePeriod, period, month, year, payDate]);
 
     const fetchData = async () => {
         try {
@@ -125,17 +182,47 @@ export default function SalariesPage() {
         }
     };
 
+    const showPeriodForPaidDate = (paidAt: Date) => {
+        const recordMonth = paidAt.getMonth() + 1;
+        const recordYear = paidAt.getFullYear();
+        const paidDateIso = formatLocalDateInput(paidAt);
+        if (period === 'month' && (month !== recordMonth || year !== recordYear)) {
+            setMonth(recordMonth);
+            setYear(recordYear);
+        } else if (period === 'day' && date !== paidDateIso) {
+            setDate(paidDateIso);
+        } else if (period === 'year' && year !== recordYear) {
+            setYear(recordYear);
+        } else {
+            fetchData();
+        }
+    };
+
+    const openPaySalary = (emp: Employee) => {
+        setError(null);
+        setEditingSalary(null);
+        setPayDate(todayLocalDate());
+        setPayTime(nowLocalTime());
+        setSelectedEmployee(emp);
+        setShowPayModal(true);
+    };
     const handlePaySalary = async (formData: any) => {
         try {
             setSubmitting(true);
             setError(null);
+            const paidAt = formData.paidDate ? new Date(formData.paidDate) : new Date();
+            if (Number.isNaN(paidAt.getTime())) {
+                throw new Error('Invalid paid date');
+            }
+            const recordMonth = paidAt.getMonth() + 1;
+            const recordYear = paidAt.getFullYear();
             const res = await fetch('/api/financial/salaries', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     ...formData,
-                    month: payTarget.month,
-                    year: payTarget.year,
+                    month: recordMonth,
+                    year: recordYear,
                 }),
             });
             if (!res.ok) {
@@ -144,7 +231,7 @@ export default function SalariesPage() {
             }
             setShowPayModal(false);
             setSelectedEmployee(null);
-            fetchData();
+            showPeriodForPaidDate(paidAt);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -181,7 +268,12 @@ export default function SalariesPage() {
                 throw new Error(data.error || 'Failed to update salary');
             }
             closeEditSalary();
-            fetchData();
+            const paidAt = formData.paidDate ? new Date(formData.paidDate) : null;
+            if (paidAt && !Number.isNaN(paidAt.getTime())) {
+                showPeriodForPaidDate(paidAt);
+            } else {
+                fetchData();
+            }
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -282,7 +374,7 @@ export default function SalariesPage() {
             <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
                 <CardHeader>
                     <CardTitle className="text-lg">Salary Status — {displayLabel}</CardTitle>
-                    <CardDescription>Record a payment, or edit / delete an existing salary record</CardDescription>
+                    <CardDescription>Pay as many times as needed — amounts in this period are added together. Edit or delete individual payments in history below.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {loading ? (
@@ -316,8 +408,17 @@ export default function SalariesPage() {
                                                     {emp.role.replace('_', ' ')}
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell className="text-right font-bold">
-                                                {emp.isPaid ? formatCurrency(emp.salaryRecord!.amount) : '—'}
+                                            <TableCell className="text-right">
+                                                {emp.paymentCount > 0 ? (
+                                                    <div>
+                                                        <p className="font-bold text-gray-900">{formatCurrency(emp.totalAmount)}</p>
+                                                        <p className="text-[11px] font-medium text-gray-500">
+                                                            {emp.paymentCount} {emp.paymentCount === 1 ? 'payment' : 'payments'}
+                                                        </p>
+                                                    </div>
+                                                ) : (
+                                                    <span className="font-bold">—</span>
+                                                )}
                                             </TableCell>
                                             <TableCell className="text-center">
                                                 {emp.isPaid ? (
@@ -331,47 +432,16 @@ export default function SalariesPage() {
                                                 )}
                                             </TableCell>
                                             <TableCell className="text-gray-600" suppressHydrationWarning>
-                                                {emp.isPaid && emp.salaryRecord ? formatDate(emp.salaryRecord.paidDate) : '—'}
+                                                {emp.lastPaidDate ? formatDate(emp.lastPaidDate) : '—'}
                                             </TableCell>
                                             <TableCell className="text-center">
-                                                {emp.isPaid && emp.salaryRecord ? (
-                                                    <div className="flex items-center justify-center gap-1">
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={() => openEditSalary({
-                                                                id: emp.salaryRecord!.id,
-                                                                employeeName: emp.name,
-                                                                amount: emp.salaryRecord!.amount,
-                                                                paidDate: emp.salaryRecord!.paidDate,
-                                                                paymentMethod: emp.salaryRecord!.paymentMethod,
-                                                                notes: emp.salaryRecord!.notes,
-                                                                monthLabel: `${monthNames[emp.salaryRecord!.month - 1]} ${emp.salaryRecord!.year}`,
-                                                            })}
-                                                            className="text-blue-600 hover:text-blue-800"
-                                                            title="Edit salary record"
-                                                        >
-                                                            <PencilIcon className="w-4 h-4" />
-                                                        </Button>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={() => handleDeleteSalary(emp.salaryRecord!.id)}
-                                                            className="text-red-600 hover:text-red-800"
-                                                            title="Delete salary record"
-                                                        >
-                                                            <TrashIcon className="w-4 h-4" />
-                                                        </Button>
-                                                    </div>
-                                                ) : (
-                                                    <Button
-                                                        size="sm"
-                                                        onClick={() => { setSelectedEmployee(emp); setShowPayModal(true); }}
-                                                        className="bg-blue-600 hover:bg-blue-700 text-white"
-                                                    >
-                                                        <BanknotesIcon className="w-4 h-4 mr-1" /> Pay Salary
-                                                    </Button>
-                                                )}
+                                                <Button
+                                                    size="sm"
+                                                    onClick={() => openPaySalary(emp)}
+                                                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                                                >
+                                                    <BanknotesIcon className="w-4 h-4 mr-1" /> Pay Salary
+                                                </Button>
                                             </TableCell>
                                         </TableRow>
                                     ))}
@@ -385,7 +455,7 @@ export default function SalariesPage() {
             <Card className="border-0 shadow-sm bg-white/80 backdrop-blur-sm">
                 <CardHeader>
                     <CardTitle className="text-lg">Salary Payment History</CardTitle>
-                    <CardDescription>Salary payments for {displayLabel}</CardDescription>
+                    <CardDescription>Each payment is listed separately for {displayLabel}. The status table above shows the added total.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {history.length === 0 ? (
@@ -466,7 +536,11 @@ export default function SalariesPage() {
                             <div>
                                 <h2 className="text-lg font-bold text-gray-900">Pay Salary</h2>
                                 <p className="text-[10px] text-gray-500 font-medium">
-                                    Employee: <span className="text-blue-600 font-bold">{selectedEmployee.name}</span> — {payTargetLabel}
+                                    Employee: <span className="text-blue-600 font-bold">{selectedEmployee.name}</span>
+                                    {payDateMonthLabel ? ` — ${payDateMonthLabel}` : ''}
+                                    {payMonthTotals.paymentCount > 0
+                                        ? ` · already paid ${formatCurrency(payMonthTotals.totalAmount)} in ${payDateMonthLabel}`
+                                        : ''}
                                 </p>
                             </div>
                             <Button variant="ghost" size="sm" onClick={() => { setShowPayModal(false); setSelectedEmployee(null); setError(null); }} className="h-8 w-8 p-0 rounded-full">
@@ -482,8 +556,37 @@ export default function SalariesPage() {
                                 amount: fd.get('amount'),
                                 paymentMethod: fd.get('paymentMethod'),
                                 notes: fd.get('notes') || null,
+                                paidDate: combineLocalDateAndTime(
+                                    String(fd.get('date') || payDate || todayLocalDate()),
+                                    String(fd.get('time') || payTime || nowLocalTime())
+                                ).toISOString(),
                             });
                         }} className="space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Paid Date</label>
+                                    <Input
+                                        name="date"
+                                        type="date"
+                                        value={payDate}
+                                        onChange={(e) => setPayDate(e.target.value)}
+                                        required
+                                        className="h-9"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Time</label>
+                                    <Input
+                                        name="time"
+                                        type="time"
+                                        value={payTime}
+                                        onChange={(e) => setPayTime(e.target.value)}
+                                        required
+                                        className="h-9"
+                                    />
+                                </div>
+                            </div>
+
                             <div className="space-y-1">
                                 <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Salary Amount (PKR)</label>
                                 <Input name="amount" type="number" placeholder="Enter amount" step="1" required className="h-9 font-bold text-emerald-700" />

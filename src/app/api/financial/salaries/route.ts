@@ -62,27 +62,37 @@ export async function GET(request: NextRequest) {
             orderBy: { paidDate: 'desc' },
         });
         const paidUserIds = new Set(salaryRecords.map((s) => s.userId));
-        // Build employee list with salary status
+        const totalsByUser = new Map<string, { totalAmount: number; paymentCount: number; lastPaidDate: Date }>();
+        for (const record of salaryRecords) {
+            const amount = Number(record.amount);
+            const current = totalsByUser.get(record.userId);
+            if (!current) {
+                totalsByUser.set(record.userId, {
+                    totalAmount: amount,
+                    paymentCount: 1,
+                    lastPaidDate: record.paidDate,
+                });
+                continue;
+            }
+            current.totalAmount += amount;
+            current.paymentCount += 1;
+            if (record.paidDate > current.lastPaidDate) {
+                current.lastPaidDate = record.paidDate;
+            }
+        }
+        // One status row per employee: period payments are summed, not replaced.
         const employees = users.map((user) => {
-            const salaryRecord = salaryRecords.find((s) => s.userId === user.id);
+            const totals = totalsByUser.get(user.id);
             return {
                 id: user.id,
                 name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
                 role: user.role,
                 email: user.email,
                 phone: user.phone,
-                isPaid: paidUserIds.has(user.id),
-                salaryRecord: salaryRecord
-                    ? {
-                        id: salaryRecord.id,
-                        amount: Number(salaryRecord.amount),
-                        paidDate: salaryRecord.paidDate,
-                        paymentMethod: salaryRecord.paymentMethod,
-                        notes: salaryRecord.notes,
-                        month: salaryRecord.month,
-                        year: salaryRecord.year,
-                    }
-                    : null,
+                isPaid: Boolean(totals && totals.paymentCount > 0),
+                totalAmount: totals?.totalAmount || 0,
+                paymentCount: totals?.paymentCount || 0,
+                lastPaidDate: totals?.lastPaidDate || null,
             };
         });
         // Salary history for the same period (reasonable limit)
@@ -137,7 +147,7 @@ export async function POST(request: NextRequest) {
         const session = auth.session;
         const regionId = getActiveRegionId(request);
         const body = await request.json();
-        const { userId, amount, month, year, paymentMethod, notes } = body;
+        const { userId, amount, month, year, paymentMethod, notes, paidDate } = body;
         if (!userId || !amount || !month || !year) {
             return NextResponse.json(
                 { error: 'Missing required fields: userId, amount, month, year' },
@@ -148,21 +158,17 @@ export async function POST(request: NextRequest) {
         if (isNaN(parsedAmount) || parsedAmount <= 0) {
             return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
         }
+        let paidAt = new Date();
+        if (paidDate !== undefined && paidDate !== null && paidDate !== '') {
+            paidAt = new Date(paidDate);
+            if (Number.isNaN(paidAt.getTime())) {
+                return NextResponse.json({ error: 'Invalid paid date' }, { status: 400 });
+            }
+        }
         // Verify user exists
         const user = await prisma.user.findUnique({ where: { id: userId } });
         if (!user) {
             return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
-        }
-        // Check for duplicate within this region
-        const existing = await prisma.salaryRecord.findFirst({
-            where: { userId, month: parseInt(month), year: parseInt(year), ...regionScopedWhere(regionId) },
-        });
-        if (existing) {
-            const monthName = format(new Date(parseInt(year), parseInt(month) - 1, 1), 'MMMM yyyy');
-            return NextResponse.json(
-                { error: `Salary already paid to ${user.name || user.email} for ${monthName} for this branch` },
-                { status: 409 }
-            );
         }
         const methodKey = normalizePaymentMethodKey(paymentMethod) || 'CASH';
         const salaryRecord = await prisma.salaryRecord.create({
@@ -171,7 +177,7 @@ export async function POST(request: NextRequest) {
                 amount: parsedAmount,
                 month: parseInt(month),
                 year: parseInt(year),
-                paidDate: new Date(),
+                paidDate: paidAt,
                 paymentMethod: methodKey,
                 notes: notes || null,
                 createdBy: session.user.id,

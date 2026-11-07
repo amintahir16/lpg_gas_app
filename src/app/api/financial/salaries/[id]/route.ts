@@ -34,6 +34,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             paymentMethod?: string;
             notes?: string | null;
             paidDate?: Date;
+            month?: number;
+            year?: number;
         } = {};
 
         if (amount !== undefined) {
@@ -56,6 +58,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 return NextResponse.json({ error: 'Invalid paid date' }, { status: 400 });
             }
             data.paidDate = parsedDate;
+            data.month = parsedDate.getMonth() + 1;
+            data.year = parsedDate.getFullYear();
         }
 
         if (Object.keys(data).length === 0) {

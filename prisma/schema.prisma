@@ -1222,7 +1222,7 @@ model SalaryRecord {
   region        Region?  @relation(fields: [regionId], references: [id])
   user          User     @relation("SalaryRecords", fields: [userId], references: [id])
 
-  @@unique([userId, regionId, month, year])
+  @@index([userId, regionId, month, year])
   @@index([regionId])
   @@map("salary_records")
 }
