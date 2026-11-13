@@ -10,6 +10,7 @@ export type BankLedgerSource =
   | 'B2B_SALE'
   | 'B2B_PAYMENT'
   | 'B2C_SALE'
+  | 'B2C_RETURN'
   | 'VENDOR_PAYMENT'
   | 'OFFICE_EXPENSE'
   | 'VEHICLE_EXPENSE'
@@ -51,6 +52,7 @@ export const BANK_LEDGER_SOURCE_LABELS: Record<BankLedgerSource, string> = {
   B2B_SALE: 'B2B Sale Payment',
   B2B_PAYMENT: 'B2B Payment',
   B2C_SALE: 'B2C Sale',
+  B2C_RETURN: 'B2C Return',
   VENDOR_PAYMENT: 'Vendor Payment',
   OFFICE_EXPENSE: 'Office Expense',
   VEHICLE_EXPENSE: 'Vehicle Expense',

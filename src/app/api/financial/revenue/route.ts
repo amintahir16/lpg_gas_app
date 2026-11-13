@@ -104,7 +104,15 @@ export async function GET(request: NextRequest) {
                     voided: false,
                     ...txRegionScope,
                 },
-                select: { finalAmount: true, totalAmount: true, paymentMethod: true },
+                select: {
+                    finalAmount: true,
+                    totalAmount: true,
+                    deliveryCharges: true,
+                    paymentMethod: true,
+                    gasItems: { select: { totalPrice: true } },
+                    accessoryItems: { select: { totalPrice: true } },
+                    securityItems: { select: { totalPrice: true, isReturn: true } },
+                },
             }),
         ]);
 
@@ -204,6 +212,34 @@ export async function GET(request: NextRequest) {
             revenue: data.revenue,
         }));
 
+        const b2cCollections: { method: string | null; amount: number }[] = [];
+        for (const tx of b2cPayments) {
+            const depositAmount = tx.securityItems
+                ?.filter((s) => !s.isReturn)
+                .reduce((sum, s) => sum + Number(s.totalPrice || 0), 0) || 0;
+            const gasAmount = tx.gasItems
+                ?.reduce((sum, g) => sum + Number(g.totalPrice || 0), 0) || 0;
+            const accAmount = tx.accessoryItems
+                ?.reduce((sum, a) => sum + Number(a.totalPrice || 0), 0) || 0;
+
+            const hasLineItems =
+                (tx.gasItems?.length || 0) > 0 ||
+                (tx.accessoryItems?.length || 0) > 0 ||
+                (tx.securityItems?.length || 0) > 0;
+
+            if (hasLineItems) {
+                const inAmount = gasAmount + accAmount + depositAmount + Number(tx.deliveryCharges || 0);
+                if (inAmount > 0) {
+                    b2cCollections.push({ method: tx.paymentMethod, amount: inAmount });
+                }
+            } else {
+                const fallbackAmount = Number(tx.finalAmount || tx.totalAmount || 0);
+                if (fallbackAmount > 0) {
+                    b2cCollections.push({ method: tx.paymentMethod, amount: fallbackAmount });
+                }
+            }
+        }
+
         // Gross collections only — vendor payments / office expenses are netted on Financial page
         const byPaymentMethod = buildPaymentMethodTotals({
             collections: [
@@ -215,10 +251,7 @@ export async function GET(request: NextRequest) {
                     method: tx.paymentMethod,
                     amount: Number(tx.paidAmount != null ? tx.paidAmount : tx.totalAmount) || 0,
                 })),
-                ...b2cPayments.map((tx) => ({
-                    method: tx.paymentMethod,
-                    amount: Number(tx.finalAmount || tx.totalAmount || 0),
-                })),
+                ...b2cCollections,
             ],
         });
 

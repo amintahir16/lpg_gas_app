@@ -170,6 +170,7 @@ export async function buildBankLedgerEntries(
         time: true,
         finalAmount: true,
         totalAmount: true,
+        deliveryCharges: true,
         paymentMethod: true,
         notes: true,
         createdBy: true,
@@ -197,6 +198,7 @@ export async function buildBankLedgerEntries(
             cylinderVariantKey: true,
             quantity: true,
             totalPrice: true,
+            isReturn: true,
           },
         },
       },
@@ -474,44 +476,160 @@ export async function buildBankLedgerEntries(
 
   for (const tx of b2cTxs) {
     if (!matchesMethod(tx.paymentMethod, method)) continue;
-    const amount = Number(tx.finalAmount || tx.totalAmount || 0);
-    if (!amount) continue;
     const when = coalesceEventDate(tx.time, tx.date);
     const parts = formatLedgerDateParts(when);
-    const lineItems = [
-      ...tx.gasItems.map((item) => ({
-        name: formatB2bItemCylinderLabel(item, cylinderTypeMap),
+
+    const returnItems = tx.securityItems.filter((item) => item.isReturn);
+    const depositItems = tx.securityItems.filter((item) => !item.isReturn);
+    const returnAmount = returnItems.reduce((sum, item) => sum + Number(item.totalPrice || 0), 0);
+    const gasAmount = tx.gasItems.reduce((sum, item) => sum + Number(item.totalPrice || 0), 0);
+    const accAmount = tx.accessoryItems.reduce((sum, item) => sum + Number(item.totalPrice || 0), 0);
+    const depositAmount = depositItems.reduce((sum, item) => sum + Number(item.totalPrice || 0), 0);
+    const deliveryAmount = Number(tx.deliveryCharges || 0);
+
+    const hasInflow = gasAmount > 0 || accAmount > 0 || depositAmount > 0 || deliveryAmount > 0;
+    const hasOutflow = returnAmount > 0;
+
+    // Pure return transaction (e.g. Bill 9): only security refund returned to customer
+    if (hasOutflow && !hasInflow) {
+      const amount = returnAmount || Number(tx.finalAmount || tx.totalAmount || 0);
+      if (!amount) continue;
+
+      const lineItems = returnItems.map((item) => ({
+        name: `Returned: ${formatB2bItemCylinderLabel(item, cylinderTypeMap)}`,
         quantity: item.quantity,
         totalPrice: Number(item.totalPrice),
-      })),
-      ...tx.accessoryItems.map((item) => ({
-        name: item.productName,
+      }));
+
+      entries.push({
+        id: `b2c-${tx.id}`,
+        source: 'B2C_RETURN',
+        sourceLabel: BANK_LEDGER_SOURCE_LABELS.B2C_RETURN || 'B2C Return',
+        direction: 'OUT',
+        amount,
+        ...parts,
+        partyName: tx.customer.name,
+        partyType: 'B2C Customer',
+        recordedBy: userNameById.get(tx.createdBy) || null,
+        regionId: tx.regionId || null,
+        regionName: tx.region?.name || null,
+        details: summarizeLineItems(lineItems),
+        reference: tx.billSno || null,
+        notes: tx.notes,
+        typeDetail: 'Security return refund',
+      });
+      continue;
+    }
+
+    // Pure sale / deposit transaction (no returns): customer payment collected into wallet
+    if (!hasOutflow) {
+      const amount = Number(tx.finalAmount || tx.totalAmount || 0);
+      if (!amount) continue;
+
+      const lineItems = [
+        ...tx.gasItems.map((item) => ({
+          name: formatB2bItemCylinderLabel(item, cylinderTypeMap),
+          quantity: item.quantity,
+          totalPrice: Number(item.totalPrice),
+        })),
+        ...tx.accessoryItems.map((item) => ({
+          name: item.productName,
+          quantity: item.quantity,
+          totalPrice: Number(item.totalPrice),
+        })),
+        ...depositItems.map((item) => ({
+          name: `Security ${formatB2bItemCylinderLabel(item, cylinderTypeMap)}`,
+          quantity: item.quantity,
+          totalPrice: Number(item.totalPrice),
+        })),
+      ];
+
+      entries.push({
+        id: `b2c-${tx.id}`,
+        source: 'B2C_SALE',
+        sourceLabel: BANK_LEDGER_SOURCE_LABELS.B2C_SALE,
+        direction: 'IN',
+        amount,
+        ...parts,
+        partyName: tx.customer.name,
+        partyType: 'B2C Customer',
+        recordedBy: userNameById.get(tx.createdBy) || null,
+        regionId: tx.regionId || null,
+        regionName: tx.region?.name || null,
+        details: summarizeLineItems(lineItems),
+        reference: tx.billSno || null,
+        notes: tx.notes,
+        typeDetail: 'B2C sale / collection',
+      });
+      continue;
+    }
+
+    // Mixed transaction: has BOTH sales/deposits AND security returns.
+    // Split into IN (collected) and OUT (refunded) entries to reflect actual wallet cash movements.
+    const inAmount = gasAmount + accAmount + depositAmount + deliveryAmount;
+    if (inAmount > 0) {
+      const inLineItems = [
+        ...tx.gasItems.map((item) => ({
+          name: formatB2bItemCylinderLabel(item, cylinderTypeMap),
+          quantity: item.quantity,
+          totalPrice: Number(item.totalPrice),
+        })),
+        ...tx.accessoryItems.map((item) => ({
+          name: item.productName,
+          quantity: item.quantity,
+          totalPrice: Number(item.totalPrice),
+        })),
+        ...depositItems.map((item) => ({
+          name: `Security ${formatB2bItemCylinderLabel(item, cylinderTypeMap)}`,
+          quantity: item.quantity,
+          totalPrice: Number(item.totalPrice),
+        })),
+      ];
+
+      entries.push({
+        id: `b2c-${tx.id}-in`,
+        source: 'B2C_SALE',
+        sourceLabel: BANK_LEDGER_SOURCE_LABELS.B2C_SALE,
+        direction: 'IN',
+        amount: inAmount,
+        ...parts,
+        partyName: tx.customer.name,
+        partyType: 'B2C Customer',
+        recordedBy: userNameById.get(tx.createdBy) || null,
+        regionId: tx.regionId || null,
+        regionName: tx.region?.name || null,
+        details: summarizeLineItems(inLineItems),
+        reference: tx.billSno || null,
+        notes: tx.notes,
+        typeDetail: 'B2C sale / collection',
+      });
+    }
+
+    if (returnAmount > 0) {
+      const returnLineItems = returnItems.map((item) => ({
+        name: `Returned: ${formatB2bItemCylinderLabel(item, cylinderTypeMap)}`,
         quantity: item.quantity,
         totalPrice: Number(item.totalPrice),
-      })),
-      ...tx.securityItems.map((item) => ({
-        name: `Security ${formatB2bItemCylinderLabel(item, cylinderTypeMap)}`,
-        quantity: item.quantity,
-        totalPrice: Number(item.totalPrice),
-      })),
-    ];
-    entries.push({
-      id: `b2c-${tx.id}`,
-      source: 'B2C_SALE',
-      sourceLabel: BANK_LEDGER_SOURCE_LABELS.B2C_SALE,
-      direction: 'IN',
-      amount,
-      ...parts,
-      partyName: tx.customer.name,
-      partyType: 'B2C Customer',
-      recordedBy: userNameById.get(tx.createdBy) || null,
-      regionId: tx.regionId || null,
-      regionName: tx.region?.name || null,
-      details: summarizeLineItems(lineItems),
-      reference: tx.billSno || null,
-      notes: tx.notes,
-      typeDetail: 'B2C sale / collection',
-    });
+      }));
+
+      entries.push({
+        id: `b2c-${tx.id}-out`,
+        source: 'B2C_RETURN',
+        sourceLabel: BANK_LEDGER_SOURCE_LABELS.B2C_RETURN || 'B2C Return',
+        direction: 'OUT',
+        amount: returnAmount,
+        ...parts,
+        partyName: tx.customer.name,
+        partyType: 'B2C Customer',
+        recordedBy: userNameById.get(tx.createdBy) || null,
+        regionId: tx.regionId || null,
+        regionName: tx.region?.name || null,
+        details: summarizeLineItems(returnLineItems),
+        reference: tx.billSno || null,
+        notes: tx.notes,
+        typeDetail: 'Security return refund',
+      });
+    }
   }
 
   for (const payment of vendorPayments) {
@@ -787,6 +905,7 @@ export async function getAllWalletsOpeningNets(params: {
     b2bPaymentWithPaid,
     b2bPaymentFallback,
     b2cPayments,
+    b2cReturns,
     vendorPayments,
     officeExpensesByMethod,
     personalExpensesByMethod,
@@ -834,20 +953,52 @@ export async function getAllWalletsOpeningNets(params: {
       () =>
         prisma.$queryRaw<Array<{ method: string | null; amount: unknown }>>`
           SELECT
-            "paymentMethod" AS method,
+            t."paymentMethod" AS method,
             COALESCE(SUM(
               CASE
-                WHEN "finalAmount" IS NOT NULL AND "finalAmount" <> 0 THEN "finalAmount"
-                ELSE "totalAmount"
+                WHEN EXISTS (SELECT 1 FROM b2c_transaction_gas_items WHERE "transactionId" = t.id)
+                  OR EXISTS (SELECT 1 FROM b2c_transaction_accessory_items WHERE "transactionId" = t.id)
+                  OR EXISTS (SELECT 1 FROM b2c_transaction_security_items WHERE "transactionId" = t.id)
+                THEN (
+                  COALESCE((SELECT SUM("totalPrice") FROM b2c_transaction_gas_items WHERE "transactionId" = t.id), 0) +
+                  COALESCE((SELECT SUM("totalPrice") FROM b2c_transaction_accessory_items WHERE "transactionId" = t.id), 0) +
+                  COALESCE((SELECT SUM("totalPrice") FROM b2c_transaction_security_items WHERE "transactionId" = t.id AND "isReturn" = false), 0) +
+                  COALESCE(t."deliveryCharges", 0)
+                )
+                ELSE (
+                  CASE
+                    WHEN t."finalAmount" IS NOT NULL AND t."finalAmount" <> 0 THEN t."finalAmount"
+                    ELSE t."totalAmount"
+                  END
+                )
               END
             ), 0) AS amount
-          FROM b2c_transactions
-          WHERE voided = false
-            AND date >= ${earliest}
-            AND date < ${beforeDate}
-            AND (${regionId ?? null}::text IS NULL OR "regionId" = ${regionId ?? null})
-            AND "paymentMethod" IS NOT NULL
-          GROUP BY "paymentMethod"
+          FROM b2c_transactions t
+          WHERE t.voided = false
+            AND t.date >= ${earliest}
+            AND t.date < ${beforeDate}
+            AND (${regionId ?? null}::text IS NULL OR t."regionId" = ${regionId ?? null})
+            AND t."paymentMethod" IS NOT NULL
+          GROUP BY t."paymentMethod"
+        `,
+      []
+    ),
+    safeLedgerQuery(
+      'b2c_transactions.groupedReturns',
+      () =>
+        prisma.$queryRaw<Array<{ method: string | null; amount: unknown }>>`
+          SELECT
+            t."paymentMethod" AS method,
+            COALESCE(SUM(
+              COALESCE((SELECT SUM("totalPrice") FROM b2c_transaction_security_items WHERE "transactionId" = t.id AND "isReturn" = true), 0)
+            ), 0) AS amount
+          FROM b2c_transactions t
+          WHERE t.voided = false
+            AND t.date >= ${earliest}
+            AND t.date < ${beforeDate}
+            AND (${regionId ?? null}::text IS NULL OR t."regionId" = ${regionId ?? null})
+            AND t."paymentMethod" IS NOT NULL
+          GROUP BY t."paymentMethod"
         `,
       []
     ),
@@ -962,6 +1113,10 @@ export async function getAllWalletsOpeningNets(params: {
         method: row.paymentMethod,
         amount: Number(row._sum?.amount || 0),
       })),
+      ...b2cReturns.map((row) => ({
+        method: row.method,
+        amount: Number(row.amount || 0),
+      })),
       ...movementDeductions,
     ],
     wallets,
@@ -1014,6 +1169,7 @@ export async function sumBankLedgerInOut(params: {
     b2bPaymentsWithPaid,
     b2bPaymentsFallback,
     b2cIn,
+    b2cOut,
     vendorOut,
     expenseOut,
     personalExpenseOut,
@@ -1060,30 +1216,79 @@ export async function sumBankLedgerInOut(params: {
       ? prisma.$queryRaw<Array<{ amount: unknown }>>`
           SELECT COALESCE(SUM(
             CASE
-              WHEN "finalAmount" IS NOT NULL AND "finalAmount" <> 0 THEN "finalAmount"
-              ELSE "totalAmount"
+              WHEN EXISTS (SELECT 1 FROM b2c_transaction_gas_items WHERE "transactionId" = t.id)
+                OR EXISTS (SELECT 1 FROM b2c_transaction_accessory_items WHERE "transactionId" = t.id)
+                OR EXISTS (SELECT 1 FROM b2c_transaction_security_items WHERE "transactionId" = t.id)
+              THEN (
+                COALESCE((SELECT SUM("totalPrice") FROM b2c_transaction_gas_items WHERE "transactionId" = t.id), 0) +
+                COALESCE((SELECT SUM("totalPrice") FROM b2c_transaction_accessory_items WHERE "transactionId" = t.id), 0) +
+                COALESCE((SELECT SUM("totalPrice") FROM b2c_transaction_security_items WHERE "transactionId" = t.id AND "isReturn" = false), 0) +
+                COALESCE(t."deliveryCharges", 0)
+              )
+              ELSE (
+                CASE
+                  WHEN t."finalAmount" IS NOT NULL AND t."finalAmount" <> 0 THEN t."finalAmount"
+                  ELSE t."totalAmount"
+                END
+              )
             END
           ), 0) AS amount
-          FROM b2c_transactions
-          WHERE voided = false
-            AND date >= ${startDate}
-            AND date < ${endDate}
-            AND UPPER(REPLACE(TRIM("paymentMethod"), ' ', '_')) = ${normMethod}
-            AND (${regionId ?? null}::text IS NULL OR "regionId" = ${regionId ?? null})
+          FROM b2c_transactions t
+          WHERE t.voided = false
+            AND t.date >= ${startDate}
+            AND t.date < ${endDate}
+            AND UPPER(REPLACE(TRIM(t."paymentMethod"), ' ', '_')) = ${normMethod}
+            AND (${regionId ?? null}::text IS NULL OR t."regionId" = ${regionId ?? null})
         `
       : prisma.$queryRaw<Array<{ amount: unknown }>>`
           SELECT COALESCE(SUM(
             CASE
-              WHEN "finalAmount" IS NOT NULL AND "finalAmount" <> 0 THEN "finalAmount"
-              ELSE "totalAmount"
+              WHEN EXISTS (SELECT 1 FROM b2c_transaction_gas_items WHERE "transactionId" = t.id)
+                OR EXISTS (SELECT 1 FROM b2c_transaction_accessory_items WHERE "transactionId" = t.id)
+                OR EXISTS (SELECT 1 FROM b2c_transaction_security_items WHERE "transactionId" = t.id)
+              THEN (
+                COALESCE((SELECT SUM("totalPrice") FROM b2c_transaction_gas_items WHERE "transactionId" = t.id), 0) +
+                COALESCE((SELECT SUM("totalPrice") FROM b2c_transaction_accessory_items WHERE "transactionId" = t.id), 0) +
+                COALESCE((SELECT SUM("totalPrice") FROM b2c_transaction_security_items WHERE "transactionId" = t.id AND "isReturn" = false), 0) +
+                COALESCE(t."deliveryCharges", 0)
+              )
+              ELSE (
+                CASE
+                  WHEN t."finalAmount" IS NOT NULL AND t."finalAmount" <> 0 THEN t."finalAmount"
+                  ELSE t."totalAmount"
+                END
+              )
             END
           ), 0) AS amount
-          FROM b2c_transactions
-          WHERE voided = false
-            AND date >= ${startDate}
-            AND date <= ${endDate}
-            AND UPPER(REPLACE(TRIM("paymentMethod"), ' ', '_')) = ${normMethod}
-            AND (${regionId ?? null}::text IS NULL OR "regionId" = ${regionId ?? null})
+          FROM b2c_transactions t
+          WHERE t.voided = false
+            AND t.date >= ${startDate}
+            AND t.date <= ${endDate}
+            AND UPPER(REPLACE(TRIM(t."paymentMethod"), ' ', '_')) = ${normMethod}
+            AND (${regionId ?? null}::text IS NULL OR t."regionId" = ${regionId ?? null})
+        `,
+    endExclusive
+      ? prisma.$queryRaw<Array<{ amount: unknown }>>`
+          SELECT COALESCE(SUM(
+            COALESCE((SELECT SUM("totalPrice") FROM b2c_transaction_security_items WHERE "transactionId" = t.id AND "isReturn" = true), 0)
+          ), 0) AS amount
+          FROM b2c_transactions t
+          WHERE t.voided = false
+            AND t.date >= ${startDate}
+            AND t.date < ${endDate}
+            AND UPPER(REPLACE(TRIM(t."paymentMethod"), ' ', '_')) = ${normMethod}
+            AND (${regionId ?? null}::text IS NULL OR t."regionId" = ${regionId ?? null})
+        `
+      : prisma.$queryRaw<Array<{ amount: unknown }>>`
+          SELECT COALESCE(SUM(
+            COALESCE((SELECT SUM("totalPrice") FROM b2c_transaction_security_items WHERE "transactionId" = t.id AND "isReturn" = true), 0)
+          ), 0) AS amount
+          FROM b2c_transactions t
+          WHERE t.voided = false
+            AND t.date >= ${startDate}
+            AND t.date <= ${endDate}
+            AND UPPER(REPLACE(TRIM(t."paymentMethod"), ' ', '_')) = ${normMethod}
+            AND (${regionId ?? null}::text IS NULL OR t."regionId" = ${regionId ?? null})
         `,
     prisma.vendorPayment.aggregate({
       where: {
@@ -1190,6 +1395,7 @@ export async function sumBankLedgerInOut(params: {
     decimalSum(transfersIn._sum.amount);
 
   const totalOut =
+    decimalSum(b2cOut[0]?.amount) +
     decimalSum(vendorOut._sum.amount) +
     decimalSum(expenseOut._sum.amount) +
     decimalSum(personalExpenseOut._sum.amount) +

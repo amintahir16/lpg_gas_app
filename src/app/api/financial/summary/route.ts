@@ -233,7 +233,15 @@ export async function GET(request: NextRequest) {
                     voided: false,
                     ...txRegionScope,
                 },
-                select: { finalAmount: true, totalAmount: true, paymentMethod: true },
+                select: {
+                    finalAmount: true,
+                    totalAmount: true,
+                    deliveryCharges: true,
+                    paymentMethod: true,
+                    gasItems: { select: { totalPrice: true } },
+                    accessoryItems: { select: { totalPrice: true } },
+                    securityItems: { select: { totalPrice: true, isReturn: true } },
+                },
             }),
             prisma.vendorPayment.groupBy({
                 by: ['method'],
@@ -309,6 +317,42 @@ export async function GET(request: NextRequest) {
                       wallets: activeWallets,
                   });
 
+        const b2cCollections: { method: string | null; amount: number }[] = [];
+        const b2cDeductions: { method: string | null; amount: number }[] = [];
+
+        for (const tx of b2cPayments) {
+            const returnAmount = tx.securityItems
+                ?.filter((s) => s.isReturn)
+                .reduce((sum, s) => sum + Number(s.totalPrice || 0), 0) || 0;
+            const depositAmount = tx.securityItems
+                ?.filter((s) => !s.isReturn)
+                .reduce((sum, s) => sum + Number(s.totalPrice || 0), 0) || 0;
+            const gasAmount = tx.gasItems
+                ?.reduce((sum, g) => sum + Number(g.totalPrice || 0), 0) || 0;
+            const accAmount = tx.accessoryItems
+                ?.reduce((sum, a) => sum + Number(a.totalPrice || 0), 0) || 0;
+
+            const hasLineItems =
+                (tx.gasItems?.length || 0) > 0 ||
+                (tx.accessoryItems?.length || 0) > 0 ||
+                (tx.securityItems?.length || 0) > 0;
+
+            if (hasLineItems) {
+                const inAmount = gasAmount + accAmount + depositAmount + Number(tx.deliveryCharges || 0);
+                if (inAmount > 0) {
+                    b2cCollections.push({ method: tx.paymentMethod, amount: inAmount });
+                }
+                if (returnAmount > 0) {
+                    b2cDeductions.push({ method: tx.paymentMethod, amount: returnAmount });
+                }
+            } else {
+                const fallbackAmount = Number(tx.finalAmount || tx.totalAmount || 0);
+                if (fallbackAmount > 0) {
+                    b2cCollections.push({ method: tx.paymentMethod, amount: fallbackAmount });
+                }
+            }
+        }
+
         const byPaymentMethod = buildPaymentMethodTotals({
             openingBalances,
             collections: [
@@ -320,10 +364,7 @@ export async function GET(request: NextRequest) {
                     method: tx.paymentMethod,
                     amount: Number(tx.paidAmount != null ? tx.paidAmount : tx.totalAmount) || 0,
                 })),
-                ...b2cPayments.map((tx) => ({
-                    method: tx.paymentMethod,
-                    amount: Number(tx.finalAmount || tx.totalAmount || 0),
-                })),
+                ...b2cCollections,
                 ...movementCollections,
             ],
             deductions: [
@@ -343,6 +384,7 @@ export async function GET(request: NextRequest) {
                     method: row.paymentMethod,
                     amount: Number(row._sum.amount || 0),
                 })),
+                ...b2cDeductions,
                 ...movementDeductions,
             ],
             wallets: activeWallets,

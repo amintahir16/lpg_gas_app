@@ -10,13 +10,17 @@ import { logoBase64 } from '@/lib/logoBase64';
 
 // Helper function to format currency
 function formatCurrency(amount: number): string {
-  return `PKR ${amount.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const isNegative = amount < 0;
+  const abs = Math.abs(amount).toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return isNegative ? `-PKR ${abs}` : `PKR ${abs}`;
 }
 
 // Helper function to format currency with Rs and rounded to whole numbers (for columns)
 function formatCurrencyRsRounded(amount: number): string {
   const rounded = Math.round(amount);
-  return `Rs ${rounded.toLocaleString('en-PK', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  const isNegative = rounded < 0;
+  const abs = Math.abs(rounded).toLocaleString('en-PK', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  return isNegative ? `-Rs ${abs}` : `Rs ${abs}`;
 }
 
 // Helper function to format date
@@ -228,7 +232,11 @@ async function generatePDF(
 
   yPosition += 15;
 
-  // Prepare table data
+  // Prepare table data and calculate totals
+  let totalSales = 0;
+  let totalDeposits = 0;
+  let totalReturns = 0;
+
   const tableData = transactions.map((transaction, index) => {
     const date = formatDate(transaction.date);
     const method = formatPaymentMethodLabel(transaction.paymentMethod);
@@ -236,7 +244,36 @@ async function generatePDF(
     // Build items description
     const itemsText = buildItemsDescription(transaction, cylinderTypeMap);
     const typeText = getTransactionTypeText(transaction);
-    const finalAmount = Number(transaction.finalAmount);
+
+    // Extract item breakdown
+    const gasAmount = (transaction.gasItems || []).reduce((sum: number, g: any) => sum + Number(g.totalPrice || 0), 0);
+    const accAmount = (transaction.accessoryItems || []).reduce((sum: number, a: any) => sum + Number(a.totalPrice || 0), 0);
+    const delivery = Number(transaction.deliveryCharges || 0);
+    const txSales = gasAmount + accAmount + delivery;
+
+    const txDeposit = (transaction.securityItems || [])
+      .filter((s: any) => !s.isReturn)
+      .reduce((sum: number, s: any) => sum + Number(s.totalPrice || 0), 0);
+
+    const txReturn = (transaction.securityItems || [])
+      .filter((s: any) => s.isReturn)
+      .reduce((sum: number, s: any) => sum + Number(s.totalPrice || 0), 0);
+
+    const hasLineItems =
+      (transaction.gasItems?.length || 0) > 0 ||
+      (transaction.accessoryItems?.length || 0) > 0 ||
+      (transaction.securityItems?.length || 0) > 0;
+
+    let netAmount = 0;
+    if (hasLineItems) {
+      netAmount = (txSales + txDeposit) - txReturn;
+      totalSales += txSales;
+      totalDeposits += txDeposit;
+      totalReturns += txReturn;
+    } else {
+      netAmount = Number(transaction.finalAmount || transaction.totalAmount || 0);
+      totalSales += netAmount;
+    }
 
     return [
       index + 1,
@@ -246,22 +283,57 @@ async function generatePDF(
       (transaction.notes || '').trim(),
       typeText,
       itemsText,
-      formatCurrencyRsRounded(finalAmount)
+      formatCurrencyRsRounded(netAmount)
     ];
   });
 
-  // Add total row
-  const totalAmount = transactions.reduce((sum, t) => sum + Number(t.finalAmount), 0);
-  tableData.push([
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    'TOTAL:',
-    formatCurrencyRsRounded(totalAmount)
-  ]);
+  const totalReceived = totalSales + totalDeposits;
+  const netTotal = totalReceived - totalReturns;
+
+  // Add total rows
+  if (totalReturns > 0) {
+    tableData.push([
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      'Total Received:',
+      formatCurrencyRsRounded(totalReceived)
+    ]);
+    tableData.push([
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      'Total Refunded:',
+      formatCurrencyRsRounded(-totalReturns)
+    ]);
+    tableData.push([
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      'NET TOTAL:',
+      formatCurrencyRsRounded(netTotal)
+    ]);
+  } else {
+    tableData.push([
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      'TOTAL:',
+      formatCurrencyRsRounded(netTotal)
+    ]);
+  }
 
   // Add table - use autoTable as a function
   autoTable(doc, {
@@ -295,13 +367,25 @@ async function generatePDF(
       6: { cellWidth: 50 },                       // Details
       7: { halign: 'right', cellWidth: 24 }       // Amount
     },
+    didParseCell: (data: any) => {
+      const summaryRowsCount = totalReturns > 0 ? 3 : 1;
+      const isSummaryRow = data.section === 'body' && data.row.index >= tableData.length - summaryRowsCount;
+      if (isSummaryRow) {
+        data.cell.styles.fontStyle = 'bold';
+        if (data.row.index === tableData.length - 1) {
+          data.cell.styles.fillColor = [240, 243, 246];
+        }
+      }
+    },
     margin: { left: 15, right: 15, bottom: 35 }
   });
 
   // Financial Summary Section
   const finalY = (doc as any).lastAutoTable?.finalY || yPosition;
+  const hasSecurityBreakdown = totalDeposits > 0 || totalReturns > 0;
+  const summaryBoxHeight = hasSecurityBreakdown ? 74 : 50;
 
-  if (finalY > pageHeight - 120) {
+  if (finalY + 15 + 8 + 20 + summaryBoxHeight > pageHeight - 35) {
     doc.addPage();
     yPosition = 20;
   } else {
@@ -316,13 +400,13 @@ async function generatePDF(
   doc.setFont('helvetica', 'bold');
   doc.text('FINANCIAL SUMMARY', 20, yPosition + 6);
 
-  yPosition += 20;
+  yPosition += 16;
 
   // Summary Box
   doc.setFillColor(248, 249, 250);
-  doc.rect(15, yPosition, pageWidth - 30, 50, 'F');
+  doc.rect(15, yPosition, pageWidth - 30, summaryBoxHeight, 'F');
   doc.setDrawColor(200, 200, 200);
-  doc.rect(15, yPosition, pageWidth - 30, 50, 'S');
+  doc.rect(15, yPosition, pageWidth - 30, summaryBoxHeight, 'S');
 
   // Date Range Info
   doc.setTextColor(100, 100, 100);
@@ -333,22 +417,58 @@ async function generatePDF(
     : 'Summary for All Time';
   doc.text(dateRangeText, 25, yPosition + 10);
 
-  // Summary Content
-  doc.setTextColor(0, 0, 0);
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
+  let curY = yPosition + 20;
 
   // Total Transactions
-  doc.text('Total Transactions:', 25, yPosition + 22);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`${transactions.length}`, pageWidth - 25, yPosition + 22, { align: 'right' });
-
-  // Total Amount
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.text('Total Amount:', 25, yPosition + 35);
-  doc.setTextColor(39, 174, 96);
-  doc.text(formatCurrency(totalAmount), pageWidth - 25, yPosition + 35, { align: 'right' });
+  doc.text('Total Transactions:', 25, curY);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`${transactions.length}`, pageWidth - 25, curY, { align: 'right' });
+
+  if (hasSecurityBreakdown) {
+    curY += 8;
+    doc.setFont('helvetica', 'bold');
+    doc.text('Total Sales (Gas & Accessories):', 25, curY);
+    doc.setFont('helvetica', 'normal');
+    doc.text(formatCurrency(totalSales), pageWidth - 25, curY, { align: 'right' });
+
+    if (totalDeposits > 0) {
+      curY += 8;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Security Deposits Received:', 25, curY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(formatCurrency(totalDeposits), pageWidth - 25, curY, { align: 'right' });
+    }
+
+    if (totalReturns > 0) {
+      curY += 8;
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(194, 65, 12);
+      doc.text('Security Returns (Refunded):', 25, curY);
+      doc.text(formatCurrency(-totalReturns), pageWidth - 25, curY, { align: 'right' });
+      doc.setTextColor(0, 0, 0);
+    }
+
+    curY += 5;
+    doc.setDrawColor(210, 215, 220);
+    doc.line(25, curY, pageWidth - 25, curY);
+    curY += 8;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text('Net Total Amount:', 25, curY);
+    doc.setTextColor(netTotal >= 0 ? 39 : 194, netTotal >= 0 ? 174 : 65, netTotal >= 0 ? 96 : 12);
+    doc.text(formatCurrency(netTotal), pageWidth - 25, curY, { align: 'right' });
+  } else {
+    curY += 14;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.text('Total Amount:', 25, curY);
+    doc.setTextColor(39, 174, 96);
+    doc.text(formatCurrency(netTotal), pageWidth - 25, curY, { align: 'right' });
+  }
 
   // Footer Loop
   const pageCount = doc.getNumberOfPages();

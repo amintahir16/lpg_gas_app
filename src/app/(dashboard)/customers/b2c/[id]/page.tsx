@@ -894,7 +894,13 @@ export default function B2CCustomerDetailPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
-                        {formatCurrency(tx.finalAmount)}
+                        {hasReturn && !hasGasSale && !hasAccessorySale && !hasDeposit ? (
+                          <span className="text-orange-600 font-bold">
+                            -{formatCurrency(tx.finalAmount)}
+                          </span>
+                        ) : (
+                          formatCurrency(tx.finalAmount)
+                        )}
                         <div className="text-xs font-normal text-green-600 mt-1">{tx.paymentMethod}</div>
                       </td>
                       {session?.user?.role === 'SUPER_ADMIN' && (
